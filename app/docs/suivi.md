@@ -3,37 +3,33 @@
 ## État actuel (fait)
 - Nouveau squelette orienté objet créé dans `app/`.
 - Suppression de toute dépendance CSV dans le nouveau flux.
-- Flux horaire prévu:
-  1. ingestion des données en base,
-  2. envoi JSON vers webhook EnergyID,
-  3. marquage des mesures publiées.
-- Base préparée pour:
-  - encodage manuel du gaz,
-  - stockage d'une grille tarifaire détaillée.
+- Flux en 2 temps:
+  1. ingestion horaire en DB,
+  2. envoi quotidien webhook EnergyID V2 (01:15).
+- Envoi quotidien basé sur **la première valeur de la journée** (import/export + solaire).
+- Sources:
+  - `Data_Dries` (kWh),
+  - `Data_Solaire.production` (Wh, converti kWh pour `pv`),
+  - fallback `Data_Brusol` sans date de fin imposée.
+- Gestion erreur webhook:
+  - 1 retry par métrique,
+  - si échec après retry: skip métrique, reprise au prochain run.
+- Provisioning V2 `/hello` intégré avant envoi.
 
-## Questions à valider (bloquantes)
-1. **Source des données électriques**: quelle API exacte doit être appelée (URL locale, authentification, format JSON)?
-2. **Granularité**: envoi EnergyID toutes les heures, ou regroupement journalier?
-3. **Webhook EnergyID**: 1 webhook unique pour tout, ou un webhook par métrique/site?
-4. **Format attendu EnergyID**: confirmez-vous les métriques/codes exacts (`gridImport`, unité, intervalle)?
-5. **Gestion gaz**:
-   - fréquence d'encodage manuel attendue (journalier, hebdomadaire, mensuel)?
-   - faut-il transformer m³ en kWh via coefficient PCS configurable?
-6. **Grille tarifaire**:
-   - faut-il gérer HP/HC (jour/nuit), mois, saisons, plages horaires?
-   - quelles composantes inclure (énergie, distribution, transport, taxes, TVA, prosumer, fixe)?
-7. **Historisation**: souhaitez-vous recalculer rétroactivement les coûts quand un tarif change?
-8. **Tolérance incidents**:
-   - combien de tentatives webhook avant abandon?
-   - faut-il une file de retry dédiée?
-9. **Multi-site / multi-compteur**: y a-t-il plusieurs logements/sites à gérer?
-10. **Sécurité**: stockage du webhook et DB en variables d'environnement obligatoire?
+## Points ouverts
+1. **Claim device**: confirmer que l'appareil est bien claimé côté EnergyID (sinon `/hello` renverra `claimCode`/`claimUrl`).
+2. **Mapping métier**: confirmer définitivement `el.t1/el.t2/el-i.t1/el-i.t2/pv`.
+3. **Gaz manuel**:
+   - fréquence d'encodage attendue,
+   - conversion m³ -> kWh (coefficient PCS) fixe ou variable par période?
+4. **Tarifaire**:
+   - faut-il gérer HP/HC, saisonnalité, coûts fixes, TVA, prosumer, et taxes régionales distinctes?
 
 ## Plan de suite proposé
-### Phase 1 — Stabilisation ingestion
-- Connecter `EnergyIngestionService` à la vraie API compteur.
-- Ajouter validation des valeurs (anti-retour arrière index, bornes).
-- Ajouter logs structurés et code retour cron robuste.
+### Phase 1 — Stabilisation webhook V2
+- Vérifier run réel avec provisioning keys.
+- Ajouter logs structurés (latence, taille payload, statut).
+- Ajouter tests d'intégration avec mock HTTP.
 
 ### Phase 2 — Tarifaire complet
 - Écran/API d'administration des grilles tarifaires.

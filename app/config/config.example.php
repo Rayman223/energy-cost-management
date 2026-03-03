@@ -11,13 +11,18 @@ return [
         'password' => 'change_me',
         'charset' => 'utf8mb4',
     ],
-    'webhook' => [
-        'url' => 'https://hooks.energyid.eu/services/WebhookIn/xxx/yyy',
+    'energyid' => [
+        'provisioning_key' => 'change_me',
+        'provisioning_secret' => 'change_me',
         'timeout' => 15,
+        'device' => [
+            'deviceId' => 'manage-energy-costs-1',
+            'deviceName' => 'Manage Energy Costs Device',
+            'firmwareVersion' => '1.0.0',
+            'ipAddress' => '127.0.0.1',
+            'macAddress' => '00:00:00:00:00:00',
+            'localDeviceUrl' => 'http://localhost',
+        ],
     ],
     'timezone' => 'Europe/Brussels',
-    'site' => [
-        'remote_id' => 'maison-principale',
-        'remote_name' => 'Maison principale',
-    ],
 ];

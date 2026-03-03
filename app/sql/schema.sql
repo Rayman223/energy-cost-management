@@ -39,3 +39,9 @@ CREATE TABLE IF NOT EXISTS tariff_grid_lines (
         FOREIGN KEY (tariff_grid_id) REFERENCES tariff_grids (id)
         ON DELETE CASCADE
 );
+
+CREATE TABLE IF NOT EXISTS webhook_sync_state (
+    source_name VARCHAR(120) PRIMARY KEY,
+    last_sent_at DATETIME NULL,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);

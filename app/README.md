@@ -3,38 +3,38 @@
 Ce dossier contient une base propre pour remplacer l'ancien projet `old/`.
 
 ## Objectif
-1. Enregistrer chaque heure les données énergie en DB.
-2. Envoyer un JSON à EnergyID via webhook après enregistrement.
-3. Préparer la suite pour:
-   - gestion de grille tarifaire détaillée,
-   - calcul des coûts électricité + gaz,
-   - encodage manuel des index gaz.
+1. Enregistrer les données énergie **horaire** en DB.
+2. Envoyer **1 fois par jour** un JSON vers EnergyID Incoming Webhooks **V2**.
+3. Publier les données des tables:
+   - `Data_Dries` (import/export jour/nuit) en kWh,
+   - `Data_Solaire.production` en Wh (converti en kWh pour la clé `pv`),
+   - fallback `Data_Brusol` tant que migration non terminée.
+4. À l'envoi quotidien, pousser **la première valeur de chaque journée**.
 
 ## Structure
 - `bootstrap.php`: autoload + chargement config.
 - `config/config.example.php`: exemple de configuration.
-- `scripts/cron_hourly.php`: script à déclencher par cron toutes les heures.
-- `src/`
-  - `Infrastructure/`: DB + HTTP.
-  - `Repository/`: accès données.
-  - `Service/`: ingestion, webhook, tarif, gaz manuel.
-  - `Domain/`: objets métiers simples.
-- `sql/schema.sql`: tables minimales.
-- `docs/suivi.md`: plan de suivi + questions ouvertes.
+- `scripts/cron_hourly.php`: ingestion horaire DB.
+- `scripts/cron_daily_webhook.php`: provisioning `/hello` + envoi quotidien vers EnergyID.
+- `docs/energyid-v2-model.md`: contrat V2 (endpoint, headers, payload, erreurs, retry).
 
 ## Installation rapide
 ```bash
 cp app/config/config.example.php app/config/config.php
-# adapter les paramètres DB + webhook
+# adapter DB + energyid provisioning credentials + device metadata
 mysql -u <user> -p <database> < app/sql/schema.sql
 ```
 
 ## Cron
-Exemple (toutes les heures):
+Exemple:
 ```cron
-0 * * * * /usr/bin/php /workspace/Manage-energy-costs/app/scripts/cron_hourly.php >> /var/log/manage-energy-costs.log 2>&1
+# Ingestion horaire en base
+0 * * * * /usr/bin/php /workspace/Manage-energy-costs/app/scripts/cron_hourly.php >> /var/log/manage-energy-costs-hourly.log 2>&1
+
+# Envoi quotidien webhook EnergyID
+15 1 * * * /usr/bin/php /workspace/Manage-energy-costs/app/scripts/cron_daily_webhook.php >> /var/log/manage-energy-costs-daily.log 2>&1
 ```
 
 ## Remarques
 - Aucun flux CSV n'est utilisé dans la nouvelle architecture.
-- Le script de cron contient un `TODO` pour brancher la vraie source de mesures (compteur/API locale).
+- Retry webhook: 1 retry max par métrique; si échec, la métrique est skip et rejouée au prochain run.
