@@ -40,8 +40,3 @@
 - Workflow d'encodage manuel gaz (avec contrôle d'écarts).
 - Conversion m³ → kWh (coefficient configurable par période).
 - Intégration des coûts gaz dans reporting global.
-
-### Phase 4 — Qualité et exploitation
-- Tests unitaires services critiques.
-- Rejeu des envois webhook en erreur.
-- Dashboard de suivi (dernier cron, volume envoyé, erreurs).

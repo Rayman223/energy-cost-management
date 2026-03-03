@@ -14,9 +14,16 @@ Ce dossier contient une base propre pour remplacer l'ancien projet `old/`.
 ## Structure
 - `bootstrap.php`: autoload + chargement config.
 - `config/config.example.php`: exemple de configuration.
-- `scripts/cron_hourly.php`: ingestion horaire DB.
+- `scripts/cron_hourly.php`: ingestion horaire DB depuis les APIs compteurs locales.
 - `scripts/cron_daily_webhook.php`: provisioning `/hello` + envoi quotidien vers EnergyID.
 - `docs/energyid-v2-model.md`: contrat V2 (endpoint, headers, payload, erreurs, retry).
+
+
+## Mapping API compteurs
+- Les endpoints sont configurés dans `config.php` (`meters.dries_url`, `meters.solar_url`).
+- Les chemins JSON des index sont configurés dans `meters.paths` et testés dans l'ordre jusqu'à trouver une valeur numérique.
+- Les index `Data_Dries` sont attendus en kWh.
+- `Data_Solaire.production` est stocké en Wh.
 
 ## Installation rapide
 ```bash
