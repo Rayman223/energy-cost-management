@@ -45,6 +45,26 @@ try {
     // ── GET actions ──────────────────────────────────────────────────────────
     if ($method === 'GET') {
         match ($action) {
+            'live' => (static function () use ($config): never {
+                $meterApi = new \App\Service\MeterApiService((int) ($config['meters']['timeout'] ?? 10));
+                $result   = ['ok' => true, 'timestamp' => date('c')];
+
+                try {
+                    $dries = $meterApi->fetchJson($config['meters']['dries_url']);
+                    $result['dries_w'] = $meterApi->readNumericValue($dries, ['active_power_w']);
+                } catch (\Throwable $e) {
+                    $result['dries_error'] = $e->getMessage();
+                }
+
+                try {
+                    $solar = $meterApi->fetchJson($config['meters']['solar_url']);
+                    $result['solar_w'] = $meterApi->readNumericValue($solar, ['active_power_w']);
+                } catch (\Throwable $e) {
+                    $result['solar_error'] = $e->getMessage();
+                }
+
+                jsonOut($result);
+            })(),
             'today'        => jsonOut($legacyRepo->getTodayIndexValues()),
             'monthly_delta'=> jsonOut($legacyRepo->getMonthlyDeltas()),
             'chart_data'   => jsonOut($legacyRepo->getDailyDeltasForChart((int) ($_GET['days'] ?? 30))),

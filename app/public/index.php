@@ -26,7 +26,6 @@ try {
     $tariffRepo = new TariffRepository($pdo);
     $costSvc    = new CostCalculationService($legacyRepo, $tariffRepo, $gasRepo, new TariffCalculatorService());
 
-    $today      = $legacyRepo->getTodayIndexValues();
     $deltas     = $legacyRepo->getMonthlyDeltas();
     $cost       = $costSvc->estimateCurrentMonthElectricity();
     $gasLatest  = $gasRepo->getLatest();
@@ -373,38 +372,21 @@ function fmtCost(mixed $v): string
   </div>
   <?php endif; ?>
 
-  <!-- ── Today's index values ──────────────────────────────────────────── -->
+  <!-- ── Live power (direct dongle read) ──────────────────────────────── -->
   <div class="section-header">
-    <span class="section-title">Index compteurs — aujourd'hui</span>
+    <span class="section-title">Puissance instantanée — temps réel</span>
     <span class="section-line"></span>
-    <?php if ($today): ?>
-    <span style="font-family:var(--mono);font-size:.68rem;color:var(--muted)">
-      <?= htmlspecialchars(substr($today['dries']['timestamp'] ?? '', 0, 16)) ?>
-    </span>
-    <?php endif; ?>
+    <span id="live-ts" style="font-family:var(--mono);font-size:.68rem;color:var(--muted)">—</span>
   </div>
 
-  <div class="cards cards-5">
+  <div class="cards cards-2">
     <div class="card amber">
-      <div class="card-label"><span class="dot" style="background:var(--amber)"></span>Import T1 — Jour</div>
-      <div class="card-value"><?= fmt($today['dries']['Prelev_jour'] ?? null) ?></div>
-    </div>
-    <div class="card amber">
-      <div class="card-label"><span class="dot" style="background:var(--amber);opacity:.6"></span>Import T2 — Nuit</div>
-      <div class="card-value"><?= fmt($today['dries']['Prelev_nuit'] ?? null) ?></div>
-    </div>
-    <div class="card blue">
-      <div class="card-label"><span class="dot" style="background:var(--blue)"></span>Export T1 — Jour</div>
-      <div class="card-value"><?= fmt($today['dries']['Injec_jour'] ?? null) ?></div>
-    </div>
-    <div class="card blue">
-      <div class="card-label"><span class="dot" style="background:var(--blue);opacity:.6"></span>Export T2 — Nuit</div>
-      <div class="card-value"><?= fmt($today['dries']['Injec_nuit'] ?? null) ?></div>
+      <div class="card-label"><span class="dot" style="background:var(--amber)"></span>Consommation réseau</div>
+      <div class="card-value" id="live-dries-w"><span class="nd">…</span></div>
     </div>
     <div class="card green">
-      <div class="card-label"><span class="dot" style="background:var(--green)"></span>Production PV</div>
-      <div class="card-value"><?= fmt($today['solar']['production'] ?? null) ?></div>
-      <div class="card-sub"><?= htmlspecialchars($today['solar_source'] ?? '') ?></div>
+      <div class="card-label"><span class="dot" style="background:var(--green)"></span>Production solaire</div>
+      <div class="card-value" id="live-solar-w"><span class="nd">…</span></div>
     </div>
   </div>
 
@@ -779,8 +761,47 @@ function renderChart(data) {
   });
 }
 
-// Initial load
-loadChart(30);
+// ── Live dongle polling ────────────────────────────────────────────────────
+const LIVE_INTERVAL = 5_000; // 5 secondes
+
+function fmtWatt(v) {
+  if (v === undefined || v === null) return '<span class="nd">—</span>';
+  const w = Math.abs(parseFloat(v));
+  if (w >= 1000) {
+    return '<span class="val">' + (w / 1000).toLocaleString('fr-BE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + '</span> <span class="unit">kW</span>';
+  }
+  return '<span class="val">' + w.toLocaleString('fr-BE', { minimumFractionDigits: 0, maximumFractionDigits: 0 }) + '</span> <span class="unit">W</span>';
+}
+
+async function fetchLive() {
+  const syncDot = document.querySelector('.sync-dot');
+  try {
+    const res  = await fetch('api.php?action=live');
+    const data = await res.json();
+
+    document.getElementById('live-ts').textContent = data.timestamp
+      ? data.timestamp.slice(0, 19).replace('T', ' ')
+      : '—';
+
+    document.getElementById('live-dries-w').innerHTML = data.dries_error
+      ? '<span class="nd" title="' + data.dries_error + '">err</span>'
+      : fmtWatt(data.dries_w);
+
+    document.getElementById('live-solar-w').innerHTML = data.solar_error
+      ? '<span class="nd" title="' + data.solar_error + '">err</span>'
+      : fmtWatt(data.solar_w);
+
+    if (syncDot) syncDot.className = (data.dries_error && data.solar_error) ? 'sync-dot error' : 'sync-dot';
+  } catch (e) {
+    if (syncDot) document.querySelector('.sync-dot').className = 'sync-dot error';
+    console.warn('Live fetch failed:', e);
+  }
+}
+
+fetchLive();
+setInterval(fetchLive, LIVE_INTERVAL);
+
+
 
 // ── Gas entry ──────────────────────────────────────────────────────────────
 async function submitGas() {
