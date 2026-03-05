@@ -640,7 +640,7 @@ function fmtCost(mixed $v): string
               font-family:var(--mono);font-size:.68rem;color:var(--muted);display:flex;
               justify-content:space-between;flex-wrap:wrap;gap:8px">
     <span>Manage Energy v2 — Brussels</span>
-    <span>PHP <?= PHP_VERSION ?> · <?= date('Y-m-d H:i:s') ?></span>
+    <span>PHP <?= PHP_VERSION ?> · <?= date('d/m/Y H:i:s') ?></span>
   </div>
 
 </div><!-- /wrap -->
