@@ -5,34 +5,53 @@ declare(strict_types=1);
 use App\Infrastructure\Database;
 use App\Repository\LegacyIngestionRepository;
 use App\Service\MeterApiService;
-use App\Service\EnergyIngestionService;
 
-$config = require __DIR__ . '/../bootstrap.php';
-
+$config   = require __DIR__ . '/../bootstrap.php';
 $database = new Database($config['database']);
-$repository = new LegacyIngestionRepository($database->pdo());
+$repo     = new LegacyIngestionRepository($database->pdo());
 $meterApi = new MeterApiService((int) ($config['meters']['timeout'] ?? 10));
+$paths    = $config['meters']['paths'] ?? [];
+$ts       = new DateTimeImmutable('now');
+$errors   = [];
 
-$driesPayload = $meterApi->fetchJson($config['meters']['dries_url']);
-$solarPayload = $meterApi->fetchJson($config['meters']['solar_url']);
+// ── P1 meter (Dries) ──────────────────────────────────────────────────────
+try {
+    $dries = $meterApi->fetchJson($config['meters']['dries_url']);
 
-$paths = $config['meters']['paths'] ?? [];
+    $repo->insertDataDries(
+        timestamp:  $ts,
+        prelevJour: $meterApi->readNumericValue($dries, $paths['prelev_jour'] ?? []),
+        prelevNuit: $meterApi->readNumericValue($dries, $paths['prelev_nuit'] ?? []),
+        injecJour:  $meterApi->readNumericValue($dries, $paths['injec_jour']  ?? []),
+        injecNuit:  $meterApi->readNumericValue($dries, $paths['injec_nuit']  ?? []),
+    );
 
-$timestamp = new DateTimeImmutable('now');
+    echo "[OK] Data_Dries enregistre.\n";
+} catch (\Throwable $e) {
+    $errors[] = '[ERROR] Dries: ' . $e->getMessage();
+}
 
-$repository->insertDataDries(
-    timestamp: $timestamp,
-    prelevJour: $meterApi->readNumericValue($driesPayload, $paths['prelev_jour'] ?? []),
-    prelevNuit: $meterApi->readNumericValue($driesPayload, $paths['prelev_nuit'] ?? []),
-    injecJour: $meterApi->readNumericValue($driesPayload, $paths['injec_jour'] ?? []),
-    injecNuit: $meterApi->readNumericValue($driesPayload, $paths['injec_nuit'] ?? []),
-);
+// ── Solar dongle ──────────────────────────────────────────────────────────
+// total_power_export_kwh : index cumulatif kWh, meme structure que P1 meter.
+try {
+    $solar = $meterApi->fetchJson($config['meters']['solar_url']);
 
-$repository->insertDataSolaire(
-    timestamp: $timestamp,
-    // total_power_export_kwh: cumulative kWh counter, same dongle structure as P1 meter.
-    productionKwh: $meterApi->readNumericValue($solarPayload, $paths['solar_production_wh'] ?? []),
-);
+    $repo->insertDataSolaire(
+        timestamp:     $ts,
+        productionKwh: $meterApi->readNumericValue($solar, $paths['solar_production_wh'] ?? []),
+    );
 
-echo "[OK] Ingestion horaire compteurs enregistrée (Data_Dries + Data_Solaire/Data_Brusol).\n";
+    echo "[OK] Data_Solaire enregistre.\n";
+} catch (\Throwable $e) {
+    $errors[] = '[ERROR] Solaire: ' . $e->getMessage();
+}
+
+// ── Exit ──────────────────────────────────────────────────────────────────
+if ($errors !== []) {
+    foreach ($errors as $err) {
+        echo $err . "\n";
+    }
+    exit(1);
+}
+
 exit(0);
