@@ -153,8 +153,11 @@ foreach (TABLES as $table => $columns) {
         echo "  <div class='info-card'><div class='label'>Lignes source</div><div class='value'>" . number_format($countSrc) . "</div></div>";
         echo "  <div class='info-card'><div class='label'>Lignes destination (avant)</div><div class='value'>" . number_format($countDst) . "</div></div>";
         echo "</div>";
+        if ($countDst > $countSrc) {
+            echo "<p style='color:#fb923c;font-family:monospace;font-size:.8rem;margin-bottom:12px'>⚠ La destination contient plus de lignes que la source ({$countDst} vs {$countSrc}). Des doublons existent probablement. La déduplication se base sur les timestamps normalisés.</p>";
+        }
     } else {
-        line("  Source : $countSrc lignes | Destination actuelle : $countDst lignes");
+        line("  Source : $countSrc lignes | Destination actuelle : $countDst lignes" . ($countDst > $countSrc ? " ⚠ DOUBLONS POSSIBLES" : ''));
     }
 
     if ($countSrc === 0) {
@@ -162,30 +165,50 @@ foreach (TABLES as $table => $columns) {
         continue;
     }
 
-    // Lire toutes les lignes source
-    $cols    = implode(', ', array_map(fn($c) => "`$c`", $columns));
-    $srcRows = $src->query("SELECT $cols FROM `$table` ORDER BY timestamp ASC")->fetchAll(PDO::FETCH_ASSOC);
+    // Compter les lignes source dont le timestamp n'existe PAS encore en destination.
+    // On compare DATE_FORMAT pour neutraliser les différences de format (espaces, T, ms…).
+    $missingCount = (int) $src->prepare(
+        "SELECT COUNT(*) FROM `$table` src
+         WHERE NOT EXISTS (
+             SELECT 1 FROM `{$config['database']['name']}`.`$table` dst
+             WHERE DATE_FORMAT(dst.timestamp, '%Y-%m-%d %H:%i:%s')
+                 = DATE_FORMAT(src.timestamp, '%Y-%m-%d %H:%i:%s')
+         )"
+    )->query()->fetchColumn();
 
-    // Récupérer les timestamps déjà présents en destination (pour éviter les doublons)
+    // Fallback si cross-DB query non dispo : on charge les timestamps destination normalisés
     $existingTs = [];
-    $tsRows = $dst->query("SELECT timestamp FROM `$table`")->fetchAll(PDO::FETCH_COLUMN);
+    $tsRows = $dst->query(
+        "SELECT DATE_FORMAT(timestamp, '%Y-%m-%d %H:%i:%s') FROM `$table`"
+    )->fetchAll(PDO::FETCH_COLUMN);
     foreach ($tsRows as $ts) {
         $existingTs[$ts] = true;
     }
 
+    // Lire toutes les lignes source
+    $cols    = implode(', ', array_map(fn($c) => "`$c`", $columns));
+    $srcRows = $src->query(
+        "SELECT $cols, DATE_FORMAT(timestamp, '%Y-%m-%d %H:%i:%s') AS ts_norm
+         FROM `$table` ORDER BY timestamp ASC"
+    )->fetchAll(PDO::FETCH_ASSOC);
+
     $placeholders = implode(', ', array_map(fn($c) => ":$c", $columns));
-    $insertSql    = "INSERT INTO `$table` ($cols) VALUES ($placeholders)";
-    $stmt         = $isDryRun ? null : $dst->prepare($insertSql);
+    // INSERT IGNORE : filet de sécurité si un doublon passe quand même
+    $insertSql = "INSERT IGNORE INTO `$table` ($cols) VALUES ($placeholders)";
+    $stmt      = $isDryRun ? null : $dst->prepare($insertSql);
 
     $inserted = 0;
     $skipped  = 0;
     $errors   = 0;
-    $samples  = []; // pour affichage
+    $samples  = [];
 
     if (!$isDryRun) $dst->beginTransaction();
 
     foreach ($srcRows as $row) {
-        if (isset($existingTs[$row['timestamp']])) {
+        $tsNorm = $row['ts_norm'];
+        unset($row['ts_norm']); // ne pas passer ts_norm dans l'INSERT
+
+        if (isset($existingTs[$tsNorm])) {
             $skipped++;
             continue;
         }
@@ -201,7 +224,7 @@ foreach (TABLES as $table => $columns) {
                 }
             }
         } else {
-            $inserted++; // dry-run : on compte ce qui serait inséré
+            $inserted++;
         }
     }
 
