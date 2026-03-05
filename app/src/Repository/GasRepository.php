@@ -9,6 +9,8 @@ use PDO;
 
 final class GasRepository
 {
+    private const TABLE = 'Data_gaz';
+
     public function __construct(private readonly PDO $pdo)
     {
     }
@@ -16,7 +18,7 @@ final class GasRepository
     public function save(DateTimeImmutable $readingAt, float $counterM3): void
     {
         $stmt = $this->pdo->prepare(
-            'INSERT INTO gas_manual_readings (reading_at, counter_m3) VALUES (:reading_at, :counter_m3)'
+            'INSERT INTO ' . self::TABLE . ' (reading_at, counter_m3) VALUES (:reading_at, :counter_m3)'
         );
         $stmt->execute([
             'reading_at' => $readingAt->format('Y-m-d H:i:s'),
@@ -29,16 +31,16 @@ final class GasRepository
     {
         $stmt = $this->pdo->prepare(
             'SELECT id, reading_at, counter_m3
-             FROM gas_manual_readings
+             FROM ' . self::TABLE . '
              ORDER BY reading_at DESC
              LIMIT :limit'
         );
         $stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
         $stmt->execute();
 
-        $rows = array_reverse($stmt->fetchAll()); // ASC for delta calc
+        $rows   = array_reverse($stmt->fetchAll()); // ASC for delta calc
         $result = [];
-        $prev = null;
+        $prev   = null;
 
         foreach ($rows as $row) {
             $delta = $prev !== null
@@ -60,21 +62,18 @@ final class GasRepository
     public function getLatest(): ?array
     {
         $stmt = $this->pdo->query(
-            'SELECT id, reading_at, counter_m3 FROM gas_manual_readings ORDER BY reading_at DESC LIMIT 1'
+            'SELECT id, reading_at, counter_m3 FROM ' . self::TABLE . ' ORDER BY reading_at DESC LIMIT 1'
         );
         $row = $stmt->fetch();
 
         return $row ?: null;
     }
 
-    /**
-     * Returns the two most recent readings to compute current period consumption.
-     * @return array{from:array|null, to:array|null}
-     */
+    /** @return array{from:array|null, to:array|null} */
     public function getLastTwoReadings(): array
     {
         $stmt = $this->pdo->query(
-            'SELECT id, reading_at, counter_m3 FROM gas_manual_readings ORDER BY reading_at DESC LIMIT 2'
+            'SELECT id, reading_at, counter_m3 FROM ' . self::TABLE . ' ORDER BY reading_at DESC LIMIT 2'
         );
         $rows = $stmt->fetchAll();
 
