@@ -190,7 +190,7 @@ function fmtCost(mixed $v): string
     line-height: 1;
     color: #eef2f8;
   }
-  .card-value .val { }
+  /*.card-value .val { }*/
   .card-value .unit { font-size: .85rem; font-weight: 400; color: var(--muted); margin-left: 4px; }
   .card-value .nd   { color: var(--muted); font-size: 1.1rem; }
   .card-sub {
