@@ -544,7 +544,7 @@ function fmtCost(mixed $v): string
   <div class="gas-grid">
     <div class="gas-history">
       <table>
-        <thead><tr><th>Date</th><th>Index (m³)</th><th>Delta</th></tr></thead>
+        <thead><tr><th>Date &amp; heure</th><th>Index (m³)</th><th>Delta</th></tr></thead>
         <tbody id="gas-tbody">
           <?php
           $gasRows = [];
@@ -554,7 +554,7 @@ function fmtCost(mixed $v): string
           <tr><td colspan="3" class="td-empty">Aucune entrée gaz enregistrée.</td></tr>
           <?php else: foreach ($gasRows as $row): ?>
           <tr>
-            <td><?= htmlspecialchars(substr($row['reading_at'], 0, 10)) ?></td>
+            <td><?= htmlspecialchars(substr($row['reading_at'], 0, 16)) ?></td>
             <td><?= number_format((float)$row['counter_m3'], 3, '.', ' ') ?></td>
             <td class="td-delta"><?= $row['delta_m3'] !== null ? '+' . number_format($row['delta_m3'], 3, '.', ' ') . ' m³' : '—' ?></td>
           </tr>
@@ -574,8 +574,12 @@ function fmtCost(mixed $v): string
       </div>
       <?php endif; ?>
       <div class="form-row">
-        <label class="form-label" for="gas-date">Date de relevé</label>
+        <label class="form-label" for="gas-date">Date du relevé</label>
         <input id="gas-date" type="date" class="form-input" value="<?= date('Y-m-d') ?>">
+      </div>
+      <div class="form-row">
+        <label class="form-label" for="gas-time">Heure du relevé</label>
+        <input id="gas-time" type="time" class="form-input" value="<?= date('H:i') ?>">
       </div>
       <div class="form-row">
         <label class="form-label" for="gas-value">Index compteur (m³)</label>
@@ -814,6 +818,7 @@ async function submitGas() {
   const btn      = document.getElementById('gas-btn');
   const feedback = document.getElementById('gas-feedback');
   const date     = document.getElementById('gas-date').value;
+  const time     = document.getElementById('gas-time').value || '00:00';
   const value    = parseFloat(document.getElementById('gas-value').value);
 
   feedback.textContent = '';
@@ -832,7 +837,7 @@ async function submitGas() {
     const res  = await fetch('api.php?action=gas_entry', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ counter_m3: value, reading_at: date }),
+      body: JSON.stringify({ counter_m3: value, reading_at: `${date} ${time}:00` }),
     });
     const data = await res.json();
 
@@ -847,7 +852,7 @@ async function submitGas() {
       if (hist.length) {
         tbody.innerHTML = hist.slice(0, 6).map(r =>
           `<tr>
-            <td>${r.reading_at.slice(0, 10)}</td>
+            <td>${r.reading_at.slice(0, 16)}</td>
             <td>${parseFloat(r.counter_m3).toFixed(3)}</td>
             <td class="td-delta">${r.delta_m3 !== null ? '+' + parseFloat(r.delta_m3).toFixed(3) + ' m³' : '—'}</td>
           </tr>`
