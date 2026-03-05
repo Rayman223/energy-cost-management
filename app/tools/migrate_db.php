@@ -144,20 +144,54 @@ foreach (TABLES as $table => $columns) {
         continue;
     }
 
-    // Compter les lignes source
     $countSrc = (int) $src->query("SELECT COUNT(*) FROM `$table`")->fetchColumn();
     $countDst = (int) $dst->query("SELECT COUNT(*) FROM `$table`")->fetchColumn();
+
+    // ── Étape 1 : déduplication de la destination ─────────────────────────
+    // Garde uniquement le MIN(id) par timestamp normalisé, supprime les autres.
+    $dupCount = (int) $dst->query(
+        "SELECT COUNT(*) FROM `$table` d
+         WHERE d.id NOT IN (
+             SELECT MIN(id) FROM `$table`
+             GROUP BY DATE_FORMAT(timestamp, '%Y-%m-%d %H:%i:%s')
+         )"
+    )->fetchColumn();
+
+    if ($dupCount > 0) {
+        if (!$isCli) {
+            echo "<p style='color:#fb923c;font-family:monospace;font-size:.8rem;margin-bottom:8px'>"
+               . "⚠ $dupCount doublon(s) détecté(s) en destination."
+               . ($isDryRun ? " (dry-run : non supprimés)" : " Suppression en cours…")
+               . "</p>";
+        } else {
+            line("  ⚠ $dupCount doublon(s) en destination." . ($isDryRun ? " (dry-run)" : " Suppression…"));
+        }
+
+        if (!$isDryRun) {
+            $dst->exec(
+                "DELETE FROM `$table`
+                 WHERE id NOT IN (
+                     SELECT * FROM (
+                         SELECT MIN(id) FROM `$table`
+                         GROUP BY DATE_FORMAT(timestamp, '%Y-%m-%d %H:%i:%s')
+                     ) AS keep
+                 )"
+            );
+            $countDst = (int) $dst->query("SELECT COUNT(*) FROM `$table`")->fetchColumn();
+            line("  ✓ Doublons supprimés. Destination : $countDst lignes.");
+        }
+    }
 
     if (!$isCli) {
         echo "<div class='info-grid'>";
         echo "  <div class='info-card'><div class='label'>Lignes source</div><div class='value'>" . number_format($countSrc) . "</div></div>";
-        echo "  <div class='info-card'><div class='label'>Lignes destination (avant)</div><div class='value'>" . number_format($countDst) . "</div></div>";
-        echo "</div>";
-        if ($countDst > $countSrc) {
-            echo "<p style='color:#fb923c;font-family:monospace;font-size:.8rem;margin-bottom:12px'>⚠ La destination contient plus de lignes que la source ({$countDst} vs {$countSrc}). Des doublons existent probablement. La déduplication se base sur les timestamps normalisés.</p>";
+        echo "  <div class='info-card'><div class='label'>Lignes destination (après dédup)</div><div class='value'>" . number_format($countDst) . "</div></div>";
+        if ($dupCount > 0 && $isDryRun) {
+            echo "  <div class='info-card'><div class='label'>Doublons à supprimer</div><div class='value' style='color:#fb923c'>" . number_format($dupCount) . "</div></div>";
         }
+        echo "</div>";
     } else {
-        line("  Source : $countSrc lignes | Destination actuelle : $countDst lignes" . ($countDst > $countSrc ? " ⚠ DOUBLONS POSSIBLES" : ''));
+        line("  Source : $countSrc lignes | Destination (après dédup) : $countDst lignes");
     }
 
     if ($countSrc === 0) {
@@ -167,14 +201,16 @@ foreach (TABLES as $table => $columns) {
 
     // Compter les lignes source dont le timestamp n'existe PAS encore en destination.
     // On compare DATE_FORMAT pour neutraliser les différences de format (espaces, T, ms…).
-    $missingCount = (int) $src->prepare(
+    $missingStmt = $src->prepare(
         "SELECT COUNT(*) FROM `$table` src
          WHERE NOT EXISTS (
              SELECT 1 FROM `{$config['database']['name']}`.`$table` dst
              WHERE DATE_FORMAT(dst.timestamp, '%Y-%m-%d %H:%i:%s')
                  = DATE_FORMAT(src.timestamp, '%Y-%m-%d %H:%i:%s')
          )"
-    )->query()->fetchColumn();
+    );
+    $missingStmt->execute();
+    $missingCount = (int) $missingStmt->fetchColumn();
 
     // Fallback si cross-DB query non dispo : on charge les timestamps destination normalisés
     $existingTs = [];

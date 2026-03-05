@@ -15,7 +15,7 @@ CREATE TABLE IF NOT EXISTS Data_Dries (
     Prelev_nuit  DECIMAL(12,3) NOT NULL COMMENT 'Import T2 (nuit) kWh cumulatif',
     Injec_jour   DECIMAL(12,3) NOT NULL COMMENT 'Export T1 (jour) kWh cumulatif',
     Injec_nuit   DECIMAL(12,3) NOT NULL COMMENT 'Export T2 (nuit) kWh cumulatif',
-    INDEX idx_data_dries_timestamp (timestamp)
+    UNIQUE KEY uq_data_dries_timestamp (timestamp)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- ── Production solaire (dongle P1 sur onduleur) ───────────────────────────
@@ -25,14 +25,14 @@ CREATE TABLE IF NOT EXISTS Data_Solaire (
     id         BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     timestamp  DATETIME NOT NULL,
     production DECIMAL(12,3) NOT NULL COMMENT 'Index cumulatif kWh (total_power_export_kwh)',
-    INDEX idx_data_solaire_timestamp (timestamp)
+    UNIQUE KEY uq_data_solaire_timestamp (timestamp)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS Data_Brusol (
     id         BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     timestamp  DATETIME NOT NULL,
     production DECIMAL(12,3) NOT NULL COMMENT 'Production journalière Wh (source Brusol)',
-    INDEX idx_data_brusol_timestamp (timestamp)
+    UNIQUE KEY uq_data_brusol_timestamp (timestamp)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- ── Relevés gaz (encodage manuel) ────────────────────────────────────────
@@ -47,7 +47,7 @@ CREATE TABLE IF NOT EXISTS gas_manual_readings (
 -- ── Tarifs énergétiques ───────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS tariff_grids (
     id               BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-    energy_type      ENUM('electricity', 'gas', 'eau') NOT NULL,
+    energy_type      ENUM('electricity', 'gas', 'water') NOT NULL,
     name             VARCHAR(120) NOT NULL,
     valid_from       DATE NOT NULL,
     valid_to         DATE NULL COMMENT 'NULL = actif indéfiniment',
