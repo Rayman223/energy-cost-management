@@ -16,6 +16,7 @@ final class TariffGrid
         public readonly DateTimeImmutable $validFrom,
         public readonly ?DateTimeImmutable $validTo,
         public readonly array $lines,
+        public readonly ?float $pcsCoefficient = null,
     ) {
     }
 

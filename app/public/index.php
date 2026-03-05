@@ -606,6 +606,12 @@ function fmtCost(mixed $v): string
     <div class="card">
       <div class="card-label">Outils</div>
       <div class="tools-strip">
+        <a href="tariffs.php" class="tool-link">
+          € Gérer les tarifs
+        </a>
+        <a href="../tools/migrate_db.php" class="tool-link" target="_blank">
+          ⇄ Migration DB
+        </a>
         <a href="../tools/conversion_solaire.php?DRY_RUN=1" class="tool-link" target="_blank">
           ☀ Migration Solaire (dry-run)
         </a>
