@@ -111,3 +111,37 @@ mysql -u <user> -p <database> < app/sql/schema.sql
 mysql -u <user> -p <database> < app/sql/schema_v2.sql
 # Décommenter et adapter les seeds tarifaires dans schema_v2.sql
 ```
+
+
+
+
+# À faire
+- Pour la gestion des tariff, voici la liste des valeurs à prendre en compte pour le mois de février 2026. Modifie pour tenir compte de toutes ces valeurs.
+Lorsque je clique pour ajouter un nouveau tariff, il faut préremplir le formulaire en reprenant les dernires valeurs en date car certaines valeurs ne change pas tous les mois.
+- Met à jour le fichier de suivi
+
+## Electricité
+- Cout simple = 11,60 c€/kWh
+- Cout Jour = 13,25 c€/kWh
+- Cout Nuit = 10,04 c€/kWh
+- Abonnement = 2,99 €/mois
+- Distribution jour = 9,96 c€/kWh
+- Transport = 2,27 c€/kWh
+- Gestion = 14,73 €/an
+- Prosumer = 0 €/kW/an
+- Droit d’accise spécial = 5,0329 c€/kWh
+- Contribution sur l'énergie = 0,20417 c€/kWh
+- Contribution énergie verte et cogénération = 2,69 c€/kWh
+- Obligations de service publique = 39,94 €/an
+
+## Gaz
+- Cout = 4,17 c€/kWh
+- Abonnement = 2,99 €/mois
+- Contribution sur l'énergie = 0,1058 c€/kWh
+- Accise fédérale = 0,8724 c€/kWh
+- Distribution
+    - Cout variable = 1,447 c€/kWh
+    - Cout fixe = 43,07 c€/kWh
+- Transport = 0,165 c€/kWh
+- Relevé de compteur = 24,95 €/an
+
