@@ -36,12 +36,13 @@ CREATE TABLE IF NOT EXISTS Data_Brusol (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- ── Relevés gaz (encodage manuel) ────────────────────────────────────────
-CREATE TABLE IF NOT EXISTS gas_manual_readings (
+CREATE TABLE IF NOT EXISTS Data_gaz (
     id          BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     reading_at  DATETIME NOT NULL,
     counter_m3  DECIMAL(12,3) NOT NULL COMMENT 'Index compteur gaz en m³',
     created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    INDEX idx_gas_manual_readings_date (reading_at)
+    UNIQUE KEY uq_data_gaz_reading (reading_at, counter_m3),
+    INDEX idx_data_gaz_date (reading_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- ── Tarifs énergétiques ───────────────────────────────────────────────────
