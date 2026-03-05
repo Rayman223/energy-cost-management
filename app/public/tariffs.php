@@ -23,13 +23,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $validTo    = trim($_POST['valid_to'] ?? '') ?: null;
 
             if (!in_array($energyType, ['electricity', 'gas'], true)) throw new \InvalidArgumentException('Type énergie invalide.');
-            if ($name === '')   throw new \InvalidArgumentException('Le nom est requis.');
+            if ($name === '')     throw new \InvalidArgumentException('Le nom est requis.');
             if ($validFrom === '') throw new \InvalidArgumentException('La date de début est requise.');
 
-            // Collect line values
             $lineKeys = $energyType === 'electricity'
-                ? ['energy_t1','energy_t2','distribution_t1','distribution_t2','distribution_fixed','federal_contribution','injection_t1','injection_t2','prosumer_annual']
-                : ['energy','distribution','distribution_fixed','federal_contribution'];
+                ? [
+                    'energy_simple', 'energy_t1', 'energy_t2',
+                    'subscription',
+                    'distribution_t1', 'distribution_t2',
+                    'transport',
+                    'management_annual', 'prosumer_annual',
+                    'excise_duty', 'energy_contribution', 'green_contribution',
+                    'public_service_annual',
+                    'injection_t1', 'injection_t2',
+                  ]
+                : [
+                    'energy', 'subscription',
+                    'energy_contribution', 'federal_excise',
+                    'distribution', 'distribution_fixed',
+                    'transport', 'meter_reading_annual',
+                  ];
 
             $lines = [];
             foreach ($lineKeys as $key) {
@@ -40,7 +53,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $lines[$key] = $val;
             }
 
-            // pcs_coefficient for gas
             $pcs = null;
             if ($energyType === 'gas' && ($_POST['pcs_coefficient'] ?? '') !== '') {
                 $pcs = (float) $_POST['pcs_coefficient'];
@@ -61,7 +73,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($action === 'close') {
             $id      = (int) ($_POST['grid_id'] ?? 0);
             $validTo = $_POST['valid_to_close'] ?? '';
-            if ($id <= 0)      throw new \InvalidArgumentException('ID invalide.');
+            if ($id <= 0)       throw new \InvalidArgumentException('ID invalide.');
             if ($validTo === '') throw new \InvalidArgumentException('Date de fin requise.');
             $tariffRepo->closeGrid($id, new \DateTimeImmutable($validTo));
             $success = 'Tarif clôturé.';
@@ -82,6 +94,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 $elecGrids = $tariffRepo->findAll('electricity');
 $gasGrids  = $tariffRepo->findAll('gas');
 
+// Latest grids for pre-fill (sorted DESC by valid_from)
+$latestElec = !empty($elecGrids) ? $elecGrids[0] : null;
+$latestGas  = !empty($gasGrids)  ? $gasGrids[0]  : null;
+
 // Pre-fill form if editing
 $editGrid = null;
 if (isset($_GET['edit'])) {
@@ -90,23 +106,38 @@ if (isset($_GET['edit'])) {
 
 // ── Line definitions ───────────────────────────────────────────────────────
 $elecLines = [
-    'energy_t1'             => ['label' => 'Énergie T1 (jour)',       'unit' => '€/kWh'],
-    'energy_t2'             => ['label' => 'Énergie T2 (nuit)',       'unit' => '€/kWh'],
-    'distribution_t1'       => ['label' => 'Distribution T1 (jour)', 'unit' => '€/kWh'],
-    'distribution_t2'       => ['label' => 'Distribution T2 (nuit)', 'unit' => '€/kWh'],
-    'distribution_fixed'    => ['label' => 'Abonnement réseau',       'unit' => '€/jour'],
-    'federal_contribution'  => ['label' => 'Cotisation fédérale',     'unit' => '€/kWh'],
-    'injection_t1'          => ['label' => 'Crédit injection T1',     'unit' => '€/kWh'],
-    'injection_t2'          => ['label' => 'Crédit injection T2',     'unit' => '€/kWh'],
-    'prosumer_annual'       => ['label' => 'Taxe prosumer BRUGEL',    'unit' => '€/an'],
+    'energy_simple'         => ['label' => 'Énergie simple (monohoraire)',     'unit' => '€/kWh'],
+    'energy_t1'             => ['label' => 'Énergie T1 (jour)',                'unit' => '€/kWh'],
+    'energy_t2'             => ['label' => 'Énergie T2 (nuit)',                'unit' => '€/kWh'],
+    'subscription'          => ['label' => 'Abonnement fournisseur',           'unit' => '€/mois'],
+    'distribution_t1'       => ['label' => 'Distribution T1 (jour)',           'unit' => '€/kWh'],
+    'distribution_t2'       => ['label' => 'Distribution T2 (nuit)',           'unit' => '€/kWh'],
+    'transport'             => ['label' => 'Transport',                        'unit' => '€/kWh'],
+    'management_annual'     => ['label' => 'Gestion (fixe annuel)',            'unit' => '€/an'],
+    'prosumer_annual'       => ['label' => 'Taxe prosumer BRUGEL',             'unit' => '€/an'],
+    'excise_duty'           => ['label' => "Droit d'accise spécial",           'unit' => '€/kWh'],
+    'energy_contribution'   => ['label' => 'Contribution énergie',             'unit' => '€/kWh'],
+    'green_contribution'    => ['label' => 'Contribution verte & cogénération','unit' => '€/kWh'],
+    'public_service_annual' => ['label' => 'Obligations de service public',    'unit' => '€/an'],
+    'injection_t1'          => ['label' => 'Crédit injection T1',              'unit' => '€/kWh'],
+    'injection_t2'          => ['label' => 'Crédit injection T2',              'unit' => '€/kWh'],
 ];
 
 $gasLines = [
-    'energy'               => ['label' => 'Énergie fournisseur', 'unit' => '€/kWh'],
-    'distribution'         => ['label' => 'Distribution',        'unit' => '€/kWh'],
-    'distribution_fixed'   => ['label' => 'Abonnement réseau',   'unit' => '€/jour'],
-    'federal_contribution' => ['label' => 'Cotisation fédérale', 'unit' => '€/kWh'],
+    'energy'               => ['label' => 'Énergie fournisseur',              'unit' => '€/kWh'],
+    'subscription'         => ['label' => 'Abonnement fournisseur',            'unit' => '€/mois'],
+    'energy_contribution'  => ['label' => 'Contribution énergie',              'unit' => '€/kWh'],
+    'federal_excise'       => ['label' => 'Accise fédérale',                   'unit' => '€/kWh'],
+    'distribution'         => ['label' => 'Distribution (variable)',           'unit' => '€/kWh'],
+    'distribution_fixed'   => ['label' => 'Distribution (fixe)',               'unit' => 'c€/kWh'],
+    'transport'            => ['label' => 'Transport',                         'unit' => '€/kWh'],
+    'meter_reading_annual' => ['label' => 'Relevé de compteur',                'unit' => '€/an'],
 ];
+
+// Lines to display: edit mode uses the grid's own lines; new mode pre-fills from latest
+$et      = $editGrid?->energyType ?? 'electricity';
+$elLines = ($editGrid && $editGrid->energyType === 'electricity') ? $editGrid->lines : ($latestElec?->lines ?? []);
+$glLines = ($editGrid && $editGrid->energyType === 'gas')         ? $editGrid->lines : ($latestGas?->lines  ?? []);
 
 $today = date('Y-m-d');
 ?>
@@ -146,12 +177,10 @@ $today = date('Y-m-d');
   .section-title  { font-size:.62rem; font-weight:700; letter-spacing:.15em; text-transform:uppercase; color:var(--muted); }
   .section-line   { flex:1; height:1px; background:var(--border); }
 
-  /* ── Alerts ── */
   .alert { padding:12px 16px; border-radius:8px; font-size:.85rem; margin-bottom:20px; font-family:var(--mono); }
   .alert-ok  { background:var(--green-dim); border:1px solid rgba(47,213,142,.3); color:var(--green); }
   .alert-err { background:var(--red-dim);   border:1px solid rgba(245,101,101,.3); color:var(--red); }
 
-  /* ── Form ── */
   .form-card { background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:24px; }
   .form-tabs { display:flex; gap:4px; margin-bottom:22px; }
   .form-tab  { padding:7px 18px; border-radius:6px; font-size:.78rem; font-weight:700; letter-spacing:.04em; text-transform:uppercase;
@@ -160,7 +189,6 @@ $today = date('Y-m-d');
   .form-tab:hover:not(.active) { color:var(--text); }
 
   .form-grid { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
-  .form-grid.three { grid-template-columns:1fr 1fr 1fr; }
   .form-row { display:flex; flex-direction:column; gap:6px; }
   .form-row.full { grid-column:1/-1; }
   .form-label { font-size:.62rem; font-weight:700; letter-spacing:.12em; text-transform:uppercase; color:var(--muted); }
@@ -173,8 +201,10 @@ $today = date('Y-m-d');
   .form-input:focus, .form-select:focus { border-color:var(--amber); }
   .form-select option { background:var(--surface); }
 
-  .divider { grid-column:1/-1; height:1px; background:var(--border); margin:6px 0; }
   .lines-title { grid-column:1/-1; font-size:.62rem; font-weight:700; letter-spacing:.15em; text-transform:uppercase; color:var(--muted); margin-top:4px; }
+  .prefill-hint { grid-column:1/-1; font-size:.68rem; font-family:var(--mono); color:var(--blue);
+                  background:rgba(65,179,245,.07); border:1px solid rgba(65,179,245,.2);
+                  border-radius:6px; padding:8px 12px; }
 
   .btn { display:inline-flex; align-items:center; gap:8px; padding:9px 20px; border-radius:6px;
          font-family:var(--sans); font-size:.8rem; font-weight:700; letter-spacing:.04em; text-transform:uppercase;
@@ -186,7 +216,6 @@ $today = date('Y-m-d');
   .btn:active { opacity:.8; }
   .form-actions { display:flex; gap:10px; align-items:center; margin-top:20px; }
 
-  /* ── Grids table ── */
   .grids-wrap { background:var(--surface); border:1px solid var(--border); border-radius:10px; overflow:hidden; margin-bottom:12px; }
   .grid-row { display:grid; grid-template-columns:1fr 120px 120px auto; align-items:center;
               padding:14px 20px; border-top:1px solid var(--border); gap:16px; }
@@ -210,7 +239,7 @@ $today = date('Y-m-d');
   .empty { padding:24px; color:var(--muted); font-size:.85rem; font-style:italic; }
 
   @media(max-width:680px) {
-    .form-grid, .form-grid.three { grid-template-columns:1fr; }
+    .form-grid { grid-template-columns:1fr; }
     .grid-row { grid-template-columns:1fr auto; }
   }
 </style>
@@ -271,7 +300,10 @@ $today = date('Y-m-d');
   <div class="lines-detail" id="<?= $rowId ?>">
     <table class="lines-table">
       <?php foreach ($g->lines as $key => $amount): ?>
-      <tr><td><?= htmlspecialchars($key) ?></td><td><?= number_format($amount, 5) ?></td></tr>
+      <tr>
+        <td><?= htmlspecialchars($elecLines[$key]['label'] ?? $key) ?></td>
+        <td><?= number_format($amount, 6) ?> <?= htmlspecialchars($elecLines[$key]['unit'] ?? '') ?></td>
+      </tr>
       <?php endforeach; ?>
     </table>
   </div>
@@ -315,7 +347,10 @@ $today = date('Y-m-d');
   <div class="lines-detail" id="<?= $rowId ?>">
     <table class="lines-table">
       <?php foreach ($g->lines as $key => $amount): ?>
-      <tr><td><?= htmlspecialchars($key) ?></td><td><?= number_format($amount, 5) ?></td></tr>
+      <tr>
+        <td><?= htmlspecialchars($gasLines[$key]['label'] ?? $key) ?></td>
+        <td><?= number_format($amount, 6) ?> <?= htmlspecialchars($gasLines[$key]['unit'] ?? '') ?></td>
+      </tr>
       <?php endforeach; ?>
     </table>
   </div>
@@ -332,13 +367,9 @@ $today = date('Y-m-d');
 </div>
 
 <div class="form-card">
-  <?php
-  $et = $editGrid?->energyType ?? 'electricity';
-  $el = $editGrid?->lines ?? [];
-  ?>
   <div class="form-tabs">
-    <button type="button" class="form-tab <?= $et === 'electricity' ? 'active' : '' ?>" onclick="switchTab('electricity')">Électricité</button>
-    <button type="button" class="form-tab <?= $et === 'gas' ? 'active' : '' ?>" onclick="switchTab('gas')">Gaz</button>
+    <button type="button" class="form-tab <?= $et === 'electricity' ? 'active' : '' ?>" onclick="switchTab('electricity', event)">Électricité</button>
+    <button type="button" class="form-tab <?= $et === 'gas' ? 'active' : '' ?>" onclick="switchTab('gas', event)">Gaz</button>
   </div>
 
   <form method="post">
@@ -348,7 +379,7 @@ $today = date('Y-m-d');
     <div class="form-grid">
       <div class="form-row">
         <label class="form-label">Nom du tarif</label>
-        <input type="text" name="name" class="form-input" required placeholder="ex. Engie bihoraire 2025"
+        <input type="text" name="name" class="form-input" required placeholder="ex. Engie bihoraire fév. 2026"
                value="<?= htmlspecialchars($editGrid?->name ?? '') ?>">
       </div>
       <div class="form-row" id="pcs-row" style="<?= $et === 'gas' ? '' : 'display:none' ?>">
@@ -371,13 +402,18 @@ $today = date('Y-m-d');
     <!-- Electricity lines -->
     <div id="elec-lines" style="<?= $et === 'electricity' ? '' : 'display:none' ?>">
       <div class="form-grid" style="margin-top:18px">
-        <div class="lines-title">Composantes tarifaires</div>
+        <div class="lines-title">Composantes tarifaires — Électricité</div>
+        <?php if (!$editGrid && $latestElec): ?>
+        <div class="prefill-hint">
+          ↺ Pré-rempli depuis « <?= htmlspecialchars($latestElec->name) ?> » (<?= $latestElec->validFrom->format('d/m/Y') ?>). Modifiez uniquement les valeurs qui ont changé.
+        </div>
+        <?php endif; ?>
         <?php foreach ($elecLines as $key => $def): ?>
         <div class="form-row">
           <label class="form-label"><?= htmlspecialchars($def['label']) ?> <span class="unit"><?= $def['unit'] ?></span></label>
-          <input type="number" name="line_<?= $key ?>" step="0.00001" class="form-input"
-                 placeholder="0.00000"
-                 value="<?= htmlspecialchars(isset($el[$key]) ? number_format($el[$key], 5, '.', '') : '') ?>">
+          <input type="number" name="line_<?= $key ?>" step="0.000001" class="form-input"
+                 placeholder="0.000000"
+                 value="<?= htmlspecialchars(isset($elLines[$key]) ? number_format($elLines[$key], 6, '.', '') : '') ?>">
         </div>
         <?php endforeach; ?>
       </div>
@@ -386,13 +422,18 @@ $today = date('Y-m-d');
     <!-- Gas lines -->
     <div id="gas-lines" style="<?= $et === 'gas' ? '' : 'display:none' ?>">
       <div class="form-grid" style="margin-top:18px">
-        <div class="lines-title">Composantes tarifaires</div>
+        <div class="lines-title">Composantes tarifaires — Gaz</div>
+        <?php if (!$editGrid && $latestGas): ?>
+        <div class="prefill-hint">
+          ↺ Pré-rempli depuis « <?= htmlspecialchars($latestGas->name) ?> » (<?= $latestGas->validFrom->format('d/m/Y') ?>). Modifiez uniquement les valeurs qui ont changé.
+        </div>
+        <?php endif; ?>
         <?php foreach ($gasLines as $key => $def): ?>
         <div class="form-row">
           <label class="form-label"><?= htmlspecialchars($def['label']) ?> <span class="unit"><?= $def['unit'] ?></span></label>
-          <input type="number" name="line_<?= $key ?>" step="0.00001" class="form-input"
-                 placeholder="0.00000"
-                 value="<?= htmlspecialchars(isset($el[$key]) ? number_format($el[$key], 5, '.', '') : '') ?>">
+          <input type="number" name="line_<?= $key ?>" step="0.000001" class="form-input"
+                 placeholder="0.000000"
+                 value="<?= htmlspecialchars(isset($glLines[$key]) ? number_format($glLines[$key], 6, '.', '') : '') ?>">
         </div>
         <?php endforeach; ?>
       </div>
@@ -419,7 +460,7 @@ $today = date('Y-m-d');
 </div>
 
 <script>
-function switchTab(type) {
+function switchTab(type, event) {
   document.getElementById('energy_type_field').value = type;
   document.querySelectorAll('.form-tab').forEach(t => t.classList.remove('active'));
   event.target.classList.add('active');
@@ -429,8 +470,7 @@ function switchTab(type) {
 }
 
 function toggleLines(id) {
-  const el = document.getElementById(id);
-  el.classList.toggle('open');
+  document.getElementById(id).classList.toggle('open');
 }
 </script>
 </body>

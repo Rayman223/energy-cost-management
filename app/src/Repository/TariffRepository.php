@@ -24,7 +24,7 @@ final class TariffRepository
         $date = $on->format('Y-m-d');
 
         $stmt = $this->pdo->prepare(
-            'SELECT id, energy_type, name, valid_from, valid_to
+            'SELECT id, energy_type, name, valid_from, valid_to, pcs_coefficient
              FROM tariff_grids
              WHERE energy_type = :type
                AND valid_from <= :date
@@ -35,55 +35,55 @@ final class TariffRepository
         $stmt->execute(['type' => $energyType, 'date' => $date]);
         $row = $stmt->fetch();
 
-        if (!$row) {
-            return null;
-        }
+        return $row ? $this->hydrate($row) : null;
+    }
 
-        return new TariffGrid(
-            id: (int) $row['id'],
-            energyType: $row['energy_type'],
-            name: $row['name'],
-            validFrom: new DateTimeImmutable($row['valid_from']),
-            validTo: $row['valid_to'] ? new DateTimeImmutable($row['valid_to']) : null,
-            lines: $this->fetchLines((int) $row['id']),
+    public function findById(int $id): ?TariffGrid
+    {
+        $stmt = $this->pdo->prepare(
+            'SELECT id, energy_type, name, valid_from, valid_to, pcs_coefficient
+             FROM tariff_grids WHERE id = :id'
         );
+        $stmt->execute(['id' => $id]);
+        $row = $stmt->fetch();
+
+        return $row ? $this->hydrate($row) : null;
     }
 
     /** @return TariffGrid[] */
     public function findAll(string $energyType): array
     {
         $stmt = $this->pdo->prepare(
-            'SELECT id, energy_type, name, valid_from, valid_to
+            'SELECT id, energy_type, name, valid_from, valid_to, pcs_coefficient
              FROM tariff_grids
              WHERE energy_type = :type
              ORDER BY valid_from DESC'
         );
         $stmt->execute(['type' => $energyType]);
-        $rows = $stmt->fetchAll();
 
-        return array_map(fn (array $row): TariffGrid => new TariffGrid(
-            id: (int) $row['id'],
-            energyType: $row['energy_type'],
-            name: $row['name'],
-            validFrom: new DateTimeImmutable($row['valid_from']),
-            validTo: $row['valid_to'] ? new DateTimeImmutable($row['valid_to']) : null,
-            lines: $this->fetchLines((int) $row['id']),
-        ), $rows);
+        return array_map(fn (array $row): TariffGrid => $this->hydrate($row), $stmt->fetchAll());
     }
 
-    public function saveGrid(string $energyType, string $name, DateTimeImmutable $validFrom, ?DateTimeImmutable $validTo, array $lines): int
-    {
+    public function saveGrid(
+        string $energyType,
+        string $name,
+        DateTimeImmutable $validFrom,
+        ?DateTimeImmutable $validTo,
+        array $lines,
+        ?float $pcsCoefficient = null,
+    ): int {
         $this->pdo->beginTransaction();
         try {
             $stmt = $this->pdo->prepare(
-                'INSERT INTO tariff_grids (energy_type, name, valid_from, valid_to)
-                 VALUES (:type, :name, :from, :to)'
+                'INSERT INTO tariff_grids (energy_type, name, valid_from, valid_to, pcs_coefficient)
+                 VALUES (:type, :name, :from, :to, :pcs)'
             );
             $stmt->execute([
                 'type' => $energyType,
                 'name' => $name,
                 'from' => $validFrom->format('Y-m-d'),
                 'to'   => $validTo?->format('Y-m-d'),
+                'pcs'  => $pcsCoefficient,
             ]);
             $id = (int) $this->pdo->lastInsertId();
 
@@ -104,6 +104,20 @@ final class TariffRepository
         return $id;
     }
 
+    public function closeGrid(int $id, DateTimeImmutable $validTo): void
+    {
+        $stmt = $this->pdo->prepare(
+            'UPDATE tariff_grids SET valid_to = :valid_to WHERE id = :id'
+        );
+        $stmt->execute(['valid_to' => $validTo->format('Y-m-d'), 'id' => $id]);
+    }
+
+    public function deleteGrid(int $id): void
+    {
+        $stmt = $this->pdo->prepare('DELETE FROM tariff_grids WHERE id = :id');
+        $stmt->execute(['id' => $id]);
+    }
+
     /** @return array<string,float> */
     private function fetchLines(int $gridId): array
     {
@@ -118,5 +132,18 @@ final class TariffRepository
         }
 
         return $lines;
+    }
+
+    private function hydrate(array $row): TariffGrid
+    {
+        return new TariffGrid(
+            id: (int) $row['id'],
+            energyType: $row['energy_type'],
+            name: $row['name'],
+            validFrom: new DateTimeImmutable($row['valid_from']),
+            validTo: $row['valid_to'] ? new DateTimeImmutable($row['valid_to']) : null,
+            lines: $this->fetchLines((int) $row['id']),
+            pcsCoefficient: isset($row['pcs_coefficient']) ? (float) $row['pcs_coefficient'] : null,
+        );
     }
 }
