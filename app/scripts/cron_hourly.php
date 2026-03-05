@@ -30,7 +30,8 @@ $repository->insertDataDries(
 
 $repository->insertDataSolaire(
     timestamp: $timestamp,
-    productionWh: $meterApi->readNumericValue($solarPayload, $paths['solar_production_wh'] ?? []),
+    // total_power_export_kwh: cumulative kWh counter, same dongle structure as P1 meter.
+    productionKwh: $meterApi->readNumericValue($solarPayload, $paths['solar_production_wh'] ?? []),
 );
 
 echo "[OK] Ingestion horaire compteurs enregistrée (Data_Dries + Data_Solaire/Data_Brusol).\n";

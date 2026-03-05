@@ -34,7 +34,12 @@ final class LegacyIngestionRepository
         ]);
     }
 
-    public function insertDataSolaire(DateTimeImmutable $timestamp, float $productionWh): void
+    /**
+     * Store solar production index.
+     * The solar dongle (same structure as P1 meter) exposes total_power_export_kwh — a cumulative kWh counter.
+     * The value is stored as-is in kWh. LegacyDailyRepository treats Data_Solaire as kWh (no /1000 conversion).
+     */
+    public function insertDataSolaire(DateTimeImmutable $timestamp, float $productionKwh): void
     {
         $table = $this->tableExists('Data_Solaire') ? 'Data_Solaire' : 'Data_Brusol';
 
@@ -43,8 +48,8 @@ final class LegacyIngestionRepository
         );
 
         $stmt->execute([
-            'timestamp' => $timestamp->format('Y-m-d H:i:s'),
-            'production' => $productionWh,
+            'timestamp'  => $timestamp->format('Y-m-d H:i:s'),
+            'production' => $productionKwh,
         ]);
     }
 
