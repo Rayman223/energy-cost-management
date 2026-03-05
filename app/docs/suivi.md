@@ -145,3 +145,6 @@ Lorsque je clique pour ajouter un nouveau tariff, il faut préremplir le formula
 - Transport = 0,165 c€/kWh
 - Relevé de compteur = 24,95 €/an
 
+Autre point : modifie le format des heures pour ne pas être états-unis soit :
+- Format heure : HH:mm (24h)
+- Format date : dd/mm/yyyy
