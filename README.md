@@ -1,55 +1,36 @@
 # Manage-energy-costs
 
-Refonte en cours du projet historique (`old/`) vers une nouvelle base orientée objet dans `app/`.
+## 1 To Do
 
-- Ingestion horaire des mesures en DB.
-- Envoi webhook EnergyID V2 quotidien à 01:15 (première valeur de chaque journée).
-- Sources: `Data_Dries` + `Data_Solaire` (`Data_Brusol` en fallback migration).
+### 1.1 Ajout compteur d'eau
 
-## Déploiement web (important)
+Ajouter l'enregistrement du compteur d'eau (manuel comme le gaz) ainsi que les 2 compteurs annexe du studio.
 
-Le **DocumentRoot** du v2 doit pointer vers `app/public/`.
+Ces 2 compteurs annexe sont sur le même réseau que le compteur principal d'eau, ils servent à connaitre la consommation du studio séparément au reste de la maison.
 
-Si ton serveur pointe vers la racine du dépôt (ou vers `app/`) sur l'URL `ip/energyv2/`, tu auras souvent une **403 Forbidden** parce que:
+### 1.2 graphique 30j activé par défaut
 
-- le dossier ne contient pas de `index.php` à ce niveau;
-- le listing de répertoire est généralement désactivé (`Options -Indexes` / `autoindex off`);
-- les permissions peuvent aussi bloquer l'accès au dossier.
+Actuellement, par défaut il n'y a pas de graphique. Je dois manuellement cliquer sur 30j pour afficher le graphique. Il faudrait que le 30j soit sélectionné par défaut.
 
-### Vérifications rapides
+### 1.3 BUG : plus d'affichage des valeurs de puissance en live
 
-1. Vérifier que l'URL `ip/energyv2/` sert bien le dossier `.../Manage-energy-costs/app/public/`.
-2. Vérifier les droits Unix (lecture + traversée) pour l'utilisateur du serveur web.
-3. Vérifier les logs web (`error.log`) pour confirmer la cause exacte du 403.
+Suite à la dernière mise à jour de sécurité, il y a au moins un bug : plus de live.
 
-Voir aussi `app/docs/energyid-v2-model.md`.
+Le graphique ne fonctionne plus également.
 
+Il faut faire une vérification complète du code.
 
-## Sécurisation recommandée
+### 1.4 Design : police trop petite
 
-Un mécanisme simple et efficace est intégré côté v2 :
+Le texte est petit et peu lisible. Il faut améliorer la visibilité du texte.
 
-- **allowlist IP** (optionnelle) ;
-- **authentification HTTP Basic** (fortement recommandée) ;
-- protection appliquée au dashboard **et** à l'API.
+Contribution énergie a besoin d'une décimale en plus. valeur actuel à 0.0020417 €/kWh
 
-Configuration dans `app/config/config.php` (copie depuis `config.example.php`) via la section `web_security`.
+### 1.5 BUG : Ajout noueau tariff
 
-Exemple minimal:
+Erreur : Unknown named parameter $pcsCoefficient
 
-```php
-'web_security' => [
-    'enabled' => true,
-    'allowed_ips' => ['192.168.1.0/24'],
-    'basic_auth' => [
-        'enabled'  => true,
-        'username' => 'admin',
-        'password' => 'un_mot_de_passe_tres_long',
-    ],
-],
-```
+### 1.6 Feat : ajout lien vers API HomeWizard
 
-Conseils :
-- utiliser un mot de passe long et unique ;
-- garder `enabled` à `true` en production ;
-- limiter les IP si ton accès est depuis un LAN/VPN connu.
+Lorsque je clique sur une icone dans les card de puissance en live (consommation réseau) et (production solaire), je veux ouvrir la page vers l'API (http://192.168.1.5/api/v1/data).
+
