@@ -28,6 +28,10 @@ final class WebAccessGuard
             return;
         }
 
+        if (self::isLoginPageRequest() === true) {
+            return;
+        }
+
         $expectedUser = (string) ($security['basic_auth']['username'] ?? '');
         $expectedPass = (string) ($security['basic_auth']['password'] ?? '');
 
@@ -35,19 +39,154 @@ final class WebAccessGuard
             self::deny(500, self::message($lang, 'invalid_config'), $jsonResponse);
         }
 
-        $user = isset($_SERVER['PHP_AUTH_USER']) ? (string) $_SERVER['PHP_AUTH_USER'] : '';
-        $pass = isset($_SERVER['PHP_AUTH_PW']) ? (string) $_SERVER['PHP_AUTH_PW'] : '';
+        if ($jsonResponse === false && self::isSessionAuthenticated($expectedUser, $expectedPass)) {
+            return;
+        }
+
+        [$user, $pass] = self::extractProvidedCredentials();
 
         $validUser = hash_equals($expectedUser, $user);
         $validPass = hash_equals($expectedPass, $pass);
 
         if ($validUser && $validPass) {
+            if ($jsonResponse === false) {
+                self::markSessionAuthenticated($expectedUser, $expectedPass);
+            }
+
             return;
+        }
+
+        if ($jsonResponse === false && self::prefersHtml()) {
+            self::redirectToLogin($lang);
         }
 
         $realm = $lang === 'fr' ? 'Accès sécurisé Manage Energy' : 'Manage Energy secure access';
         header('WWW-Authenticate: Basic realm="' . addslashes($realm) . '", charset="UTF-8"');
         self::deny(401, self::message($lang, 'auth_required'), $jsonResponse);
+    }
+
+    public static function authenticateForm(array $security, string $username, string $password): bool
+    {
+        $expectedUser = (string) ($security['basic_auth']['username'] ?? '');
+        $expectedPass = (string) ($security['basic_auth']['password'] ?? '');
+
+        if ($expectedUser === '' || $expectedPass === '') {
+            return false;
+        }
+
+        $validUser = hash_equals($expectedUser, $username);
+        $validPass = hash_equals($expectedPass, $password);
+
+        if ($validUser && $validPass) {
+            self::markSessionAuthenticated($expectedUser, $expectedPass);
+            return true;
+        }
+
+        return false;
+    }
+
+    private static function isLoginPageRequest(): bool
+    {
+        $script = (string) ($_SERVER['SCRIPT_NAME'] ?? '');
+        return str_ends_with($script, '/login.php') || $script === 'login.php';
+    }
+
+    private static function prefersHtml(): bool
+    {
+        $accept = strtolower((string) ($_SERVER['HTTP_ACCEPT'] ?? ''));
+        if ($accept === '') {
+            return true;
+        }
+
+        return str_contains($accept, 'text/html') || str_contains($accept, '*/*');
+    }
+
+    private static function redirectToLogin(string $lang): void
+    {
+        $path = isset($_SERVER['REQUEST_URI']) ? (string) $_SERVER['REQUEST_URI'] : '/';
+        $next = urlencode($path);
+        $langParam = urlencode($lang);
+        header('Location: ' . self::buildLoginPath() . '?next=' . $next . '&lang=' . $langParam, true, 302);
+        exit;
+    }
+
+
+    private static function buildLoginPath(): string
+    {
+        $base = self::applicationBasePath();
+        return $base . '/login.php';
+    }
+
+    private static function applicationBasePath(): string
+    {
+        $script = (string) ($_SERVER['SCRIPT_NAME'] ?? '');
+        if ($script === '') {
+            return '';
+        }
+
+        $base = str_replace('\\', '/', dirname($script));
+        if ($base === '/' || $base === '.') {
+            return '';
+        }
+
+        return rtrim($base, '/');
+    }
+
+    private static function isSessionAuthenticated(string $expectedUser, string $expectedPass): bool
+    {
+        self::startSession();
+        $token = isset($_SESSION['web_auth']) ? (string) $_SESSION['web_auth'] : '';
+
+        if ($token === '') {
+            return false;
+        }
+
+        return hash_equals($token, self::sessionToken($expectedUser, $expectedPass));
+    }
+
+    private static function markSessionAuthenticated(string $username, string $password): void
+    {
+        self::startSession();
+        session_regenerate_id(true);
+        $_SESSION['web_auth'] = self::sessionToken($username, $password);
+    }
+
+    private static function sessionToken(string $username, string $password): string
+    {
+        return hash('sha256', $username . ':' . $password);
+    }
+
+    private static function startSession(): void
+    {
+        if (session_status() === PHP_SESSION_NONE) {
+            session_start();
+        }
+    }
+
+    /**
+     * @return array{0:string,1:string}
+     */
+    private static function extractProvidedCredentials(): array
+    {
+        $user = isset($_SERVER['PHP_AUTH_USER']) ? (string) $_SERVER['PHP_AUTH_USER'] : '';
+        $pass = isset($_SERVER['PHP_AUTH_PW']) ? (string) $_SERVER['PHP_AUTH_PW'] : '';
+
+        if ($user !== '' || $pass !== '') {
+            return [$user, $pass];
+        }
+
+        $authorization = (string) ($_SERVER['HTTP_AUTHORIZATION'] ?? $_SERVER['REDIRECT_HTTP_AUTHORIZATION'] ?? '');
+        if ($authorization === '' || stripos($authorization, 'basic ') !== 0) {
+            return ['', ''];
+        }
+
+        $raw = base64_decode(substr($authorization, 6), true);
+        if ($raw === false || str_contains($raw, ':') === false) {
+            return ['', ''];
+        }
+
+        [$decodedUser, $decodedPass] = explode(':', $raw, 2);
+        return [(string) $decodedUser, (string) $decodedPass];
     }
 
     private static function deny(int $status, string $message, bool $jsonResponse): void
