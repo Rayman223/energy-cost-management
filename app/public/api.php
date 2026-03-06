@@ -2,18 +2,21 @@
 
 declare(strict_types=1);
 
-header('Content-Type: application/json; charset=utf-8');
-header('X-Content-Type-Options: nosniff');
-header('Cache-Control: no-store');
-
-$config = require __DIR__ . '/../bootstrap.php';
-
 use App\Infrastructure\Database;
 use App\Repository\GasRepository;
 use App\Repository\LegacyDailyRepository;
 use App\Repository\TariffRepository;
 use App\Service\CostCalculationService;
 use App\Service\TariffCalculatorService;
+use App\Security\WebAccessGuard;
+
+header('Content-Type: application/json; charset=utf-8');
+header('X-Content-Type-Options: nosniff');
+header('Cache-Control: no-store');
+
+$config = require __DIR__ . '/../bootstrap.php';
+
+WebAccessGuard::protect($config['web_security'] ?? [], true);
 
 function jsonOut(mixed $data, int $status = 200): never
 {

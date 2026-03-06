@@ -3,8 +3,11 @@ declare(strict_types=1);
 
 use App\Infrastructure\Database;
 use App\Repository\TariffRepository;
+use App\Security\WebAccessGuard;
 
 $config = require __DIR__ . '/../bootstrap.php';
+
+WebAccessGuard::protect($config['web_security'] ?? []);
 
 $db          = new Database($config['database']);
 $tariffRepo  = new TariffRepository($db->pdo());

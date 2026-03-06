@@ -48,5 +48,21 @@ return [
         'pcs_coefficient' => 10.55,
     ],
 
+    'web_security' => [
+        // Master switch for web protection.
+        'enabled' => true,
+
+        // Optional allowlist (IPv4/CIDR). Empty array = no IP restriction.
+        // Examples: ['192.168.1.0/24', '10.0.0.42']
+        'allowed_ips' => [],
+
+        // HTTP Basic authentication for all web endpoints (dashboard + API).
+        'basic_auth' => [
+            'enabled'  => true,
+            'username' => 'admin',
+            'password' => 'change_me_now',
+        ],
+    ],
+
     'timezone' => 'Europe/Brussels',
 ];

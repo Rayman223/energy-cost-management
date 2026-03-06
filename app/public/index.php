@@ -7,6 +7,7 @@ use App\Repository\LegacyDailyRepository;
 use App\Repository\TariffRepository;
 use App\Service\CostCalculationService;
 use App\Service\TariffCalculatorService;
+use App\Security\WebAccessGuard;
 
 // Bootstrap — graceful degradation if DB unavailable
 $dbError = null;
@@ -18,6 +19,8 @@ $gasLatest  = null;
 
 try {
     $config     = require __DIR__ . '/../bootstrap.php';
+
+    WebAccessGuard::protect($config['web_security'] ?? []);
 
     $db         = new Database($config['database']);
     $pdo        = $db->pdo();
