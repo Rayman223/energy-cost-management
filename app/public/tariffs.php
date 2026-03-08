@@ -20,6 +20,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     try {
         if ($action === 'save') {
+            $editId     = filter_var($_POST['edit_id'] ?? null, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]) ?: null;
             $energyType = $_POST['energy_type'] ?? '';
             $name       = trim($_POST['name'] ?? '');
             $validFrom  = $_POST['valid_from'] ?? '';
@@ -61,16 +62,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $pcs = (float) $_POST['pcs_coefficient'];
             }
 
-            $tariffRepo->saveGrid(
-                $energyType,
-                $name,
-                new \DateTimeImmutable($validFrom),
-                $validTo ? new \DateTimeImmutable($validTo) : null,
-                $lines,
-                $pcs,
-            );
-
-            $success = "Tarif « $name » enregistré.";
+            if ($editId !== null) {
+                $tariffRepo->updateGrid(
+                    $editId,
+                    $energyType,
+                    $name,
+                    new \DateTimeImmutable($validFrom),
+                    $validTo ? new \DateTimeImmutable($validTo) : null,
+                    $lines,
+                    $pcs,
+                );
+                $success = "Tarif « $name » enregistré.";
+            } else {
+                $tariffRepo->saveGrid(
+                    $energyType,
+                    $name,
+                    new \DateTimeImmutable($validFrom),
+                    $validTo ? new \DateTimeImmutable($validTo) : null,
+                    $lines,
+                    $pcs,
+                );
+                $success = "Tarif « $name » enregistré.";
+            }
         }
 
         if ($action === 'close') {
@@ -104,7 +117,20 @@ $latestGas  = !empty($gasGrids)  ? $gasGrids[0]  : null;
 // Pre-fill form if editing
 $editGrid = null;
 if (isset($_GET['edit'])) {
-    $editGrid = $tariffRepo->findById((int) $_GET['edit']);
+    $editId = filter_var($_GET['edit'], FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
+
+    if ($editId === false) {
+        $error = 'ID invalide.';
+    } else {
+        try {
+            $editGrid = $tariffRepo->findById($editId);
+            if ($editGrid === null) {
+                $error = 'Tarif introuvable.';
+            }
+        } catch (\Throwable $e) {
+            $error = $e->getMessage();
+        }
+    }
 }
 
 // ── Line definitions ───────────────────────────────────────────────────────
@@ -377,6 +403,7 @@ $today = date('Y-m-d');
 
   <form method="post">
     <input type="hidden" name="action" value="save">
+    <input type="hidden" name="edit_id" value="<?= htmlspecialchars((string) ($editGrid?->id ?? '')) ?>">
     <input type="hidden" name="energy_type" id="energy_type_field" value="<?= htmlspecialchars($et) ?>">
 
     <div class="form-grid">

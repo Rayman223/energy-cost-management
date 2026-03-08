@@ -104,6 +104,62 @@ final class TariffRepository
         return $id;
     }
 
+
+    public function updateGrid(
+        int $id,
+        string $energyType,
+        string $name,
+        DateTimeImmutable $validFrom,
+        ?DateTimeImmutable $validTo,
+        array $lines,
+        ?float $pcsCoefficient = null,
+    ): void {
+        $this->pdo->beginTransaction();
+        try {
+            $stmt = $this->pdo->prepare(
+                'UPDATE tariff_grids
+                 SET energy_type = :type,
+                     name = :name,
+                     valid_from = :from,
+                     valid_to = :to,
+                     pcs_coefficient = :pcs
+                 WHERE id = :id'
+            );
+            $stmt->execute([
+                'id' => $id,
+                'type' => $energyType,
+                'name' => $name,
+                'from' => $validFrom->format('Y-m-d'),
+                'to'   => $validTo?->format('Y-m-d'),
+                'pcs'  => $pcsCoefficient,
+            ]);
+
+            if ($stmt->rowCount() === 0) {
+                $existsStmt = $this->pdo->prepare('SELECT 1 FROM tariff_grids WHERE id = :id');
+                $existsStmt->execute(['id' => $id]);
+                if ($existsStmt->fetchColumn() === false) {
+                    throw new \RuntimeException('Tarif introuvable.');
+                }
+            }
+
+            $deleteStmt = $this->pdo->prepare('DELETE FROM tariff_grid_lines WHERE tariff_grid_id = :grid_id');
+            $deleteStmt->execute(['grid_id' => $id]);
+
+            $lineStmt = $this->pdo->prepare(
+                'INSERT INTO tariff_grid_lines (tariff_grid_id, line_key, amount_per_kwh)
+                 VALUES (:grid_id, :key, :amount)'
+            );
+            foreach ($lines as $key => $amount) {
+                $lineStmt->execute(['grid_id' => $id, 'key' => $key, 'amount' => $amount]);
+            }
+
+            $this->pdo->commit();
+        } catch (\Throwable $e) {
+            $this->pdo->rollBack();
+            throw $e;
+        }
+    }
+
     public function closeGrid(int $id, DateTimeImmutable $validTo): void
     {
         $stmt = $this->pdo->prepare(
