@@ -62,12 +62,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
 
             $tariffRepo->saveGrid(
-                energyType: $energyType,
-                name: $name,
-                validFrom: new \DateTimeImmutable($validFrom),
-                validTo: $validTo ? new \DateTimeImmutable($validTo) : null,
-                lines: $lines,
-                pcsCoefficient: $pcs,
+                $energyType,
+                $name,
+                new \DateTimeImmutable($validFrom),
+                $validTo ? new \DateTimeImmutable($validTo) : null,
+                $lines,
+                $pcs,
             );
 
             $success = "Tarif « $name » enregistré.";
