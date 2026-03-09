@@ -28,3 +28,12 @@ la valeur live de Consommation réseau est en valeur absolue. Il faut enlever ce
 
 pour les taxe mensuel, il faut prendre que le mois en cours. actuellement le jour du mois suivant est inclus mais doit être exclu.
 
+### 1.11 Feat: ajouter proportion consommé / solaire
+
+Il faut ajouter la proportion solaire consommé avec la quantité prise du grid pour connaitre sa proportion d'auto-consommation et les économies faites.
+Indique dans "Estimation coûts" la production solaire, la production solaire consommée (donc non exportée sur le grid) et les économies faites.
+
+### 1.12 Feat: calculer rentabiliter entre mono-horaire ou bi-horaire
+
+Calcul par mois et année (à placer dans "Estimation coûts") ce qui serait le plus rentable entre un bi-horaire (le calcul actuel) et le mono-horaire (en utilisant le cout simple qui n'est pas encore utilisé dans le calcul).
+

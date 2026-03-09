@@ -1049,8 +1049,8 @@ const LIVE_INTERVAL = 2_000; // 2 secondes
 
 function fmtWatt(v) {
   if (v === undefined || v === null) return '<span class="nd">—</span>';
-  const w = Math.abs(parseFloat(v));
-  if (w >= 1000) {
+  const w = parseFloat(v);
+  if (w >= 1000 || w <= -1000) {
     return '<span class="val">' + (w / 1000).toLocaleString('fr-BE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + '</span> <span class="unit">kW</span>';
   }
   return '<span class="val">' + w.toLocaleString('fr-BE', { minimumFractionDigits: 0, maximumFractionDigits: 0 }) + '</span> <span class="unit">W</span>';
@@ -1072,7 +1072,7 @@ async function fetchLive() {
 
     document.getElementById('live-solar-w').innerHTML = data.solar_error
       ? '<span class="nd" title="' + data.solar_error + '">err</span>'
-      : fmtWatt(data.solar_w);
+      : fmtWatt(Math.abs(data.solar_w));
 
     if (syncDot) syncDot.className = (data.dries_error && data.solar_error) ? 'sync-dot error' : 'sync-dot';
   } catch (e) {
