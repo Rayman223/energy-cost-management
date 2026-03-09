@@ -36,8 +36,7 @@ namespace App\Service;
  */
 final class TariffCalculatorService
 {
-    private const TVA       = 0.21;
-    private const DAYS_YEAR = 365.0;
+    private const TVA = 0.21;
 
     /**
      * Calculate the full electricity cost for a given period.
@@ -49,6 +48,7 @@ final class TariffCalculatorService
         float $kwhExportT1,
         float $kwhExportT2,
         int $days,
+        int $daysInYear,
         array $tariff
     ): array {
         $totalKwh   = $kwhT1 + $kwhT2;
@@ -66,14 +66,14 @@ final class TariffCalculatorService
         $distributionT1   = $kwhT1    * ($tariff['distribution_t1'] ?? 0.0);
         $distributionT2   = $kwhT2    * ($tariff['distribution_t2'] ?? 0.0);
         $transport        = $totalKwh * ($tariff['transport']        ?? 0.0);
-        $managementFee    = $days     * (($tariff['management_annual']     ?? 0.0) / self::DAYS_YEAR);
+        $managementFee    = $days     * (($tariff['management_annual']     ?? 0.0) / $daysInYear);
 
         // ── Taxes & contributions ────────────────────────────────────────────
-        $prosumerFee          = $days     * (($tariff['prosumer_annual']       ?? 0.0) / self::DAYS_YEAR);
+        $prosumerFee          = $days     * (($tariff['prosumer_annual']       ?? 0.0) / $daysInYear);
         $exciseDuty           = $totalKwh * ($tariff['excise_duty']            ?? 0.0);
         $energyContribution   = $totalKwh * ($tariff['energy_contribution']    ?? 0.0);
         $greenContribution    = $totalKwh * ($tariff['green_contribution']     ?? 0.0);
-        $publicServiceFee     = $days     * (($tariff['public_service_annual'] ?? 0.0) / self::DAYS_YEAR);
+        $publicServiceFee     = $days     * (($tariff['public_service_annual'] ?? 0.0) / $daysInYear);
 
         // ── Injection credits (negative = reduce the bill) ────────────────────
         $injectionT1 = -($kwhExportT1 * ($tariff['injection_t1'] ?? 0.0));
