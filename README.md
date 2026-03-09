@@ -20,13 +20,10 @@ La Distribution (fixe) c€/kWh pour le gaz est un montant annuel donc €/an
 
 il y a 2 décimales pour le PCS, il faut augmenter à 4 décimales
 
-### 1.9 Bug : Consommation réseau enlever absolu
-
-la valeur live de Consommation réseau est en valeur absolue. Il faut enlever cet absolu pour indiquer si on prend du réseau (positif) ou si on donne au réseau (négatif) donc prendre la valeur telquel sans transformation.
-
 ### 1.10 Bug : mauvais range de date
 
-pour les taxe mensuel, il faut prendre que le mois en cours. actuellement le jour du mois suivant est inclus mais doit être exclu.
+Pour les taxe mensuel ("Gestion (fixe annuel)", "Taxe prosumer BRUGEL" et "Obligations de service public"), il faut prendre que le mois en cours. actuellement le jour du mois suivant est inclus mais doit être exclu.
+le seul moment où le code actuel fonctionne c'est pour le mois en cours puisqu'il faut prendre le jour d'aujourd'hui même s'il n'est pas terminé.
 
 ### 1.11 Feat: ajouter proportion consommé / solaire
 

@@ -41,7 +41,17 @@ final class CostCalculationService
 
         $from = new DateTimeImmutable($deltas['from']);
         $to   = new DateTimeImmutable($deltas['to']);
-        $days = max(1, (int) $from->diff($to)->days + 1);
+        $sameMonth = ($from->format('Y-m') === $to->format('Y-m'));
+
+        if ($sameMonth) {
+            // Mois en cours : $to = aujourd'hui (lecture incomplète), on l'inclut avec +1
+            $days = max(1, (int) $from->diff($to)->days + 1);
+        } else {
+            // Mois passé : $to = première lecture du mois suivant (borne exclusive kWh).
+            // Pour les taxes fixes (gestion, prosumer, OSP), on prorate sur le nombre de
+            // jours calendaires du mois entier, indépendamment du jour de la première lecture.
+            $days = (int) $from->format('t');
+        }
 
         $tariff = $this->tariffRepo->findActiveGrid('electricity', $to);
         if ($tariff === null) {
@@ -82,7 +92,17 @@ final class CostCalculationService
 
         $from = new DateTimeImmutable($deltas['from']);
         $to   = new DateTimeImmutable($deltas['to']);
-        $days = max(1, (int) $from->diff($to)->days + 1);
+        $sameMonth = ($from->format('Y-m') === $to->format('Y-m'));
+
+        if ($sameMonth) {
+            // Mois en cours : $to = aujourd'hui (lecture incomplète), on l'inclut avec +1
+            $days = max(1, (int) $from->diff($to)->days + 1);
+        } else {
+            // Mois passé : $to = première lecture du mois suivant (borne exclusive kWh).
+            // Pour les taxes fixes (gestion, prosumer, OSP), on prorate sur le nombre de
+            // jours calendaires du mois entier, indépendamment du jour de la première lecture.
+            $days = (int) $from->format('t');
+        }
 
         $tariff = $this->tariffRepo->findActiveGrid('electricity', $to);
         if ($tariff === null) {
