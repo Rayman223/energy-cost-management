@@ -63,8 +63,50 @@ final class CostCalculationService
             'period_to'     => $deltas['to'],
             'days'          => $days,
             'tariff_name'   => $tariff->name,
+            'tariff_rates'  => $tariff->toTariffArray(),
             'deltas'        => $deltas,
             'cost'          => $breakdown,
+        ];
+    }
+
+    /**
+     * Estimate electricity cost for any given calendar month (year + month).
+     */
+    public function estimateMonthElectricity(int $year, int $month): array
+    {
+        $deltas = $this->legacyRepo->getMonthlyDeltasForMonth($year, $month);
+
+        if (empty($deltas)) {
+            return ['available' => false, 'reason' => "No data for {$year}-{$month}"];
+        }
+
+        $from = new DateTimeImmutable($deltas['from']);
+        $to   = new DateTimeImmutable($deltas['to']);
+        $days = max(1, (int) $from->diff($to)->days + 1);
+
+        $tariff = $this->tariffRepo->findActiveGrid('electricity', $to);
+        if ($tariff === null) {
+            return ['available' => false, 'reason' => 'No active electricity tariff configured'];
+        }
+
+        $breakdown = $this->calculator->calculateElectricityCost(
+            kwhT1: $deltas['prelev_jour'] ?? 0.0,
+            kwhT2: $deltas['prelev_nuit'] ?? 0.0,
+            kwhExportT1: $deltas['injec_jour'] ?? 0.0,
+            kwhExportT2: $deltas['injec_nuit'] ?? 0.0,
+            days: $days,
+            tariff: $tariff->toTariffArray(),
+        );
+
+        return [
+            'available'    => true,
+            'period_from'  => $deltas['from'],
+            'period_to'    => $deltas['to'],
+            'days'         => $days,
+            'tariff_name'  => $tariff->name,
+            'tariff_rates' => $tariff->toTariffArray(),
+            'deltas'       => $deltas,
+            'cost'         => $breakdown,
         ];
     }
 

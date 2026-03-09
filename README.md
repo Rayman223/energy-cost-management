@@ -8,13 +8,7 @@ Ajouter l'enregistrement du compteur d'eau (manuel comme le gaz) ainsi que les 2
 
 Ces 2 compteurs annexe sont sur le même réseau que le compteur principal d'eau, ils servent à connaitre la consommation du studio séparément au reste de la maison.
 
-### 1.2 graphique 30j activé par défaut
-
-Actuellement, par défaut il n'y a pas de graphique. Je dois manuellement cliquer sur 30j pour afficher le graphique. Il faudrait que le 30j soit sélectionné par défaut.
-
-### 1.4 Design : police trop petite
-
-Le texte est petit et peu lisible. Il faut améliorer la visibilité du texte.
+### 1.4 Design : nombre décimales
 
 Contribution énergie a besoin d'une décimale en plus. valeur actuel à 0.0020417 €/kWh
 
@@ -29,4 +23,8 @@ La Distribution (fixe) c€/kWh pour le gaz est un montant annuel donc €/an
 ### 1.8 Bug : PCS plus de décimale
 
 il y a 2 décimales pour le PCS, il faut augmenter à 4 décimales
+
+### 1.9 Bug : Consommation réseau enlever absolu
+
+la valeur live de Consommation réseau est en valeur absolue. Il faut enlever cet absolu pour indiquer si on prend du réseau (positif) ou si on donne au réseau (négatif) donc prendre la valeur telquel sans transformation.
 

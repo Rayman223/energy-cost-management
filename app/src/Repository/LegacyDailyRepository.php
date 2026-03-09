@@ -169,6 +169,89 @@ final class LegacyDailyRepository
         return $result;
     }
 
+    /**
+     * Compute electricity/solar deltas for a specific calendar month.
+     * Returns [] if no data is available for that month.
+     */
+    public function getMonthlyDeltasForMonth(int $year, int $month): array
+    {
+        // First reading of the given month
+        $stmt = $this->pdo->prepare(
+            'SELECT d.timestamp, d.Prelev_jour, d.Prelev_nuit, d.Injec_jour, d.Injec_nuit
+             FROM Data_Dries d
+             INNER JOIN (
+                 SELECT MIN(timestamp) AS min_ts
+                 FROM Data_Dries
+                 WHERE YEAR(timestamp) = :year AND MONTH(timestamp) = :month
+             ) f ON d.timestamp = f.min_ts
+             LIMIT 1'
+        );
+        $stmt->execute(['year' => $year, 'month' => $month]);
+        $first = $stmt->fetch() ?: null;
+
+        if ($first === null) {
+            return [];
+        }
+
+        // Last reading of the given month (or latest available if current month)
+        $stmt = $this->pdo->prepare(
+            'SELECT timestamp, Prelev_jour, Prelev_nuit, Injec_jour, Injec_nuit
+             FROM Data_Dries
+             WHERE YEAR(timestamp) = :year AND MONTH(timestamp) = :month
+             ORDER BY timestamp DESC LIMIT 1'
+        );
+        $stmt->execute(['year' => $year, 'month' => $month]);
+        $latest = $stmt->fetch() ?: null;
+
+        if ($latest === null) {
+            return [];
+        }
+
+        $result = [
+            'from'        => $first['timestamp'],
+            'to'          => $latest['timestamp'],
+            'prelev_jour' => max(0.0, round((float) $latest['Prelev_jour'] - (float) $first['Prelev_jour'], 3)),
+            'prelev_nuit' => max(0.0, round((float) $latest['Prelev_nuit'] - (float) $first['Prelev_nuit'], 3)),
+            'injec_jour'  => max(0.0, round((float) $latest['Injec_jour']  - (float) $first['Injec_jour'],  3)),
+            'injec_nuit'  => max(0.0, round((float) $latest['Injec_nuit']  - (float) $first['Injec_nuit'],  3)),
+        ];
+
+        // Solar delta
+        $table = $this->solarTable();
+        $stmt  = $this->pdo->prepare(
+            "SELECT s.timestamp, s.production
+             FROM {$table} s
+             INNER JOIN (
+                 SELECT MIN(timestamp) AS min_ts
+                 FROM {$table}
+                 WHERE YEAR(timestamp) = :year AND MONTH(timestamp) = :month
+             ) f ON s.timestamp = f.min_ts
+             LIMIT 1"
+        );
+        $stmt->execute(['year' => $year, 'month' => $month]);
+        $firstSolar = $stmt->fetch() ?: null;
+
+        $stmt = $this->pdo->prepare(
+            "SELECT production FROM {$table}
+             WHERE YEAR(timestamp) = :year AND MONTH(timestamp) = :month
+             ORDER BY timestamp DESC LIMIT 1"
+        );
+        $stmt->execute(['year' => $year, 'month' => $month]);
+        $latestSolar = $stmt->fetchColumn();
+
+        if ($firstSolar !== null && $latestSolar !== false) {
+            $unit                = ($table === 'Data_Solaire') ? 'kwh' : 'wh';
+            $raw                 = max(0.0, (float) $latestSolar - (float) $firstSolar['production']);
+            $result['solar']     = round($unit === 'kwh' ? $raw : $raw / 1000, 3);
+            $result['solar_unit'] = 'kwh';
+        } else {
+            $result['solar']     = null;
+            $result['solar_unit'] = null;
+        }
+
+        return $result;
+    }
+
     // -------------------------------------------------------------------------
     // Dashboard: chart data (daily deltas for last N days)
     // -------------------------------------------------------------------------

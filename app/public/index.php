@@ -90,7 +90,7 @@ function fmtCost(mixed $v): string
     --sans: 'Syne', sans-serif;
   }
 
-  html { font-size: 15px; }
+  html { font-size: 16px; }
   body {
     background: var(--bg);
     color: var(--text);
@@ -155,7 +155,7 @@ function fmtCost(mixed $v): string
     margin: 36px 0 16px;
   }
   .section-title {
-    font-size: .65rem; font-weight: 700; letter-spacing: .15em;
+    font-size: .78rem; font-weight: 700; letter-spacing: .15em;
     text-transform: uppercase; color: var(--muted);
   }
   .section-line { flex: 1; height: 1px; background: var(--border); }
@@ -176,7 +176,7 @@ function fmtCost(mixed $v): string
   }
   .card:hover { border-color: var(--border2); }
   .card-label {
-    font-size: .62rem; font-weight: 700; letter-spacing: .12em;
+    font-size: .72rem; font-weight: 700; letter-spacing: .12em;
     text-transform: uppercase; color: var(--muted);
     margin-bottom: 10px;
     display: flex; align-items: center; gap: 6px;
@@ -187,17 +187,17 @@ function fmtCost(mixed $v): string
   }
   .card-value {
     font-family: var(--mono);
-    font-size: 1.6rem;
+    font-size: 1.75rem;
     font-weight: 700;
     letter-spacing: -.02em;
     line-height: 1;
     color: #eef2f8;
   }
   /*.card-value .val { }*/
-  .card-value .unit { font-size: .85rem; font-weight: 400; color: var(--muted); margin-left: 4px; }
-  .card-value .nd   { color: var(--muted); font-size: 1.1rem; }
+  .card-value .unit { font-size: .9rem; font-weight: 400; color: var(--muted); margin-left: 4px; }
+  .card-value .nd   { color: var(--muted); font-size: 1.2rem; }
   .card-sub {
-    font-family: var(--mono); font-size: .68rem; color: var(--muted);
+    font-family: var(--mono); font-size: .95rem; color: var(--muted);
     margin-top: 8px;
   }
 
@@ -211,16 +211,25 @@ function fmtCost(mixed $v): string
 
   .cost-lines { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 20px 24px; }
   .cost-line {
-    display: flex; justify-content: space-between; align-items: center;
-    padding: 9px 0; border-bottom: 1px solid var(--border); font-size: .88rem;
+    display: grid;
+    grid-template-columns: 1fr auto auto;
+    align-items: center;
+    gap: 0 20px;
+    padding: 10px 0; border-bottom: 1px solid var(--border);
   }
   .cost-line:last-child { border: none; }
-  .cost-line .cl-label { color: var(--muted); font-size: .8rem; }
-  .cost-line .cl-amount { font-family: var(--mono); font-size: .9rem; color: var(--text); }
-  .cost-line.total .cl-label { color: var(--text); font-weight: 700; font-size: .88rem; }
-  .cost-line.total .cl-amount { color: var(--amber); font-size: 1.1rem; font-weight: 700; }
+  .cost-line .cl-label   { color: var(--muted); font-size: .88rem; }
+  .cost-line .cl-detail  {
+    font-family: var(--mono); font-size: .95rem; color: var(--muted);
+    text-align: right; white-space: nowrap;
+  }
+  .cost-line .cl-amount  { font-family: var(--mono); font-size: .95rem; color: var(--text); text-align: right; white-space: nowrap; }
+  .cost-line.total .cl-label  { color: var(--text); font-weight: 700; font-size: .95rem; }
+  .cost-line.total .cl-amount { color: var(--amber); font-size: 1.15rem; font-weight: 700; }
   .cost-line.credit .cl-amount { color: var(--green); }
-  .cost-line.vat .cl-label { color: var(--muted); font-style: italic; }
+  .cost-line.credit .cl-detail { color: rgba(47,213,142,.55); }
+  .cost-line.vat .cl-label    { color: var(--muted); font-style: italic; }
+  .cost-line.subtotal-sep     { border-top: 1px solid var(--border2); margin-top: 4px; padding-top: 14px; }
 
   .cost-total-card {
     background: var(--surface); border: 1px solid var(--border);
@@ -228,14 +237,14 @@ function fmtCost(mixed $v): string
     display: flex; flex-direction: column; justify-content: space-between;
   }
   .cost-total-label {
-    font-size: .62rem; font-weight: 700; letter-spacing: .15em;
+    font-size: .72rem; font-weight: 700; letter-spacing: .15em;
     text-transform: uppercase; color: var(--muted); margin-bottom: 16px;
   }
   .cost-total-amount {
-    font-family: var(--mono); font-size: 2.8rem; font-weight: 700;
+    font-family: var(--mono); font-size: 3rem; font-weight: 700;
     color: var(--amber); letter-spacing: -.04em; line-height: 1;
   }
-  .cost-total-meta { font-family: var(--mono); font-size: .72rem; color: var(--muted); margin-top: 12px; }
+  .cost-total-meta { font-family: var(--mono); font-size: .8rem; color: var(--muted); margin-top: 12px; }
   .cost-total-meta span { display: block; margin-top: 3px; }
   .no-tariff {
     background: var(--surface); border: 1px dashed var(--border2);
@@ -266,17 +275,17 @@ function fmtCost(mixed $v): string
   .gas-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 
   .gas-history { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
-  table { width: 100%; border-collapse: collapse; font-size: .82rem; }
+  table { width: 100%; border-collapse: collapse; font-size: .9rem; }
   thead th {
     background: var(--surface2); color: var(--muted);
-    font-size: .62rem; font-weight: 700; letter-spacing: .1em; text-transform: uppercase;
+    font-size: .72rem; font-weight: 700; letter-spacing: .1em; text-transform: uppercase;
     padding: 10px 16px; text-align: left;
   }
   tbody tr { border-top: 1px solid var(--border); }
   tbody tr:hover { background: var(--surface2); }
-  tbody td { padding: 10px 16px; font-family: var(--mono); color: var(--text); font-size: .8rem; }
+  tbody td { padding: 10px 16px; font-family: var(--mono); color: var(--text); font-size: .85rem; }
   .td-delta { color: var(--blue); }
-  .td-empty { padding: 24px 16px; color: var(--muted); font-style: italic; font-size: .82rem; }
+  .td-empty { padding: 24px 16px; color: var(--muted); font-style: italic; font-size: .88rem; }
 
   .gas-form { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 22px 24px; }
   .form-row { margin-bottom: 16px; }
@@ -323,7 +332,56 @@ function fmtCost(mixed $v): string
   }
   .tool-link:hover { color: var(--text); border-color: var(--blue); }
 
-  /* ── Responsive ─────────────────────────────────────────────────────────── */
+  /* ── Month navigator ───────────────────────────────────────────────────── */
+  .month-nav {
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  }
+  .month-nav-btn {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 32px; height: 32px; border-radius: 6px;
+    border: 1px solid var(--border2); background: transparent;
+    color: var(--muted); cursor: pointer; font-size: 1rem;
+    transition: color .15s, border-color .15s;
+  }
+  .month-nav-btn:hover { color: var(--text); border-color: var(--amber); }
+  .month-nav-current {
+    font-family: var(--mono); font-size: .85rem; font-weight: 700;
+    color: var(--text); min-width: 120px; text-align: center;
+    background: var(--surface); border: 1px solid var(--border2);
+    border-radius: 6px; padding: 5px 14px;
+  }
+  .month-nav-mode {
+    display: flex; gap: 4px; margin-left: 6px;
+  }
+  .month-nav-mode button {
+    padding: 5px 12px; border-radius: 6px; font-size: .72rem; font-weight: 700;
+    letter-spacing: .06em; text-transform: uppercase; cursor: pointer;
+    border: 1px solid var(--border2); background: transparent; color: var(--muted);
+    transition: color .15s, border-color .15s, background .15s;
+  }
+  .month-nav-mode button.active { background: var(--amber-dim); border-color: var(--amber); color: var(--amber); }
+  .month-nav-mode button:hover:not(.active) { color: var(--text); border-color: var(--border2); }
+
+  /* ── Year overview grid ─────────────────────────────────────────────────── */
+  .year-overview {
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px;
+    margin-top: 4px;
+  }
+  .year-month-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 8px; padding: 12px 14px; cursor: pointer;
+    transition: border-color .15s;
+  }
+  .year-month-card:hover { border-color: var(--amber); }
+  .year-month-card.active { border-color: var(--amber); background: var(--amber-dim); }
+  .year-month-card .ymc-label { font-size: .7rem; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; }
+  .year-month-card .ymc-cost { font-family: var(--mono); font-size: 1.05rem; font-weight: 700; color: var(--amber); }
+  .year-month-card .ymc-kwh  { font-family: var(--mono); font-size: .72rem; color: var(--muted); margin-top: 2px; }
+  .year-month-card .ymc-nd   { color: var(--muted); font-size: .8rem; }
+  .ymc-loading { opacity: .4; }
+
+  @media (max-width: 768px) { .year-overview { grid-template-columns: repeat(2, 1fr); } }
+  @media (max-width: 480px) { .year-overview { grid-template-columns: 1fr 1fr; } }
   @media (max-width: 1024px) {
     .cards-5 { grid-template-columns: repeat(3, 1fr); }
     .cost-wrap { grid-template-columns: 1fr; }
@@ -430,99 +488,40 @@ function fmtCost(mixed $v): string
 
   <!-- ── Cost estimate ─────────────────────────────────────────────────── -->
   <div class="section-header">
-    <span class="section-title">Estimation coûts — mois en cours</span>
+    <span class="section-title">Estimation coûts</span>
     <span class="section-line"></span>
+    <div class="month-nav">
+      <button class="month-nav-btn" id="nav-prev" title="Mois précédent">&#8592;</button>
+      <span class="month-nav-current" id="nav-label">…</span>
+      <button class="month-nav-btn" id="nav-next" title="Mois suivant">&#8594;</button>
+      <div class="month-nav-mode">
+        <button id="mode-month" class="active" onclick="setNavMode('month')">Mois</button>
+        <button id="mode-year"  onclick="setNavMode('year')">Année</button>
+      </div>
+    </div>
   </div>
 
-  <?php if (!$cost || !($cost['available'] ?? false)): ?>
-  <div class="no-tariff">
-    <strong style="color:var(--text);margin-bottom:6px;display:block">Aucun tarif configuré</strong>
-    <?= htmlspecialchars($cost['reason'] ?? 'Ajoutez un tarif via l\'API ou la section Tarifs.') ?><br><br>
-    Exemple via l'API :
-    <pre style="background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:12px;margin-top:10px;font-size:.75rem;overflow-x:auto">POST api.php?action=save_tariff
-{
-  "energy_type": "electricity",
-  "name": "Engie 2025",
-  "valid_from": "2025-01-01",
-  "lines": {
-    "energy_t1": 0.2950,
-    "energy_t2": 0.2350,
-    "distribution_t1": 0.0821,
-    "distribution_t2": 0.0412,
-    "distribution_fixed": 0.3082,
-    "federal_contribution": 0.0054,
-    "injection_t1": 0.0,
-    "injection_t2": 0.0,
-    "prosumer_annual": 185.0
-  }
-}</pre>
+  <!-- Year overview (hidden by default) -->
+  <div id="year-overview-wrap" style="display:none">
+    <div class="year-overview" id="year-overview-grid"></div>
   </div>
 
-  <?php else:
-    $c = $cost['cost'];
+  <!-- Dynamic cost content -->
+  <div id="cost-content">
+    <div style="font-family:var(--mono);font-size:.85rem;color:var(--muted);padding:24px 0">Chargement…</div>
+  </div>
+
+  <?php
+  // Embed current-month data as JSON for JS bootstrapping
+  $initCostData = json_encode($cost ?? ['available' => false, 'reason' => 'No data']);
+  $initYear  = (int) date('Y');
+  $initMonth = (int) date('n');
   ?>
-  <div class="cost-wrap">
-    <div class="cost-lines">
-      <div class="cost-line">
-        <span class="cl-label">Énergie T1 (jour)</span>
-        <span class="cl-amount"><?= fmtCost($c['energy_t1']) ?></span>
-      </div>
-      <div class="cost-line">
-        <span class="cl-label">Énergie T2 (nuit)</span>
-        <span class="cl-amount"><?= fmtCost($c['energy_t2']) ?></span>
-      </div>
-      <div class="cost-line">
-        <span class="cl-label">Distribution T1 (jour)</span>
-        <span class="cl-amount"><?= fmtCost($c['distribution_t1']) ?></span>
-      </div>
-      <div class="cost-line">
-        <span class="cl-label">Distribution T2 (nuit)</span>
-        <span class="cl-amount"><?= fmtCost($c['distribution_t2']) ?></span>
-      </div>
-      <div class="cost-line">
-        <span class="cl-label">Abonnement réseau (<?= $cost['days'] ?> jours)</span>
-        <span class="cl-amount"><?= fmtCost($c['distribution_fixed']) ?></span>
-      </div>
-      <div class="cost-line">
-        <span class="cl-label">Cotisation fédérale</span>
-        <span class="cl-amount"><?= fmtCost($c['federal_contribution']) ?></span>
-      </div>
-      <div class="cost-line">
-        <span class="cl-label">Taxe prosumer (prorata <?= $cost['days'] ?>j)</span>
-        <span class="cl-amount"><?= fmtCost($c['prosumer_fee']) ?></span>
-      </div>
-      <div class="cost-line credit">
-        <span class="cl-label">Crédit injection ↓</span>
-        <span class="cl-amount"><?= fmtCost($c['injection_credit']) ?></span>
-      </div>
-      <div class="cost-line vat">
-        <span class="cl-label">Sous-total HTVA</span>
-        <span class="cl-amount"><?= fmtCost($c['subtotal_ex_vat']) ?></span>
-      </div>
-      <div class="cost-line vat">
-        <span class="cl-label">TVA 21%</span>
-        <span class="cl-amount"><?= fmtCost($c['vat']) ?></span>
-      </div>
-      <div class="cost-line total">
-        <span class="cl-label">Total TVAC</span>
-        <span class="cl-amount"><?= fmtCost($c['total']) ?></span>
-      </div>
-    </div>
-
-    <div class="cost-total-card">
-      <div>
-        <div class="cost-total-label">Estimation mois en cours</div>
-        <div class="cost-total-amount"><?= fmtCost($c['total']) ?></div>
-      </div>
-      <div class="cost-total-meta">
-        <span>Tarif : <?= htmlspecialchars($cost['tariff_name'] ?? '') ?></span>
-        <span>Import : <?= number_format(($deltas['prelev_jour'] ?? 0) + ($deltas['prelev_nuit'] ?? 0), 1) ?> kWh</span>
-        <span>Export : <?= number_format(($deltas['injec_jour'] ?? 0) + ($deltas['injec_nuit'] ?? 0), 1) ?> kWh</span>
-        <span>Période : <?= $cost['days'] ?> jours</span>
-      </div>
-    </div>
-  </div>
-  <?php endif; ?>
+  <script>
+    window.__INIT_COST__ = <?= $initCostData ?>;
+    window.__INIT_YEAR__  = <?= $initYear ?>;
+    window.__INIT_MONTH__ = <?= $initMonth ?>;
+  </script>
 
   <!-- ── Chart ─────────────────────────────────────────────────────────── -->
   <div class="section-header">
@@ -571,7 +570,7 @@ function fmtCost(mixed $v): string
         Nouvel index gaz
       </div>
       <?php if ($gasLatest): ?>
-      <div style="font-family:var(--mono);font-size:.75rem;color:var(--muted);margin-bottom:14px;padding:8px 12px;background:var(--bg);border-radius:5px;border:1px solid var(--border)">
+      <div style="font-family:var(--mono);font-size:.95rem;color:var(--muted);margin-bottom:14px;padding:8px 12px;background:var(--bg);border-radius:5px;border:1px solid var(--border)">
         Dernier index : <strong style="color:var(--text)"><?= number_format((float)$gasLatest['counter_m3'], 3, '.', ' ') ?> m³</strong>
         le <?= htmlspecialchars(substr($gasLatest['reading_at'], 0, 10)) ?>
       </div>
@@ -649,6 +648,257 @@ function fmtCost(mixed $v): string
 </div><!-- /wrap -->
 
 <script>
+// ── Month cost navigation ──────────────────────────────────────────────────
+(function() {
+  const MONTHS_FR = ['Jan','Fév','Mar','Avr','Mai','Jun','Jul','Aoû','Sep','Oct','Nov','Déc'];
+  let navYear  = window.__INIT_YEAR__;
+  let navMonth = window.__INIT_MONTH__;
+  let navMode  = 'month'; // 'month' | 'year'
+  const NOW_YEAR  = window.__INIT_YEAR__;
+  const NOW_MONTH = window.__INIT_MONTH__;
+
+  function fmtEur(v) {
+    if (v === null || v === undefined) return '<span style="color:var(--muted)">—</span>';
+    const sign = v < 0 ? '−' : '';
+    return sign + Math.abs(v).toFixed(2).replace('.', '.') + ' €';
+  }
+  function fmtKwh(v, dec = 1) {
+    if (v === null || v === undefined || isNaN(v)) return '';
+    return Number(v).toFixed(dec) + ' kWh';
+  }
+
+  function renderCostContent(data) {
+    const el = document.getElementById('cost-content');
+    if (!data || !data.available) {
+      el.innerHTML = `<div class="no-tariff">
+        <strong style="color:var(--text);margin-bottom:6px;display:block">Aucune donnée disponible</strong>
+        ${data?.reason ?? 'Pas de tarif ou de données pour cette période.'}
+      </div>`;
+      return;
+    }
+    const c = data.cost;
+    const d = data.deltas || {};
+    const r = data.tariff_rates || {};
+    const t1 = (d.prelev_jour ?? 0);
+    const t2 = (d.prelev_nuit ?? 0);
+    const e1 = (d.injec_jour  ?? 0);
+    const e2 = (d.injec_nuit  ?? 0);
+
+    // Format a unit rate
+    function fmtRate(v, unit) {
+      if (v == null || isNaN(v)) return '';
+      return Number(v).toFixed(4) + ' ' + unit;
+    }
+    // Format detail string: "qty unit × rate €/unit"
+    function detail(qty, qtyUnit, rate, rateUnit) {
+      if (!qty && qty !== 0) return '';
+      const qtyStr  = Number(qty).toFixed(qtyUnit === 'j' ? 0 : 2);
+      const rateStr = rate != null ? Number(rate).toFixed(4) : null;
+      return rateStr ? `${qtyStr} ${qtyUnit} × ${rateStr} €/${rateUnit}` : `${qtyStr} ${qtyUnit}`;
+    }
+
+    // row(label, detail_str, amount, extra_css_class)
+    function row(label, detailStr, amount, cls = '') {
+      return `<div class="cost-line ${cls}">
+        <span class="cl-label">${label}</span>
+        <span class="cl-detail">${detailStr}</span>
+        <span class="cl-amount">${fmtEur(amount)}</span>
+      </div>`;
+    }
+    function rowPlain(label, detailStr, amount, cls = '') {
+      return row(label, detailStr, amount, cls);
+    }
+
+    const isCurrentMonth = (navYear === NOW_YEAR && navMonth === NOW_MONTH);
+    const periodLabel = isCurrentMonth ? 'Estimation mois en cours' : `${MONTHS_FR[navMonth-1]} ${navYear}`;
+
+    el.innerHTML = `<div class="cost-wrap">
+      <div class="cost-lines">
+        ${row('Énergie T1 — jour',
+              detail(t1, 'kWh', r.energy_t1, 'kWh'),
+              c.energy_t1)}
+        ${row('Énergie T2 — nuit',
+              detail(t2, 'kWh', r.energy_t2, 'kWh'),
+              c.energy_t2)}
+        ${row('Distribution T1 — jour',
+              detail(t1, 'kWh', r.distribution_t1, 'kWh'),
+              c.distribution_t1)}
+        ${row('Distribution T2 — nuit',
+              detail(t2, 'kWh', r.distribution_t2, 'kWh'),
+              c.distribution_t2)}
+        ${row('Abonnement réseau',
+              detail(data.days, 'j', r.distribution_fixed, 'j'),
+              c.distribution_fixed)}
+        ${row('Cotisation fédérale',
+              detail(t1 + t2, 'kWh', r.federal_contribution, 'kWh'),
+              c.federal_contribution)}
+        ${row('Taxe prosumer BRUGEL',
+              `${detail(data.days, 'j', r.prosumer_annual != null ? +(r.prosumer_annual / 365).toFixed(6) : null, 'j')}<span style="opacity:.55;margin-left:6px">(${r.prosumer_annual != null ? Number(r.prosumer_annual).toFixed(2) + ' €/an' : '—'})</span>`,
+              c.prosumer_fee)}
+        ${row('Crédit injection T1',
+              detail(e1, 'kWh', r.injection_t1 ?? 0, 'kWh'),
+              -(e1 * (r.injection_t1 ?? 0)),
+              'credit')}
+        ${row('Crédit injection T2',
+              detail(e2, 'kWh', r.injection_t2 ?? 0, 'kWh'),
+              -(e2 * (r.injection_t2 ?? 0)),
+              'credit')}
+        ${rowPlain('Sous-total HTVA', '', c.subtotal_ex_vat, 'vat subtotal-sep')}
+        ${rowPlain('TVA 21%', `21% × ${fmtEur(c.subtotal_ex_vat)}`, c.vat, 'vat')}
+        ${rowPlain('Total TVAC', '', c.total, 'total')}
+      </div>
+      <div class="cost-total-card">
+        <div>
+          <div class="cost-total-label">${periodLabel}</div>
+          <div class="cost-total-amount">${fmtEur(c.total)}</div>
+        </div>
+        <div class="cost-total-meta">
+          <span>Tarif : ${data.tariff_name ?? '—'}</span>
+          <span>Import T1 : ${fmtKwh(t1)} · T2 : ${fmtKwh(t2)}</span>
+          <span>Export T1 : ${fmtKwh(e1)} · T2 : ${fmtKwh(e2)}</span>
+          ${d.solar != null ? `<span>Solaire : ${fmtKwh(d.solar)}</span>` : ''}
+          <span>Période : ${data.days} jours</span>
+        </div>
+      </div>
+    </div>`;
+  }
+
+  async function loadMonthCost(year, month) {
+    const el = document.getElementById('cost-content');
+    el.innerHTML = '<div style="font-family:var(--mono);font-size:.85rem;color:var(--muted);padding:24px 0">Chargement…</div>';
+    // Use cached init data for current month
+    if (year === NOW_YEAR && month === NOW_MONTH && window.__INIT_COST__) {
+      renderCostContent(window.__INIT_COST__);
+      return;
+    }
+    try {
+      const res  = await fetch(`api.php?action=month_cost&year=${year}&month=${month}`);
+      const data = await res.json();
+      renderCostContent(data);
+    } catch (e) {
+      el.innerHTML = '<div style="color:var(--red);font-family:var(--mono);font-size:.85rem;padding:24px 0">Erreur de chargement.</div>';
+    }
+  }
+
+  // ── Year overview ──────────────────────────────────────────────────────
+  const yearCache = {};
+
+  async function loadYearOverview(year) {
+    const grid = document.getElementById('year-overview-grid');
+    grid.innerHTML = '';
+    const curY = NOW_YEAR, curM = NOW_MONTH;
+    const MONTH_NAMES = ['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre'];
+
+    for (let m = 1; m <= 12; m++) {
+      const isFuture = (year > curY || (year === curY && m > curM));
+      const card = document.createElement('div');
+      card.className = 'year-month-card' + (m === navMonth && year === navYear ? ' active' : '');
+      card.dataset.month = m;
+      card.innerHTML = `<div class="ymc-label">${MONTH_NAMES[m-1]}</div>
+        <div class="ymc-cost ymc-loading">${isFuture ? '<span class="ymc-nd">—</span>' : '…'}</div>
+        <div class="ymc-kwh"></div>`;
+      card.addEventListener('click', () => {
+        navMonth = m;
+        setNavMode('month');
+        updateNav();
+        loadMonthCost(navYear, navMonth);
+      });
+      grid.appendChild(card);
+
+      if (!isFuture) {
+        const key = `${year}-${m}`;
+        if (yearCache[key]) {
+          updateYearCard(card, yearCache[key]);
+        } else {
+          (async (card, m) => {
+            try {
+              const d = year === curY && m === curM && window.__INIT_COST__
+                ? window.__INIT_COST__
+                : await (await fetch(`api.php?action=month_cost&year=${year}&month=${m}`)).json();
+              yearCache[key] = d;
+              updateYearCard(card, d);
+            } catch { card.querySelector('.ymc-cost').innerHTML = '<span class="ymc-nd">err</span>'; }
+          })(card, m);
+        }
+      }
+    }
+  }
+
+  function updateYearCard(card, data) {
+    const costEl = card.querySelector('.ymc-cost');
+    const kwhEl  = card.querySelector('.ymc-kwh');
+    costEl.classList.remove('ymc-loading');
+    if (!data || !data.available) {
+      costEl.innerHTML = '<span class="ymc-nd">—</span>';
+    } else {
+      const t = data.cost?.total;
+      const d = data.deltas || {};
+      const kwh = (d.prelev_jour ?? 0) + (d.prelev_nuit ?? 0);
+      costEl.textContent = t != null ? (t < 0 ? '−' : '') + Math.abs(t).toFixed(2) + ' €' : '—';
+      kwhEl.textContent  = kwh ? kwh.toFixed(1) + ' kWh' : '';
+    }
+  }
+
+  // ── Navigation controls ────────────────────────────────────────────────
+  function updateNav() {
+    const label = document.getElementById('nav-label');
+    const MONTH_NAMES = ['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre'];
+    if (navMode === 'year') {
+      label.textContent = String(navYear);
+    } else {
+      label.textContent = MONTH_NAMES[navMonth - 1] + ' ' + navYear;
+    }
+    // Disable next if at current month/year
+    const nextBtn = document.getElementById('nav-next');
+    if (navMode === 'month') {
+      nextBtn.disabled = (navYear === NOW_YEAR && navMonth === NOW_MONTH);
+    } else {
+      nextBtn.disabled = (navYear >= NOW_YEAR);
+    }
+    nextBtn.style.opacity = nextBtn.disabled ? '.3' : '';
+  }
+
+  document.getElementById('nav-prev').addEventListener('click', () => {
+    if (navMode === 'month') {
+      navMonth--;
+      if (navMonth < 1) { navMonth = 12; navYear--; }
+      loadMonthCost(navYear, navMonth);
+    } else {
+      navYear--;
+      loadYearOverview(navYear);
+    }
+    updateNav();
+  });
+
+  document.getElementById('nav-next').addEventListener('click', () => {
+    if (navMode === 'month') {
+      if (navYear === NOW_YEAR && navMonth === NOW_MONTH) return;
+      navMonth++;
+      if (navMonth > 12) { navMonth = 1; navYear++; }
+      loadMonthCost(navYear, navMonth);
+    } else {
+      if (navYear >= NOW_YEAR) return;
+      navYear++;
+      loadYearOverview(navYear);
+    }
+    updateNav();
+  });
+
+  window.setNavMode = function(mode) {
+    navMode = mode;
+    document.getElementById('mode-month').classList.toggle('active', mode === 'month');
+    document.getElementById('mode-year').classList.toggle('active', mode === 'year');
+    document.getElementById('year-overview-wrap').style.display = mode === 'year' ? 'block' : 'none';
+    document.getElementById('cost-content').style.display = mode === 'month' ? 'block' : 'none';
+    if (mode === 'year') loadYearOverview(navYear);
+    updateNav();
+  };
+
+  // Init
+  updateNav();
+  renderCostContent(window.__INIT_COST__);
+})();
+
 // ── Clock ──────────────────────────────────────────────────────────────────
 (function clock() {
   const timeEl = document.getElementById('clock-time');
