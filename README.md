@@ -24,3 +24,6 @@ il y a 2 décimales pour le PCS, il faut augmenter à 4 décimales
 
 la valeur live de Consommation réseau est en valeur absolue. Il faut enlever cet absolu pour indiquer si on prend du réseau (positif) ou si on donne au réseau (négatif) donc prendre la valeur telquel sans transformation.
 
+### 1.10 Bug : mauvais range de date
+
+pour les taxe mensuel, il faut prendre que le mois en cours. actuellement le jour du mois suivant est inclus mais doit être exclu.
