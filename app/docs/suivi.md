@@ -41,7 +41,7 @@ Calcul complet dans `TariffCalculatorService`. Composantes stockées dans `tarif
 | `energy_contribution`  | Contribution sur l'énergie              | €/kWh   |
 | `federal_excise`       | Accise fédérale                         | €/kWh   |
 | `distribution`         | Distribution (variable)                 | €/kWh   |
-| `distribution_fixed`   | Distribution (fixe)                     | c€/kWh  |
+| `distribution_fixed`   | Distribution (fixe)                     | €/an    |
 | `transport`            | Transport                               | €/kWh   |
 | `meter_reading_annual` | Relevé de compteur                      | €/an    |
 
@@ -67,7 +67,7 @@ Calcul complet dans `TariffCalculatorService`. Composantes stockées dans `tarif
 - Contribution énergie : 0,1058 c€/kWh → `energy_contribution` = 0,001058 €/kWh
 - Accise fédérale : 0,8724 c€/kWh → `federal_excise` = 0,008724 €/kWh
 - Distribution variable : 1,447 c€/kWh → `distribution` = 0,014470 €/kWh
-- Distribution fixe : 43,07 c€/kWh → `distribution_fixed` = 43,070000
+- Distribution fixe : 43,07 €/an → `distribution_fixed` = 43,070000
 - Transport : 0,165 c€/kWh → `transport` = 0,001650 €/kWh
 - Relevé de compteur : 24,95 €/an → `meter_reading_annual` = 24,950000
 
@@ -90,14 +90,13 @@ Calcul complet dans `TariffCalculatorService`. Composantes stockées dans `tarif
 
 ## Points ouverts
 
-1. **Suppression code mort** : retirer `app/src/Repository/EnergyRepository.php`, `EnergyIngestionService.php`, `EnergyWebhookService.php` (jamais appelés).
+1. ~~**Suppression code mort** : retirer `app/src/Repository/EnergyRepository.php`, `EnergyIngestionService.php`, `EnergyWebhookService.php` (jamais appelés).~~
 2. **Claim device EnergyID** : confirmer que l'appareil est claimé côté portail EnergyID (sinon `/hello` renvoie `claimCode`/`claimUrl`).
 3. **Mapping métier** : `el.t1` / `el.t2` / `el-i.t1` / `el-i.t2` / `pv` — confirmer avec EnergyID.
-4. **Fiabilité dongle solaire** : une fois le dongle stable, supprimer le fallback `Data_Brusol` dans `LegacyDailyRepository::solarTable()` et fixer `Data_Solaire` en dur.
-5. **Tarifs en DB** : exécuter les seeds commentés dans `schema_v2.sql` après avoir adapté les valeurs au contrat réel.
-6. **PCS coefficient gaz** : vérifier si le coefficient fourni par le fournisseur est fixe ou variable par période ; si variable, ajouter une table de coefficients périodiques.
-7. **Distribution fixe gaz** : vérifier l'unité réelle de `distribution_fixed` (actuellement renseigné en c€/kWh dans les données fév. 2026 — à confirmer si €/an ou €/jour).
-8. **TariffCalculatorService** : mettre à jour le calcul pour intégrer les nouvelles clés (`excise_duty`, `energy_contribution`, `green_contribution`, `public_service_annual`, `subscription`, `management_annual`, `transport`, `federal_excise`, `meter_reading_annual`).
+4. ~~**Fiabilité dongle solaire** : une fois le dongle stable, supprimer le fallback `Data_Brusol` dans `LegacyDailyRepository::solarTable()` et fixer `Data_Solaire` en dur.~~
+6. ~~**PCS coefficient gaz** : vérifier si le coefficient fourni par le fournisseur est fixe ou variable par période ; si variable, ajouter une table de coefficients périodiques.~~
+7. ~~**Distribution fixe gaz** : unité confirmée **€/an** — calcul corrigé (`$days / 365`) dans `TariffCalculatorService`, label mis à jour dans `tariffs.php`.~~
+8. ~~**TariffCalculatorService** : mettre à jour le calcul pour intégrer les nouvelles clés (`excise_duty`, `energy_contribution`, `green_contribution`, `public_service_annual`, `subscription`, `management_annual`, `transport`, `federal_excise`, `meter_reading_annual`).~~
 
 ---
 

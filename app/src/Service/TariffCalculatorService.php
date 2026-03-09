@@ -30,7 +30,7 @@ namespace App\Service;
  *   energy_contribution   float  €/kWh
  *   federal_excise        float  €/kWh
  *   distribution          float  €/kWh
- *   distribution_fixed    float  c€/kWh (stored as cents, /100 to get €)
+ *   distribution_fixed    float  €/an   distribution fixe (frais annuel fixe)
  *   transport             float  €/kWh
  *   meter_reading_annual  float  €/an
  */
@@ -139,14 +139,14 @@ final class TariffCalculatorService
      */
     public function calculateGasCost(float $kwh, int $days, array $tariff): array
     {
-        $energy      = $kwh  * ($tariff['energy'] ?? 0.0);
+        $energy       = $kwh  * ($tariff['energy'] ?? 0.0);
         $distribution = $kwh * ($tariff['distribution'] ?? 0.0);
-        $fixed       = $days * ($tariff['distribution_fixed'] ?? 0.0);
-        $federal     = $kwh  * ($tariff['federal_contribution'] ?? 0.0);
+        $fixed        = $days * (($tariff['distribution_fixed'] ?? 0.0) / self::DAYS_YEAR);
+        $federal      = $kwh  * ($tariff['federal_contribution'] ?? 0.0);
 
-        $subtotal = $energy + $distribution + $fixed + $federal;
-        $vat      = $subtotal * self::TVA;
-        $total    = $subtotal + $vat;
+        $subtotal     = $energy + $distribution + $fixed + $federal;
+        $vat          = $subtotal * self::TVA;
+        $total        = $subtotal + $vat;
 
         return [
             'energy'               => round($energy, 4),

@@ -185,6 +185,13 @@ function fmtCost(mixed $v): string
     width: 6px; height: 6px; border-radius: 50%;
     display: inline-block; flex-shrink: 0;
   }
+  .card-api-link {
+    margin-left: auto; flex-shrink: 0;
+    color: var(--muted); opacity: .45;
+    transition: opacity .2s, color .2s;
+    line-height: 0;
+  }
+  .card-api-link:hover { opacity: 1; color: var(--text); }
   .card-value {
     font-family: var(--mono);
     font-size: 1.75rem;
@@ -455,11 +462,17 @@ function fmtCost(mixed $v): string
 
   <div class="cards cards-2">
     <div class="card amber">
-      <div class="card-label"><span class="dot" style="background:var(--amber)"></span>Consommation réseau</div>
+      <div class="card-label">
+        <span class="dot" style="background:var(--amber)"></span>Consommation réseau
+        <a href="http://192.168.1.5/api/v1/data" target="_blank" rel="noopener" class="card-api-link" title="Ouvrir l'API HomeWizard"><svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg></a>
+      </div>
       <div class="card-value" id="live-dries-w"><span class="nd">…</span></div>
     </div>
     <div class="card green">
-      <div class="card-label"><span class="dot" style="background:var(--green)"></span>Production solaire</div>
+      <div class="card-label">
+        <span class="dot" style="background:var(--green)"></span>Production solaire
+        <a href="http://192.168.1.7/api/v1/data" target="_blank" rel="noopener" class="card-api-link" title="Ouvrir l'API HomeWizard"><svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg></a>
+      </div>
       <div class="card-value" id="live-solar-w"><span class="nd">…</span></div>
     </div>
   </div>

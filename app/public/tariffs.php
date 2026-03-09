@@ -153,12 +153,12 @@ $elecLines = [
 ];
 
 $gasLines = [
-    'energy'               => ['label' => 'Énergie fournisseur',              'unit' => '€/kWh'],
+    'energy'               => ['label' => 'Énergie fournisseur',               'unit' => '€/kWh'],
     'subscription'         => ['label' => 'Abonnement fournisseur',            'unit' => '€/mois'],
     'energy_contribution'  => ['label' => 'Contribution énergie',              'unit' => '€/kWh'],
     'federal_excise'       => ['label' => 'Accise fédérale',                   'unit' => '€/kWh'],
     'distribution'         => ['label' => 'Distribution (variable)',           'unit' => '€/kWh'],
-    'distribution_fixed'   => ['label' => 'Distribution (fixe)',               'unit' => 'c€/kWh'],
+    'distribution_fixed'   => ['label' => 'Distribution (fixe)',               'unit' => '€/an'],
     'transport'            => ['label' => 'Transport',                         'unit' => '€/kWh'],
     'meter_reading_annual' => ['label' => 'Relevé de compteur',                'unit' => '€/an'],
 ];
