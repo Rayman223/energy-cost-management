@@ -702,7 +702,7 @@ function fmtCost(mixed $v): string
     // Format a detail string: "qty unit × rate €/unit"
     function detail(qty, qtyUnit, rate, rateUnit) {
       const qtyFmt  = Number(qty).toFixed(qtyUnit === 'mois' || qtyUnit === 'j' ? 2 : 2);
-      const rateFmt = (rate != null && rate !== 0) ? Number(rate).toFixed(4) : null;
+      const rateFmt = (rate != null && rate !== 0) ? Number(rate).toFixed(7) : null;
       return rateFmt ? `${qtyFmt} ${qtyUnit} × ${rateFmt} €/${rateUnit}` : `${qtyFmt} ${qtyUnit}`;
     }
     function detailAnnual(days, annualRate, unit) {

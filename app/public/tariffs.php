@@ -331,7 +331,7 @@ $today = date('Y-m-d');
       <?php foreach ($g->lines as $key => $amount): ?>
       <tr>
         <td><?= htmlspecialchars($elecLines[$key]['label'] ?? $key) ?></td>
-        <td><?= number_format($amount, 6) ?> <?= htmlspecialchars($elecLines[$key]['unit'] ?? '') ?></td>
+        <td><?= number_format($amount, 7) ?> <?= htmlspecialchars($elecLines[$key]['unit'] ?? '') ?></td>
       </tr>
       <?php endforeach; ?>
     </table>
@@ -378,7 +378,7 @@ $today = date('Y-m-d');
       <?php foreach ($g->lines as $key => $amount): ?>
       <tr>
         <td><?= htmlspecialchars($gasLines[$key]['label'] ?? $key) ?></td>
-        <td><?= number_format($amount, 6) ?> <?= htmlspecialchars($gasLines[$key]['unit'] ?? '') ?></td>
+        <td><?= number_format($amount, 7) ?> <?= htmlspecialchars($gasLines[$key]['unit'] ?? '') ?></td>
       </tr>
       <?php endforeach; ?>
     </table>
@@ -441,9 +441,9 @@ $today = date('Y-m-d');
         <?php foreach ($elecLines as $key => $def): ?>
         <div class="form-row">
           <label class="form-label"><?= htmlspecialchars($def['label']) ?> <span class="unit"><?= $def['unit'] ?></span></label>
-          <input type="number" name="line_<?= $key ?>" step="0.000001" class="form-input"
-                 placeholder="0.000000"
-                 value="<?= htmlspecialchars(isset($elLines[$key]) ? number_format($elLines[$key], 6, '.', '') : '') ?>">
+          <input type="number" name="line_<?= $key ?>" step="0.0000001" class="form-input"
+                 placeholder="0.0000000"
+                 value="<?= htmlspecialchars(isset($elLines[$key]) ? number_format($elLines[$key], 7, '.', '') : '') ?>">
         </div>
         <?php endforeach; ?>
       </div>
@@ -461,9 +461,9 @@ $today = date('Y-m-d');
         <?php foreach ($gasLines as $key => $def): ?>
         <div class="form-row">
           <label class="form-label"><?= htmlspecialchars($def['label']) ?> <span class="unit"><?= $def['unit'] ?></span></label>
-          <input type="number" name="line_<?= $key ?>" step="0.000001" class="form-input"
-                 placeholder="0.000000"
-                 value="<?= htmlspecialchars(isset($glLines[$key]) ? number_format($glLines[$key], 6, '.', '') : '') ?>">
+          <input type="number" name="line_<?= $key ?>" step="0.0000001" class="form-input"
+                 placeholder="0.0000000"
+                 value="<?= htmlspecialchars(isset($glLines[$key]) ? number_format($glLines[$key], 7, '.', '') : '') ?>">
         </div>
         <?php endforeach; ?>
       </div>

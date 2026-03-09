@@ -61,7 +61,7 @@ CREATE TABLE IF NOT EXISTS tariff_grid_lines (
     id              BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     tariff_grid_id  BIGINT UNSIGNED NOT NULL,
     line_key        VARCHAR(100) NOT NULL COMMENT 'Cle tarifaire (energy_t1, distribution_fixed, prosumer_annual...)',
-    amount_per_kwh  DECIMAL(10,5) NOT NULL COMMENT 'Montant en EUR. Unite reelle selon la cle (EUR/kWh ou EUR/jour ou EUR/an)',
+    amount_per_kwh  DECIMAL(12,7) NOT NULL COMMENT 'Montant en EUR. Unite reelle selon la cle (EUR/kWh ou EUR/jour ou EUR/an)',
     created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT fk_tariff_grid_lines_grid
         FOREIGN KEY (tariff_grid_id) REFERENCES tariff_grids (id)
@@ -74,39 +74,3 @@ CREATE TABLE IF NOT EXISTS webhook_sync_state (
     last_sent_at DATETIME NULL,
     updated_at   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-
-
--- ============================================================
--- Seeds tarifaires — adapter avant import, puis decommenter
--- ============================================================
-
-/*
--- Electricite bihoraire (prosumer Bruxelles)
-INSERT INTO tariff_grids (energy_type, name, valid_from, valid_to) VALUES
-    ('electricity', 'Tarif bihoraire 2025', '2025-01-01', NULL);
-
-SET @elec = LAST_INSERT_ID();
-
-INSERT INTO tariff_grid_lines (tariff_grid_id, line_key, amount_per_kwh) VALUES
-    (@elec, 'energy_t1',             0.2950),
-    (@elec, 'energy_t2',             0.2350),
-    (@elec, 'distribution_t1',       0.0821),
-    (@elec, 'distribution_t2',       0.0412),
-    (@elec, 'distribution_fixed',    0.3082),   -- EUR/jour
-    (@elec, 'federal_contribution',  0.0054),
-    (@elec, 'injection_t1',          0.0000),   -- 0 pour prosumer
-    (@elec, 'injection_t2',          0.0000),   -- 0 pour prosumer
-    (@elec, 'prosumer_annual',     185.0000);   -- EUR/an taxe prosumer BRUGEL
-
--- Gaz naturel
-INSERT INTO tariff_grids (energy_type, name, valid_from, valid_to, pcs_coefficient) VALUES
-    ('gas', 'Gaz naturel 2025', '2025-01-01', NULL, 10.55);
-
-SET @gas = LAST_INSERT_ID();
-
-INSERT INTO tariff_grid_lines (tariff_grid_id, line_key, amount_per_kwh) VALUES
-    (@gas, 'energy',               0.0680),
-    (@gas, 'distribution',         0.0185),
-    (@gas, 'distribution_fixed',   0.1370),   -- EUR/jour
-    (@gas, 'federal_contribution', 0.0000);
-*/

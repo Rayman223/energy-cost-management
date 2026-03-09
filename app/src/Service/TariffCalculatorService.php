@@ -115,7 +115,7 @@ final class TariffCalculatorService
             // Taxes
             'prosumer_fee'          => round($prosumerFee, 4),
             'excise_duty'           => round($exciseDuty, 4),
-            'energy_contribution'   => round($energyContribution, 4),
+            'energy_contribution'   => round($energyContribution, 7),
             'green_contribution'    => round($greenContribution, 4),
             'public_service_fee'    => round($publicServiceFee, 4),
             // Injection
