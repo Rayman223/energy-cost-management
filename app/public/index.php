@@ -1045,7 +1045,7 @@ function renderChart(data) {
 }
 
 // ── Live dongle polling ────────────────────────────────────────────────────
-const LIVE_INTERVAL = 5_000; // 5 secondes
+const LIVE_INTERVAL = 2_000; // 2 secondes
 
 function fmtWatt(v) {
   if (v === undefined || v === null) return '<span class="nd">—</span>';
