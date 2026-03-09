@@ -39,7 +39,7 @@ final class WebAccessGuard
             self::deny(500, self::message($lang, 'invalid_config'), $jsonResponse);
         }
 
-        if ($jsonResponse === false && self::isSessionAuthenticated($expectedUser, $expectedPass)) {
+        if (self::isSessionAuthenticated($expectedUser, $expectedPass)) {
             return;
         }
 
