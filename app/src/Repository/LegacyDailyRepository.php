@@ -193,15 +193,38 @@ final class LegacyDailyRepository
             return [];
         }
 
-        // Last reading of the given month (or latest available if current month)
+        // Upper bound: first reading of the next calendar month.
+        // This is the most accurate boundary — it captures the full month including
+        // the last hour, exactly like daily deltas use "first of day N+1".
+        // Falls back to the last reading of the requested month when next month
+        // has no data yet (i.e. the current ongoing month).
+        $nextYear  = $month === 12 ? $year + 1 : $year;
+        $nextMonth = $month === 12 ? 1 : $month + 1;
+
         $stmt = $this->pdo->prepare(
-            'SELECT timestamp, Prelev_jour, Prelev_nuit, Injec_jour, Injec_nuit
-             FROM Data_Dries
-             WHERE YEAR(timestamp) = :year AND MONTH(timestamp) = :month
-             ORDER BY timestamp DESC LIMIT 1'
+            'SELECT d.timestamp, d.Prelev_jour, d.Prelev_nuit, d.Injec_jour, d.Injec_nuit
+             FROM Data_Dries d
+             INNER JOIN (
+                 SELECT MIN(timestamp) AS min_ts
+                 FROM Data_Dries
+                 WHERE YEAR(timestamp) = :year AND MONTH(timestamp) = :month
+             ) f ON d.timestamp = f.min_ts
+             LIMIT 1'
         );
-        $stmt->execute(['year' => $year, 'month' => $month]);
+        $stmt->execute(['year' => $nextYear, 'month' => $nextMonth]);
         $latest = $stmt->fetch() ?: null;
+
+        // No first reading of next month → use last reading of the requested month
+        if ($latest === null) {
+            $stmt = $this->pdo->prepare(
+                'SELECT timestamp, Prelev_jour, Prelev_nuit, Injec_jour, Injec_nuit
+                 FROM Data_Dries
+                 WHERE YEAR(timestamp) = :year AND MONTH(timestamp) = :month
+                 ORDER BY timestamp DESC LIMIT 1'
+            );
+            $stmt->execute(['year' => $year, 'month' => $month]);
+            $latest = $stmt->fetch() ?: null;
+        }
 
         if ($latest === null) {
             return [];
@@ -216,7 +239,7 @@ final class LegacyDailyRepository
             'injec_nuit'  => max(0.0, round((float) $latest['Injec_nuit']  - (float) $first['Injec_nuit'],  3)),
         ];
 
-        // Solar delta
+        // Solar delta — same boundary logic
         $table = $this->solarTable();
         $stmt  = $this->pdo->prepare(
             "SELECT s.timestamp, s.production
@@ -231,21 +254,38 @@ final class LegacyDailyRepository
         $stmt->execute(['year' => $year, 'month' => $month]);
         $firstSolar = $stmt->fetch() ?: null;
 
+        // First reading of next month for solar (same boundary logic as electricity)
         $stmt = $this->pdo->prepare(
-            "SELECT production FROM {$table}
-             WHERE YEAR(timestamp) = :year AND MONTH(timestamp) = :month
-             ORDER BY timestamp DESC LIMIT 1"
+            "SELECT s.production
+             FROM {$table} s
+             INNER JOIN (
+                 SELECT MIN(timestamp) AS min_ts
+                 FROM {$table}
+                 WHERE YEAR(timestamp) = :year AND MONTH(timestamp) = :month
+             ) f ON s.timestamp = f.min_ts
+             LIMIT 1"
         );
-        $stmt->execute(['year' => $year, 'month' => $month]);
+        $stmt->execute(['year' => $nextYear, 'month' => $nextMonth]);
         $latestSolar = $stmt->fetchColumn();
 
+        // Fallback to last reading of the month
+        if ($latestSolar === false) {
+            $stmt = $this->pdo->prepare(
+                "SELECT production FROM {$table}
+                 WHERE YEAR(timestamp) = :year AND MONTH(timestamp) = :month
+                 ORDER BY timestamp DESC LIMIT 1"
+            );
+            $stmt->execute(['year' => $year, 'month' => $month]);
+            $latestSolar = $stmt->fetchColumn();
+        }
+
         if ($firstSolar !== null && $latestSolar !== false) {
-            $unit                = ($table === 'Data_Solaire') ? 'kwh' : 'wh';
-            $raw                 = max(0.0, (float) $latestSolar - (float) $firstSolar['production']);
-            $result['solar']     = round($unit === 'kwh' ? $raw : $raw / 1000, 3);
+            $unit                 = ($table === 'Data_Solaire') ? 'kwh' : 'wh';
+            $raw                  = max(0.0, (float) $latestSolar - (float) $firstSolar['production']);
+            $result['solar']      = round($unit === 'kwh' ? $raw : $raw / 1000, 3);
             $result['solar_unit'] = 'kwh';
         } else {
-            $result['solar']     = null;
+            $result['solar']      = null;
             $result['solar_unit'] = null;
         }
 

@@ -122,7 +122,7 @@ function fmtCost(mixed $v): string
     box-shadow: 0 0 20px rgba(245,166,35,.35);
   }
   .logo-text { font-size: 1.15rem; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; color: #eef2f8; }
-  .logo-sub  { font-family: var(--mono); font-size: .68rem; color: var(--muted); letter-spacing: .08em; margin-top: 1px; }
+  .logo-sub  { font-family: var(--mono); font-size: .7rem; color: var(--muted); letter-spacing: .08em; margin-top: 1px; }
 
   .header-right { display: flex; align-items: center; gap: 20px; flex-wrap: wrap; }
   .clock { font-family: var(--mono); font-size: .8rem; color: var(--muted); text-align: right; }
@@ -220,7 +220,7 @@ function fmtCost(mixed $v): string
   .cost-line:last-child { border: none; }
   .cost-line .cl-label   { color: var(--muted); font-size: .88rem; }
   .cost-line .cl-detail  {
-    font-family: var(--mono); font-size: .95rem; color: var(--muted);
+    font-family: var(--mono); font-size: .9rem; color: var(--muted);
     text-align: right; white-space: nowrap;
   }
   .cost-line .cl-amount  { font-family: var(--mono); font-size: .95rem; color: var(--text); text-align: right; white-space: nowrap; }
@@ -229,7 +229,20 @@ function fmtCost(mixed $v): string
   .cost-line.credit .cl-amount { color: var(--green); }
   .cost-line.credit .cl-detail { color: rgba(47,213,142,.55); }
   .cost-line.vat .cl-label    { color: var(--muted); font-style: italic; }
+  .cost-line.vat-highlight .cl-amount { color: var(--red); }
   .cost-line.subtotal-sep     { border-top: 1px solid var(--border2); margin-top: 4px; padding-top: 14px; }
+
+  .cost-group-label {
+    font-size: .68rem; font-weight: 700; letter-spacing: .13em;
+    text-transform: uppercase; color: var(--muted);
+    padding: 14px 0 6px; border-bottom: 1px solid var(--border2);
+    margin-bottom: 2px;
+  }
+  .cost-group-label--credit { color: rgba(47,213,142,.6); }
+  .cost-group-sep {
+    height: 1px; background: var(--border2);
+    margin: 8px 0;
+  }
 
   .cost-total-card {
     background: var(--surface); border: 1px solid var(--border);
@@ -244,7 +257,7 @@ function fmtCost(mixed $v): string
     font-family: var(--mono); font-size: 3rem; font-weight: 700;
     color: var(--amber); letter-spacing: -.04em; line-height: 1;
   }
-  .cost-total-meta { font-family: var(--mono); font-size: .8rem; color: var(--muted); margin-top: 12px; }
+  .cost-total-meta { font-family: var(--mono); font-size: 1rem; color: var(--muted); margin-top: 12px; }
   .cost-total-meta span { display: block; margin-top: 3px; }
   .no-tariff {
     background: var(--surface); border: 1px dashed var(--border2);
@@ -679,84 +692,94 @@ function fmtCost(mixed $v): string
     const c = data.cost;
     const d = data.deltas || {};
     const r = data.tariff_rates || {};
-    const t1 = (d.prelev_jour ?? 0);
-    const t2 = (d.prelev_nuit ?? 0);
-    const e1 = (d.injec_jour  ?? 0);
-    const e2 = (d.injec_nuit  ?? 0);
+    const t1 = +(d.prelev_jour ?? 0);
+    const t2 = +(d.prelev_nuit ?? 0);
+    const e1 = +(d.injec_jour  ?? 0);
+    const e2 = +(d.injec_nuit  ?? 0);
+    const totalKwh = t1 + t2;
+    const wholeMonths = Math.max(1, Math.round(data.days / 30.4375));
 
-    // Format a unit rate
-    function fmtRate(v, unit) {
-      if (v == null || isNaN(v)) return '';
-      return Number(v).toFixed(4) + ' ' + unit;
-    }
-    // Format detail string: "qty unit × rate €/unit"
+    // Format a detail string: "qty unit × rate €/unit"
     function detail(qty, qtyUnit, rate, rateUnit) {
-      if (!qty && qty !== 0) return '';
-      const qtyStr  = Number(qty).toFixed(qtyUnit === 'j' ? 0 : 2);
-      const rateStr = rate != null ? Number(rate).toFixed(4) : null;
-      return rateStr ? `${qtyStr} ${qtyUnit} × ${rateStr} €/${rateUnit}` : `${qtyStr} ${qtyUnit}`;
+      const qtyFmt  = Number(qty).toFixed(qtyUnit === 'mois' || qtyUnit === 'j' ? 2 : 2);
+      const rateFmt = (rate != null && rate !== 0) ? Number(rate).toFixed(4) : null;
+      return rateFmt ? `${qtyFmt} ${qtyUnit} × ${rateFmt} €/${rateUnit}` : `${qtyFmt} ${qtyUnit}`;
+    }
+    function detailAnnual(days, annualRate, unit) {
+      if (!annualRate) return `${days} j`;
+      const daily = annualRate / 365;
+      return `${days} j × ${daily.toFixed(5)} €/j <span style="opacity:.55">(${Number(annualRate).toFixed(2)} €/an)</span>`;
     }
 
-    // row(label, detail_str, amount, extra_css_class)
+    // row(label, detail_str, computed_cost, css_class)
     function row(label, detailStr, amount, cls = '') {
+      const amtHtml = amount === null || amount === undefined
+        ? '<span style="color:var(--muted)">—</span>'
+        : (() => { const s = amount < 0 ? '−' : ''; return `${s}${Math.abs(amount).toFixed(2)} €`; })();
       return `<div class="cost-line ${cls}">
         <span class="cl-label">${label}</span>
         <span class="cl-detail">${detailStr}</span>
-        <span class="cl-amount">${fmtEur(amount)}</span>
+        <span class="cl-amount">${amtHtml}</span>
       </div>`;
     }
-    function rowPlain(label, detailStr, amount, cls = '') {
+    // Only render a row if the tariff rate is set (non-zero) OR the computed cost is non-zero
+    function rowIf(label, detailStr, amount, cls = '') {
+      if (!amount && !(r[label.toLowerCase()])) return '';
       return row(label, detailStr, amount, cls);
     }
 
     const isCurrentMonth = (navYear === NOW_YEAR && navMonth === NOW_MONTH);
     const periodLabel = isCurrentMonth ? 'Estimation mois en cours' : `${MONTHS_FR[navMonth-1]} ${navYear}`;
 
+    // Helper: only show row if rate OR cost is non-zero
+    function maybeRow(label, detailStr, amount, cls = '') {
+      if (!amount || amount === 0) return '';
+      return row(label, detailStr, amount, cls);
+    }
+
+    //${maybeRow('Énergie simple (monohoraire)', detail(totalKwh, 'kWh', r.energy_simple, 'kWh'), c.energy_simple)}
     el.innerHTML = `<div class="cost-wrap">
       <div class="cost-lines">
-        ${row('Énergie T1 — jour',
-              detail(t1, 'kWh', r.energy_t1, 'kWh'),
-              c.energy_t1)}
-        ${row('Énergie T2 — nuit',
-              detail(t2, 'kWh', r.energy_t2, 'kWh'),
-              c.energy_t2)}
-        ${row('Distribution T1 — jour',
-              detail(t1, 'kWh', r.distribution_t1, 'kWh'),
-              c.distribution_t1)}
-        ${row('Distribution T2 — nuit',
-              detail(t2, 'kWh', r.distribution_t2, 'kWh'),
-              c.distribution_t2)}
-        ${row('Abonnement réseau',
-              detail(data.days, 'j', r.distribution_fixed, 'j'),
-              c.distribution_fixed)}
-        ${row('Cotisation fédérale',
-              detail(t1 + t2, 'kWh', r.federal_contribution, 'kWh'),
-              c.federal_contribution)}
-        ${row('Taxe prosumer BRUGEL',
-              `${detail(data.days, 'j', r.prosumer_annual != null ? +(r.prosumer_annual / 365).toFixed(6) : null, 'j')}<span style="opacity:.55;margin-left:6px">(${r.prosumer_annual != null ? Number(r.prosumer_annual).toFixed(2) + ' €/an' : '—'})</span>`,
-              c.prosumer_fee)}
-        ${row('Crédit injection T1',
-              detail(e1, 'kWh', r.injection_t1 ?? 0, 'kWh'),
-              -(e1 * (r.injection_t1 ?? 0)),
-              'credit')}
-        ${row('Crédit injection T2',
-              detail(e2, 'kWh', r.injection_t2 ?? 0, 'kWh'),
-              -(e2 * (r.injection_t2 ?? 0)),
-              'credit')}
-        ${rowPlain('Sous-total HTVA', '', c.subtotal_ex_vat, 'vat subtotal-sep')}
-        ${rowPlain('TVA 21%', `21% × ${fmtEur(c.subtotal_ex_vat)}`, c.vat, 'vat')}
-        ${rowPlain('Total TVAC', '', c.total, 'total')}
+        <div class="cost-group-label">Fournisseur</div>
+        
+        ${maybeRow('Énergie T1 — jour',            detail(t1,       'kWh', r.energy_t1,     'kWh'), c.energy_t1)}
+        ${maybeRow('Énergie T2 — nuit',            detail(t2,       'kWh', r.energy_t2,     'kWh'), c.energy_t2)}
+        ${row('Abonnement fournisseur', `${wholeMonths} mois × ${r.subscription != null ? Number(r.subscription).toFixed(2) + ' €/mois' : '—'}`, c.subscription ?? 0)}
+
+        <div class="cost-group-label">Distribution (Sibelga)</div>
+        ${maybeRow('Distribution T1 — jour',  detail(t1,       'kWh', r.distribution_t1, 'kWh'), c.distribution_t1)}
+        ${maybeRow('Distribution T2 — nuit',  detail(t2,       'kWh', r.distribution_t2, 'kWh'), c.distribution_t2)}
+        ${row('Transport',                    detail(totalKwh, 'kWh', r.transport,        'kWh'), c.transport ?? 0)}
+        ${row('Gestion (fixe annuel)',         detailAnnual(data.days, r.management_annual, 'j'), c.management_fee ?? 0)}
+
+        <div class="cost-group-label">Taxes &amp; contributions</div>
+        ${row('Taxe prosumer BRUGEL',          detailAnnual(data.days, r.prosumer_annual, 'j'),       c.prosumer_fee ?? 0)}
+        ${row("Droit d'accise spécial",        detail(totalKwh, 'kWh', r.excise_duty,           'kWh'), c.excise_duty ?? 0)}
+        ${row('Contribution énergie',          detail(totalKwh, 'kWh', r.energy_contribution,   'kWh'), c.energy_contribution ?? 0)}
+        ${row('Contribution verte &amp; cogén.',detail(totalKwh,'kWh', r.green_contribution,    'kWh'), c.green_contribution ?? 0)}
+        ${row('Obligations de service public', detailAnnual(data.days, r.public_service_annual, 'j'), c.public_service_fee ?? 0)}
+
+        <div class="cost-group-label cost-group-label--credit">Injections (revenus)</div>
+        ${row('Crédit injection T1', detail(e1, 'kWh', r.injection_t1, 'kWh'), c.injection_t1, 'credit')}
+        ${row('Crédit injection T2', detail(e2, 'kWh', r.injection_t2, 'kWh'), c.injection_t2, 'credit')}
+
+        <div class="cost-group-sep"></div>
+        ${row('Total TTC', '', c.total, 'total')}
+        ${row('dont HTVA', `÷ 1.21`, c.htva, 'vat')}
+        ${row('dont TVA 21% incluse', `${Math.abs(c.total).toFixed(2)} − ${Math.abs(c.htva).toFixed(2)} €`, c.vat_included, 'vat vat-highlight')}
       </div>
       <div class="cost-total-card">
         <div>
           <div class="cost-total-label">${periodLabel}</div>
-          <div class="cost-total-amount">${fmtEur(c.total)}</div>
+          <div class="cost-total-amount">${(() => { const s = c.total < 0 ? '−' : ''; return `${s}${Math.abs(c.total).toFixed(2)} €`; })()}</div>
         </div>
         <div class="cost-total-meta">
           <span>Tarif : ${data.tariff_name ?? '—'}</span>
-          <span>Import T1 : ${fmtKwh(t1)} · T2 : ${fmtKwh(t2)}</span>
-          <span>Export T1 : ${fmtKwh(e1)} · T2 : ${fmtKwh(e2)}</span>
-          ${d.solar != null ? `<span>Solaire : ${fmtKwh(d.solar)}</span>` : ''}
+          <span>Import T1 : ${t1.toFixed(2)} kWh</span>
+          <span>Import T2 : ${t2.toFixed(2)} kWh</span>
+          <span>Export T1 : ${e1.toFixed(2)} kWh</span>
+          <span>Export T2 : ${e2.toFixed(2)} kWh</span>
+          ${d.solar != null ? `<span>Solaire : ${Number(d.solar).toFixed(2)} kWh</span>` : ''}
           <span>Période : ${data.days} jours</span>
         </div>
       </div>
