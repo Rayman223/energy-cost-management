@@ -132,9 +132,9 @@ final class CostCalculationService
 
     /**
      * Estimate gas cost between the two most recent manual readings.
-     * @param float $pcsCoefficient m³ → kWh conversion factor (default 10.55)
+     * The PCS coefficient (m³ → kWh) is read from the active tariff grid.
      */
-    public function estimateLastGasPeriod(float $pcsCoefficient = 10.55): array
+    public function estimateLastGasPeriod(): array
     {
         $pair = $this->gasRepo->getLastTwoReadings();
 
@@ -143,7 +143,6 @@ final class CostCalculationService
         }
 
         $deltaM3 = max(0.0, (float) $pair['to']['counter_m3'] - (float) $pair['from']['counter_m3']);
-        $kWh     = $this->calculator->m3ToKwh($deltaM3, $pcsCoefficient);
 
         $from = new DateTimeImmutable($pair['from']['reading_at']);
         $to   = new DateTimeImmutable($pair['to']['reading_at']);
@@ -153,6 +152,9 @@ final class CostCalculationService
         if ($tariff === null) {
             return ['available' => false, 'reason' => 'No active gas tariff configured'];
         }
+
+        $pcsCoefficient = $tariff->pcsCoefficient ?? 10.55;
+        $kWh            = $this->calculator->m3ToKwh($deltaM3, $pcsCoefficient);
 
         $breakdown = $this->calculator->calculateGasCost($kWh, $days, $tariff->toTariffArray());
 

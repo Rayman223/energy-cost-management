@@ -52,7 +52,7 @@ CREATE TABLE IF NOT EXISTS tariff_grids (
     name             VARCHAR(120) NOT NULL,
     valid_from       DATE NOT NULL,
     valid_to         DATE NULL COMMENT 'NULL = actif indéfiniment',
-    pcs_coefficient  DECIMAL(8,4) NULL COMMENT 'Gaz uniquement : coefficient PCS m3->kWh. NULL = valeur config (10.55)',
+    pcs_coefficient  DECIMAL(8,4) NULL COMMENT 'Gaz uniquement : coefficient PCS m3->kWh.',
     created_at       DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     INDEX idx_tariff_grids_type_date (energy_type, valid_from)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

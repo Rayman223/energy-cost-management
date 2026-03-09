@@ -41,13 +41,6 @@ return [
         ],
     ],
 
-    'gas' => [
-        // m³ → kWh PCS conversion factor.
-        // Sibelga reference value for Brussels natural gas: 10.55 kWh/m³.
-        // Update per period if your supplier provides a variable coefficient.
-        'pcs_coefficient' => 10.55,
-    ],
-
     'web_security' => [
         // Master switch for web protection.
         'enabled' => true,
