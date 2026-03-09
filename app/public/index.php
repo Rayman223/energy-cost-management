@@ -634,9 +634,6 @@ function fmtCost(mixed $v): string
         <a href="../tools/conversion_solaire.php?DRY_RUN=1" class="tool-link" target="_blank">
           ☀ Migration Solaire (dry-run)
         </a>
-        <a href="../tools/conversion_solaire.php" class="tool-link" target="_blank">
-          ☀ Migration Solaire (live)
-        </a>
         <a href="api.php?action=sync_status" class="tool-link" target="_blank">
           ⟳ API sync status
         </a>
