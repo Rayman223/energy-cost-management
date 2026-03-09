@@ -135,16 +135,18 @@ final class TariffCalculatorService
      *
      * @param float $kwh   consumed kWh (after m³ → kWh conversion)
      * @param int   $days  number of days in the period
+     * @param int   $daysInYear year length used to prorate annual fixed lines
      * @param array $tariff
      */
-    public function calculateGasCost(float $kwh, int $days, array $tariff): array
+    public function calculateGasCost(float $kwh, int $days, int $daysInYear, array $tariff): array
     {
         $energy      = $kwh  * ($tariff['energy'] ?? 0.0);
         $distribution = $kwh * ($tariff['distribution'] ?? 0.0);
         $fixed       = $days * ($tariff['distribution_fixed'] ?? 0.0);
         $federal     = $kwh  * ($tariff['federal_contribution'] ?? 0.0);
+        $meterReadingFee = $days * (($tariff['meter_reading_annual'] ?? 0.0) / $daysInYear);
 
-        $subtotal = $energy + $distribution + $fixed + $federal;
+        $subtotal = $energy + $distribution + $fixed + $federal + $meterReadingFee;
         $vat      = $subtotal * self::TVA;
         $total    = $subtotal + $vat;
 
@@ -153,6 +155,7 @@ final class TariffCalculatorService
             'distribution'         => round($distribution, 4),
             'distribution_fixed'   => round($fixed, 4),
             'federal_contribution' => round($federal, 4),
+            'meter_reading_fee'    => round($meterReadingFee, 4),
             'subtotal_ex_vat'      => round($subtotal, 4),
             'vat'                  => round($vat, 4),
             'total'                => round($total, 2),

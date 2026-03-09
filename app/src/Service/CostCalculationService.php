@@ -134,13 +134,14 @@ final class CostCalculationService
         $from = new DateTimeImmutable($pair['from']['reading_at']);
         $to   = new DateTimeImmutable($pair['to']['reading_at']);
         $days = max(1, (int) $from->diff($to)->days);
+        $daysInYear = $this->daysInYear((int) $to->format('Y'));
 
         $tariff = $this->tariffRepo->findActiveGrid('gas', $to);
         if ($tariff === null) {
             return ['available' => false, 'reason' => 'No active gas tariff configured'];
         }
 
-        $breakdown = $this->calculator->calculateGasCost($kWh, $days, $tariff->toTariffArray());
+        $breakdown = $this->calculator->calculateGasCost($kWh, $days, $daysInYear, $tariff->toTariffArray());
 
         return [
             'available'       => true,
