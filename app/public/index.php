@@ -811,6 +811,7 @@ async function fetchLive() {
   }
 }
 
+loadChart(30);
 fetchLive();
 setInterval(fetchLive, LIVE_INTERVAL);
 
