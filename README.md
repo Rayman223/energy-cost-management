@@ -27,3 +27,4 @@ la valeur live de Consommation réseau est en valeur absolue. Il faut enlever ce
 ### 1.10 Bug : mauvais range de date
 
 pour les taxe mensuel, il faut prendre que le mois en cours. actuellement le jour du mois suivant est inclus mais doit être exclu.
+

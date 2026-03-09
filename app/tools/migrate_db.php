@@ -12,7 +12,11 @@
  *   http://…/app/tools/migrate_db.php?mode=live → insertion réelle
  */
 
-$config  = require __DIR__ . '/../bootstrap.php';
+// ── Timeout & mémoire ─────────────────────────────────────────────────────
+set_time_limit(0);           // pas de coupure PHP pour ce script uniquement
+ini_set('memory_limit', '256M');
+
+$config = require __DIR__ . '/../bootstrap.php';
 
 use App\Infrastructure\Database;
 
@@ -31,8 +35,8 @@ const TABLES = [
     'Data_Brusol'  => ['timestamp', 'production'],
 ];
 
-const SRC_DB = 'Energy';   // ancienne DB
-// DST_DB = celle configurée dans config.php (energyv2)
+const SRC_DB     = 'Energy'; // ancienne DB
+const CHUNK_SIZE = 500;      // lignes par INSERT multi-valeurs
 
 $isCli = PHP_SAPI === 'cli';
 
@@ -40,6 +44,7 @@ $isCli = PHP_SAPI === 'cli';
 function line(string $msg): void {
     global $isCli;
     echo $isCli ? $msg . "\n" : $msg . '<br>';
+    if (!$isCli) flush();
 }
 
 function section(string $title): void {
@@ -48,6 +53,16 @@ function section(string $title): void {
         echo "\n── $title " . str_repeat('─', max(0, 50 - strlen($title))) . "\n";
     } else {
         echo '<div class="section-title">' . htmlspecialchars($title) . '</div>';
+        flush();
+    }
+}
+
+function showError(string $msg, bool $isCli): void {
+    if ($isCli) {
+        echo "  ✗ ERREUR : $msg\n";
+    } else {
+        echo '<pre style="color:#f87171">✗ ERREUR : ' . htmlspecialchars($msg) . '</pre>';
+        flush();
     }
 }
 
@@ -75,11 +90,6 @@ if (!$isCli): ?>
   .info-card .value.green  { color:#6ee7b7; }
   .info-card .value.orange { color:#fb923c; }
   .info-card .value.muted  { color:#556070; }
-  table { width:100%; border-collapse:collapse; font-size:.82rem; margin-bottom:1.5rem; }
-  thead th { background:#111318; color:#556070; font-size:.68rem; font-weight:700; text-transform:uppercase; letter-spacing:.08em; padding:.6rem 1rem; text-align:left; }
-  tbody tr { border-top:1px solid #1e2530; }
-  tbody tr:hover { background:#111318; }
-  tbody td { padding:.5rem 1rem; font-family:monospace; color:#a0aec0; font-size:.8rem; }
   .ok   { color:#6ee7b7; }
   .warn { color:#fb923c; }
   .err  { color:#f87171; }
@@ -97,25 +107,27 @@ $modeLabel = $isDryRun ? 'DRY-RUN (simulation)' : '⚠ MODE RÉEL — insertions
 $modeClass = $isDryRun ? 'dry' : 'live';
 echo "<span class='badge $modeClass'>$modeLabel</span><br><br>";
 echo "<a href='?mode=dry'  class='btn btn-dry'>Dry-run</a>";
-echo "<a href='?mode=live' class='btn btn-live' onclick=\"return confirm('Insérer les données manquantes dans " . htmlspecialchars($config['database']['name']) . " ?')\">Exécuter (live)</a>";
+echo "<a href='?mode=live' class='btn btn-live' onclick=\"return confirm('Insérer les données manquantes dans "
+    . htmlspecialchars($config['database']['name']) . " ?')\">Exécuter (live)</a>";
 echo '<br><br>';
-endif; // end HTML shell
+flush();
+endif;
 
-// ── Connexion ─────────────────────────────────────────────────────────────
+// ── Connexion DB destination ───────────────────────────────────────────────
 try {
     $dst = (new Database($config['database']))->pdo();
 } catch (\Throwable $e) {
-    line('ERREUR connexion DB destination : ' . $e->getMessage());
+    showError('Connexion DB destination : ' . $e->getMessage(), $isCli);
     if (!$isCli) echo '</body></html>';
     exit(1);
 }
 
-// Connexion à la DB source (même host, DB différente)
+// ── Connexion DB source (même host, DB différente) ────────────────────────
 try {
     $srcConfig = array_merge($config['database'], ['name' => SRC_DB]);
-    $src = (new Database($srcConfig))->pdo();
+    $src       = (new Database($srcConfig))->pdo();
 } catch (\Throwable $e) {
-    line('ERREUR connexion DB source (' . SRC_DB . ') : ' . $e->getMessage());
+    showError('Connexion DB source (' . SRC_DB . ') : ' . $e->getMessage(), $isCli);
     if (!$isCli) echo '</body></html>';
     exit(1);
 }
@@ -128,171 +140,177 @@ $totalErrors   = 0;
 foreach (TABLES as $table => $columns) {
     section($table);
 
-    // Vérifier que la table source existe
-    $check = $src->prepare('SHOW TABLES LIKE :t');
-    $check->execute(['t' => $table]);
-    if (!$check->fetchColumn()) {
-        line("  ⚠ Table absente dans " . SRC_DB . ", ignorée.");
-        continue;
-    }
+    try {
 
-    // Vérifier que la table destination existe
-    $checkDst = $dst->prepare('SHOW TABLES LIKE :t');
-    $checkDst->execute(['t' => $table]);
-    if (!$checkDst->fetchColumn()) {
-        line("  ⚠ Table absente dans la DB destination, ignorée.");
-        continue;
-    }
-
-    $countSrc = (int) $src->query("SELECT COUNT(*) FROM `$table`")->fetchColumn();
-    $countDst = (int) $dst->query("SELECT COUNT(*) FROM `$table`")->fetchColumn();
-
-    // ── Étape 1 : déduplication de la destination ─────────────────────────
-    // Garde uniquement le MIN(id) par timestamp normalisé, supprime les autres.
-    $dupCount = (int) $dst->query(
-        "SELECT COUNT(*) FROM `$table` d
-         WHERE d.id NOT IN (
-             SELECT MIN(id) FROM `$table`
-             GROUP BY DATE_FORMAT(timestamp, '%Y-%m-%d %H:%i:%s')
-         )"
-    )->fetchColumn();
-
-    if ($dupCount > 0) {
-        if (!$isCli) {
-            echo "<p style='color:#fb923c;font-family:monospace;font-size:.8rem;margin-bottom:8px'>"
-               . "⚠ $dupCount doublon(s) détecté(s) en destination."
-               . ($isDryRun ? " (dry-run : non supprimés)" : " Suppression en cours…")
-               . "</p>";
-        } else {
-            line("  ⚠ $dupCount doublon(s) en destination." . ($isDryRun ? " (dry-run)" : " Suppression…"));
-        }
-
-        if (!$isDryRun) {
-            $dst->exec(
-                "DELETE FROM `$table`
-                 WHERE id NOT IN (
-                     SELECT * FROM (
-                         SELECT MIN(id) FROM `$table`
-                         GROUP BY DATE_FORMAT(timestamp, '%Y-%m-%d %H:%i:%s')
-                     ) AS keep
-                 )"
-            );
-            $countDst = (int) $dst->query("SELECT COUNT(*) FROM `$table`")->fetchColumn();
-            line("  ✓ Doublons supprimés. Destination : $countDst lignes.");
-        }
-    }
-
-    if (!$isCli) {
-        echo "<div class='info-grid'>";
-        echo "  <div class='info-card'><div class='label'>Lignes source</div><div class='value'>" . number_format($countSrc) . "</div></div>";
-        echo "  <div class='info-card'><div class='label'>Lignes destination (après dédup)</div><div class='value'>" . number_format($countDst) . "</div></div>";
-        if ($dupCount > 0 && $isDryRun) {
-            echo "  <div class='info-card'><div class='label'>Doublons à supprimer</div><div class='value' style='color:#fb923c'>" . number_format($dupCount) . "</div></div>";
-        }
-        echo "</div>";
-    } else {
-        line("  Source : $countSrc lignes | Destination (après dédup) : $countDst lignes");
-    }
-
-    if ($countSrc === 0) {
-        line("  ⚠ Table source vide, rien à migrer.");
-        continue;
-    }
-
-    // Compter les lignes source dont le timestamp n'existe PAS encore en destination.
-    // On compare DATE_FORMAT pour neutraliser les différences de format (espaces, T, ms…).
-    $missingStmt = $src->prepare(
-        "SELECT COUNT(*) FROM `$table` src
-         WHERE NOT EXISTS (
-             SELECT 1 FROM `{$config['database']['name']}`.`$table` dst
-             WHERE DATE_FORMAT(dst.timestamp, '%Y-%m-%d %H:%i:%s')
-                 = DATE_FORMAT(src.timestamp, '%Y-%m-%d %H:%i:%s')
-         )"
-    );
-    $missingStmt->execute();
-    $missingCount = (int) $missingStmt->fetchColumn();
-
-    // Fallback si cross-DB query non dispo : on charge les timestamps destination normalisés
-    $existingTs = [];
-    $tsRows = $dst->query(
-        "SELECT DATE_FORMAT(timestamp, '%Y-%m-%d %H:%i:%s') FROM `$table`"
-    )->fetchAll(PDO::FETCH_COLUMN);
-    foreach ($tsRows as $ts) {
-        $existingTs[$ts] = true;
-    }
-
-    // Lire toutes les lignes source
-    $cols    = implode(', ', array_map(fn($c) => "`$c`", $columns));
-    $srcRows = $src->query(
-        "SELECT $cols, DATE_FORMAT(timestamp, '%Y-%m-%d %H:%i:%s') AS ts_norm
-         FROM `$table` ORDER BY timestamp ASC"
-    )->fetchAll(PDO::FETCH_ASSOC);
-
-    $placeholders = implode(', ', array_map(fn($c) => ":$c", $columns));
-    // INSERT IGNORE : filet de sécurité si un doublon passe quand même
-    $insertSql = "INSERT IGNORE INTO `$table` ($cols) VALUES ($placeholders)";
-    $stmt      = $isDryRun ? null : $dst->prepare($insertSql);
-
-    $inserted = 0;
-    $skipped  = 0;
-    $errors   = 0;
-    $samples  = [];
-
-    if (!$isDryRun) $dst->beginTransaction();
-
-    foreach ($srcRows as $row) {
-        $tsNorm = $row['ts_norm'];
-        unset($row['ts_norm']); // ne pas passer ts_norm dans l'INSERT
-
-        if (isset($existingTs[$tsNorm])) {
-            $skipped++;
+        // ── Vérifications d'existence ──────────────────────────────────────
+        $chkSrc = $src->prepare('SHOW TABLES LIKE :t');
+        $chkSrc->execute(['t' => $table]);
+        if (!$chkSrc->fetchColumn()) {
+            line("  ⚠ Table absente dans " . SRC_DB . ", ignorée.");
             continue;
         }
 
-        if (!$isDryRun) {
-            try {
-                $stmt->execute($row);
-                $inserted++;
-            } catch (\Throwable $e) {
-                $errors++;
-                if (count($samples) < 3) {
-                    $samples[] = ['ts' => $row['timestamp'], 'err' => $e->getMessage()];
-                }
+        $chkDst = $dst->prepare('SHOW TABLES LIKE :t');
+        $chkDst->execute(['t' => $table]);
+        if (!$chkDst->fetchColumn()) {
+            line("  ⚠ Table absente dans la DB destination, ignorée.");
+            continue;
+        }
+
+        // ── Comptages ─────────────────────────────────────────────────────
+        $countSrc = (int) $src->query("SELECT COUNT(*) FROM `$table`")->fetchColumn();
+        $countDst = (int) $dst->query("SELECT COUNT(*) FROM `$table`")->fetchColumn();
+
+        // ── Étape 1 : déduplication de la destination ─────────────────────
+        $dupCount = (int) $dst->query(
+            "SELECT COUNT(*) FROM `$table` d
+             WHERE d.id NOT IN (
+                 SELECT MIN(id) FROM `$table`
+                 GROUP BY DATE_FORMAT(timestamp, '%Y-%m-%d %H:%i:%s')
+             )"
+        )->fetchColumn();
+
+        if ($dupCount > 0) {
+            $dupMsg = "⚠ $dupCount doublon(s) détecté(s) en destination."
+                    . ($isDryRun ? " (dry-run : non supprimés)" : " Suppression en cours…");
+            if (!$isCli) {
+                echo "<p style='color:#fb923c;font-family:monospace;font-size:.8rem;margin-bottom:8px'>$dupMsg</p>";
+                flush();
+            } else {
+                line("  $dupMsg");
             }
+
+            if (!$isDryRun) {
+                $dst->exec(
+                    "DELETE FROM `$table`
+                     WHERE id NOT IN (
+                         SELECT * FROM (
+                             SELECT MIN(id) FROM `$table`
+                             GROUP BY DATE_FORMAT(timestamp, '%Y-%m-%d %H:%i:%s')
+                         ) AS keep
+                     )"
+                );
+                $countDst = (int) $dst->query("SELECT COUNT(*) FROM `$table`")->fetchColumn();
+                line("  ✓ Doublons supprimés. Destination : $countDst lignes.");
+            }
+        }
+
+        if (!$isCli) {
+            echo "<div class='info-grid'>";
+            echo "<div class='info-card'><div class='label'>Lignes source</div>"
+               . "<div class='value'>" . number_format($countSrc) . "</div></div>";
+            echo "<div class='info-card'><div class='label'>Lignes destination (après dédup)</div>"
+               . "<div class='value'>" . number_format($countDst) . "</div></div>";
+            if ($dupCount > 0 && $isDryRun) {
+                echo "<div class='info-card'><div class='label'>Doublons à supprimer</div>"
+                   . "<div class='value' style='color:#fb923c'>" . number_format($dupCount) . "</div></div>";
+            }
+            echo "</div>";
+            flush();
         } else {
-            $inserted++;
+            line("  Source : $countSrc lignes | Destination (après dédup) : $countDst lignes");
         }
-    }
 
-    if (!$isDryRun) {
-        if ($errors === 0) {
-            $dst->commit();
+        if ($countSrc === 0) {
+            line("  ⚠ Table source vide, rien à migrer.");
+            continue;
+        }
+
+        // ── Étape 2 : chargement des timestamps destination en mémoire ────
+        // DATE_FORMAT normalise les formats (espaces, T, millisecondes…).
+        $existingTs = [];
+        foreach (
+            $dst->query(
+                "SELECT DATE_FORMAT(timestamp, '%Y-%m-%d %H:%i:%s') FROM `$table`"
+            )->fetchAll(PDO::FETCH_COLUMN) as $ts
+        ) {
+            $existingTs[$ts] = true;
+        }
+
+        // ── Étape 3 : lecture source + filtrage PHP ───────────────────────
+        $cols    = implode(', ', array_map(fn($c) => "`$c`", $columns));
+        $srcRows = $src->query(
+            "SELECT $cols, DATE_FORMAT(timestamp, '%Y-%m-%d %H:%i:%s') AS ts_norm
+             FROM `$table` ORDER BY timestamp ASC"
+        )->fetchAll(PDO::FETCH_ASSOC);
+
+        $toInsert = [];
+        $skipped  = 0;
+        foreach ($srcRows as $row) {
+            $tsNorm = $row['ts_norm'];
+            unset($row['ts_norm']);
+            if (isset($existingTs[$tsNorm])) {
+                $skipped++;
+            } else {
+                $toInsert[] = $row;
+            }
+        }
+        $inserted = count($toInsert);
+
+        // ── Étape 4 : insertion par chunks (INSERT multi-valeurs) ─────────
+        // ~500× plus rapide que les inserts un par un de la version originale.
+        // En dry-run : on affiche le compte sans rien toucher.
+        $errors  = 0;
+        $errMsgs = [];
+
+        if (!$isDryRun && $inserted > 0) {
+            $placeholderRow = '(' . implode(', ', array_fill(0, count($columns), '?')) . ')';
+            $dst->beginTransaction();
+            try {
+                foreach (array_chunk($toInsert, CHUNK_SIZE) as $chunk) {
+                    $allPlaceholders = implode(', ', array_fill(0, count($chunk), $placeholderRow));
+                    $stmt = $dst->prepare(
+                        "INSERT IGNORE INTO `$table` ($cols) VALUES $allPlaceholders"
+                    );
+                    $params = [];
+                    foreach ($chunk as $row) {
+                        foreach ($columns as $col) {
+                            $params[] = $row[$col];
+                        }
+                    }
+                    $stmt->execute($params);
+                }
+                $dst->commit();
+            } catch (\Throwable $e) {
+                $dst->rollBack();
+                $errors++;
+                $errMsgs[] = $e->getMessage();
+                $inserted  = 0;
+                line("  ✗ Transaction annulée : " . $e->getMessage());
+            }
+        }
+
+        $totalInserted += $inserted;
+        $totalSkipped  += $skipped;
+        $totalErrors   += $errors;
+
+        if (!$isCli) {
+            echo "<div class='info-grid'>";
+            $label = $isDryRun ? 'À insérer (simulation)' : 'Insérées';
+            echo "<div class='info-card'><div class='label'>$label</div>"
+               . "<div class='value " . ($inserted > 0 ? 'green' : 'muted') . "'>"
+               . number_format($inserted) . "</div></div>";
+            echo "<div class='info-card'><div class='label'>Déjà présentes (skip)</div>"
+               . "<div class='value muted'>" . number_format($skipped) . "</div></div>";
+            if ($errors > 0) {
+                echo "<div class='info-card'><div class='label'>Erreurs</div>"
+                   . "<div class='value err'>" . number_format($errors) . "</div></div>";
+            }
+            echo "</div>";
+            foreach ($errMsgs as $msg) {
+                echo "<pre>" . htmlspecialchars($msg) . "</pre>";
+            }
+            flush();
         } else {
-            $dst->rollBack();
-            line("  ✗ Transaction annulée à cause de $errors erreur(s).");
+            $label = $isDryRun ? 'Seraient insérées' : 'Insérées';
+            line("  $label : $inserted | Skippées : $skipped"
+               . ($errors > 0 ? " | ERREURS : $errors" : ''));
         }
-    }
 
-    $totalInserted += $inserted;
-    $totalSkipped  += $skipped;
-    $totalErrors   += $errors;
-
-    if (!$isCli) {
-        echo "<div class='info-grid'>";
-        $label = $isDryRun ? 'À insérer (simulation)' : 'Insérées';
-        echo "  <div class='info-card'><div class='label'>" . $label . "</div><div class='value " . ($inserted > 0 ? 'green' : 'muted') . "'>" . number_format($inserted) . "</div></div>";
-        echo "  <div class='info-card'><div class='label'>Déjà présentes (skip)</div><div class='value muted'>" . number_format($skipped) . "</div></div>";
-        if ($errors > 0) {
-            echo "  <div class='info-card'><div class='label'>Erreurs</div><div class='value err'>" . number_format($errors) . "</div></div>";
-        }
-        echo "</div>";
-
-        foreach ($samples as $s) {
-            echo "<pre>Erreur sur {$s['ts']} : " . htmlspecialchars($s['err']) . "</pre>";
-        }
-    } else {
-        $label = $isDryRun ? 'Seraient insérées' : 'Insérées';
-        line("  $label : $inserted | Skippées : $skipped" . ($errors > 0 ? " | ERREURS : $errors" : ''));
+    } catch (\Throwable $e) {
+        // Catch-all : affiche l'erreur sans tuer le reste du script
+        showError("[$table] " . $e->getMessage(), $isCli);
+        $totalErrors++;
     }
 }
 
@@ -302,16 +320,21 @@ section('Résumé');
 if (!$isCli) {
     echo "<div class='info-grid'>";
     $lbl = $isDryRun ? 'Total à insérer' : 'Total inséré';
-    echo "  <div class='info-card'><div class='label'>$lbl</div><div class='value " . ($totalInserted > 0 ? 'green' : 'muted') . "'>" . number_format($totalInserted) . "</div></div>";
-    echo "  <div class='info-card'><div class='label'>Total skippé</div><div class='value muted'>" . number_format($totalSkipped) . "</div></div>";
+    echo "<div class='info-card'><div class='label'>$lbl</div>"
+       . "<div class='value " . ($totalInserted > 0 ? 'green' : 'muted') . "'>"
+       . number_format($totalInserted) . "</div></div>";
+    echo "<div class='info-card'><div class='label'>Total skippé</div>"
+       . "<div class='value muted'>" . number_format($totalSkipped) . "</div></div>";
     if ($totalErrors > 0) {
-        echo "  <div class='info-card'><div class='label'>Total erreurs</div><div class='value err'>" . number_format($totalErrors) . "</div></div>";
+        echo "<div class='info-card'><div class='label'>Total erreurs</div>"
+           . "<div class='value err'>" . number_format($totalErrors) . "</div></div>";
     }
     echo "</div>";
     echo '</body></html>';
 } else {
     $lbl = $isDryRun ? '[DRY-RUN] Seraient insérées' : '[OK] Insérées';
-    line("$lbl : $totalInserted | Skippées : $totalSkipped" . ($totalErrors > 0 ? " | ERREURS : $totalErrors" : ''));
+    line("$lbl : $totalInserted | Skippées : $totalSkipped"
+       . ($totalErrors > 0 ? " | ERREURS : $totalErrors" : ''));
 }
 
 exit($totalErrors > 0 ? 1 : 0);
