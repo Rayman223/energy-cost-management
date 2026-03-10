@@ -59,12 +59,13 @@ final class CostCalculationService
         }
 
         $breakdown = $this->calculator->calculateElectricityCost(
-            kwhT1: $deltas['prelev_jour'] ?? 0.0,
-            kwhT2: $deltas['prelev_nuit'] ?? 0.0,
-            kwhExportT1: $deltas['injec_jour'] ?? 0.0,
-            kwhExportT2: $deltas['injec_nuit'] ?? 0.0,
-            days: $days,
-            tariff: $tariff->toTariffArray(),
+            kwhT1:       $deltas['prelev_jour'] ?? 0.0,
+            kwhT2:       $deltas['prelev_nuit'] ?? 0.0,
+            kwhExportT1: $deltas['injec_jour']  ?? 0.0,
+            kwhExportT2: $deltas['injec_nuit']  ?? 0.0,
+            days:        $days,
+            tariff:      $tariff->toTariffArray(),
+            kwhSolar:    (float) ($deltas['solar'] ?? 0.0),
         );
 
         return [
@@ -110,12 +111,13 @@ final class CostCalculationService
         }
 
         $breakdown = $this->calculator->calculateElectricityCost(
-            kwhT1: $deltas['prelev_jour'] ?? 0.0,
-            kwhT2: $deltas['prelev_nuit'] ?? 0.0,
-            kwhExportT1: $deltas['injec_jour'] ?? 0.0,
-            kwhExportT2: $deltas['injec_nuit'] ?? 0.0,
-            days: $days,
-            tariff: $tariff->toTariffArray(),
+            kwhT1:       $deltas['prelev_jour'] ?? 0.0,
+            kwhT2:       $deltas['prelev_nuit'] ?? 0.0,
+            kwhExportT1: $deltas['injec_jour']  ?? 0.0,
+            kwhExportT2: $deltas['injec_nuit']  ?? 0.0,
+            days:        $days,
+            tariff:      $tariff->toTariffArray(),
+            kwhSolar:    (float) ($deltas['solar'] ?? 0.0),
         );
 
         return [
@@ -132,6 +134,7 @@ final class CostCalculationService
 
     /**
      * Estimate gas cost between the two most recent manual readings.
+     * Returns ['available' => false] when fewer than two readings exist.
      */
     public function estimateLastGasPeriod(): array
     {

@@ -254,6 +254,7 @@ function fmtCost(mixed $v): string
     margin-bottom: 2px;
   }
   .cost-group-label--credit { color: rgba(47,213,142,.6); }
+  .cost-group-label--solar  { color: rgba(47,213,142,.5); }
   .cost-group-sep {
     height: 1px; background: var(--border2);
     margin: 8px 0;
@@ -403,9 +404,10 @@ function fmtCost(mixed $v): string
   .year-month-card:hover { border-color: var(--amber); }
   .year-month-card.active { border-color: var(--amber); background: var(--amber-dim); }
   .year-month-card .ymc-label { font-size: .7rem; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; }
-  .year-month-card .ymc-cost { font-family: var(--mono); font-size: 1.05rem; font-weight: 700; color: var(--amber); }
-  .year-month-card .ymc-kwh  { font-family: var(--mono); font-size: .72rem; color: var(--muted); margin-top: 2px; }
-  .year-month-card .ymc-nd   { color: var(--muted); font-size: .8rem; }
+  .year-month-card .ymc-cost    { font-family: var(--mono); font-size: 1.05rem; font-weight: 700; color: var(--amber); }
+  .year-month-card .ymc-kwh     { font-family: var(--mono); font-size: .72rem; color: var(--muted); margin-top: 2px; }
+  .year-month-card .ymc-savings { font-family: var(--mono); font-size: .72rem; color: var(--green); margin-top: 2px; }
+  .year-month-card .ymc-nd      { color: var(--muted); font-size: .8rem; }
   .ymc-loading { opacity: .4; }
 
   @media (max-width: 768px) { .year-overview { grid-template-columns: repeat(2, 1fr); } }
@@ -768,6 +770,15 @@ function fmtCost(mixed $v): string
       if (!amount || amount === 0) return '';
       return row(label, detailStr, amount, cls);
     }
+    // Informational row displaying a kWh value (no € amount column)
+    function solarKwhRow(label, kwhVal) {
+      const kwhStr = kwhVal != null ? Number(kwhVal).toFixed(2) + ' kWh' : '—';
+      return `<div class="cost-line">
+        <span class="cl-label">${label}</span>
+        <span class="cl-detail"></span>
+        <span class="cl-amount" style="color:var(--green)">${kwhStr}</span>
+      </div>`;
+    }
 
     const isCurrentMonth = (navYear === NOW_YEAR && navMonth === NOW_MONTH);
     const periodLabel    = isCurrentMonth ? 'Estimation mois en cours' : `${MONTHS_FR[navMonth-1]} ${navYear}`;
@@ -796,10 +807,24 @@ function fmtCost(mixed $v): string
         ${row('Crédit injection T1', detail(e1, 'kWh', r.injection_t1, 'kWh'), c.injection_t1, 'credit')}
         ${row('Crédit injection T2', detail(e2, 'kWh', r.injection_t2, 'kWh'), c.injection_t2, 'credit')}
 
+        ${c.solar_produced != null ? `
+        <div class="cost-group-label cost-group-label--solar">☀ Solaire (auto-consommation)</div>
+        ${solarKwhRow('Production PV totale', c.solar_produced)}
+        ${solarKwhRow(
+            c.self_consumption_pct != null
+              ? `Auto-consommée — ${Number(c.self_consumption_pct).toFixed(1)} %`
+              : 'Auto-consommée (non exportée)',
+            c.solar_consumed
+        )}
+        ${row('Économies réalisées (tarif T1 TTC)',
+              `${Number(c.solar_consumed).toFixed(2)} kWh × ${Number(c.solar_savings_rate).toFixed(6)} €/kWh`,
+              c.solar_savings, 'credit')}
+        ` : ''}
+
         <div class="cost-group-sep"></div>
-        ${row('Total TTC',           '',                                                                           c.total,       'total')}
-        ${row('dont HTVA',           '÷ 1.21',                                                                     c.htva,        'vat')}
-        ${row('dont TVA 21% incluse', `${Math.abs(c.total).toFixed(2)} − ${Math.abs(c.htva).toFixed(2)} €`,       c.vat_included,'vat vat-highlight')}
+        ${row('Total TTC', '',                                                                              c.total,       'total')}
+        ${row('dont HTVA', '÷ 1.21',                                                                        c.htva,        'vat')}
+        ${row('dont TVA 21% incluse', `${Math.abs(c.total).toFixed(2)} − ${Math.abs(c.htva).toFixed(2)} €`, c.vat_included,'vat vat-highlight')}
       </div>
       <div class="cost-total-card">
         <div>
@@ -812,7 +837,11 @@ function fmtCost(mixed $v): string
           <span>Import T2 : ${t2.toFixed(2)} kWh</span>
           <span>Export T1 : ${e1.toFixed(2)} kWh</span>
           <span>Export T2 : ${e2.toFixed(2)} kWh</span>
-          ${d.solar != null ? `<span>Solaire : ${Number(d.solar).toFixed(2)} kWh</span>` : ''}
+          ${c.solar_produced != null ? `
+          <span style="color:var(--green)">☀ Prod. PV : ${Number(c.solar_produced).toFixed(2)} kWh</span>
+          <span style="color:var(--green)">Auto-conso : ${Number(c.solar_consumed).toFixed(2)} kWh${c.self_consumption_pct != null ? ` (${Number(c.self_consumption_pct).toFixed(1)} %)` : ''}</span>
+          <span style="color:var(--green)">Économies : +${Number(c.solar_savings).toFixed(2)} €</span>
+          ` : (d.solar != null ? `<span>Solaire : ${Number(d.solar).toFixed(2)} kWh</span>` : '')}
           <span>Période : ${data.days} jours</span>
         </div>
       </div>
@@ -849,7 +878,8 @@ function fmtCost(mixed $v): string
       card.dataset.month = m;
       card.innerHTML = `<div class="ymc-label">${MONTH_NAMES[m-1]}</div>
         <div class="ymc-cost ymc-loading">${isFuture ? '<span class="ymc-nd">—</span>' : '…'}</div>
-        <div class="ymc-kwh"></div>`;
+        <div class="ymc-kwh"></div>
+        <div class="ymc-savings"></div>`;
       card.addEventListener('click', () => {
         navMonth = m;
         setNavMode('month');
@@ -878,17 +908,22 @@ function fmtCost(mixed $v): string
   }
 
   function updateYearCard(card, data) {
-    const costEl = card.querySelector('.ymc-cost');
-    const kwhEl  = card.querySelector('.ymc-kwh');
+    const costEl    = card.querySelector('.ymc-cost');
+    const kwhEl     = card.querySelector('.ymc-kwh');
+    const savingsEl = card.querySelector('.ymc-savings');
     costEl.classList.remove('ymc-loading');
     if (!data || !data.available) {
       costEl.innerHTML = '<span class="ymc-nd">—</span>';
     } else {
-      const t   = data.cost?.total;
-      const d   = data.deltas || {};
-      const kwh = (d.prelev_jour ?? 0) + (d.prelev_nuit ?? 0);
+      const t       = data.cost?.total;
+      const savings = data.cost?.solar_savings;
+      const d       = data.deltas || {};
+      const kwh     = (d.prelev_jour ?? 0) + (d.prelev_nuit ?? 0);
       costEl.textContent = t != null ? (t < 0 ? '−' : '') + Math.abs(t).toFixed(2) + ' €' : '—';
       kwhEl.textContent  = kwh ? kwh.toFixed(1) + ' kWh' : '';
+      if (savingsEl) {
+        savingsEl.textContent = savings != null && savings > 0 ? '☀ −' + savings.toFixed(2) + ' €' : '';
+      }
     }
   }
 

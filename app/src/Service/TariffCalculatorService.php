@@ -7,7 +7,7 @@ namespace App\Service;
 /**
  * Belgian electricity & gas cost calculator.
  *
- * Electricity tariff array keys (all amounts in €):
+ * Electricity tariff array keys (all amounts in €, TTC):
  *   energy_simple         float  €/kWh  supplier mono-hourly rate (alternative to t1/t2)
  *   energy_t1             float  €/kWh  supplier day rate
  *   energy_t2             float  €/kWh  supplier night rate
@@ -44,16 +44,23 @@ final class TariffCalculatorService
     /**
      * Calculate the full electricity cost for a given period.
      * Handles all tariff fields defined in tariffs.php.
+     *
+     * @param float $kwhSolar  Total PV production for the period (kWh).
+     *                         Used to compute auto-consumption and savings.
+     *                         Defaults to 0.0 when no solar data is available.
      */
     public function calculateElectricityCost(
         float $kwhT1,
         float $kwhT2,
         float $kwhExportT1,
         float $kwhExportT2,
-        int $days,
-        array $tariff
+        int   $days,
+        array $tariff,
+        float $kwhSolar = 0.0,
     ): array {
-        $totalKwh   = $kwhT1 + $kwhT2;
+        $totalKwh    = $kwhT1 + $kwhT2;
+        $totalExport = $kwhExportT1 + $kwhExportT2;
+
         // Subscription is a fixed monthly fee: 2.99 €/mois stays 2.99 € whether the month
         // has 28, 29, 30 or 31 days. We round to the nearest whole month.
         $wholeMonths = max(1, round($days / 30.4375));
@@ -103,6 +110,32 @@ final class TariffCalculatorService
         $htva        = $totalTtc / (1 + self::TVA);
         $vatIncluded = $totalTtc - $htva;
 
+        // ── Solar self-consumption ────────────────────────────────────────────
+        // Solar production occurs during daytime → T1 (day) variable rates apply.
+        // All tariff rates are already TTC so no additional TVA factor is needed.
+        //
+        // self_consumed  = production − exported to grid  (≥ 0)
+        // savings_rate   = sum of all T1 variable per-kWh costs (TTC)
+        // savings        = self_consumed × savings_rate
+        //
+        // Fixed costs (subscription, management_annual, prosumer_annual,
+        // public_service_annual) are NOT included: self-consumed solar doesn't
+        // change those fixed charges.
+        $solarConsumed = max(0.0, $kwhSolar - $totalExport);
+
+        // Variable cost per kWh at T1 rate (all TTC already):
+        $savingsRateTtc = ($tariff['energy_t1']           ?? 0.0)
+                        + ($tariff['distribution_t1']     ?? 0.0)
+                        + ($tariff['transport']           ?? 0.0)
+                        + ($tariff['excise_duty']         ?? 0.0)
+                        + ($tariff['energy_contribution'] ?? 0.0)
+                        + ($tariff['green_contribution']  ?? 0.0);
+
+        $solarSavings          = $solarConsumed * $savingsRateTtc;
+        $selfConsumptionPct    = $kwhSolar > 0.0
+            ? round($solarConsumed / $kwhSolar * 100.0, 1)
+            : null;
+
         return [
             // Fournisseur
             //'energy_simple'         => round($energySimple, 4),
@@ -128,7 +161,13 @@ final class TariffCalculatorService
             'htva'                  => round($htva, 2),
             'vat_included'          => round($vatIncluded, 2),
             'import_kwh'            => round($totalKwh, 3),
-            'export_kwh'            => round($kwhExportT1 + $kwhExportT2, 3),
+            'export_kwh'            => round($totalExport, 3),
+            // Solar self-consumption (null when no solar data available)
+            'solar_produced'        => $kwhSolar > 0.0 ? round($kwhSolar, 3)        : null,
+            'solar_consumed'        => $kwhSolar > 0.0 ? round($solarConsumed, 3)   : null,
+            'self_consumption_pct'  => $selfConsumptionPct,
+            'solar_savings_rate'    => $kwhSolar > 0.0 ? round($savingsRateTtc, 6)  : null,
+            'solar_savings'         => $kwhSolar > 0.0 ? round($solarSavings, 2)    : null,
         ];
     }
 
@@ -204,6 +243,6 @@ final class TariffCalculatorService
      */
     public function m3ToKwh(float $m3, float $pcsCoefficient = 10.55): float
     {
-        return round(floor($m3) * $pcsCoefficient, 3);
+        return round($m3 * $pcsCoefficient, 3);
     }
 }
