@@ -245,7 +245,7 @@ $today = date('Y-m-d');
   .btn:active { opacity:.8; }
   .form-actions { display:flex; gap:10px; align-items:center; margin-top:20px; }
 
-  .grids-wrap { background:var(--surface); border:1px solid var(--border); border-radius:10px; overflow:hidden; margin-bottom:12px; }
+.grids-wrap { background:var(--surface); border:1px solid var(--border); border-radius:10px; overflow-y:auto; margin-bottom:12px; max-height:340px; scrollbar-width:thin; scrollbar-color:var(--border2) transparent; }
   .grid-row { display:grid; grid-template-columns:1fr 120px 120px auto; align-items:center;
               padding:14px 20px; border-top:1px solid var(--border); gap:16px; }
   .grid-row:first-child { border:none; }
