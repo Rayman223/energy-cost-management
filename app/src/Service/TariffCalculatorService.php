@@ -33,6 +33,8 @@ namespace App\Service;
  *   distribution_fixed    float  €/an    (fixed annual, prorated by days)
  *   transport             float  €/kWh
  *   meter_reading_annual  float  €/an    (prorated by days)
+ *   connection_fee_kwh    float  €/kWh   Redevance de raccordement
+ *   public_service_annual float  €/an    Obligations de service public (prorated by days)
  */
 final class TariffCalculatorService
 {
@@ -160,6 +162,8 @@ final class TariffCalculatorService
         // ── Taxes & contributions ────────────────────────────────────────────
         $energyContribution = $kwh * ($tariff['energy_contribution'] ?? 0.0);
         $federalExcise      = $kwh * ($tariff['federal_excise']      ?? 0.0);
+        $connectionFee      = $kwh  * ($tariff['connection_fee_kwh']     ?? 0.0);
+        $publicService      = $days * (($tariff['public_service_annual'] ?? 0.0) / self::DAYS_YEAR);
 
         // All amounts are already TTC (VAT-inclusive)
         $totalTtc = $energy
@@ -169,7 +173,9 @@ final class TariffCalculatorService
             + $transport
             + $meterReading
             + $energyContribution
-            + $federalExcise;
+            + $federalExcise
+            + $connectionFee
+            + $publicService;
 
         $htva        = $totalTtc / (1.0 + self::TVA);
         $vatIncluded = $totalTtc - $htva;
@@ -183,6 +189,8 @@ final class TariffCalculatorService
             'meter_reading'       => round($meterReading, 4),
             'energy_contribution' => round($energyContribution, 4),
             'federal_excise'      => round($federalExcise, 4),
+            'connection_fee'      => round($connectionFee, 4),
+            'public_service'      => round($publicService, 4),
             'total'               => round($totalTtc, 2),
             'htva'                => round($htva, 2),
             'vat_included'        => round($vatIncluded, 2),

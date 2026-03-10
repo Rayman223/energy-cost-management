@@ -46,6 +46,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     'energy_contribution', 'federal_excise',
                     'distribution', 'distribution_fixed',
                     'transport', 'meter_reading_annual',
+                    'connection_fee_kwh', 'public_service_annual',
                   ];
 
             $lines = [];
@@ -153,14 +154,16 @@ $elecLines = [
 ];
 
 $gasLines = [
-    'energy'               => ['label' => 'Énergie fournisseur',               'unit' => '€/kWh'],
-    'subscription'         => ['label' => 'Abonnement fournisseur',            'unit' => '€/mois'],
-    'energy_contribution'  => ['label' => 'Contribution énergie',              'unit' => '€/kWh'],
-    'federal_excise'       => ['label' => 'Accise fédérale',                   'unit' => '€/kWh'],
-    'distribution'         => ['label' => 'Distribution (variable)',           'unit' => '€/kWh'],
-    'distribution_fixed'   => ['label' => 'Distribution (fixe)',               'unit' => '€/an'],
-    'transport'            => ['label' => 'Transport',                         'unit' => '€/kWh'],
-    'meter_reading_annual' => ['label' => 'Relevé de compteur',                'unit' => '€/an'],
+    'energy'                => ['label' => 'Énergie fournisseur',               'unit' => '€/kWh'],
+    'subscription'          => ['label' => 'Abonnement fournisseur',            'unit' => '€/mois'],
+    'energy_contribution'   => ['label' => 'Contribution énergie',              'unit' => '€/kWh'],
+    'federal_excise'        => ['label' => 'Accise fédérale',                   'unit' => '€/kWh'],
+    'distribution'          => ['label' => 'Distribution (variable)',           'unit' => '€/kWh'],
+    'distribution_fixed'    => ['label' => 'Distribution (fixe)',               'unit' => '€/an'],
+    'transport'             => ['label' => 'Transport',                         'unit' => '€/kWh'],
+    'meter_reading_annual'  => ['label' => 'Relevé de compteur',                'unit' => '€/an'],
+    'connection_fee_kwh'    => ['label' => 'Redevance de raccordement',         'unit' => '€/kWh'],
+    'public_service_annual' => ['label' => 'Obligations de service public',     'unit' => '€/an'],
 ];
 
 // Lines to display: edit mode uses the grid's own lines; new mode pre-fills from latest

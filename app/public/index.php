@@ -1023,8 +1023,10 @@ function fmtCost(mixed $v): string
         ${maybeRow('Relevé de compteur',    detailAnnual(data.days, r.meter_reading_annual),      c.meter_reading)}
 
         <div class="cost-group-label">Taxes &amp; contributions</div>
-        ${maybeRow('Contribution énergie',  detail(kwh, 'kWh', r.energy_contribution, 'kWh'), c.energy_contribution)}
-        ${maybeRow('Accise fédérale',       detail(kwh, 'kWh', r.federal_excise,       'kWh'), c.federal_excise)}
+        ${maybeRow('Contribution énergie',          detail(kwh, 'kWh', r.energy_contribution, 'kWh'), c.energy_contribution)}
+        ${maybeRow('Accise fédérale',               detail(kwh, 'kWh', r.federal_excise,       'kWh'), c.federal_excise)}
+        ${maybeRow('Redevance de raccordement',     detail(kwh, 'kWh', r.connection_fee_kwh,   'kWh'), c.connection_fee)}
+        ${maybeRow('Obligations de service public', detailAnnual(data.days, r.public_service_annual),   c.public_service)}
 
         <div class="cost-group-sep"></div>
         ${row('Total TTC',           '',                                                                       c.total,       'total')}

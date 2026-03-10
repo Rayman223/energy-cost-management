@@ -19,6 +19,3 @@ Calcul par mois et année (à placer dans "Estimation coûts") ce qui serait le 
 
 ### 1.14 debug: utilité des class dans src/domain/
 
-### 1.15 bug: manque champ gaz
-
-Il manque les champs suivant dans le tariff gaz : Redevance de raccordement (€/kWh) et Obligations de service publique (€/an).
