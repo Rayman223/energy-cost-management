@@ -17,3 +17,4 @@ Indique dans "Estimation coûts" la production solaire, la production solaire co
 
 Calcul par mois et année (à placer dans "Estimation coûts") ce qui serait le plus rentable entre un bi-horaire (le calcul actuel) et le mono-horaire (en utilisant le cout simple qui n'est pas encore utilisé dans le calcul).
 
+### 1.13 Feat: Calcul cout gaz
