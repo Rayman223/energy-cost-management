@@ -81,9 +81,7 @@ try {
             })(),
             'gas_history'  => jsonOut($gasRepo->getLastReadings(10)),
             'cost_estimate'=> jsonOut($costSvc->estimateCurrentMonthElectricity()),
-            'gas_cost'     => jsonOut($costSvc->estimateLastGasPeriod(
-                (float) ($config['gas']['pcs_coefficient'] ?? 10.55)
-            )),
+            'gas_cost'     => jsonOut($costSvc->estimateLastGasPeriod()),
             'sync_status'  => jsonOut([
                 'prelevement_jour'  => $legacyRepo->getLastSentAt('prelevement-jour')?->format('c'),
                 'prelevement_nuit'  => $legacyRepo->getLastSentAt('prelevement-nuit')?->format('c'),

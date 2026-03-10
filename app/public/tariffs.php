@@ -153,12 +153,12 @@ $elecLines = [
 ];
 
 $gasLines = [
-    'energy'               => ['label' => 'Énergie fournisseur',              'unit' => '€/kWh'],
+    'energy'               => ['label' => 'Énergie fournisseur',               'unit' => '€/kWh'],
     'subscription'         => ['label' => 'Abonnement fournisseur',            'unit' => '€/mois'],
     'energy_contribution'  => ['label' => 'Contribution énergie',              'unit' => '€/kWh'],
     'federal_excise'       => ['label' => 'Accise fédérale',                   'unit' => '€/kWh'],
     'distribution'         => ['label' => 'Distribution (variable)',           'unit' => '€/kWh'],
-    'distribution_fixed'   => ['label' => 'Distribution (fixe)',               'unit' => 'c€/kWh'],
+    'distribution_fixed'   => ['label' => 'Distribution (fixe)',               'unit' => '€/an'],
     'transport'            => ['label' => 'Transport',                         'unit' => '€/kWh'],
     'meter_reading_annual' => ['label' => 'Relevé de compteur',                'unit' => '€/an'],
 ];
@@ -358,7 +358,7 @@ $today = date('Y-m-d');
         <?= $g->validFrom->format('d/m/Y') ?> →
         <?= $g->validTo ? $g->validTo->format('d/m/Y') : '∞' ?>
         <?php if ($g->pcsCoefficient ?? null): ?>
-          <span style="margin-left:8px;color:var(--blue)">PCS <?= $g->pcsCoefficient ?> kWh/m³</span>
+          <span style="margin-left:8px;color:var(--blue)">PCS <?= number_format($g->pcsCoefficient, 4) ?> kWh/m³</span>
         <?php endif; ?>
       </div>
     </div>
@@ -414,8 +414,8 @@ $today = date('Y-m-d');
       </div>
       <div class="form-row" id="pcs-row" style="<?= $et === 'gas' ? '' : 'display:none' ?>">
         <label class="form-label">Coefficient PCS <span class="unit">kWh/m³</span></label>
-        <input type="number" name="pcs_coefficient" step="0.01" class="form-input" placeholder="10.55"
-               value="<?= htmlspecialchars((string)($editGrid?->pcsCoefficient ?? '')) ?>">
+        <input type="number" name="pcs_coefficient" step="0.0001" class="form-input" placeholder="10.5500"
+               value="<?= htmlspecialchars($editGrid?->pcsCoefficient !== null ? number_format($editGrid->pcsCoefficient, 4, '.', '') : '') ?>">
       </div>
       <div class="form-row">
         <label class="form-label">Valable à partir du</label>
