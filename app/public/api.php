@@ -81,7 +81,15 @@ try {
             })(),
             'gas_history'  => jsonOut($gasRepo->getLastReadings(10)),
             'cost_estimate'=> jsonOut($costSvc->estimateCurrentMonthElectricity()),
-            'gas_cost'     => jsonOut($costSvc->estimateLastGasPeriod()),
+            'gas_cost'       => jsonOut($costSvc->estimateLastGasPeriod()),
+            'gas_month_cost' => (static function () use ($costSvc): never {
+                $year  = (int) ($_GET['year']  ?? date('Y'));
+                $month = (int) ($_GET['month'] ?? date('n'));
+                if ($year < 2000 || $year > 2100 || $month < 1 || $month > 12) {
+                    jsonOut(['ok' => false, 'error' => 'Invalid year/month'], 422);
+                }
+                jsonOut($costSvc->estimateMonthGas($year, $month));
+            })(),
             'sync_status'  => jsonOut([
                 'prelevement_jour'  => $legacyRepo->getLastSentAt('prelevement-jour')?->format('c'),
                 'prelevement_nuit'  => $legacyRepo->getLastSentAt('prelevement-nuit')?->format('c'),

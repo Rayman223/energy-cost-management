@@ -18,3 +18,15 @@ Indique dans "Estimation coûts" la production solaire, la production solaire co
 Calcul par mois et année (à placer dans "Estimation coûts") ce qui serait le plus rentable entre un bi-horaire (le calcul actuel) et le mono-horaire (en utilisant le cout simple qui n'est pas encore utilisé dans le calcul).
 
 ### 1.13 Feat: Calcul cout gaz
+
+⚠ Database connection error
+Call to undefined method App\Repository\TariffRepository::findMostRecentPcs()
+Check app/config/config.php and ensure the DB is reachable.
+pourtant je n'ai pas touché a config.php
+
+Distribution fixe2005.228 kWh × 43.0700 c€/kWh863.65 €
+
+la distribution fixe est un montant €/an et non c€/kWh d'où l'erreur de calcul.
+
+### 1.14 debug: utilité des class dans src/domain/
+

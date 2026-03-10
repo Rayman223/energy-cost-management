@@ -82,4 +82,54 @@ final class GasRepository
             'to'   => $rows[0] ?? null,
         ];
     }
+
+    /**
+     * Get the two gas readings that bracket a given calendar month.
+     *
+     * Strategy (mirrors electricity):
+     *   $from = reading closest to the 1st of month M
+     *   $to   = reading closest to the 1st of month M+1,
+     *           that is strictly after $from
+     *
+     * @return array{from: array|null, to: array|null}
+     */
+    public function getTwoReadingsForMonth(int $year, int $month): array
+    {
+        $firstOfMonth = sprintf('%04d-%02d-01', $year, $month);
+
+        $nextYear     = $month === 12 ? $year + 1 : $year;
+        $nextMonth    = $month === 12 ? 1         : $month + 1;
+        $firstOfNext  = sprintf('%04d-%02d-01', $nextYear, $nextMonth);
+
+        // ── $from : reading closest to the 1st of month M ────────────────────
+        $stmt = $this->pdo->prepare(
+            'SELECT id, reading_at, counter_m3
+             FROM ' . self::TABLE . '
+             ORDER BY ABS(DATEDIFF(reading_at, :ref)) ASC, reading_at ASC
+             LIMIT 1'
+        );
+        $stmt->execute(['ref' => $firstOfMonth]);
+        $from = $stmt->fetch() ?: null;
+
+        if ($from === null) {
+            return ['from' => null, 'to' => null];
+        }
+
+        // ── $to : reading closest to the 1st of month M+1,
+        //         strictly after $from to avoid picking the same row ──────────
+        $stmt = $this->pdo->prepare(
+            'SELECT id, reading_at, counter_m3
+             FROM ' . self::TABLE . '
+             WHERE reading_at > :from_date
+             ORDER BY ABS(DATEDIFF(reading_at, :ref)) ASC, reading_at ASC
+             LIMIT 1'
+        );
+        $stmt->execute([
+            'ref'       => $firstOfNext,
+            'from_date' => $from['reading_at'],
+        ]);
+        $to = $stmt->fetch() ?: null;
+
+        return ['from' => $from, 'to' => $to];
+    }
 }

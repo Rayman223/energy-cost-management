@@ -202,4 +202,32 @@ final class TariffRepository
             pcsCoefficient: isset($row['pcs_coefficient']) ? (float) $row['pcs_coefficient'] : null,
         );
     }
+
+    /**
+     * Find the most recent PCS coefficient available for a given energy type
+     * at or before a reference date.
+     *
+     * Used as fallback when the active tariff has no pcs_coefficient set.
+     * Searches backwards in time regardless of valid_to.
+     */
+    public function findMostRecentPcs(string $energyType, DateTimeImmutable $before): ?float
+    {
+        $stmt = $this->pdo->prepare(
+            'SELECT pcs_coefficient
+             FROM tariff_grids
+             WHERE energy_type     = :type
+               AND pcs_coefficient IS NOT NULL
+               AND valid_from      <= :date
+             ORDER BY valid_from DESC
+             LIMIT 1'
+        );
+        $stmt->execute([
+            'type' => $energyType,
+            'date' => $before->format('Y-m-d'),
+        ]);
+
+        $val = $stmt->fetchColumn();
+
+        return $val !== false ? (float) $val : null;
+    }
 }

@@ -24,15 +24,15 @@ namespace App\Service;
  *   injection_t1          float  €/kWh  injection credit day
  *   injection_t2          float  €/kWh  injection credit night
  *
- * Gas tariff array keys:
+ * Gas tariff array keys (all amounts TTC, in €):
  *   energy                float  €/kWh
  *   subscription          float  €/mois
  *   energy_contribution   float  €/kWh
  *   federal_excise        float  €/kWh
- *   distribution          float  €/kWh
- *   distribution_fixed    float  €/an   distribution fixe (frais annuel fixe)
+ *   distribution          float  €/kWh   (variable, per kWh)
+ *   distribution_fixed    float  €/an    (fixed annual, prorated by days)
  *   transport             float  €/kWh
- *   meter_reading_annual  float  €/an
+ *   meter_reading_annual  float  €/an    (prorated by days)
  */
 final class TariffCalculatorService
 {
@@ -131,32 +131,62 @@ final class TariffCalculatorService
     }
 
     /**
-     * Calculate gas cost (manual index entries).
+     * Calculate gas cost for a given period.
      *
-     * @param float $kwh   consumed kWh (after m³ → kWh conversion)
-     * @param int   $days  number of days in the period
+     * All tariff rates are TTC (VAT-inclusive, Belgian standard).
+     * total_ttc = sum of all lines
+     * htva      = total_ttc / 1.21
+     * vat_in    = total_ttc - htva
+     *
+     * @param float $kwh  consumed kWh (after m³ → kWh conversion via PCS)
+     * @param int   $days number of days in the period
      * @param array $tariff
      */
     public function calculateGasCost(float $kwh, int $days, array $tariff): array
     {
-        $energy       = $kwh  * ($tariff['energy'] ?? 0.0);
-        $distribution = $kwh * ($tariff['distribution'] ?? 0.0);
-        $fixed        = $days * (($tariff['distribution_fixed'] ?? 0.0) / self::DAYS_YEAR);
-        $federal      = $kwh  * ($tariff['federal_contribution'] ?? 0.0);
+        $wholeMonths = max(1, (int) round($days / 30.4375));
 
-        $subtotal     = $energy + $distribution + $fixed + $federal;
-        $vat          = $subtotal * self::TVA;
-        $total        = $subtotal + $vat;
+        // ── Fournisseur ──────────────────────────────────────────────────────
+        $energy       = $kwh         * ($tariff['energy']      ?? 0.0);
+        $subscription = $wholeMonths * ($tariff['subscription'] ?? 0.0);
+
+        // ── Distribution & transport (Sibelga) ───────────────────────────────
+        $distribution      = $kwh  * ($tariff['distribution']         ?? 0.0);
+        // distribution_fixed stored in €/an — prorate to the actual period
+        $distributionFixed = $days * (($tariff['distribution_fixed']   ?? 0.0) / self::DAYS_YEAR);
+        $transport         = $kwh  * ($tariff['transport']             ?? 0.0);
+        $meterReading      = $days * (($tariff['meter_reading_annual'] ?? 0.0) / self::DAYS_YEAR);
+
+        // ── Taxes & contributions ────────────────────────────────────────────
+        $energyContribution = $kwh * ($tariff['energy_contribution'] ?? 0.0);
+        $federalExcise      = $kwh * ($tariff['federal_excise']      ?? 0.0);
+
+        // All amounts are already TTC (VAT-inclusive)
+        $totalTtc = $energy
+            + $subscription
+            + $distribution
+            + $distributionFixed
+            + $transport
+            + $meterReading
+            + $energyContribution
+            + $federalExcise;
+
+        $htva        = $totalTtc / (1.0 + self::TVA);
+        $vatIncluded = $totalTtc - $htva;
 
         return [
-            'energy'               => round($energy, 4),
-            'distribution'         => round($distribution, 4),
-            'distribution_fixed'   => round($fixed, 4),
-            'federal_contribution' => round($federal, 4),
-            'subtotal_ex_vat'      => round($subtotal, 4),
-            'vat'                  => round($vat, 4),
-            'total'                => round($total, 2),
-            'kwh'                  => round($kwh, 3),
+            'energy'              => round($energy, 4),
+            'subscription'        => round($subscription, 4),
+            'distribution'        => round($distribution, 4),
+            'distribution_fixed'  => round($distributionFixed, 4),
+            'transport'           => round($transport, 4),
+            'meter_reading'       => round($meterReading, 4),
+            'energy_contribution' => round($energyContribution, 4),
+            'federal_excise'      => round($federalExcise, 4),
+            'total'               => round($totalTtc, 2),
+            'htva'                => round($htva, 2),
+            'vat_included'        => round($vatIncluded, 2),
+            'kwh'                 => round($kwh, 3),
         ];
     }
 
@@ -166,6 +196,6 @@ final class TariffCalculatorService
      */
     public function m3ToKwh(float $m3, float $pcsCoefficient = 10.55): float
     {
-        return round($m3 * $pcsCoefficient, 3);
+        return round(floor($m3) * $pcsCoefficient, 3);
     }
 }
