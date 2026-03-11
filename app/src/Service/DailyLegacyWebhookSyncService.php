@@ -255,7 +255,7 @@ final class DailyLegacyWebhookSyncService
             $points[] = [
                 'ts'    => $this->payloadFactory->unixTs($row['timestamp']),
                 // EnergyID predefined key for domestic water : 'dw'
-                'water' => (float) $row['value'],
+                'eau'   => (float) $row['value'],
             ];
         }
 

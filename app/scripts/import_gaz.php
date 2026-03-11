@@ -93,7 +93,7 @@ while (($line = fgetcsv($handle)) !== false) {
         continue;
     }
 
-    if (!is_numeric($rawVal) || (float) $rawVal <= 0) {
+    if (!is_numeric($rawVal) || (float) $rawVal < 0) {
         $skipped[] = "Ligne {$lineNum} : valeur m3 invalide '{$rawVal}', ignoree.";
         continue;
     }
