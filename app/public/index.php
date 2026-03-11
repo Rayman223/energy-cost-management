@@ -46,6 +46,7 @@ try {
         'injection_jour'     => $legacyRepo->getLastSentAt('injection-jour')?->format('d/m H:i'),
         'injection_nuit'     => $legacyRepo->getLastSentAt('injection-nuit')?->format('d/m H:i'),
         'production_solaire' => $legacyRepo->getLastSentAt('production-solaire')?->format('d/m H:i'),
+        'gaz_index'          => $legacyRepo->getLastSentAt('gas-index')?->format('d/m H:i'),
     ];
 } catch (\Throwable $e) {
     $dbError = $e->getMessage();
@@ -671,6 +672,7 @@ function fmtCost(mixed $v): string
         <tr><td>Export T1</td><td><?= htmlspecialchars($syncStatus['injection_jour'] ?? '—') ?></td></tr>
         <tr><td>Export T2</td><td><?= htmlspecialchars($syncStatus['injection_nuit'] ?? '—') ?></td></tr>
         <tr><td>Production PV</td><td><?= htmlspecialchars($syncStatus['production_solaire'] ?? '—') ?></td></tr>
+        <tr><td>Gaz</td><td><?= htmlspecialchars($syncStatus['gaz_index'] ?? '—') ?></td></tr>
       </table>
     </div>
     <div class="card">
@@ -691,10 +693,6 @@ function fmtCost(mixed $v): string
         <a href="api.php?action=tariffs" class="tool-link" target="_blank">
           € Tarifs JSON
         </a>
-      </div>
-      <div style="font-family:var(--mono);font-size:.72rem;color:var(--muted);margin-top:20px;line-height:1.6">
-        Cron quotidien : <strong style="color:var(--text)">01:15</strong> — cron_daily_webhook.php<br>
-        Ingestion horaire : <strong style="color:var(--text)">:00</strong> — cron_hourly.php
       </div>
     </div>
   </div>

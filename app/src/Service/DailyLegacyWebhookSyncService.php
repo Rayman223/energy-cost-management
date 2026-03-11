@@ -30,8 +30,7 @@ final class DailyLegacyWebhookSyncService
         private readonly EnergyIdV2Client $energyIdClient,
         private readonly array $device,
         private readonly \Closure|null $logger = null,
-    ) {
-    }
+    ) {}
 
     public function syncUntil(DateTimeImmutable $until): array
     {

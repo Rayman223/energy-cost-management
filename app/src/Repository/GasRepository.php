@@ -185,4 +185,32 @@ final class GasRepository
 
         return ['from' => $from, 'to' => $to];
     }
+
+    /**
+     * Fetch gas readings strictly after $fromExclusive and up to $toInclusive.
+     * Returns rows shaped as {timestamp, value} to match the sync service contract.
+     *
+     * @return array<int, array{timestamp: string, value: string}>
+     */
+    public function fetchReadingsSince(
+        ?DateTimeImmutable $fromExclusive,
+        DateTimeImmutable $toInclusive
+    ): array {
+        $sql    = 'SELECT reading_at AS timestamp, counter_m3 AS value
+                FROM ' . self::TABLE . '
+                WHERE reading_at <= :to';
+        $params = ['to' => $toInclusive->format('Y-m-d H:i:s')];
+
+        if ($fromExclusive !== null) {
+            $sql             .= ' AND reading_at > :from';
+            $params['from']   = $fromExclusive->format('Y-m-d H:i:s');
+        }
+
+        $sql .= ' ORDER BY reading_at ASC';
+
+        $stmt = $this->pdo->prepare($sql);
+        $stmt->execute($params);
+
+        return $stmt->fetchAll();
+    }
 }
