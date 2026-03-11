@@ -96,6 +96,7 @@ try {
                 'injection_jour'    => $legacyRepo->getLastSentAt('injection-jour')?->format('c'),
                 'injection_nuit'    => $legacyRepo->getLastSentAt('injection-nuit')?->format('c'),
                 'production_solaire'=> $legacyRepo->getLastSentAt('production-solaire')?->format('c'),
+                'gaz_index'         => $legacyRepo->getLastSentAt('gas-index')?->format('c'),
             ]),
             'tariffs'      => jsonOut([
                 'electricity' => array_map(
