@@ -303,7 +303,7 @@ function fmtCost(mixed $v): string
   /* ── Gas ────────────────────────────────────────────────────────────────── */
   .gas-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 
-  .gas-history { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+  .gas-history { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; max-height: 420px; overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--border2) transparent; }
   table { width: 100%; border-collapse: collapse; font-size: .9rem; }
   thead th {
     background: var(--surface2); color: var(--muted);
@@ -589,7 +589,7 @@ function fmtCost(mixed $v): string
         <tbody id="gas-tbody">
           <?php
           $gasRows = [];
-          try { if ($gasRepo) $gasRows = $gasRepo->getLastReadings(6); } catch (\Throwable) {}
+          try { if ($gasRepo) $gasRows = $gasRepo->getAllReadings(); } catch (\Throwable) {}
           if (empty($gasRows)):
           ?>
           <tr><td colspan="3" class="td-empty">Aucune entrée gaz enregistrée.</td></tr>
@@ -1378,7 +1378,7 @@ async function submitGas() {
       const hist    = await histRes.json();
       const tbody   = document.getElementById('gas-tbody');
       if (hist.length) {
-        tbody.innerHTML = hist.slice(0, 6).map(r =>
+        tbody.innerHTML = hist.map(r =>
           `<tr>
             <td>${r.reading_at.slice(0, 16)}</td>
             <td>${parseFloat(r.counter_m3).toFixed(3)}</td>

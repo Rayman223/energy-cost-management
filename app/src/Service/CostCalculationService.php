@@ -44,12 +44,8 @@ final class CostCalculationService
         $sameMonth = ($from->format('Y-m') === $to->format('Y-m'));
 
         if ($sameMonth) {
-            // Mois en cours : $to = aujourd'hui (lecture incomplète), on l'inclut avec +1
             $days = max(1, (int) $from->diff($to)->days + 1);
         } else {
-            // Mois passé : $to = première lecture du mois suivant (borne exclusive kWh).
-            // Pour les taxes fixes (gestion, prosumer, OSP), on prorate sur le nombre de
-            // jours calendaires du mois entier, indépendamment du jour de la première lecture.
             $days = (int) $from->format('t');
         }
 
@@ -69,14 +65,14 @@ final class CostCalculationService
         );
 
         return [
-            'available'     => true,
-            'period_from'   => $deltas['from'],
-            'period_to'     => $deltas['to'],
-            'days'          => $days,
-            'tariff_name'   => $tariff->name,
-            'tariff_rates'  => $tariff->toTariffArray(),
-            'deltas'        => $deltas,
-            'cost'          => $breakdown,
+            'available'    => true,
+            'period_from'  => $deltas['from'],
+            'period_to'    => $deltas['to'],
+            'days'         => $days,
+            'tariff_name'  => $tariff->name,
+            'tariff_rates' => $tariff->toTariffArray(),
+            'deltas'       => $deltas,
+            'cost'         => $breakdown,
         ];
     }
 
@@ -88,7 +84,7 @@ final class CostCalculationService
         $deltas = $this->legacyRepo->getMonthlyDeltasForMonth($year, $month);
 
         if (empty($deltas)) {
-            return ['available' => false, 'reason' => "No data for {$year}-{$month}"];
+            return ['available' => false, 'reason' => sprintf('No data for %04d-%02d', $year, $month)];
         }
 
         $from = new DateTimeImmutable($deltas['from']);
@@ -96,18 +92,16 @@ final class CostCalculationService
         $sameMonth = ($from->format('Y-m') === $to->format('Y-m'));
 
         if ($sameMonth) {
-            // Mois en cours : $to = aujourd'hui (lecture incomplète), on l'inclut avec +1
             $days = max(1, (int) $from->diff($to)->days + 1);
         } else {
-            // Mois passé : $to = première lecture du mois suivant (borne exclusive kWh).
-            // Pour les taxes fixes (gestion, prosumer, OSP), on prorate sur le nombre de
-            // jours calendaires du mois entier, indépendamment du jour de la première lecture.
             $days = (int) $from->format('t');
         }
 
-        $tariff = $this->tariffRepo->findActiveGrid('electricity', $to);
+        $tariff = $this->tariffRepo->findActiveGrid('electricity', $from)
+               ?? $this->tariffRepo->findActiveGrid('electricity', $to);
+
         if ($tariff === null) {
-            return ['available' => false, 'reason' => 'No active electricity tariff configured'];
+            return ['available' => false, 'reason' => sprintf('No active electricity tariff for %04d-%02d', $year, $month)];
         }
 
         $breakdown = $this->calculator->calculateElectricityCost(
@@ -146,11 +140,8 @@ final class CostCalculationService
 
         $from = new DateTimeImmutable($pair['from']['reading_at']);
         $to   = new DateTimeImmutable($pair['to']['reading_at']);
-        $days = max(1, (int) $from->setTime(0,0,0)->diff($to->setTime(0,0,0))->days);
+        $days = max(1, (int) $from->setTime(0, 0, 0)->diff($to->setTime(0, 0, 0))->days);
 
-        // Look up the tariff active at the START of the period ($from).
-        // A "January" tariff (valid_from 01/01, valid_to 31/01) would be missed
-        // if we searched with $to = 01/02. Fallback to $to if $from yields nothing.
         $tariff = $this->tariffRepo->findActiveGrid('gas', $from)
                ?? $this->tariffRepo->findActiveGrid('gas', $to);
 
@@ -158,10 +149,6 @@ final class CostCalculationService
             return ['available' => false, 'reason' => 'Aucun tarif gaz configuré pour cette période.'];
         }
 
-        // PCS fallback chain:
-        // 1. tariff's own pcs_coefficient (set when creating the tariff)
-        // 2. most recent prior tariff that has a PCS (e.g. Jan tariff for Feb period)
-        // 3. Belgian Sibelga default 10.55 kWh/m³
         $pcs = $tariff->pcsCoefficient
             ?? $this->tariffRepo->findMostRecentPcs('gas', $from)
             ?? 10.55;
@@ -186,8 +173,16 @@ final class CostCalculationService
     }
 
     /**
-     * Estimate gas cost for any given calendar month (year + month).
-     * Uses the two readings that bracket the month (GasRepository::getTwoReadingsForMonth).
+     * Estimate gas cost for any given calendar month using LINEAR INTERPOLATION.
+     *
+     * The two readings bracketing the month (from GasRepository::getTwoReadingsForMonth)
+     * may fall on any date — e.g. Aug-31 and Oct-01 for a September month with no
+     * reading on Sep-01. We interpolate linearly by Unix timestamp to derive the
+     * theoretical index at exactly midnight on the 1st of month M and the 1st of
+     * month M+1, then compute the difference as the monthly consumption.
+     *
+     * Fixed daily costs (abonnement, redevance, …) are prorated over the number of
+     * calendar days actually covered by data within the month.
      */
     public function estimateMonthGas(int $year, int $month): array
     {
@@ -200,12 +195,68 @@ final class CostCalculationService
             ];
         }
 
-        $from = new DateTimeImmutable($pair['from']['reading_at']);
-        $to   = new DateTimeImmutable($pair['to']['reading_at']);
-        $days = max(1, (int) $from->setTime(0,0,0)->diff($to->setTime(0,0,0))->days);
+        // ── Timestamps (Unix seconds, integer arithmetic) ─────────────────────
+        $fromDt = new DateTimeImmutable($pair['from']['reading_at']);
+        $toDt   = new DateTimeImmutable($pair['to']['reading_at']);
 
-        $tariff = $this->tariffRepo->findActiveGrid('gas', $from)
-               ?? $this->tariffRepo->findActiveGrid('gas', $to);
+        $fromTs = $fromDt->getTimestamp();
+        $toTs   = $toDt->getTimestamp();
+        $totalSecs = $toTs - $fromTs;
+
+        if ($totalSecs <= 0) {
+            return [
+                'available' => false,
+                'reason'    => 'Les deux relevés ont le même horodatage.',
+            ];
+        }
+
+        // ── Calendar boundaries of the requested month ────────────────────────
+        $nextYear    = $month === 12 ? $year + 1 : $year;
+        $nextMonth   = $month === 12 ? 1         : $month + 1;
+
+        $monthStartDt = new DateTimeImmutable(sprintf('%04d-%02d-01 00:00:00', $year,      $month));
+        $monthEndDt   = new DateTimeImmutable(sprintf('%04d-%02d-01 00:00:00', $nextYear,  $nextMonth));
+
+        $monthStartTs = $monthStartDt->getTimestamp();
+        $monthEndTs   = $monthEndDt->getTimestamp();
+
+        // ── Effective coverage window within the month ────────────────────────
+        // Clamp the readings' range to the month's boundaries.
+        $effStartTs = max($monthStartTs, $fromTs); // can't go before the first reading
+        $effEndTs   = min($monthEndTs,   $toTs);   // can't go beyond the last reading
+
+        if ($effStartTs >= $effEndTs) {
+            return [
+                'available' => false,
+                'reason'    => 'Les relevés ne couvrent pas cette période.',
+            ];
+        }
+
+        // ── Linear interpolation of the meter index ───────────────────────────
+        $totalDeltaM3 = (float) $pair['to']['counter_m3'] - (float) $pair['from']['counter_m3'];
+
+        // Fraction of the inter-reading span that corresponds to the month start/end
+        $fracStart = ($effStartTs - $fromTs) / $totalSecs;
+        $fracEnd   = ($effEndTs   - $fromTs) / $totalSecs;
+
+        $indexAtEffStart = (float) $pair['from']['counter_m3'] + $totalDeltaM3 * $fracStart;
+        $indexAtEffEnd   = (float) $pair['from']['counter_m3'] + $totalDeltaM3 * $fracEnd;
+
+        $monthlyM3 = max(0.0, $indexAtEffEnd - $indexAtEffStart);
+
+        // ── Days for fixed-cost proration ─────────────────────────────────────
+        // If the readings fully bracket the month (from ≤ monthStart AND to ≥ monthEnd)
+        // use the exact calendar day-count of the month.
+        // Otherwise (partial coverage — first/last month in DB, or current month)
+        // use the number of days actually covered by data.
+        $calendarDays = (int) $monthStartDt->format('t'); // 28/29/30/31
+        $coverageDays = (int) round(($effEndTs - $effStartTs) / 86400);
+        $isFull       = ($fromTs <= $monthStartTs && $toTs >= $monthEndTs);
+        $days         = $isFull ? $calendarDays : max(1, $coverageDays);
+
+        // ── Tariff & PCS ──────────────────────────────────────────────────────
+        $tariff = $this->tariffRepo->findActiveGrid('gas', $fromDt)
+               ?? $this->tariffRepo->findActiveGrid('gas', $toDt);
 
         if ($tariff === null) {
             return [
@@ -215,25 +266,31 @@ final class CostCalculationService
         }
 
         $pcs = $tariff->pcsCoefficient
-            ?? $this->tariffRepo->findMostRecentPcs('gas', $from)
+            ?? $this->tariffRepo->findMostRecentPcs('gas', $fromDt)
             ?? 10.55;
 
-        $deltaM3 = max(0.0, (float) $pair['to']['counter_m3'] - (float) $pair['from']['counter_m3']);
-        $kWh     = $this->calculator->m3ToKwh($deltaM3, $pcs);
+        $kWh = $this->calculator->m3ToKwh($monthlyM3, $pcs);
 
         $breakdown = $this->calculator->calculateGasCost($kWh, $days, $tariff->toTariffArray());
 
         return [
-            'available'       => true,
-            'period_from'     => $pair['from']['reading_at'],
-            'period_to'       => $pair['to']['reading_at'],
-            'days'            => $days,
-            'delta_m3'        => round($deltaM3, 3),
-            'kwh'             => $kWh,
-            'pcs_coefficient' => $pcs,
-            'tariff_name'     => $tariff->name,
-            'tariff_rates'    => $tariff->toTariffArray(),
-            'cost'            => $breakdown,
+            'available'           => true,
+            // Show the exact reading timestamps used, for transparency
+            'period_from'         => $pair['from']['reading_at'],
+            'period_to'           => $pair['to']['reading_at'],
+            // Effective window within the calendar month
+            'month_start'         => $monthStartDt->format('Y-m-d H:i:s'),
+            'month_end'           => $monthEndDt->format('Y-m-d H:i:s'),
+            'interpolated'        => !($fromTs === $monthStartTs && $toTs === $monthEndTs),
+            'days'                => $days,
+            'calendar_days'       => $calendarDays,
+            'is_full_month'       => $isFull,
+            'delta_m3'            => round($monthlyM3, 3),
+            'kwh'                 => round($kWh, 2),
+            'pcs_coefficient'     => $pcs,
+            'tariff_name'         => $tariff->name,
+            'tariff_rates'        => $tariff->toTariffArray(),
+            'cost'                => $breakdown,
         ];
     }
 }

@@ -79,7 +79,7 @@ try {
                 }
                 jsonOut($costSvc->estimateMonthElectricity($year, $month));
             })(),
-            'gas_history'  => jsonOut($gasRepo->getLastReadings(10)),
+            'gas_history'  => jsonOut($gasRepo->getAllReadings()),
             'cost_estimate'=> jsonOut($costSvc->estimateCurrentMonthElectricity()),
             'gas_cost'       => jsonOut($costSvc->estimateLastGasPeriod()),
             'gas_month_cost' => (static function () use ($costSvc): never {
