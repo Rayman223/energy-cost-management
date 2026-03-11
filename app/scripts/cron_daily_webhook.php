@@ -11,29 +11,49 @@ use App\Service\EnergyIdV2Client;
 
 $config = require __DIR__ . '/../bootstrap.php';
 
+// Logger : préfixe chaque ligne avec l'heure exacte et flush immédiat.
+$logger = static function (string $message): void {
+    echo '[' . date('H:i:s') . '] ' . $message . "\n";
+    if (ob_get_level() > 0) {
+        ob_flush();
+    }
+    flush();
+};
+
+$logger('[start] Lancement sync EnergyID — ' . date('Y-m-d H:i:s'));
+
 try {
     $database = new Database($config['database']);
-    $repository = new LegacyDailyRepository($database->pdo());
+    $logger('[db] Connexion OK.');
+
+    $repository     = new LegacyDailyRepository($database->pdo());
     $energyIdClient = new EnergyIdV2Client(
-        http: new HttpClient(),
-        provisioningKey: $config['energyid']['provisioning_key'],
+        http:               new HttpClient(),
+        provisioningKey:    $config['energyid']['provisioning_key'],
         provisioningSecret: $config['energyid']['provisioning_secret'],
-        timeout: (int) ($config['energyid']['timeout'] ?? 15)
+        timeout:            (int) ($config['energyid']['timeout'] ?? 15)
     );
 
     $service = new DailyLegacyWebhookSyncService(
-        repository: $repository,
+        repository:     $repository,
         payloadFactory: new EnergyIdPayloadFactory(),
         energyIdClient: $energyIdClient,
-        device: $config['energyid']['device'],
+        device:         $config['energyid']['device'],
+        logger:         $logger,
     );
 
     $until   = new DateTimeImmutable('now');
     $reports = $service->syncUntil($until);
 
 } catch (\Throwable $e) {
-    echo '[FATAL] ' . $e->getMessage() . "\n";
+    $logger('[FATAL] ' . $e->getMessage());
+    $logger('[FATAL] ' . $e->getFile() . ':' . $e->getLine());
     exit(1);
+}
+
+if ($reports === []) {
+    $logger('[OK] Rien a envoyer, tout est a jour.');
+    exit(0);
 }
 
 $errors = array_filter($reports, static fn (array $r): bool => ($r['result']['ok'] ?? false) === false);
@@ -41,17 +61,17 @@ $errors = array_filter($reports, static fn (array $r): bool => ($r['result']['ok
 if ($errors !== []) {
     foreach ($errors as $error) {
         if (($error['result']['type'] ?? '') === 'not_claimed') {
-            echo sprintf(
-                "[ACTION] Device not claimed. claimCode=%s claimUrl=%s exp=%s\n",
+            $logger(sprintf(
+                '[ACTION] Device not claimed. claimCode=%s claimUrl=%s exp=%s',
                 $error['result']['claimCode'] ?? '-',
                 $error['result']['claimUrl'] ?? '-',
                 $error['result']['exp'] ?? '-'
-            );
+            ));
             continue;
         }
 
-        echo sprintf(
-            "[ERROR] %s/%s - attempts=%s status=%s error=%s body=%s type=%s\n",
+        $logger(sprintf(
+            '[ERROR] %s/%s - attempts=%s status=%s error=%s body=%s type=%s',
             $error['source'],
             $error['remoteId'],
             $error['result']['attempts'] ?? 'n/a',
@@ -59,10 +79,11 @@ if ($errors !== []) {
             $error['result']['error'] ?? '-',
             $error['result']['body'] ?? '-',
             $error['result']['type'] ?? '-'
-        );
+        ));
     }
+    $logger('[end] Termine avec erreurs.');
     exit(1);
 }
 
-echo '[OK] Sync quotidienne EnergyID terminee (' . count($reports) . " metrique(s) traitee(s)).\n";
+$logger('[OK] Sync quotidienne EnergyID terminee (' . count($reports) . ' envoi(s) effectue(s)).');
 exit(0);
