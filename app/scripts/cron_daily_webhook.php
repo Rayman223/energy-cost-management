@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use App\Infrastructure\Database;
 use App\Infrastructure\HttpClient;
+use App\Repository\GasRepository;
 use App\Repository\LegacyDailyRepository;
 use App\Service\DailyLegacyWebhookSyncService;
 use App\Service\EnergyIdPayloadFactory;
@@ -26,7 +27,9 @@ try {
     $database = new Database($config['database']);
     $logger('[db] Connexion OK.');
 
-    $repository     = new LegacyDailyRepository($database->pdo());
+    $pdo            = $database->pdo();
+    $repository     = new LegacyDailyRepository($pdo);
+    $gasRepository  = new GasRepository($pdo);
     $energyIdClient = new EnergyIdV2Client(
         http:               new HttpClient(),
         provisioningKey:    $config['energyid']['provisioning_key'],
@@ -36,6 +39,7 @@ try {
 
     $service = new DailyLegacyWebhookSyncService(
         repository:     $repository,
+        gasRepository:  $gasRepository,
         payloadFactory: new EnergyIdPayloadFactory(),
         energyIdClient: $energyIdClient,
         device:         $config['energyid']['device'],

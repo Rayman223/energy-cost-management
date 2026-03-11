@@ -97,9 +97,9 @@ final class GasRepository
     {
         $firstOfMonth = sprintf('%04d-%02d-01', $year, $month);
 
-        $nextYear     = $month === 12 ? $year + 1 : $year;
-        $nextMonth    = $month === 12 ? 1         : $month + 1;
-        $firstOfNext  = sprintf('%04d-%02d-01', $nextYear, $nextMonth);
+        $nextYear    = $month === 12 ? $year + 1 : $year;
+        $nextMonth   = $month === 12 ? 1         : $month + 1;
+        $firstOfNext = sprintf('%04d-%02d-01', $nextYear, $nextMonth);
 
         // ── $from : reading closest to the 1st of month M ────────────────────
         $stmt = $this->pdo->prepare(
@@ -115,8 +115,7 @@ final class GasRepository
             return ['from' => null, 'to' => null];
         }
 
-        // ── $to : reading closest to the 1st of month M+1,
-        //         strictly after $from to avoid picking the same row ──────────
+        // $to : reading closest to 1st of month M+1, strictly after $from
         $stmt = $this->pdo->prepare(
             'SELECT id, reading_at, counter_m3
              FROM ' . self::TABLE . '
@@ -131,5 +130,34 @@ final class GasRepository
         $to = $stmt->fetch() ?: null;
 
         return ['from' => $from, 'to' => $to];
+    }
+
+    /**
+     * Fetch all gas readings strictly after $fromExclusive and up to $toInclusive.
+     * Used by DailyLegacyWebhookSyncService to build the EnergyID payload.
+     *
+     * @return array<int,array{timestamp:string,value:float}>
+     */
+    public function fetchReadingsSince(
+        ?DateTimeImmutable $fromExclusive,
+        DateTimeImmutable $toInclusive
+    ): array {
+        $where  = 'reading_at <= :to';
+        $params = ['to' => $toInclusive->format('Y-m-d H:i:s')];
+
+        if ($fromExclusive !== null) {
+            $where             .= ' AND reading_at > :from';
+            $params['from']     = $fromExclusive->format('Y-m-d H:i:s');
+        }
+
+        $stmt = $this->pdo->prepare(
+            'SELECT reading_at AS timestamp, counter_m3 AS value
+             FROM ' . self::TABLE . '
+             WHERE ' . $where . '
+             ORDER BY reading_at ASC'
+        );
+        $stmt->execute($params);
+
+        return $stmt->fetchAll();
     }
 }
