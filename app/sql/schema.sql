@@ -45,6 +45,16 @@ CREATE TABLE IF NOT EXISTS Data_gaz (
     INDEX idx_data_gaz_date (reading_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+-- ── Relevés eau (encodage manuel) ────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS Data_eau (
+    id          BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    reading_at  DATETIME NOT NULL,
+    counter_m3  DECIMAL(12,3) NOT NULL COMMENT 'Index compteur eau en m³',
+    created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY uq_data_eau_reading (reading_at),
+    INDEX idx_data_eau_date (reading_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 -- ── Tarifs énergétiques ───────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS tariff_grids (
     id               BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,

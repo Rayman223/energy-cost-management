@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 use App\Infrastructure\Database;
 use App\Repository\GasRepository;
+use App\Repository\WaterRepository;
 use App\Repository\LegacyDailyRepository;
 use App\Repository\TariffRepository;
 use App\Service\CostCalculationService;
@@ -26,6 +27,7 @@ try {
     $pdo        = $db->pdo();
     $legacyRepo = new LegacyDailyRepository($pdo);
     $gasRepo    = new GasRepository($pdo);
+    $waterRepo  = new WaterRepository($pdo);
     $tariffRepo = new TariffRepository($pdo);
     $costSvc    = new CostCalculationService($legacyRepo, $tariffRepo, $gasRepo, new TariffCalculatorService());
 
@@ -40,6 +42,9 @@ try {
         $gasInitMonth  = (int) $gasPeriodFrom->format('n');
     }
     $gasLatest  = $gasRepo->getLatest();
+
+    $waterLatest = $waterRepo->getLatest();
+
     $syncStatus = [
         'prelevement_jour'   => $legacyRepo->getLastSentAt('prelevement-jour')?->format('d/m H:i'),
         'prelevement_nuit'   => $legacyRepo->getLastSentAt('prelevement-nuit')?->format('d/m H:i'),
@@ -657,6 +662,61 @@ function fmtCost(mixed $v): string
     <div style="font-family:var(--mono);font-size:.85rem;color:var(--muted);padding:24px 0">Chargement…</div>
   </div>
 
+  <!-- ── Eau ──────────────────────────────────────────────────────────── -->
+  <div class="section-header">
+    <span class="section-title">Eau</span>
+    <span class="section-line"></span>
+  </div>
+
+  <div class="gas-grid">
+    <div class="gas-history">
+      <table>
+        <thead><tr><th>Date &amp; heure</th><th>Index (m³)</th><th>Delta</th></tr></thead>
+        <tbody id="water-tbody">
+          <?php
+          $waterRows = [];
+          try { if ($waterRepo) $waterRows = $waterRepo->getAllReadings(); } catch (\Throwable) {}
+          if (empty($waterRows)):
+          ?>
+          <tr><td colspan="3" class="td-empty">Aucune entrée eau enregistrée.</td></tr>
+          <?php else: foreach ($waterRows as $row): ?>
+          <tr>
+            <td><?= htmlspecialchars(substr($row['reading_at'], 0, 16)) ?></td>
+            <td><?= number_format((float)$row['counter_m3'], 3, '.', ' ') ?></td>
+            <td class="td-delta"><?= $row['delta_m3'] !== null ? '+' . number_format($row['delta_m3'], 3, '.', ' ') . ' m³' : '—' ?></td>
+          </tr>
+          <?php endforeach; endif; ?>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="gas-form">
+      <div style="font-size:.72rem;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin-bottom:18px">
+        Nouvel index eau
+      </div>
+      <?php if ($waterLatest): ?>
+      <div style="font-family:var(--mono);font-size:.95rem;color:var(--muted);margin-bottom:14px;padding:8px 12px;background:var(--bg);border-radius:5px;border:1px solid var(--border)">
+        Dernier index : <strong style="color:var(--text)"><?= number_format((float)$waterLatest['counter_m3'], 3, '.', ' ') ?> m³</strong>
+        le <?= htmlspecialchars(substr($waterLatest['reading_at'], 0, 10)) ?>
+      </div>
+      <?php endif; ?>
+      <div class="form-row">
+        <label class="form-label" for="water-date">Date du relevé</label>
+        <input id="water-date" type="date" class="form-input" value="<?= date('Y-m-d') ?>">
+      </div>
+      <div class="form-row">
+        <label class="form-label" for="water-time">Heure du relevé</label>
+        <input id="water-time" type="time" class="form-input" value="<?= date('H:i') ?>">
+      </div>
+      <div class="form-row">
+        <label class="form-label" for="water-value">Index compteur (m³)</label>
+        <input id="water-value" type="number" step="0.001" class="form-input" placeholder="ex. 1234.567" min="0">
+      </div>
+      <button class="btn btn-amber" id="water-btn" onclick="submitWater()">Enregistrer</button>
+      <div class="form-feedback" id="water-feedback"></div>
+    </div>
+  </div>
+
   <!-- ── Webhook Sync Status ────────────────────────────────────────────── -->
   <div class="section-header">
     <span class="section-title">Webhook sync — état</span>
@@ -673,6 +733,7 @@ function fmtCost(mixed $v): string
         <tr><td>Export T2</td><td><?= htmlspecialchars($syncStatus['injection_nuit'] ?? '—') ?></td></tr>
         <tr><td>Production PV</td><td><?= htmlspecialchars($syncStatus['production_solaire'] ?? '—') ?></td></tr>
         <tr><td>Gaz</td><td><?= htmlspecialchars($syncStatus['gaz_index'] ?? '—') ?></td></tr>
+        <tr><td>Eau</td><td><?= htmlspecialchars($syncStatus['water_index'] ?? '—') ?></td></tr>
       </table>
     </div>
     <div class="card">
@@ -1386,6 +1447,64 @@ async function submitGas() {
       }
       // Refresh gas cost block
       document.dispatchEvent(new Event('gas-entry-saved'));
+    } else {
+      feedback.textContent = '✗ ' + (data.error || 'Erreur inconnue.');
+      feedback.className   = 'form-feedback err';
+    }
+  } catch (e) {
+    feedback.textContent = '✗ Erreur réseau.';
+    feedback.className   = 'form-feedback err';
+  } finally {
+    btn.disabled    = false;
+    btn.textContent = 'Enregistrer';
+  }
+}
+
+// ── Water entry ────────────────────────────────────────────────────────────
+async function submitWater() {
+  const btn      = document.getElementById('water-btn');
+  const feedback = document.getElementById('water-feedback');
+  const date     = document.getElementById('water-date').value;
+  const time     = document.getElementById('water-time').value || '00:00';
+  const value    = parseFloat(document.getElementById('water-value').value);
+
+  feedback.textContent = '';
+  feedback.className   = 'form-feedback';
+
+  if (!date || isNaN(value) || value <= 0) {
+    feedback.textContent = '⚠ Renseigne une date et une valeur valide.';
+    feedback.className   = 'form-feedback err';
+    return;
+  }
+
+  btn.disabled    = true;
+  btn.textContent = 'Envoi…';
+
+  try {
+    const res  = await fetch('api.php?action=water_entry', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ counter_m3: value, reading_at: `${date} ${time}:00` }),
+    });
+    const data = await res.json();
+
+    if (data.ok) {
+      feedback.textContent = `✓ Enregistré — ${data.counter_m3} m³ le ${data.saved_at.slice(0, 10)}`;
+      feedback.className   = 'form-feedback ok';
+      document.getElementById('water-value').value = '';
+      // Reload water table
+      const histRes = await fetch('api.php?action=water_history');
+      const hist    = await histRes.json();
+      const tbody   = document.getElementById('water-tbody');
+      if (hist.length) {
+        tbody.innerHTML = hist.map(r =>
+          `<tr>
+            <td>${r.reading_at.slice(0, 16)}</td>
+            <td>${parseFloat(r.counter_m3).toFixed(3)}</td>
+            <td class="td-delta">${r.delta_m3 !== null ? '+' + parseFloat(r.delta_m3).toFixed(3) + ' m³' : '—'}</td>
+          </tr>`
+        ).join('');
+      }
     } else {
       feedback.textContent = '✗ ' + (data.error || 'Erreur inconnue.');
       feedback.className   = 'form-feedback err';

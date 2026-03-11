@@ -6,6 +6,7 @@ namespace App\Service;
 
 use App\Repository\GasRepository;
 use App\Repository\LegacyDailyRepository;
+use App\Repository\WaterRepository;
 use DateTimeImmutable;
 
 final class DailyLegacyWebhookSyncService
@@ -21,11 +22,13 @@ final class DailyLegacyWebhookSyncService
         'production-solaire',
     ];
 
-    private const GAS_STATE_KEY = 'gas-index';
+    private const GAS_STATE_KEY   = 'gas-index';
+    private const WATER_STATE_KEY = 'water-index';
 
     public function __construct(
         private readonly LegacyDailyRepository $repository,
         private readonly GasRepository $gasRepository,
+        private readonly WaterRepository $waterRepository,
         private readonly EnergyIdPayloadFactory $payloadFactory,
         private readonly EnergyIdV2Client $energyIdClient,
         private readonly array $device,
@@ -51,7 +54,7 @@ final class DailyLegacyWebhookSyncService
             $hello['uploadInterval']
         ));
 
-        // La session est partagée entre les deux blocs d'envoi.
+        // La session est partagée entre tous les blocs d'envoi.
         // postWithRetry() la renouvelle par référence si 401/404.
         $session = $hello;
 
@@ -65,6 +68,12 @@ final class DailyLegacyWebhookSyncService
         $gasReport = $this->syncGas($session, $until);
         if ($gasReport !== null) {
             $reports[] = $gasReport;
+        }
+
+        // ── 4. Sync eau ───────────────────────────────────────────────────
+        $waterReport = $this->syncWater($session, $until);
+        if ($waterReport !== null) {
+            $reports[] = $waterReport;
         }
 
         return $reports;
@@ -222,6 +231,63 @@ final class DailyLegacyWebhookSyncService
         }
 
         return ['source' => 'Data_gaz', 'remoteId' => 'gas', 'result' => $result];
+    }
+
+    // ── Privé — Eau ───────────────────────────────────────────────────────────
+
+    private function syncWater(array &$session, DateTimeImmutable $until): ?array
+    {
+        $from = $this->repository->getLastSentAt(self::WATER_STATE_KEY);
+        $this->log(sprintf(
+            '[water] Envoi à partir du: %s',
+            $from !== null ? $from->format('Y-m-d H:i:s') : '(aucun historique)'
+        ));
+
+        $rows = $this->waterRepository->fetchReadingsSince($from, $until);
+
+        if ($rows === []) {
+            $this->log('[water] Aucune donnee a envoyer.');
+            return null;
+        }
+
+        $points = [];
+        foreach ($rows as $row) {
+            $points[] = [
+                'ts'    => $this->payloadFactory->unixTs($row['timestamp']),
+                // EnergyID predefined key for domestic water : 'dw'
+                'water' => (float) $row['value'],
+            ];
+        }
+
+        $this->log(sprintf(
+            '[water] %d relevé(s) a envoyer (du %s au %s).',
+            count($points),
+            $rows[0]['timestamp'],
+            $rows[array_key_last($rows)]['timestamp']
+        ));
+
+        $result = $this->postWithRetry($session, $points, 'water');
+
+        if ($result['ok']) {
+            $lastTs = new DateTimeImmutable($rows[array_key_last($rows)]['timestamp']);
+            $this->repository->saveLastSentAt(self::WATER_STATE_KEY, $lastTs);
+
+            $this->log(sprintf(
+                '[water] OK (attempt %d) — last_sent_at mis a jour: %s',
+                $result['attempts'],
+                $lastTs->format('Y-m-d H:i:s')
+            ));
+        } else {
+            $this->log(sprintf(
+                '[water] ECHEC (attempt %d) — status=%s error=%s body=%s',
+                $result['attempts'],
+                $result['status'] ?? '?',
+                $result['error'] ?? '-',
+                $result['body'] ?? '-'
+            ));
+        }
+
+        return ['source' => 'Data_eau', 'remoteId' => 'water', 'result' => $result];
     }
 
     // ── Privé — Helpers ───────────────────────────────────────────────────────

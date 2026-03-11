@@ -6,6 +6,7 @@ use App\Infrastructure\Database;
 use App\Repository\GasRepository;
 use App\Repository\LegacyDailyRepository;
 use App\Repository\TariffRepository;
+use App\Repository\WaterRepository;
 use App\Service\CostCalculationService;
 use App\Service\TariffCalculatorService;
 use App\Security\WebAccessGuard;
@@ -30,6 +31,7 @@ try {
     $pdo        = $db->pdo();
     $legacyRepo = new LegacyDailyRepository($pdo);
     $gasRepo    = new GasRepository($pdo);
+    $waterRepo  = new WaterRepository($pdo);
     $tariffRepo = new TariffRepository($pdo);
     $costSvc    = new CostCalculationService(
         legacyRepo: $legacyRepo,
@@ -68,10 +70,10 @@ try {
 
                 jsonOut($result);
             })(),
-            'today'        => jsonOut($legacyRepo->getTodayIndexValues()),
-            'monthly_delta'=> jsonOut($legacyRepo->getMonthlyDeltas()),
-            'chart_data'   => jsonOut($legacyRepo->getDailyDeltasForChart((int) ($_GET['days'] ?? 30))),
-            'month_cost'   => (static function () use ($costSvc): never {
+            'today'         => jsonOut($legacyRepo->getTodayIndexValues()),
+            'monthly_delta' => jsonOut($legacyRepo->getMonthlyDeltas()),
+            'chart_data'    => jsonOut($legacyRepo->getDailyDeltasForChart((int) ($_GET['days'] ?? 30))),
+            'month_cost'    => (static function () use ($costSvc): never {
                 $year  = (int) ($_GET['year']  ?? date('Y'));
                 $month = (int) ($_GET['month'] ?? date('n'));
                 if ($year < 2000 || $year > 2100 || $month < 1 || $month > 12) {
@@ -79,10 +81,11 @@ try {
                 }
                 jsonOut($costSvc->estimateMonthElectricity($year, $month));
             })(),
-            'gas_history'  => jsonOut($gasRepo->getAllReadings()),
-            'cost_estimate'=> jsonOut($costSvc->estimateCurrentMonthElectricity()),
-            'gas_cost'       => jsonOut($costSvc->estimateLastGasPeriod()),
-            'gas_month_cost' => (static function () use ($costSvc): never {
+            'gas_history'   => jsonOut($gasRepo->getAllReadings()),
+            'water_history' => jsonOut($waterRepo->getAllReadings()),
+            'cost_estimate' => jsonOut($costSvc->estimateCurrentMonthElectricity()),
+            'gas_cost'      => jsonOut($costSvc->estimateLastGasPeriod()),
+            'gas_month_cost'=> (static function () use ($costSvc): never {
                 $year  = (int) ($_GET['year']  ?? date('Y'));
                 $month = (int) ($_GET['month'] ?? date('n'));
                 if ($year < 2000 || $year > 2100 || $month < 1 || $month > 12) {
@@ -90,15 +93,16 @@ try {
                 }
                 jsonOut($costSvc->estimateMonthGas($year, $month));
             })(),
-            'sync_status'  => jsonOut([
-                'prelevement_jour'  => $legacyRepo->getLastSentAt('prelevement-jour')?->format('c'),
-                'prelevement_nuit'  => $legacyRepo->getLastSentAt('prelevement-nuit')?->format('c'),
-                'injection_jour'    => $legacyRepo->getLastSentAt('injection-jour')?->format('c'),
-                'injection_nuit'    => $legacyRepo->getLastSentAt('injection-nuit')?->format('c'),
-                'production_solaire'=> $legacyRepo->getLastSentAt('production-solaire')?->format('c'),
-                'gaz_index'         => $legacyRepo->getLastSentAt('gas-index')?->format('c'),
+            'sync_status'   => jsonOut([
+                'prelevement_jour'   => $legacyRepo->getLastSentAt('prelevement-jour')?->format('c'),
+                'prelevement_nuit'   => $legacyRepo->getLastSentAt('prelevement-nuit')?->format('c'),
+                'injection_jour'     => $legacyRepo->getLastSentAt('injection-jour')?->format('c'),
+                'injection_nuit'     => $legacyRepo->getLastSentAt('injection-nuit')?->format('c'),
+                'production_solaire' => $legacyRepo->getLastSentAt('production-solaire')?->format('c'),
+                'gaz_index'          => $legacyRepo->getLastSentAt('gas-index')?->format('c'),
+                'water_index'        => $legacyRepo->getLastSentAt('water-index')?->format('c'),
             ]),
-            'tariffs'      => jsonOut([
+            'tariffs'         => jsonOut([
                 'electricity' => array_map(
                     static fn ($g) => [
                         'id'         => $g->id,
@@ -151,6 +155,31 @@ try {
                 }
 
                 $gasRepo->save($ts, $counterM3);
+                jsonOut(['ok' => true, 'saved_at' => $ts->format('c'), 'counter_m3' => $counterM3]);
+            })(),
+
+            'water_entry' => (static function () use ($waterRepo, $body): never {
+                $counterM3 = filter_var($body['counter_m3'] ?? null, FILTER_VALIDATE_FLOAT);
+                $readingAt = $body['reading_at'] ?? null;
+
+                if ($counterM3 === false || $counterM3 <= 0) {
+                    jsonOut(['ok' => false, 'error' => 'Invalid counter_m3 value'], 422);
+                }
+
+                $ts = $readingAt
+                    ? new \DateTimeImmutable($readingAt)
+                    : new \DateTimeImmutable('now');
+
+                // Validate not before last reading
+                $latest = $waterRepo->getLatest();
+                if ($latest && $ts <= new \DateTimeImmutable($latest['reading_at'])) {
+                    jsonOut(['ok' => false, 'error' => 'Reading date must be after the latest entry (' . $latest['reading_at'] . ')'], 422);
+                }
+                if ($latest && $counterM3 < (float) $latest['counter_m3']) {
+                    jsonOut(['ok' => false, 'error' => 'Counter value must be ≥ previous reading (' . $latest['counter_m3'] . ' m³)'], 422);
+                }
+
+                $waterRepo->save($ts, $counterM3);
                 jsonOut(['ok' => true, 'saved_at' => $ts->format('c'), 'counter_m3' => $counterM3]);
             })(),
 

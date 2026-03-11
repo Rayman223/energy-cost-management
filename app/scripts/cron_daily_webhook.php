@@ -6,6 +6,7 @@ use App\Infrastructure\Database;
 use App\Infrastructure\HttpClient;
 use App\Repository\GasRepository;
 use App\Repository\LegacyDailyRepository;
+use App\Repository\WaterRepository;
 use App\Service\DailyLegacyWebhookSyncService;
 use App\Service\EnergyIdPayloadFactory;
 use App\Service\EnergyIdV2Client;
@@ -27,10 +28,11 @@ try {
     $database = new Database($config['database']);
     $logger('[db] Connexion OK.');
 
-    $pdo            = $database->pdo();
-    $repository     = new LegacyDailyRepository($pdo);
-    $gasRepository  = new GasRepository($pdo);
-    $energyIdClient = new EnergyIdV2Client(
+    $pdo             = $database->pdo();
+    $repository      = new LegacyDailyRepository($pdo);
+    $gasRepository   = new GasRepository($pdo);
+    $waterRepository = new WaterRepository($pdo);
+    $energyIdClient  = new EnergyIdV2Client(
         http:               new HttpClient(),
         provisioningKey:    $config['energyid']['provisioning_key'],
         provisioningSecret: $config['energyid']['provisioning_secret'],
@@ -38,12 +40,13 @@ try {
     );
 
     $service = new DailyLegacyWebhookSyncService(
-        repository:     $repository,
-        gasRepository:  $gasRepository,
-        payloadFactory: new EnergyIdPayloadFactory(),
-        energyIdClient: $energyIdClient,
-        device:         $config['energyid']['device'],
-        logger:         $logger,
+        repository:      $repository,
+        gasRepository:   $gasRepository,
+        waterRepository: $waterRepository,
+        payloadFactory:  new EnergyIdPayloadFactory(),
+        energyIdClient:  $energyIdClient,
+        device:          $config['energyid']['device'],
+        logger:          $logger,
     );
 
     $until   = new DateTimeImmutable('now');
