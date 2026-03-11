@@ -141,9 +141,15 @@ try {
                     jsonOut(['ok' => false, 'error' => 'Invalid counter_m3 value'], 422);
                 }
 
-                $ts = $readingAt
-                    ? new \DateTimeImmutable($readingAt)
-                    : new \DateTimeImmutable('now');
+                if ($readingAt) {
+                    try {
+                        $ts = new \DateTimeImmutable((string) $readingAt);
+                    } catch (\Throwable) {
+                        jsonOut(['ok' => false, 'error' => 'Invalid reading_at date format'], 422);
+                    }
+                } else {
+                    $ts = new \DateTimeImmutable('now');
+                }
 
                 // Validate not before last reading
                 $latest = $gasRepo->getLatest();
@@ -166,9 +172,15 @@ try {
                     jsonOut(['ok' => false, 'error' => 'Invalid counter_m3 value'], 422);
                 }
 
-                $ts = $readingAt
-                    ? new \DateTimeImmutable($readingAt)
-                    : new \DateTimeImmutable('now');
+                if ($readingAt) {
+                    try {
+                        $ts = new \DateTimeImmutable((string) $readingAt);
+                    } catch (\Throwable) {
+                        jsonOut(['ok' => false, 'error' => 'Invalid reading_at date format'], 422);
+                    }
+                } else {
+                    $ts = new \DateTimeImmutable('now');
+                }
 
                 // Validate not before last reading
                 $latest = $waterRepo->getLatest();
@@ -193,11 +205,26 @@ try {
                 if (!in_array($body['energy_type'], ['electricity', 'gas'], true)) {
                     jsonOut(['ok' => false, 'error' => 'energy_type must be electricity or gas'], 422);
                 }
+                try {
+                    $validFrom = new \DateTimeImmutable((string) $body['valid_from']);
+                } catch (\Throwable) {
+                    jsonOut(['ok' => false, 'error' => 'Invalid valid_from date format'], 422);
+                }
+
+                $validTo = null;
+                if (isset($body['valid_to']) && trim((string) $body['valid_to']) !== '') {
+                    try {
+                        $validTo = new \DateTimeImmutable((string) $body['valid_to']);
+                    } catch (\Throwable) {
+                        jsonOut(['ok' => false, 'error' => 'Invalid valid_to date format'], 422);
+                    }
+                }
+
                 $id = $tariffRepo->saveGrid(
                     energyType: $body['energy_type'],
                     name: $body['name'],
-                    validFrom: new \DateTimeImmutable($body['valid_from']),
-                    validTo: isset($body['valid_to']) ? new \DateTimeImmutable($body['valid_to']) : null,
+                    validFrom: $validFrom,
+                    validTo: $validTo,
                     lines: (array) $body['lines'],
                 );
                 jsonOut(['ok' => true, 'id' => $id]);
