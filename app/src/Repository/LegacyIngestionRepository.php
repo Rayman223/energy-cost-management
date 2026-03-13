@@ -9,6 +9,9 @@ use PDO;
 
 final class LegacyIngestionRepository
 {
+    /** @var array<string,bool> Cache des résultats SHOW TABLES par nom de table. */
+    private array $tableExistsCache = [];
+
     public function __construct(private readonly PDO $pdo)
     {
     }
@@ -55,9 +58,12 @@ final class LegacyIngestionRepository
 
     private function tableExists(string $table): bool
     {
-        $stmt = $this->pdo->prepare('SHOW TABLES LIKE :table_name');
-        $stmt->execute(['table_name' => $table]);
+        if (!array_key_exists($table, $this->tableExistsCache)) {
+            $stmt = $this->pdo->prepare('SHOW TABLES LIKE :table_name');
+            $stmt->execute(['table_name' => $table]);
+            $this->tableExistsCache[$table] = (bool) $stmt->fetchColumn();
+        }
 
-        return (bool) $stmt->fetchColumn();
+        return $this->tableExistsCache[$table];
     }
 }
