@@ -26,6 +26,23 @@ function jsonOut(mixed $data, int $status = 200): never
     exit;
 }
 
+function parseDateTimeOr422(mixed $value, string $field): \DateTimeImmutable
+{
+    try {
+        return new \DateTimeImmutable((string) $value);
+    } catch (\Exception) {
+        jsonOut(['ok' => false, 'error' => sprintf('Invalid %s date format', $field)], 422);
+    }
+}
+
+function parseOptionalDateTimeOr422(mixed $value, string $field): ?\DateTimeImmutable
+{
+    if (!is_string($value) || trim($value) === '') {
+        return null;
+    }
+    return parseDateTimeOr422($value, $field);
+}
+
 try {
     $db         = new Database($config['database']);
     $pdo        = $db->pdo();
@@ -141,15 +158,9 @@ try {
                     jsonOut(['ok' => false, 'error' => 'Invalid counter_m3 value'], 422);
                 }
 
-                if ($readingAt) {
-                    try {
-                        $ts = new \DateTimeImmutable((string) $readingAt);
-                    } catch (\Throwable) {
-                        jsonOut(['ok' => false, 'error' => 'Invalid reading_at date format'], 422);
-                    }
-                } else {
-                    $ts = new \DateTimeImmutable('now');
-                }
+                $ts = $readingAt
+                    ? parseDateTimeOr422($readingAt, 'reading_at')
+                    : new \DateTimeImmutable('now');
 
                 // Validate not before last reading
                 $latest = $gasRepo->getLatest();
@@ -172,15 +183,9 @@ try {
                     jsonOut(['ok' => false, 'error' => 'Invalid counter_m3 value'], 422);
                 }
 
-                if ($readingAt) {
-                    try {
-                        $ts = new \DateTimeImmutable((string) $readingAt);
-                    } catch (\Throwable) {
-                        jsonOut(['ok' => false, 'error' => 'Invalid reading_at date format'], 422);
-                    }
-                } else {
-                    $ts = new \DateTimeImmutable('now');
-                }
+                $ts = $readingAt
+                    ? parseDateTimeOr422($readingAt, 'reading_at')
+                    : new \DateTimeImmutable('now');
 
                 // Validate not before last reading
                 $latest = $waterRepo->getLatest();
@@ -205,20 +210,8 @@ try {
                 if (!in_array($body['energy_type'], ['electricity', 'gas'], true)) {
                     jsonOut(['ok' => false, 'error' => 'energy_type must be electricity or gas'], 422);
                 }
-                try {
-                    $validFrom = new \DateTimeImmutable((string) $body['valid_from']);
-                } catch (\Throwable) {
-                    jsonOut(['ok' => false, 'error' => 'Invalid valid_from date format'], 422);
-                }
-
-                $validTo = null;
-                if (isset($body['valid_to']) && trim((string) $body['valid_to']) !== '') {
-                    try {
-                        $validTo = new \DateTimeImmutable((string) $body['valid_to']);
-                    } catch (\Throwable) {
-                        jsonOut(['ok' => false, 'error' => 'Invalid valid_to date format'], 422);
-                    }
-                }
+                $validFrom = parseDateTimeOr422($body['valid_from'], 'valid_from');
+                $validTo   = parseOptionalDateTimeOr422($body['valid_to'] ?? null, 'valid_to');
 
                 $id = $tariffRepo->saveGrid(
                     energyType: $body['energy_type'],
