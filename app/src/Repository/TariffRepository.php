@@ -60,8 +60,20 @@ final class TariffRepository
              ORDER BY valid_from DESC'
         );
         $stmt->execute(['type' => $energyType]);
+        $rows = $stmt->fetchAll();
 
-        return array_map(fn (array $row): TariffGrid => $this->hydrate($row), $stmt->fetchAll());
+        if ($rows === []) {
+            return [];
+        }
+
+        // Chargement de toutes les lignes en une seule requête (évite le N+1).
+        $ids      = array_map(static fn (array $r): int => (int) $r['id'], $rows);
+        $linesMap = $this->fetchLinesForIds($ids);
+
+        return array_map(
+            fn (array $row): TariffGrid => $this->hydrate($row, $linesMap[(int) $row['id']] ?? []),
+            $rows
+        );
     }
 
     public function saveGrid(
@@ -190,15 +202,50 @@ final class TariffRepository
         return $lines;
     }
 
-    private function hydrate(array $row): TariffGrid
+    /**
+     * Charge toutes les lignes pour une liste d'ids en une seule requête.
+     * Utilisé par findAll() pour éviter le pattern N+1.
+     *
+     * @param  int[]                           $ids
+     * @return array<int,array<string,float>>  Indexé par tariff_grid_id
+     */
+    private function fetchLinesForIds(array $ids): array
     {
+        if ($ids === []) {
+            return [];
+        }
+
+        $placeholders = implode(',', array_fill(0, count($ids), '?'));
+        $stmt = $this->pdo->prepare(
+            "SELECT tariff_grid_id, line_key, amount_per_kwh
+             FROM tariff_grid_lines
+             WHERE tariff_grid_id IN ($placeholders)"
+        );
+        $stmt->execute(array_values($ids));
+
+        $map = [];
+        foreach ($stmt->fetchAll() as $row) {
+            $map[(int) $row['tariff_grid_id']][$row['line_key']] = (float) $row['amount_per_kwh'];
+        }
+
+        return $map;
+    }
+
+    /**
+     * @param array<string,float>|null $preloadedLines  Lignes déjà chargées (évite un SELECT supplémentaire).
+     */
+    private function hydrate(array $row, ?array $preloadedLines = null): TariffGrid
+    {
+        $id    = (int) $row['id'];
+        $lines = $preloadedLines ?? $this->fetchLines($id);
+
         return new TariffGrid(
-            id: (int) $row['id'],
+            id: $id,
             energyType: $row['energy_type'],
             name: $row['name'],
             validFrom: new DateTimeImmutable($row['valid_from']),
             validTo: $row['valid_to'] ? new DateTimeImmutable($row['valid_to']) : null,
-            lines: $this->fetchLines((int) $row['id']),
+            lines: $lines,
             pcsCoefficient: isset($row['pcs_coefficient']) ? (float) $row['pcs_coefficient'] : null,
         );
     }
