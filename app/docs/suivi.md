@@ -62,13 +62,7 @@ Calcul complet dans `TariffCalculatorService`. Composantes stockées dans `tarif
 
 ## Points ouverts
 
-1. ~~**Suppression code mort** : retirer `app/src/Repository/EnergyRepository.php`, `EnergyIngestionService.php`, `EnergyWebhookService.php` (jamais appelés).~~
-2. **Claim device EnergyID** : confirmer que l'appareil est claimé côté portail EnergyID (sinon `/hello` renvoie `claimCode`/`claimUrl`).
-3. **Mapping métier** : `el.t1` / `el.t2` / `el-i.t1` / `el-i.t2` / `pv` — confirmer avec EnergyID.
-4. ~~**Fiabilité dongle solaire** : une fois le dongle stable, supprimer le fallback `Data_Brusol` dans `LegacyDailyRepository::solarTable()` et fixer `Data_Solaire` en dur.~~
-6. ~~**PCS coefficient gaz** : vérifier si le coefficient fourni par le fournisseur est fixe ou variable par période ; si variable, ajouter une table de coefficients périodiques.~~
-7. ~~**Distribution fixe gaz** : unité confirmée **€/an** — calcul corrigé (`$days / 365`) dans `TariffCalculatorService`, label mis à jour dans `tariffs.php`.~~
-8. ~~**TariffCalculatorService** : mettre à jour le calcul pour intégrer les nouvelles clés (`excise_duty`, `energy_contribution`, `green_contribution`, `public_service_annual`, `subscription`, `management_annual`, `transport`, `federal_excise`, `meter_reading_annual`).~~
+none
 
 ---
 
