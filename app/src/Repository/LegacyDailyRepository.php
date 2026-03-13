@@ -9,6 +9,9 @@ use PDO;
 
 final class LegacyDailyRepository
 {
+    /** Cache du nom de table solaire résolu une seule fois par instance. */
+    private ?string $solarTableCache = null;
+
     public function __construct(private readonly PDO $pdo)
     {
     }
@@ -451,7 +454,11 @@ final class LegacyDailyRepository
 
     private function solarTable(): string
     {
-        return $this->tableExists('Data_Solaire') ? 'Data_Solaire' : 'Data_Brusol';
+        if ($this->solarTableCache === null) {
+            $this->solarTableCache = $this->tableExists('Data_Solaire') ? 'Data_Solaire' : 'Data_Brusol';
+        }
+
+        return $this->solarTableCache;
     }
 
     private function tableExists(string $table): bool
