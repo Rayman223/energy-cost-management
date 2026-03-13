@@ -41,39 +41,14 @@ final class CostCalculationService
 
         $from = new DateTimeImmutable($deltas['from']);
         $to   = new DateTimeImmutable($deltas['to']);
-        $sameMonth = ($from->format('Y-m') === $to->format('Y-m'));
-
-        if ($sameMonth) {
-            $days = max(1, (int) $from->diff($to)->days + 1);
-        } else {
-            $days = (int) $from->format('t');
-        }
+        $days = $this->computeDays($from, $to);
 
         $tariff = $this->tariffRepo->findActiveGrid('electricity', $to);
         if ($tariff === null) {
             return ['available' => false, 'reason' => 'No active electricity tariff configured'];
         }
 
-        $breakdown = $this->calculator->calculateElectricityCost(
-            kwhT1:       $deltas['prelev_jour'] ?? 0.0,
-            kwhT2:       $deltas['prelev_nuit'] ?? 0.0,
-            kwhExportT1: $deltas['injec_jour']  ?? 0.0,
-            kwhExportT2: $deltas['injec_nuit']  ?? 0.0,
-            days:        $days,
-            tariff:      $tariff->toTariffArray(),
-            kwhSolar:    (float) ($deltas['solar'] ?? 0.0),
-        );
-
-        return [
-            'available'    => true,
-            'period_from'  => $deltas['from'],
-            'period_to'    => $deltas['to'],
-            'days'         => $days,
-            'tariff_name'  => $tariff->name,
-            'tariff_rates' => $tariff->toTariffArray(),
-            'deltas'       => $deltas,
-            'cost'         => $breakdown,
-        ];
+        return $this->buildElectricityResponse($deltas, $tariff, $days);
     }
 
     /**
@@ -89,13 +64,7 @@ final class CostCalculationService
 
         $from = new DateTimeImmutable($deltas['from']);
         $to   = new DateTimeImmutable($deltas['to']);
-        $sameMonth = ($from->format('Y-m') === $to->format('Y-m'));
-
-        if ($sameMonth) {
-            $days = max(1, (int) $from->diff($to)->days + 1);
-        } else {
-            $days = (int) $from->format('t');
-        }
+        $days = $this->computeDays($from, $to);
 
         $tariff = $this->tariffRepo->findActiveGrid('electricity', $from)
                ?? $this->tariffRepo->findActiveGrid('electricity', $to);
@@ -104,26 +73,7 @@ final class CostCalculationService
             return ['available' => false, 'reason' => sprintf('No active electricity tariff for %04d-%02d', $year, $month)];
         }
 
-        $breakdown = $this->calculator->calculateElectricityCost(
-            kwhT1:       $deltas['prelev_jour'] ?? 0.0,
-            kwhT2:       $deltas['prelev_nuit'] ?? 0.0,
-            kwhExportT1: $deltas['injec_jour']  ?? 0.0,
-            kwhExportT2: $deltas['injec_nuit']  ?? 0.0,
-            days:        $days,
-            tariff:      $tariff->toTariffArray(),
-            kwhSolar:    (float) ($deltas['solar'] ?? 0.0),
-        );
-
-        return [
-            'available'    => true,
-            'period_from'  => $deltas['from'],
-            'period_to'    => $deltas['to'],
-            'days'         => $days,
-            'tariff_name'  => $tariff->name,
-            'tariff_rates' => $tariff->toTariffArray(),
-            'deltas'       => $deltas,
-            'cost'         => $breakdown,
-        ];
+        return $this->buildElectricityResponse($deltas, $tariff, $days);
     }
 
     /**
@@ -291,6 +241,53 @@ final class CostCalculationService
             'tariff_name'         => $tariff->name,
             'tariff_rates'        => $tariff->toTariffArray(),
             'cost'                => $breakdown,
+        ];
+    }
+
+    // ── Helpers privés ─────────────────────────────────────────────────────────
+
+    /**
+     * Calcule le nombre de jours pour une période électricité.
+     *
+     * Si from et to sont dans le même mois-calendrier : nombre de jours entre les
+     * deux horodatages + 1 (inclusif), avec un minimum de 1.
+     * Si les horodatages chevauchent deux mois (from en fin de mois N, to en mois N+1) :
+     * on utilise le nombre total de jours du mois de $from.
+     */
+    private function computeDays(DateTimeImmutable $from, DateTimeImmutable $to): int
+    {
+        if ($from->format('Y-m') === $to->format('Y-m')) {
+            return max(1, (int) $from->diff($to)->days + 1);
+        }
+
+        return (int) $from->format('t');
+    }
+
+    /**
+     * Construit le tableau de résultat électricité à partir des deltas, du tarif et du nombre de jours.
+     * Factorise la logique commune à estimateCurrentMonthElectricity() et estimateMonthElectricity().
+     */
+    private function buildElectricityResponse(array $deltas, \App\Domain\TariffGrid $tariff, int $days): array
+    {
+        $breakdown = $this->calculator->calculateElectricityCost(
+            kwhT1:       $deltas['prelev_jour'] ?? 0.0,
+            kwhT2:       $deltas['prelev_nuit'] ?? 0.0,
+            kwhExportT1: $deltas['injec_jour']  ?? 0.0,
+            kwhExportT2: $deltas['injec_nuit']  ?? 0.0,
+            days:        $days,
+            tariff:      $tariff->toTariffArray(),
+            kwhSolar:    (float) ($deltas['solar'] ?? 0.0),
+        );
+
+        return [
+            'available'    => true,
+            'period_from'  => $deltas['from'],
+            'period_to'    => $deltas['to'],
+            'days'         => $days,
+            'tariff_name'  => $tariff->name,
+            'tariff_rates' => $tariff->toTariffArray(),
+            'deltas'       => $deltas,
+            'cost'         => $breakdown,
         ];
     }
 }
