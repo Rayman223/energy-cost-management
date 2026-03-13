@@ -253,7 +253,7 @@ final class DailyLegacyWebhookSyncService
         $points = [];
         foreach ($rows as $row) {
             $points[] = [
-                'ts'    => $this->payloadFactory->unixTs($row['timestamp']),
+                'ts' => $this->payloadFactory->unixTs($row['timestamp']),
                 // EnergyID predefined key for domestic water : 'dw'
                 'dw' => round((float) $row['value'] * 1000, 0),  // m³ → litres
             ];
@@ -317,6 +317,8 @@ final class DailyLegacyWebhookSyncService
 
     /**
      * Envoie le payload avec 1 retry en cas de 401/404/429.
+     * Le body de réponse EnergyID est loggué systématiquement (succès ou échec)
+     * pour faciliter le diagnostic.
      *
      * @param array{webhookUrl:string,headers:array<string,string>,uploadInterval:int} $session
      * @param array<int,array<string,float|int>> $points
@@ -328,7 +330,12 @@ final class DailyLegacyWebhookSyncService
 
         if ($first['ok']) {
             $first['attempts'] = 1;
-            $this->log(sprintf('[post:%s] Attempt 1 OK — status=%d', $label, $first['status']));
+            $this->log(sprintf(
+                '[post:%s] Attempt 1 OK — status=%d body=%s',
+                $label,
+                $first['status'],
+                $first['body'] !== '' ? $first['body'] : '(vide)'
+            ));
             return $first;
         }
 
@@ -337,7 +344,7 @@ final class DailyLegacyWebhookSyncService
             $label,
             $first['status'] ?? 0,
             $first['error'] ?? '-',
-            $first['body'] ?? '-'
+            $first['body'] !== '' ? $first['body'] : '(vide)'
         ));
 
         // Token expiré → renouveler la session
@@ -365,10 +372,11 @@ final class DailyLegacyWebhookSyncService
         $second['attempts'] = 2;
 
         $this->log(sprintf(
-            '[post:%s] Attempt 2 %s — status=%d',
+            '[post:%s] Attempt 2 %s — status=%d body=%s',
             $label,
             $second['ok'] ? 'OK' : 'ECHEC',
-            $second['status'] ?? 0
+            $second['status'] ?? 0,
+            ($second['body'] ?? '') !== '' ? $second['body'] : '(vide)'
         ));
 
         return $second;
