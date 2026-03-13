@@ -52,6 +52,7 @@ try {
         'injection_nuit'     => $legacyRepo->getLastSentAt('injection-nuit')?->format('d/m H:i'),
         'production_solaire' => $legacyRepo->getLastSentAt('production-solaire')?->format('d/m H:i'),
         'gaz_index'          => $legacyRepo->getLastSentAt('gas-index')?->format('d/m H:i'),
+        'water_index'        => $legacyRepo->getLastSentAt('water-index')?->format('d/m H:i'),
     ];
 } catch (\Throwable $e) {
     $dbError = $e->getMessage();

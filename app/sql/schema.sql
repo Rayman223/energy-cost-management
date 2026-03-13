@@ -80,7 +80,7 @@ CREATE TABLE IF NOT EXISTS tariff_grid_lines (
 
 -- ── État de synchronisation webhook EnergyID ─────────────────────────────
 CREATE TABLE IF NOT EXISTS webhook_sync_state (
-    source_name  VARCHAR(120) PRIMARY KEY COMMENT 'prelevement-jour | prelevement-nuit | injection-jour | injection-nuit | production-solaire | gas-index',
+    source_name  VARCHAR(120) PRIMARY KEY COMMENT 'prelevement-jour | prelevement-nuit | injection-jour | injection-nuit | production-solaire | gas-index | water-index',
     last_sent_at DATETIME NULL,
     updated_at   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
