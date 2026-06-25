@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Service;
 
+use App\Domain\TariffGrid;
 use App\Repository\GasRepository;
 use App\Repository\LegacyDailyRepository;
 use App\Repository\TariffRepository;
@@ -19,6 +20,9 @@ use DateTimeImmutable;
  */
 final class CostCalculationService
 {
+    /** Coefficient PCS gaz par défaut (kWh/m³) en l'absence de valeur configurée. */
+    private const DEFAULT_PCS = 10.55;
+
     public function __construct(
         private readonly LegacyDailyRepository $legacyRepo,
         private readonly TariffRepository $tariffRepo,
@@ -101,7 +105,7 @@ final class CostCalculationService
 
         $pcs = $tariff->pcsCoefficient
             ?? $this->tariffRepo->findMostRecentPcs('gas', $from)
-            ?? 10.55;
+            ?? self::DEFAULT_PCS;
 
         $deltaM3 = max(0.0, (float) $pair['to']['counter_m3'] - (float) $pair['from']['counter_m3']);
         $kWh     = $this->calculator->m3ToKwh($deltaM3, $pcs);
@@ -217,7 +221,7 @@ final class CostCalculationService
 
         $pcs = $tariff->pcsCoefficient
             ?? $this->tariffRepo->findMostRecentPcs('gas', $fromDt)
-            ?? 10.55;
+            ?? self::DEFAULT_PCS;
 
         $kWh = $this->calculator->m3ToKwh($monthlyM3, $pcs);
 
@@ -267,7 +271,7 @@ final class CostCalculationService
      * Construit le tableau de résultat électricité à partir des deltas, du tarif et du nombre de jours.
      * Factorise la logique commune à estimateCurrentMonthElectricity() et estimateMonthElectricity().
      */
-    private function buildElectricityResponse(array $deltas, \App\Domain\TariffGrid $tariff, int $days): array
+    private function buildElectricityResponse(array $deltas, TariffGrid $tariff, int $days): array
     {
         $breakdown = $this->calculator->calculateElectricityCost(
             kwhT1:       $deltas['prelev_jour'] ?? 0.0,
