@@ -55,12 +55,6 @@ parameters:
 			path: app/public/tariffs.php
 
 		-
-			message: '#^Method App\\Repository\\TariffRepository\:\:hydrate\(\) invoked with 2 parameters, 1 required\.$#'
-			identifier: arguments.count
-			count: 1
-			path: app/src/Repository/TariffRepository.php
-
-		-
 			message: '#^Offset 0 on non\-empty\-list\<string\> in isset\(\) always exists and is not nullable\.$#'
 			identifier: isset.offset
 			count: 1
