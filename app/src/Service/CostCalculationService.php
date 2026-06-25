@@ -5,9 +5,9 @@ declare(strict_types=1);
 namespace App\Service;
 
 use App\Domain\TariffGrid;
-use App\Repository\GasRepository;
-use App\Repository\LegacyDailyRepository;
-use App\Repository\TariffRepository;
+use App\Repository\Contract\GasReadingRepositoryInterface;
+use App\Repository\Contract\LegacyDailyRepositoryInterface;
+use App\Repository\Contract\TariffRepositoryInterface;
 use DateTimeImmutable;
 
 /**
@@ -24,9 +24,9 @@ final class CostCalculationService
     private const DEFAULT_PCS = 10.55;
 
     public function __construct(
-        private readonly LegacyDailyRepository $legacyRepo,
-        private readonly TariffRepository $tariffRepo,
-        private readonly GasRepository $gasRepo,
+        private readonly LegacyDailyRepositoryInterface $legacyRepo,
+        private readonly TariffRepositoryInterface $tariffRepo,
+        private readonly GasReadingRepositoryInterface $gasRepo,
         private readonly TariffCalculatorService $calculator,
     ) {
     }

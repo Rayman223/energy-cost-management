@@ -1,1 +1,6 @@
 app/config/config.php
+
+# Outils de dev (Composer / PHPUnit) — non déployés en production
+/vendor/
+/.phpunit.cache/
+/.phpunit.result.cache

@@ -5,10 +5,11 @@ declare(strict_types=1);
 namespace App\Repository;
 
 use App\Domain\TariffGrid;
+use App\Repository\Contract\TariffRepositoryInterface;
 use DateTimeImmutable;
 use PDO;
 
-final class TariffRepository
+final class TariffRepository implements TariffRepositoryInterface
 {
     public function __construct(private readonly PDO $pdo)
     {

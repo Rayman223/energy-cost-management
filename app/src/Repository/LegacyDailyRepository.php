@@ -4,10 +4,11 @@ declare(strict_types=1);
 
 namespace App\Repository;
 
+use App\Repository\Contract\LegacyDailyRepositoryInterface;
 use DateTimeImmutable;
 use PDO;
 
-final class LegacyDailyRepository
+final class LegacyDailyRepository implements LegacyDailyRepositoryInterface
 {
     /** Cache du nom de table solaire résolu une seule fois par instance. */
     private ?string $solarTableCache = null;
