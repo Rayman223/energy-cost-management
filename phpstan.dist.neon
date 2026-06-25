@@ -1,0 +1,11 @@
+includes:
+    - phpstan-baseline.neon
+
+parameters:
+    level: 5
+    paths:
+        - app/src
+        - app/scripts
+        - app/tools
+        - app/public
+        - app/bootstrap.php

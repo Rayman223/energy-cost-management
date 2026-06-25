@@ -1,0 +1,85 @@
+parameters:
+	ignoreErrors:
+		-
+			message: '#^Variable \$gasInitMonth might not be defined\.$#'
+			identifier: variable.undefined
+			count: 1
+			path: app/public/index.php
+
+		-
+			message: '#^Variable \$gasInitYear might not be defined\.$#'
+			identifier: variable.undefined
+			count: 1
+			path: app/public/index.php
+
+		-
+			message: '#^Variable \$gasRepo might not be defined\.$#'
+			identifier: variable.undefined
+			count: 1
+			path: app/public/index.php
+
+		-
+			message: '#^Variable \$waterLatest might not be defined\.$#'
+			identifier: variable.undefined
+			count: 1
+			path: app/public/index.php
+
+		-
+			message: '#^Variable \$waterRepo might not be defined\.$#'
+			identifier: variable.undefined
+			count: 1
+			path: app/public/index.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>energyType" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/public/tariffs.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>id" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/public/tariffs.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>lines" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 2
+			path: app/public/tariffs.php
+
+		-
+			message: '#^Using nullsafe property access "\?\-\>name" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 1
+			path: app/public/tariffs.php
+
+		-
+			message: '#^Method App\\Repository\\TariffRepository\:\:hydrate\(\) invoked with 2 parameters, 1 required\.$#'
+			identifier: arguments.count
+			count: 1
+			path: app/src/Repository/TariffRepository.php
+
+		-
+			message: '#^Offset 0 on non\-empty\-list\<string\> in isset\(\) always exists and is not nullable\.$#'
+			identifier: isset.offset
+			count: 1
+			path: app/src/Security/WebAccessGuard.php
+
+		-
+			message: '#^Parameter &\$session by\-ref type of method App\\Service\\DailyLegacyWebhookSyncService\:\:postWithRetry\(\) expects array\{webhookUrl\: string, headers\: array\<string, string\>, uploadInterval\: int\}, non\-empty\-array given\.$#'
+			identifier: parameterByRef.type
+			count: 1
+			path: app/src/Service/DailyLegacyWebhookSyncService.php
+
+		-
+			message: '#^Variable \$earliest on left side of \?\? always exists and is not nullable\.$#'
+			identifier: nullCoalesce.variable
+			count: 1
+			path: app/src/Service/DailyLegacyWebhookSyncService.php
+
+		-
+			message: '#^Variable \$pdo in isset\(\) always exists and is not nullable\.$#'
+			identifier: isset.variable
+			count: 1
+			path: app/tools/conversion_solaire.php
