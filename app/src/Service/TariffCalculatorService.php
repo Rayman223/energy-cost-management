@@ -63,7 +63,7 @@ final class TariffCalculatorService
 
         // Subscription is a fixed monthly fee: 2.99 €/mois stays 2.99 € whether the month
         // has 28, 29, 30 or 31 days. We round to the nearest whole month.
-        $wholeMonths = max(1, round($days / 30.4375));
+        $wholeMonths = $this->wholeMonths($days);
 
         // ── Fournisseur ──────────────────────────────────────────────────────
         //$energySimple   = $totalKwh  * ($tariff['energy_simple']  ?? 0.0);
@@ -75,14 +75,14 @@ final class TariffCalculatorService
         $distributionT1   = $kwhT1    * ($tariff['distribution_t1'] ?? 0.0);
         $distributionT2   = $kwhT2    * ($tariff['distribution_t2'] ?? 0.0);
         $transport        = $totalKwh * ($tariff['transport']        ?? 0.0);
-        $managementFee    = $days     * (($tariff['management_annual']     ?? 0.0) / self::DAYS_YEAR);
+        $managementFee    = $this->prorateAnnual($tariff['management_annual'] ?? 0.0, $days);
 
         // ── Taxes & contributions ────────────────────────────────────────────
-        $prosumerFee          = $days     * (($tariff['prosumer_annual']       ?? 0.0) / self::DAYS_YEAR);
+        $prosumerFee          = $this->prorateAnnual($tariff['prosumer_annual'] ?? 0.0, $days);
         $exciseDuty           = $totalKwh * ($tariff['excise_duty']            ?? 0.0);
         $energyContribution   = $totalKwh * ($tariff['energy_contribution']    ?? 0.0);
         $greenContribution    = $totalKwh * ($tariff['green_contribution']     ?? 0.0);
-        $publicServiceFee     = $days     * (($tariff['public_service_annual'] ?? 0.0) / self::DAYS_YEAR);
+        $publicServiceFee     = $this->prorateAnnual($tariff['public_service_annual'] ?? 0.0, $days);
 
         // ── Injection credits (negative = reduce the bill) ────────────────────
         $injectionT1 = -($kwhExportT1 * ($tariff['injection_t1'] ?? 0.0));
@@ -185,7 +185,7 @@ final class TariffCalculatorService
      */
     public function calculateGasCost(float $kwh, int $days, array $tariff): array
     {
-        $wholeMonths = max(1, (int) round($days / 30.4375));
+        $wholeMonths = $this->wholeMonths($days);
 
         // ── Fournisseur ──────────────────────────────────────────────────────
         $energy       = $kwh         * ($tariff['energy']      ?? 0.0);
@@ -194,15 +194,15 @@ final class TariffCalculatorService
         // ── Distribution & transport (Sibelga) ───────────────────────────────
         $distribution      = $kwh  * ($tariff['distribution']         ?? 0.0);
         // distribution_fixed stored in €/an — prorate to the actual period
-        $distributionFixed = $days * (($tariff['distribution_fixed']   ?? 0.0) / self::DAYS_YEAR);
+        $distributionFixed = $this->prorateAnnual($tariff['distribution_fixed'] ?? 0.0, $days);
         $transport         = $kwh  * ($tariff['transport']             ?? 0.0);
-        $meterReading      = $days * (($tariff['meter_reading_annual'] ?? 0.0) / self::DAYS_YEAR);
+        $meterReading      = $this->prorateAnnual($tariff['meter_reading_annual'] ?? 0.0, $days);
 
         // ── Taxes & contributions ────────────────────────────────────────────
         $energyContribution = $kwh * ($tariff['energy_contribution'] ?? 0.0);
         $federalExcise      = $kwh * ($tariff['federal_excise']      ?? 0.0);
         $connectionFee      = $kwh  * ($tariff['connection_fee_kwh']     ?? 0.0);
-        $publicService      = $days * (($tariff['public_service_annual'] ?? 0.0) / self::DAYS_YEAR);
+        $publicService      = $this->prorateAnnual($tariff['public_service_annual'] ?? 0.0, $days);
 
         // All amounts are already TTC (VAT-inclusive)
         $totalTtc = $energy
@@ -244,5 +244,22 @@ final class TariffCalculatorService
     public function m3ToKwh(float $m3, float $pcsCoefficient = 10.55): float
     {
         return round($m3 * $pcsCoefficient, 3);
+    }
+
+    /**
+     * Nombre de mois entiers facturés pour une période (plancher à 1).
+     * L'abonnement est un forfait mensuel fixe, indépendant du nombre de jours.
+     */
+    private function wholeMonths(int $days): int
+    {
+        return max(1, (int) round($days / 30.4375));
+    }
+
+    /**
+     * Proratise un forfait annuel (€/an) sur le nombre de jours de la période.
+     */
+    private function prorateAnnual(float $annual, int $days): float
+    {
+        return $days * ($annual / self::DAYS_YEAR);
     }
 }

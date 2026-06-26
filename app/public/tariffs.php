@@ -1,6 +1,7 @@
 <?php
 declare(strict_types=1);
 
+use App\Domain\TariffLineCatalog;
 use App\Infrastructure\Database;
 use App\Repository\TariffRepository;
 use App\Security\WebAccessGuard;
@@ -31,24 +32,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($name === '')     throw new \InvalidArgumentException('Le nom est requis.');
             if ($validFrom === '') throw new \InvalidArgumentException('La date de début est requise.');
 
-            $lineKeys = $energyType === 'electricity'
-                ? [
-                    'energy_simple', 'energy_t1', 'energy_t2',
-                    'subscription',
-                    'distribution_t1', 'distribution_t2',
-                    'transport',
-                    'management_annual', 'prosumer_annual',
-                    'excise_duty', 'energy_contribution', 'green_contribution',
-                    'public_service_annual',
-                    'injection_t1', 'injection_t2',
-                  ]
-                : [
-                    'energy', 'subscription',
-                    'energy_contribution', 'federal_excise',
-                    'distribution', 'distribution_fixed',
-                    'transport', 'meter_reading_annual',
-                    'connection_fee_kwh', 'public_service_annual',
-                  ];
+            $lineKeys = TariffLineCatalog::keysFor($energyType);
 
             $lines = [];
             foreach ($lineKeys as $key) {
@@ -135,37 +119,9 @@ if (isset($_GET['edit'])) {
     }
 }
 
-// ── Line definitions ───────────────────────────────────────────────────────
-$elecLines = [
-    'energy_simple'         => ['label' => 'Énergie simple (monohoraire)',     'unit' => '€/kWh'],
-    'energy_t1'             => ['label' => 'Énergie T1 (jour)',                'unit' => '€/kWh'],
-    'energy_t2'             => ['label' => 'Énergie T2 (nuit)',                'unit' => '€/kWh'],
-    'subscription'          => ['label' => 'Abonnement fournisseur',           'unit' => '€/mois'],
-    'distribution_t1'       => ['label' => 'Distribution T1 (jour)',           'unit' => '€/kWh'],
-    'distribution_t2'       => ['label' => 'Distribution T2 (nuit)',           'unit' => '€/kWh'],
-    'transport'             => ['label' => 'Transport',                        'unit' => '€/kWh'],
-    'management_annual'     => ['label' => 'Gestion (fixe annuel)',            'unit' => '€/an'],
-    'prosumer_annual'       => ['label' => 'Taxe prosumer BRUGEL',             'unit' => '€/an'],
-    'excise_duty'           => ['label' => "Droit d'accise spécial",           'unit' => '€/kWh'],
-    'energy_contribution'   => ['label' => 'Contribution énergie',             'unit' => '€/kWh'],
-    'green_contribution'    => ['label' => 'Contribution verte & cogénération','unit' => '€/kWh'],
-    'public_service_annual' => ['label' => 'Obligations de service public',    'unit' => '€/an'],
-    'injection_t1'          => ['label' => 'Crédit injection T1',              'unit' => '€/kWh'],
-    'injection_t2'          => ['label' => 'Crédit injection T2',              'unit' => '€/kWh'],
-];
-
-$gasLines = [
-    'energy'                => ['label' => 'Énergie fournisseur',               'unit' => '€/kWh'],
-    'subscription'          => ['label' => 'Abonnement fournisseur',            'unit' => '€/mois'],
-    'energy_contribution'   => ['label' => 'Contribution énergie',              'unit' => '€/kWh'],
-    'federal_excise'        => ['label' => 'Accise fédérale',                   'unit' => '€/kWh'],
-    'distribution'          => ['label' => 'Distribution (variable)',           'unit' => '€/kWh'],
-    'distribution_fixed'    => ['label' => 'Distribution (fixe)',               'unit' => '€/an'],
-    'transport'             => ['label' => 'Transport',                         'unit' => '€/kWh'],
-    'meter_reading_annual'  => ['label' => 'Relevé de compteur',                'unit' => '€/an'],
-    'connection_fee_kwh'    => ['label' => 'Redevance de raccordement',         'unit' => '€/kWh'],
-    'public_service_annual' => ['label' => 'Obligations de service public',     'unit' => '€/an'],
-];
+// ── Line definitions (source unique : TariffLineCatalog) ─────────────────────
+$elecLines = TariffLineCatalog::electricity();
+$gasLines  = TariffLineCatalog::gas();
 
 // Lines to display: edit mode uses the grid's own lines; new mode pre-fills from latest
 $et      = $editGrid?->energyType ?? 'electricity';
