@@ -31,8 +31,10 @@ et des templates sous `app/templates/`, avec **échappement centralisé**. Les
 - [x] Template `templates/login.php`
 - [x] `public/login.php` : data → `View::render`
 - [x] Convertir `index.php` → `templates/dashboard.php` (corps + helpers `fmt`/`fmtCost`)
-- [ ] (suite) Convertir `tariffs.php` (formulaire + lignes tarifaires)
-- [ ] (suite) Partials réutilisables (header, footer, navigation)
+- [x] Convertir `tariffs.php` → `templates/tariffs.php` (formulaire + lignes tarifaires)
+- [ ] (optionnel) Partials réutilisables : duplication réelle limitée — seul le bloc
+      `logo` est partagé (sous-titre variable) entre `dashboard` et `tariffs` ; les
+      en-têtes (droite) et pieds de page sont propres à chaque page. À extraire si besoin.
 
 ## Vérification
 
