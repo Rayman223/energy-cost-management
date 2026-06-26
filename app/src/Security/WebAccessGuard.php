@@ -6,6 +6,7 @@ namespace App\Security;
 
 final class WebAccessGuard
 {
+    /** @param array<string, mixed> $security */
     public static function protect(array $security, bool $jsonResponse = false): void
     {
         if (PHP_SAPI === 'cli' || PHP_SAPI === 'phpdbg') {
@@ -65,6 +66,7 @@ final class WebAccessGuard
         self::deny(401, self::message($lang, 'auth_required'), $jsonResponse);
     }
 
+    /** @param array<string, mixed> $security */
     public static function authenticateForm(array $security, string $username, string $password): bool
     {
         $expectedUser = (string) ($security['basic_auth']['username'] ?? '');
@@ -237,6 +239,7 @@ final class WebAccessGuard
         return $messages[$lang][$key] ?? $messages['en'][$key] ?? 'Access denied';
     }
 
+    /** @param array<string, mixed> $security */
     private static function isIpDenied(array $security): bool
     {
         $allowlist = $security['allowed_ips'] ?? [];

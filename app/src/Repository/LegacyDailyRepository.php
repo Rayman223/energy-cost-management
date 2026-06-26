@@ -52,6 +52,8 @@ final class LegacyDailyRepository implements LegacyDailyRepositoryInterface
     /**
      * Latest electricity reading for today (or most recent available).
      * Shows the current meter index values.
+     *
+     * @return array<string, mixed>
      */
     public function getTodayIndexValues(): array
     {
@@ -101,6 +103,8 @@ final class LegacyDailyRepository implements LegacyDailyRepositoryInterface
     /**
      * Compute current-month consumption/injection deltas for electricity and solar.
      * Delta = latest available reading − first reading of the current calendar month.
+     *
+     * @return array<string, mixed>
      */
     public function getMonthlyDeltas(): array
     {
@@ -176,6 +180,8 @@ final class LegacyDailyRepository implements LegacyDailyRepositoryInterface
     /**
      * Compute electricity/solar deltas for a specific calendar month.
      * Returns [] if no data is available for that month.
+     *
+     * @return array<string, mixed>
      */
     public function getMonthlyDeltasForMonth(int $year, int $month): array
     {

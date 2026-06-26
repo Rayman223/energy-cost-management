@@ -15,14 +15,14 @@ interface GasReadingRepositoryInterface
     /**
      * Les deux relevés les plus récents (pour la dernière période).
      *
-     * @return array{from:array|null, to:array|null}
+     * @return array{from: array<string, mixed>|null, to: array<string, mixed>|null}
      */
     public function getLastTwoReadings(): array;
 
     /**
      * Les deux relevés encadrant un mois calendaire (interpolation linéaire).
      *
-     * @return array{from: array|null, to: array|null}
+     * @return array{from: array<string, mixed>|null, to: array<string, mixed>|null}
      */
     public function getTwoReadingsForMonth(int $year, int $month): array;
 }

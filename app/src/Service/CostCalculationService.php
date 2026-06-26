@@ -34,6 +34,8 @@ final class CostCalculationService
     /**
      * Estimate electricity cost for the current calendar month.
      * Uses delta between first reading of the month and the latest available reading.
+     *
+     * @return array<string, mixed>
      */
     public function estimateCurrentMonthElectricity(): array
     {
@@ -57,6 +59,8 @@ final class CostCalculationService
 
     /**
      * Estimate electricity cost for any given calendar month (year + month).
+     *
+     * @return array<string, mixed>
      */
     public function estimateMonthElectricity(int $year, int $month): array
     {
@@ -83,6 +87,8 @@ final class CostCalculationService
     /**
      * Estimate gas cost between the two most recent manual readings.
      * Returns ['available' => false] when fewer than two readings exist.
+     *
+     * @return array<string, mixed>
      */
     public function estimateLastGasPeriod(): array
     {
@@ -137,6 +143,8 @@ final class CostCalculationService
      *
      * Fixed daily costs (abonnement, redevance, …) are prorated over the number of
      * calendar days actually covered by data within the month.
+     *
+     * @return array<string, mixed>
      */
     public function estimateMonthGas(int $year, int $month): array
     {
@@ -270,6 +278,9 @@ final class CostCalculationService
     /**
      * Construit le tableau de résultat électricité à partir des deltas, du tarif et du nombre de jours.
      * Factorise la logique commune à estimateCurrentMonthElectricity() et estimateMonthElectricity().
+     *
+     * @param array<string, mixed> $deltas
+     * @return array<string, mixed>
      */
     private function buildElectricityResponse(array $deltas, TariffGrid $tariff, int $days): array
     {

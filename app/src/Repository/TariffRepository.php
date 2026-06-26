@@ -77,6 +77,7 @@ final class TariffRepository implements TariffRepositoryInterface
         );
     }
 
+    /** @param array<string, mixed> $lines */
     public function saveGrid(
         string $energyType,
         string $name,
@@ -118,6 +119,7 @@ final class TariffRepository implements TariffRepositoryInterface
     }
 
 
+    /** @param array<string, mixed> $lines */
     public function updateGrid(
         int $id,
         string $energyType,
@@ -233,6 +235,7 @@ final class TariffRepository implements TariffRepositoryInterface
     }
 
     /**
+     * @param array<string, mixed> $row
      * @param array<string,float>|null $preloadedLines  Lignes déjà chargées (évite un SELECT supplémentaire).
      */
     private function hydrate(array $row, ?array $preloadedLines = null): TariffGrid

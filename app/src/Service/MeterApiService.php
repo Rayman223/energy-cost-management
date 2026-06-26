@@ -10,6 +10,7 @@ final class MeterApiService
     {
     }
 
+    /** @return array<string, mixed> */
     public function fetchJson(string $url): array
     {
         $ch = curl_init($url);
@@ -40,6 +41,7 @@ final class MeterApiService
     }
 
     /**
+     * @param array<string, mixed> $payload
      * @param array<int,string> $paths
      */
     public function readNumericValue(array $payload, array $paths): float
@@ -54,6 +56,7 @@ final class MeterApiService
         throw new \RuntimeException('Aucune valeur numérique trouvée pour les chemins: ' . implode(', ', $paths));
     }
 
+    /** @param array<string, mixed> $payload */
     private function readPath(array $payload, string $path): mixed
     {
         $cursor = $payload;

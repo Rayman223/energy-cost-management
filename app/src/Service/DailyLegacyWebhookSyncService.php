@@ -25,6 +25,7 @@ final class DailyLegacyWebhookSyncService
     private const GAS_STATE_KEY   = 'gas-index';
     private const WATER_STATE_KEY = 'water-index';
 
+    /** @param array<string, mixed> $device */
     public function __construct(
         private readonly LegacyDailyRepository $repository,
         private readonly GasRepository $gasRepository,
@@ -35,6 +36,7 @@ final class DailyLegacyWebhookSyncService
         private readonly \Closure|null $logger = null,
     ) {}
 
+    /** @return list<array<string, mixed>> */
     public function syncUntil(DateTimeImmutable $until): array
     {
         $reports = [];
@@ -81,6 +83,10 @@ final class DailyLegacyWebhookSyncService
 
     // ── Privé — Électricité ───────────────────────────────────────────────────
 
+    /**
+     * @param array<string, mixed> $session
+     * @return array<string, mixed>|null
+     */
     private function syncElectricity(array &$session, DateTimeImmutable $until): ?array
     {
         $from = $this->resolveElecFrom();
@@ -179,6 +185,10 @@ final class DailyLegacyWebhookSyncService
 
     // ── Privé — Gaz ───────────────────────────────────────────────────────────
 
+    /**
+     * @param array<string, mixed> $session
+     * @return array<string, mixed>|null
+     */
     private function syncGas(array &$session, DateTimeImmutable $until): ?array
     {
         $from = $this->repository->getLastSentAt(self::GAS_STATE_KEY);
@@ -235,6 +245,10 @@ final class DailyLegacyWebhookSyncService
 
     // ── Privé — Eau ───────────────────────────────────────────────────────────
 
+    /**
+     * @param array<string, mixed> $session
+     * @return array<string, mixed>|null
+     */
     private function syncWater(array &$session, DateTimeImmutable $until): ?array
     {
         $from = $this->repository->getLastSentAt(self::WATER_STATE_KEY);
@@ -322,6 +336,7 @@ final class DailyLegacyWebhookSyncService
      *
      * @param array{webhookUrl:string,headers:array<string,string>,uploadInterval:int} $session
      * @param array<int,array<string,float|int>> $points
+     * @return array<string, mixed>
      */
     private function postWithRetry(array &$session, array $points, string $label): array
     {

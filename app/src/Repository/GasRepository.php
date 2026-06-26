@@ -80,6 +80,7 @@ final class GasRepository implements GasReadingRepositoryInterface
         return array_slice($this->getAllReadings(), 0, $limit);
     }
 
+    /** @return array<string, mixed>|null */
     public function getLatest(): ?array
     {
         $stmt = $this->pdo->query(
@@ -90,7 +91,7 @@ final class GasRepository implements GasReadingRepositoryInterface
         return $row ?: null;
     }
 
-    /** @return array{from:array|null, to:array|null} */
+    /** @return array{from: array<string, mixed>|null, to: array<string, mixed>|null} */
     public function getLastTwoReadings(): array
     {
         $stmt = $this->pdo->query(
@@ -119,7 +120,7 @@ final class GasRepository implements GasReadingRepositoryInterface
      * consumed within the calendar month, no matter when the readings were taken
      * (e.g. an Aug-31 reading instead of a Sep-01 one).
      *
-     * @return array{from: array|null, to: array|null}
+     * @return array{from: array<string, mixed>|null, to: array<string, mixed>|null}
      */
     public function getTwoReadingsForMonth(int $year, int $month): array
     {

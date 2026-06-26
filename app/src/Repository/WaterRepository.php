@@ -68,6 +68,7 @@ final class WaterRepository
         return array_reverse($result); // DESC for display
     }
 
+    /** @return array<string, mixed>|null */
     public function getLatest(): ?array
     {
         $stmt = $this->pdo->query(

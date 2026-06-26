@@ -34,7 +34,11 @@ final class TariffGrid
         return $this->lines[$key] ?? $default;
     }
 
-    /** Export as flat array suitable for TariffCalculatorService. */
+    /**
+     * Export as flat array suitable for TariffCalculatorService.
+     *
+     * @return array<string, float>
+     */
     public function toTariffArray(): array
     {
         return $this->lines;

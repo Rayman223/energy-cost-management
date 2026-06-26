@@ -48,6 +48,8 @@ final class TariffCalculatorService
      * @param float $kwhSolar  Total PV production for the period (kWh).
      *                         Used to compute auto-consumption and savings.
      *                         Defaults to 0.0 when no solar data is available.
+     * @param array<string, mixed> $tariff
+     * @return array<string, mixed>
      */
     public function calculateElectricityCost(
         float $kwhT1,
@@ -181,7 +183,8 @@ final class TariffCalculatorService
      *
      * @param float $kwh  consumed kWh (after m³ → kWh conversion via PCS)
      * @param int   $days number of days in the period
-     * @param array $tariff
+     * @param array<string, mixed> $tariff
+     * @return array<string, mixed>
      */
     public function calculateGasCost(float $kwh, int $days, array $tariff): array
     {

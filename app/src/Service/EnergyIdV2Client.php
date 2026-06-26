@@ -18,6 +18,10 @@ final class EnergyIdV2Client
     ) {
     }
 
+    /**
+     * @param array<string, mixed> $device
+     * @return array<string, mixed>
+     */
     public function hello(array $device): array
     {
         $result = $this->http->postJson(
@@ -62,6 +66,11 @@ final class EnergyIdV2Client
         ];
     }
 
+    /**
+     * @param array<string,string> $headers
+     * @param array<array-key, mixed> $payload  Liste de mesures (ou objet JSON).
+     * @return array<string, mixed>
+     */
     public function postMeasurements(string $webhookUrl, array $headers, array $payload): array
     {
         return $this->http->postJson($webhookUrl, $payload, $this->timeout, $headers);

@@ -16,12 +16,16 @@ interface LegacyDailyRepositoryInterface
     /**
      * Deltas électricité/solaire du mois calendaire courant.
      * Renvoie [] si aucune donnée n'est disponible.
+     *
+     * @return array<string, mixed>
      */
     public function getMonthlyDeltas(): array;
 
     /**
      * Deltas électricité/solaire pour un mois calendaire donné.
      * Renvoie [] si aucune donnée n'est disponible pour ce mois.
+     *
+     * @return array<string, mixed>
      */
     public function getMonthlyDeltasForMonth(int $year, int $month): array;
 }

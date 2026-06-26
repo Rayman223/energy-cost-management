@@ -7,7 +7,9 @@ namespace App\Infrastructure;
 final class HttpClient
 {
     /**
+     * @param array<array-key, mixed> $payload  Corps JSON : objet (assoc) ou liste de mesures.
      * @param array<string,string> $headers
+     * @return array<string, mixed>
      */
     public function postJson(string $url, array $payload, int $timeout = 15, array $headers = []): array
     {

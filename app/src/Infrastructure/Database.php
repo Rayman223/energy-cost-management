@@ -10,6 +10,7 @@ final class Database
 {
     private PDO $pdo;
 
+    /** @param array<string, mixed> $config */
     public function __construct(array $config)
     {
         $dsn = sprintf(
