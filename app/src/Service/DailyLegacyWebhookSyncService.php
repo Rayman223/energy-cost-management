@@ -99,67 +99,27 @@ final class DailyLegacyWebhookSyncService
         $driesI2 = $this->repository->fetchDriesDailyFirstValues('Injec_nuit',   $from, $until);
         $solar   = $this->repository->fetchSolaireDailyFirstValues($from, $until);
 
-        // Fusionner par date
-        $byDate = [];
+        // Fusion par date + assemblage des points (logique pure, testée dans
+        // ElectricityReadingMergerTest).
+        $elec = (new ElectricityReadingMerger($this->payloadFactory))
+            ->build($driesT1, $driesT2, $driesI1, $driesI2, $solar);
 
-        foreach ($driesT1 as $row) {
-            $date = substr($row['timestamp'], 0, 10);
-            $byDate[$date]['ts']    = $byDate[$date]['ts'] ?? $row['timestamp'];
-            $byDate[$date]['el.t1'] = (float) $row['value'];
-        }
-        foreach ($driesT2 as $row) {
-            $date = substr($row['timestamp'], 0, 10);
-            $byDate[$date]['ts']    = $byDate[$date]['ts'] ?? $row['timestamp'];
-            $byDate[$date]['el.t2'] = (float) $row['value'];
-        }
-        foreach ($driesI1 as $row) {
-            $date = substr($row['timestamp'], 0, 10);
-            $byDate[$date]['ts']      = $byDate[$date]['ts'] ?? $row['timestamp'];
-            $byDate[$date]['el-i.t1'] = (float) $row['value'];
-        }
-        foreach ($driesI2 as $row) {
-            $date = substr($row['timestamp'], 0, 10);
-            $byDate[$date]['ts']      = $byDate[$date]['ts'] ?? $row['timestamp'];
-            $byDate[$date]['el-i.t2'] = (float) $row['value'];
-        }
-        foreach ($solar as $row) {
-            $date = substr($row['timestamp'], 0, 10);
-            $byDate[$date]['ts'] = $byDate[$date]['ts'] ?? $row['timestamp'];
-            $byDate[$date]['pv'] = round((float) $row['value'] / 1000, 3);
-        }
-
-        if ($byDate === []) {
+        if ($elec->isEmpty()) {
             $this->log('[elec] Aucune donnee a envoyer.');
             return null;
         }
 
-        ksort($byDate);
-
-        $metricKeys = ['el.t1', 'el.t2', 'el-i.t1', 'el-i.t2', 'pv'];
-        $points     = [];
-
-        foreach ($byDate as $data) {
-            $point = ['ts' => $this->payloadFactory->unixTs($data['ts'])];
-            foreach ($metricKeys as $key) {
-                if (isset($data[$key])) {
-                    $point[$key] = $data[$key];
-                }
-            }
-            $points[] = $point;
-        }
-
         $this->log(sprintf(
             '[elec] %d point(s) a envoyer (du %s au %s).',
-            count($points),
-            array_key_first($byDate),
-            array_key_last($byDate)
+            count($elec->points),
+            $elec->firstDate,
+            $elec->lastDate
         ));
 
-        $result = $this->postWithRetry($session, $points, 'elec');
+        $result = $this->postWithRetry($session, $elec->points, 'elec');
 
         if ($result['ok']) {
-            $lastDate = array_key_last($byDate);
-            $lastTs   = new DateTimeImmutable($byDate[$lastDate]['ts']);
+            $lastTs = new DateTimeImmutable($elec->lastTimestamp);
 
             foreach (self::ELEC_STATE_KEYS as $stateKey) {
                 $this->repository->saveLastSentAt($stateKey, $lastTs);
