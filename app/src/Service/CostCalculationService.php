@@ -28,6 +28,7 @@ final class CostCalculationService
         private readonly TariffRepositoryInterface $tariffRepo,
         private readonly GasReadingRepositoryInterface $gasRepo,
         private readonly TariffCalculatorService $calculator,
+        private readonly GasMonthInterpolator $gasInterpolator = new GasMonthInterpolator(),
     ) {
     }
 
@@ -157,64 +158,23 @@ final class CostCalculationService
             ];
         }
 
-        // ── Timestamps (Unix seconds, integer arithmetic) ─────────────────────
         $fromDt = new DateTimeImmutable($pair['from']['reading_at']);
         $toDt   = new DateTimeImmutable($pair['to']['reading_at']);
 
-        $fromTs = $fromDt->getTimestamp();
-        $toTs   = $toDt->getTimestamp();
-        $totalSecs = $toTs - $fromTs;
+        // Interpolation linéaire de la consommation du mois (logique pure, testée
+        // indépendamment dans GasMonthInterpolatorTest).
+        $interp = $this->gasInterpolator->interpolate(
+            $fromDt,
+            (float) $pair['from']['counter_m3'],
+            $toDt,
+            (float) $pair['to']['counter_m3'],
+            $year,
+            $month,
+        );
 
-        if ($totalSecs <= 0) {
-            return [
-                'available' => false,
-                'reason'    => 'Les deux relevés ont le même horodatage.',
-            ];
+        if (!$interp->available) {
+            return ['available' => false, 'reason' => $interp->reason];
         }
-
-        // ── Calendar boundaries of the requested month ────────────────────────
-        $nextYear    = $month === 12 ? $year + 1 : $year;
-        $nextMonth   = $month === 12 ? 1         : $month + 1;
-
-        $monthStartDt = new DateTimeImmutable(sprintf('%04d-%02d-01 00:00:00', $year,      $month));
-        $monthEndDt   = new DateTimeImmutable(sprintf('%04d-%02d-01 00:00:00', $nextYear,  $nextMonth));
-
-        $monthStartTs = $monthStartDt->getTimestamp();
-        $monthEndTs   = $monthEndDt->getTimestamp();
-
-        // ── Effective coverage window within the month ────────────────────────
-        // Clamp the readings' range to the month's boundaries.
-        $effStartTs = max($monthStartTs, $fromTs); // can't go before the first reading
-        $effEndTs   = min($monthEndTs,   $toTs);   // can't go beyond the last reading
-
-        if ($effStartTs >= $effEndTs) {
-            return [
-                'available' => false,
-                'reason'    => 'Les relevés ne couvrent pas cette période.',
-            ];
-        }
-
-        // ── Linear interpolation of the meter index ───────────────────────────
-        $totalDeltaM3 = (float) $pair['to']['counter_m3'] - (float) $pair['from']['counter_m3'];
-
-        // Fraction of the inter-reading span that corresponds to the month start/end
-        $fracStart = ($effStartTs - $fromTs) / $totalSecs;
-        $fracEnd   = ($effEndTs   - $fromTs) / $totalSecs;
-
-        $indexAtEffStart = (float) $pair['from']['counter_m3'] + $totalDeltaM3 * $fracStart;
-        $indexAtEffEnd   = (float) $pair['from']['counter_m3'] + $totalDeltaM3 * $fracEnd;
-
-        $monthlyM3 = max(0.0, $indexAtEffEnd - $indexAtEffStart);
-
-        // ── Days for fixed-cost proration ─────────────────────────────────────
-        // If the readings fully bracket the month (from ≤ monthStart AND to ≥ monthEnd)
-        // use the exact calendar day-count of the month.
-        // Otherwise (partial coverage — first/last month in DB, or current month)
-        // use the number of days actually covered by data.
-        $calendarDays = (int) $monthStartDt->format('t'); // 28/29/30/31
-        $coverageDays = (int) round(($effEndTs - $effStartTs) / 86400);
-        $isFull       = ($fromTs <= $monthStartTs && $toTs >= $monthEndTs);
-        $days         = $isFull ? $calendarDays : max(1, $coverageDays);
 
         // ── Tariff & PCS ──────────────────────────────────────────────────────
         $tariff = $this->tariffRepo->findActiveGrid('gas', $fromDt)
@@ -231,9 +191,9 @@ final class CostCalculationService
             ?? $this->tariffRepo->findMostRecentPcs('gas', $fromDt)
             ?? self::DEFAULT_PCS;
 
-        $kWh = $this->calculator->m3ToKwh($monthlyM3, $pcs);
+        $kWh = $this->calculator->m3ToKwh($interp->monthlyM3, $pcs);
 
-        $breakdown = $this->calculator->calculateGasCost($kWh, $days, $tariff->toTariffArray());
+        $breakdown = $this->calculator->calculateGasCost($kWh, $interp->days, $tariff->toTariffArray());
 
         return [
             'available'           => true,
@@ -241,13 +201,13 @@ final class CostCalculationService
             'period_from'         => $pair['from']['reading_at'],
             'period_to'           => $pair['to']['reading_at'],
             // Effective window within the calendar month
-            'month_start'         => $monthStartDt->format('Y-m-d H:i:s'),
-            'month_end'           => $monthEndDt->format('Y-m-d H:i:s'),
-            'interpolated'        => !($fromTs === $monthStartTs && $toTs === $monthEndTs),
-            'days'                => $days,
-            'calendar_days'       => $calendarDays,
-            'is_full_month'       => $isFull,
-            'delta_m3'            => round($monthlyM3, 3),
+            'month_start'         => $interp->monthStart,
+            'month_end'           => $interp->monthEnd,
+            'interpolated'        => $interp->interpolated,
+            'days'                => $interp->days,
+            'calendar_days'       => $interp->calendarDays,
+            'is_full_month'       => $interp->isFull,
+            'delta_m3'            => round($interp->monthlyM3, 3),
             'kwh'                 => round($kWh, 2),
             'pcs_coefficient'     => $pcs,
             'tariff_name'         => $tariff->name,
