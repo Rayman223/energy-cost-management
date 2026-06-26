@@ -33,7 +33,10 @@ Phase 0 (PR #27, mergée) couvre déjà le cœur métier.
 - [x] Extraire le JS (`<script>` → `assets/js/dashboard.js`)
 - [x] Remplacer les blocs inline par `<link>` / `<script src>` versionnés
 - [x] Conserver le pont d'init PHP→JS inline (données dynamiques)
-- [ ] (suite) `tariffs.php`, `login.php`, puis factorisation CSS/JS commune
+- [x] `tariffs.php` → `assets/css/tariffs.css` + `assets/js/tariffs.js`
+- [x] `login.php` → `assets/css/login.css` (style autonome, hors tokens)
+- [x] Factorisation des tokens communs (reset + `:root`) → `assets/css/tokens.css`
+      partagé par `index.php` et `tariffs.php`
 
 ## Vérification
 

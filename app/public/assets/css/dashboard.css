@@ -1,26 +1,3 @@
-  /* ── Reset & tokens ────────────────────────────────────────────────────── */
-  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
-  :root {
-    --bg:        #0b0d10;
-    --surface:   #111318;
-    --surface2:  #181c23;
-    --border:    #1f2530;
-    --border2:   #2a3040;
-    --text:      #c8d0dc;
-    --muted:     #556070;
-    --amber:     #f5a623;
-    --amber-dim: rgba(245,166,35,.12);
-    --green:     #2fd58e;
-    --green-dim: rgba(47,213,142,.10);
-    --blue:      #41b3f5;
-    --blue-dim:  rgba(65,179,245,.10);
-    --red:       #f56565;
-    --red-dim:   rgba(245,101,101,.10);
-    --mono: 'Space Mono', monospace;
-    --sans: 'Syne', sans-serif;
-  }
-
   html { font-size: 16px; }
   body {
     background: var(--bg);

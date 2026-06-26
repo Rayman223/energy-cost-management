@@ -81,6 +81,7 @@ function fmtCost(mixed $v): string
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<link rel="stylesheet" href="<?= \App\Support\Assets::url('assets/css/tokens.css') ?>">
 <link rel="stylesheet" href="<?= \App\Support\Assets::url('assets/css/dashboard.css') ?>">
 </head>
 <body>
