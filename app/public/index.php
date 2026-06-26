@@ -20,8 +20,6 @@ $gasCostData  = null;
 $syncStatus   = null;
 $gasLatest    = null;
 $waterLatest  = null;
-$gasRows      = [];
-$waterRows    = [];
 $gasInitYear  = (int) date('Y');
 $gasInitMonth = (int) date('n');
 
@@ -48,8 +46,6 @@ try {
     }
     $gasLatest   = $gasRepo->getLatest();
     $waterLatest = $waterRepo->getLatest();
-    $gasRows     = $gasRepo->getAllReadings();
-    $waterRows   = $waterRepo->getAllReadings();
 
     $syncStatus = [
         'prelevement_jour'   => $legacyRepo->getLastSentAt('prelevement-jour')?->format('d/m H:i'),
@@ -71,8 +67,6 @@ echo (new View(__DIR__ . '/../templates'))->render('dashboard', [
     'gasCostData'  => $gasCostData,
     'gasLatest'    => $gasLatest,
     'waterLatest'  => $waterLatest,
-    'gasRows'      => $gasRows,
-    'waterRows'    => $waterRows,
     'syncStatus'   => $syncStatus,
     'initYear'     => (int) date('Y'),
     'initMonth'    => (int) date('n'),

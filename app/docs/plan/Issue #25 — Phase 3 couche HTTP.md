@@ -42,8 +42,19 @@ En-têtes, `WebAccessGuard::protect(..., true)`, connexion DB d'abord (503), les
 4. **Smoke** (serveur intégré, DB bidon) : 503 au format exact + en-têtes
    (Content-Type json, nosniff, no-store), aucune erreur fatale.
 
-## Suite (reste Phase 3)
+## Front : consommation de l'API via `fetch`
 
-- Front : les pages consomment déjà `api.php` via `fetch` (dashboard.js) ;
-  vérifier/compléter là où pertinent.
-- Centralisation `WebAccessGuard` (déjà au point d'entrée API).
+Le temps-réel/interactif consommait déjà l'API (live, navigation des coûts,
+chart). Étape complémentaire : les **tables gaz/eau** sont désormais chargées via
+`api.php?action=gas_history|water_history` au chargement (et après chaque saisie),
+supprimant la duplication template+JS et le couplage BDD de ces sections.
+
+- `dashboard.js` : helpers `fmtM3()` (aligné sur `number_format(x,3,'.',' ')`),
+  `renderReadings()` (factorise gaz/eau), `loadGasHistory()`/`loadWaterHistory()`
+  appelés au load ; `submitGas`/`submitWater` réutilisent ces fonctions.
+- `templates/dashboard.php` : `<tbody>` gaz/eau réduits à un état « Chargement… ».
+- `public/index.php` : `gasRows`/`waterRows` retirés (contrôleur allégé).
+
+Les sections statiques restantes (cartes Δ, statut synchro) restent en rendu
+serveur (cohérent avec le « découplage progressif »). `WebAccessGuard` est déjà
+centralisé au point d'entrée de chaque page / de l'API.

@@ -8,8 +8,6 @@
  * @var array<string,mixed>|null $gasCostData
  * @var array<string,mixed>|null $gasLatest
  * @var array<string,mixed>|null $waterLatest
- * @var array<int,array<string,mixed>> $gasRows
- * @var array<int,array<string,mixed>> $waterRows
  * @var array<string,string|null>|null $syncStatus
  * @var int                      $initYear
  * @var int                      $initMonth
@@ -206,15 +204,8 @@ if (!function_exists('fmtCost')) {
       <table>
         <thead><tr><th>Date &amp; heure</th><th>Index (m³)</th><th>Delta</th></tr></thead>
         <tbody id="gas-tbody">
-          <?php if (empty($gasRows)): ?>
-          <tr><td colspan="3" class="td-empty">Aucune entrée gaz enregistrée.</td></tr>
-          <?php else: foreach ($gasRows as $row): ?>
-          <tr>
-            <td><?= $this->e(substr($row['reading_at'], 0, 16)) ?></td>
-            <td><?= number_format((float)$row['counter_m3'], 3, '.', ' ') ?></td>
-            <td class="td-delta"><?= $row['delta_m3'] !== null ? '+' . number_format($row['delta_m3'], 3, '.', ' ') . ' m³' : '—' ?></td>
-          </tr>
-          <?php endforeach; endif; ?>
+          <!-- Rempli via api.php?action=gas_history (dashboard.js) au chargement -->
+          <tr><td colspan="3" class="td-empty">Chargement…</td></tr>
         </tbody>
       </table>
     </div>
@@ -282,15 +273,8 @@ if (!function_exists('fmtCost')) {
       <table>
         <thead><tr><th>Date &amp; heure</th><th>Index (m³)</th><th>Delta</th></tr></thead>
         <tbody id="water-tbody">
-          <?php if (empty($waterRows)): ?>
-          <tr><td colspan="3" class="td-empty">Aucune entrée eau enregistrée.</td></tr>
-          <?php else: foreach ($waterRows as $row): ?>
-          <tr>
-            <td><?= $this->e(substr($row['reading_at'], 0, 16)) ?></td>
-            <td><?= number_format((float)$row['counter_m3'], 3, '.', ' ') ?></td>
-            <td class="td-delta"><?= $row['delta_m3'] !== null ? '+' . number_format($row['delta_m3'], 3, '.', ' ') . ' m³' : '—' ?></td>
-          </tr>
-          <?php endforeach; endif; ?>
+          <!-- Rempli via api.php?action=water_history (dashboard.js) au chargement -->
+          <tr><td colspan="3" class="td-empty">Chargement…</td></tr>
         </tbody>
       </table>
     </div>

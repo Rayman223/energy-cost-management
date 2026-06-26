@@ -629,6 +629,49 @@ async function fetchLive() {
 loadChart(30);
 fetchLive();
 setInterval(fetchLive, LIVE_INTERVAL);
+loadGasHistory();
+loadWaterHistory();
+
+// ── Meter reading tables (gas / water) ───────────────────────────────────────
+// Rendu désormais piloté par l'API (api.php?action=gas_history|water_history) au
+// chargement et après chaque saisie : un seul chemin de rendu, plus de duplication
+// avec le serveur, et la page ne dépend plus de la BDD pour ces tables.
+function fmtM3(v) {
+  // Aligné sur number_format($x, 3, '.', ' ') côté serveur :
+  // décimale point, séparateur de milliers espace (8523.456 -> "8 523.456").
+  const parts = parseFloat(v).toFixed(3).split('.');
+  return parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ' ') + '.' + parts[1];
+}
+
+function renderReadings(tbodyId, rows, emptyLabel) {
+  const tbody = document.getElementById(tbodyId);
+  if (!tbody) return;
+  if (!Array.isArray(rows) || rows.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="3" class="td-empty">${emptyLabel}</td></tr>`;
+    return;
+  }
+  tbody.innerHTML = rows.map(r =>
+    `<tr>
+      <td>${r.reading_at.slice(0, 16)}</td>
+      <td>${fmtM3(r.counter_m3)}</td>
+      <td class="td-delta">${r.delta_m3 !== null ? '+' + fmtM3(r.delta_m3) + ' m³' : '—'}</td>
+    </tr>`
+  ).join('');
+}
+
+async function loadGasHistory() {
+  try {
+    const res = await fetch('api.php?action=gas_history');
+    renderReadings('gas-tbody', await res.json(), 'Aucune entrée gaz enregistrée.');
+  } catch (e) { /* la table reste vide en cas d'erreur réseau */ }
+}
+
+async function loadWaterHistory() {
+  try {
+    const res = await fetch('api.php?action=water_history');
+    renderReadings('water-tbody', await res.json(), 'Aucune entrée eau enregistrée.');
+  } catch (e) { /* idem */ }
+}
 
 // ── Gas entry ──────────────────────────────────────────────────────────────
 async function submitGas() {
@@ -663,18 +706,7 @@ async function submitGas() {
       feedback.className   = 'form-feedback ok';
       document.getElementById('gas-value').value = '';
       // Reload gas table
-      const histRes = await fetch('api.php?action=gas_history');
-      const hist    = await histRes.json();
-      const tbody   = document.getElementById('gas-tbody');
-      if (hist.length) {
-        tbody.innerHTML = hist.map(r =>
-          `<tr>
-            <td>${r.reading_at.slice(0, 16)}</td>
-            <td>${parseFloat(r.counter_m3).toFixed(3)}</td>
-            <td class="td-delta">${r.delta_m3 !== null ? '+' + parseFloat(r.delta_m3).toFixed(3) + ' m³' : '—'}</td>
-          </tr>`
-        ).join('');
-      }
+      await loadGasHistory();
       // Refresh gas cost block
       document.dispatchEvent(new Event('gas-entry-saved'));
     } else {
@@ -723,18 +755,7 @@ async function submitWater() {
       feedback.className   = 'form-feedback ok';
       document.getElementById('water-value').value = '';
       // Reload water table
-      const histRes = await fetch('api.php?action=water_history');
-      const hist    = await histRes.json();
-      const tbody   = document.getElementById('water-tbody');
-      if (hist.length) {
-        tbody.innerHTML = hist.map(r =>
-          `<tr>
-            <td>${r.reading_at.slice(0, 16)}</td>
-            <td>${parseFloat(r.counter_m3).toFixed(3)}</td>
-            <td class="td-delta">${r.delta_m3 !== null ? '+' + parseFloat(r.delta_m3).toFixed(3) + ' m³' : '—'}</td>
-          </tr>`
-        ).join('');
-      }
+      await loadWaterHistory();
     } else {
       feedback.textContent = '✗ ' + (data.error || 'Erreur inconnue.');
       feedback.className   = 'form-feedback err';
