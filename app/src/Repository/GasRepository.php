@@ -5,10 +5,11 @@ declare(strict_types=1);
 namespace App\Repository;
 
 use App\Repository\Contract\GasReadingRepositoryInterface;
+use App\Repository\Contract\MeterReadingRepositoryInterface;
 use DateTimeImmutable;
 use PDO;
 
-final class GasRepository implements GasReadingRepositoryInterface
+final class GasRepository implements GasReadingRepositoryInterface, MeterReadingRepositoryInterface
 {
     private const TABLE = 'Data_gaz';
 

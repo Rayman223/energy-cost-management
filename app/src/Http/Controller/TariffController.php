@@ -8,14 +8,14 @@ use App\Domain\TariffGrid;
 use App\Http\JsonResponse;
 use App\Http\Request;
 use App\Http\ValidationException;
-use App\Repository\TariffRepository;
+use App\Repository\Contract\TariffRepositoryInterface;
 
 /**
  * Lecture et création des grilles tarifaires.
  */
 final class TariffController
 {
-    public function __construct(private readonly TariffRepository $tariffRepo)
+    public function __construct(private readonly TariffRepositoryInterface $tariffRepo)
     {
     }
 

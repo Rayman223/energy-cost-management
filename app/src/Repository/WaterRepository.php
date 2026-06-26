@@ -4,10 +4,11 @@ declare(strict_types=1);
 
 namespace App\Repository;
 
+use App\Repository\Contract\MeterReadingRepositoryInterface;
 use DateTimeImmutable;
 use PDO;
 
-final class WaterRepository
+final class WaterRepository implements MeterReadingRepositoryInterface
 {
     private const TABLE = 'Data_eau';
 

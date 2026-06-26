@@ -7,8 +7,7 @@ namespace App\Http\Controller;
 use App\Http\JsonResponse;
 use App\Http\Request;
 use App\Http\ValidationException;
-use App\Repository\GasRepository;
-use App\Repository\WaterRepository;
+use App\Repository\Contract\MeterReadingRepositoryInterface;
 use DateTimeImmutable;
 
 /**
@@ -18,8 +17,8 @@ use DateTimeImmutable;
 final class MeterEntryController
 {
     public function __construct(
-        private readonly GasRepository $gasRepo,
-        private readonly WaterRepository $waterRepo,
+        private readonly MeterReadingRepositoryInterface $gasRepo,
+        private readonly MeterReadingRepositoryInterface $waterRepo,
     ) {
     }
 
@@ -33,7 +32,7 @@ final class MeterEntryController
         return $this->saveReading($request, $this->waterRepo);
     }
 
-    private function saveReading(Request $request, GasRepository|WaterRepository $repo): JsonResponse
+    private function saveReading(Request $request, MeterReadingRepositoryInterface $repo): JsonResponse
     {
         $counterM3 = filter_var($request->input('counter_m3'), FILTER_VALIDATE_FLOAT);
         if ($counterM3 === false || $counterM3 <= 0) {

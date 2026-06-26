@@ -26,4 +26,25 @@ interface TariffRepositoryInterface
      * à ou avant une date de référence. Repli quand la grille active n'en définit pas.
      */
     public function findMostRecentPcs(string $energyType, DateTimeImmutable $before): ?float;
+
+    /**
+     * Toutes les grilles d'un type d'énergie, triées par date de début décroissante.
+     *
+     * @return TariffGrid[]
+     */
+    public function findAll(string $energyType): array;
+
+    /**
+     * Crée une grille tarifaire et ses lignes. Renvoie l'identifiant créé.
+     *
+     * @param array<string, mixed> $lines
+     */
+    public function saveGrid(
+        string $energyType,
+        string $name,
+        DateTimeImmutable $validFrom,
+        ?DateTimeImmutable $validTo,
+        array $lines,
+        ?float $pcsCoefficient = null,
+    ): int;
 }
