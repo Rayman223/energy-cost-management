@@ -30,7 +30,7 @@ et des templates sous `app/templates/`, avec **échappement centralisé**. Les
 - [x] Moteur `App\View\View` (rendu + échappement centralisé `e()`)
 - [x] Template `templates/login.php`
 - [x] `public/login.php` : data → `View::render`
-- [ ] (suite) Convertir `index.php` (corps + partials header/footer/cartes)
+- [x] Convertir `index.php` → `templates/dashboard.php` (corps + helpers `fmt`/`fmtCost`)
 - [ ] (suite) Convertir `tariffs.php` (formulaire + lignes tarifaires)
 - [ ] (suite) Partials réutilisables (header, footer, navigation)
 

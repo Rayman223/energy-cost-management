@@ -1,36 +1,6 @@
 parameters:
 	ignoreErrors:
 		-
-			message: '#^Variable \$gasInitMonth might not be defined\.$#'
-			identifier: variable.undefined
-			count: 1
-			path: app/public/index.php
-
-		-
-			message: '#^Variable \$gasInitYear might not be defined\.$#'
-			identifier: variable.undefined
-			count: 1
-			path: app/public/index.php
-
-		-
-			message: '#^Variable \$gasRepo might not be defined\.$#'
-			identifier: variable.undefined
-			count: 1
-			path: app/public/index.php
-
-		-
-			message: '#^Variable \$waterLatest might not be defined\.$#'
-			identifier: variable.undefined
-			count: 1
-			path: app/public/index.php
-
-		-
-			message: '#^Variable \$waterRepo might not be defined\.$#'
-			identifier: variable.undefined
-			count: 1
-			path: app/public/index.php
-
-		-
 			message: '#^Using nullsafe property access "\?\-\>energyType" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
 			identifier: nullsafe.neverNull
 			count: 1
