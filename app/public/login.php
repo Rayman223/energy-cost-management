@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use App\Security\WebAccessGuard;
+use App\View\View;
 
 $config = require __DIR__ . '/../bootstrap.php';
 
@@ -67,33 +68,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $error = $messages[$lang]['error'];
 }
 
-?>
-<!doctype html>
-<html lang="<?= htmlspecialchars($lang) ?>">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title><?= htmlspecialchars($messages[$lang]['title']) ?></title>
-  <link rel="stylesheet" href="<?= \App\Support\Assets::url('assets/css/login.css') ?>">
-</head>
-<body>
-  <form class="box" method="post" action="<?= htmlspecialchars($basePath . '/login.php') ?>">
-    <h1><?= htmlspecialchars($messages[$lang]['heading']) ?></h1>
+$view = new View(__DIR__ . '/../templates');
 
-    <input type="hidden" name="next" value="<?= htmlspecialchars($next) ?>">
-    <input type="hidden" name="lang" value="<?= htmlspecialchars($lang) ?>">
-
-    <label for="username"><?= htmlspecialchars($messages[$lang]['username']) ?></label>
-    <input id="username" name="username" autocomplete="username" required>
-
-    <label for="password"><?= htmlspecialchars($messages[$lang]['password']) ?></label>
-    <input id="password" type="password" name="password" autocomplete="current-password" required>
-
-    <button type="submit"><?= htmlspecialchars($messages[$lang]['submit']) ?></button>
-
-    <?php if ($error !== ''): ?>
-      <p class="error"><?= htmlspecialchars($error) ?></p>
-    <?php endif; ?>
-  </form>
-</body>
-</html>
+echo $view->render('login', [
+    'lang'     => $lang,
+    't'        => $messages[$lang],
+    'error'    => $error,
+    'next'     => $next,
+    'basePath' => $basePath,
+]);
