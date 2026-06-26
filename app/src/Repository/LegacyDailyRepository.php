@@ -13,6 +13,18 @@ final class LegacyDailyRepository implements LegacyDailyRepositoryInterface
     /** Cache du nom de table solaire résolu une seule fois par instance. */
     private ?string $solarTableCache = null;
 
+    /**
+     * Cache requête-scopé des deltas du mois courant. Le dashboard appelle
+     * getMonthlyDeltas() directement ET via estimateCurrentMonthElectricity() :
+     * sans cache, les ~4 requêtes tournent deux fois. Sûr car les relevés ne
+     * changent pas au sein d'une requête HTTP (écriture = cron, pas le web).
+     *
+     * @var array<string, mixed>
+     */
+    private array $monthlyDeltasCache = [];
+
+    private bool $monthlyDeltasComputed = false;
+
     public function __construct(private readonly PDO $pdo)
     {
     }
@@ -101,12 +113,28 @@ final class LegacyDailyRepository implements LegacyDailyRepositoryInterface
     // -------------------------------------------------------------------------
 
     /**
+     * Deltas du mois courant — mémoïsé par instance (cf. $monthlyDeltasCache),
+     * car appelé deux fois lors du rendu du dashboard.
+     *
+     * @return array<string, mixed>
+     */
+    public function getMonthlyDeltas(): array
+    {
+        if (!$this->monthlyDeltasComputed) {
+            $this->monthlyDeltasCache    = $this->computeMonthlyDeltas();
+            $this->monthlyDeltasComputed = true;
+        }
+
+        return $this->monthlyDeltasCache;
+    }
+
+    /**
      * Compute current-month consumption/injection deltas for electricity and solar.
      * Delta = latest available reading − first reading of the current calendar month.
      *
      * @return array<string, mixed>
      */
-    public function getMonthlyDeltas(): array
+    private function computeMonthlyDeltas(): array
     {
         // First reading of the current month
         $stmt = $this->pdo->query(

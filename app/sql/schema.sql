@@ -41,8 +41,7 @@ CREATE TABLE IF NOT EXISTS Data_gaz (
     reading_at  DATETIME NOT NULL,
     counter_m3  DECIMAL(12,3) NOT NULL COMMENT 'Index compteur gaz en m³',
     created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE KEY uq_data_gaz_reading (reading_at),
-    INDEX idx_data_gaz_date (reading_at)
+    UNIQUE KEY uq_data_gaz_reading (reading_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- ── Relevés eau (encodage manuel) ────────────────────────────────────────
@@ -51,8 +50,7 @@ CREATE TABLE IF NOT EXISTS Data_eau (
     reading_at  DATETIME NOT NULL,
     counter_m3  DECIMAL(12,3) NOT NULL COMMENT 'Index compteur eau en m³',
     created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE KEY uq_data_eau_reading (reading_at),
-    INDEX idx_data_eau_date (reading_at)
+    UNIQUE KEY uq_data_eau_reading (reading_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- ── Tarifs énergétiques ───────────────────────────────────────────────────
