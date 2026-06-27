@@ -27,20 +27,30 @@ schéma ; les réécritures non vérifiables par exécution sont **reportées**.
    [2026-06-26_drop_redundant_reading_indexes.sql](app/sql/migrations/2026-06-26_drop_redundant_reading_indexes.sql)
    + `schema.sql` mis à jour. Gain : un index de moins à maintenir par INSERT.
 
-## Reporté (nécessite une base pour valider)
+## Corrigé : filtres non-sargables → prédicats de plage (validé sur MariaDB)
 
-3. **Filtres non-sargables → prédicats de plage.** Dans `LegacyDailyRepository`,
-   les requêtes mensuelles/du-jour utilisent `WHERE YEAR(timestamp)=… AND
-   MONTH(timestamp)=…` et `WHERE DATE(timestamp)=CURDATE()`. La fonction sur la
-   colonne empêche l'usage de l'index `timestamp` (scan). La réécriture sémantique
-   équivalente :
+3. Dans `LegacyDailyRepository`, les requêtes mensuelles/du-jour utilisaient
+   `WHERE YEAR(timestamp)=… AND MONTH(timestamp)=…` et
+   `WHERE DATE(timestamp)=CURDATE()` : la fonction sur la colonne empêchait
+   l'usage de l'index `timestamp`. Réécrit en prédicats de plage :
 
    ```sql
-   -- au lieu de : WHERE YEAR(timestamp)=:y AND MONTH(timestamp)=:m
-   WHERE timestamp >= :monthStart
-     AND timestamp <  :monthStart + INTERVAL 1 MONTH
+   -- mois : WHERE YEAR(timestamp)=:y AND MONTH(timestamp)=:m
+   WHERE timestamp >= :month_start
+     AND timestamp <  :month_start + INTERVAL 1 MONTH   -- INTERVAL gère la bascule déc→jan
+
+   -- mois courant : DATE_FORMAT(CURDATE(), '%Y-%m-01') ...
+   -- jour : WHERE DATE(timestamp)=CURDATE()
+   WHERE timestamp >= CURDATE() AND timestamp < CURDATE() + INTERVAL 1 DAY
    ```
 
-   rendrait l'index utilisable (gain réel sur des tables qui grossissent). À faire
-   **avec une base de validation** (les requêtes legacy n'ont pas de test ; pas de
-   BDD en CI), de préférence avec un jeu de données de contrôle avant/après.
+   **Validation sur une base MariaDB de test** (`energ_test`) :
+   - **Équivalence** : ancien vs nouveau renvoient des résultats identiques sur 12
+     cas (mois courant, précédent, **bascule déc→jan**, mois futur vide…).
+   - **`EXPLAIN`** : l'ancien faisait `type=index … Using where` (scan complet de
+     l'index) ; le nouveau → `Select tables optimized away` (seek de plage sur
+     l'index, MIN optimisé) → gain réel sur des tables qui grossissent.
+   - **Bout-en-bout** : les méthodes réelles renvoient les bons deltas (11 contrôles).
+   - **Régression** : `tests/Integration/LegacyDailyRepositoryDbTest` (transaction
+     annulée, garde « base test ») — **s'exécute si une BDD est joignable, se skippe
+     sinon** (CI sans base → vert).

@@ -73,7 +73,7 @@ final class LegacyDailyRepository implements LegacyDailyRepositoryInterface
         $stmt = $this->pdo->query(
             'SELECT timestamp, Prelev_jour, Prelev_nuit, Injec_jour, Injec_nuit
              FROM Data_Dries
-             WHERE DATE(timestamp) = CURDATE()
+             WHERE timestamp >= CURDATE() AND timestamp < CURDATE() + INTERVAL 1 DAY
              ORDER BY timestamp DESC
              LIMIT 1'
         );
@@ -91,7 +91,7 @@ final class LegacyDailyRepository implements LegacyDailyRepositoryInterface
         $table  = $this->solarTable();
         $stmt   = $this->pdo->query(
             "SELECT timestamp, production FROM {$table}
-             WHERE DATE(timestamp) = CURDATE()
+             WHERE timestamp >= CURDATE() AND timestamp < CURDATE() + INTERVAL 1 DAY
              ORDER BY timestamp DESC LIMIT 1"
         );
         $solar = $stmt->fetch() ?: null;
@@ -143,8 +143,8 @@ final class LegacyDailyRepository implements LegacyDailyRepositoryInterface
              INNER JOIN (
                  SELECT MIN(timestamp) AS min_ts
                  FROM Data_Dries
-                 WHERE YEAR(timestamp) = YEAR(CURDATE())
-                   AND MONTH(timestamp) = MONTH(CURDATE())
+                 WHERE timestamp >= DATE_FORMAT(CURDATE(), \'%Y-%m-01\')
+                   AND timestamp < DATE_FORMAT(CURDATE(), \'%Y-%m-01\') + INTERVAL 1 MONTH
              ) f ON d.timestamp = f.min_ts
              LIMIT 1'
         );
@@ -182,8 +182,8 @@ final class LegacyDailyRepository implements LegacyDailyRepositoryInterface
              INNER JOIN (
                  SELECT MIN(timestamp) AS min_ts
                  FROM {$table}
-                 WHERE YEAR(timestamp) = YEAR(CURDATE())
-                   AND MONTH(timestamp) = MONTH(CURDATE())
+                 WHERE timestamp >= DATE_FORMAT(CURDATE(), '%Y-%m-01')
+                   AND timestamp < DATE_FORMAT(CURDATE(), '%Y-%m-01') + INTERVAL 1 MONTH
              ) f ON s.timestamp = f.min_ts
              LIMIT 1"
         );
@@ -213,6 +213,8 @@ final class LegacyDailyRepository implements LegacyDailyRepositoryInterface
      */
     public function getMonthlyDeltasForMonth(int $year, int $month): array
     {
+        $monthStart = sprintf('%04d-%02d-01 00:00:00', $year, $month);
+
         // First reading of the given month
         $stmt = $this->pdo->prepare(
             'SELECT d.timestamp, d.Prelev_jour, d.Prelev_nuit, d.Injec_jour, d.Injec_nuit
@@ -220,11 +222,11 @@ final class LegacyDailyRepository implements LegacyDailyRepositoryInterface
              INNER JOIN (
                  SELECT MIN(timestamp) AS min_ts
                  FROM Data_Dries
-                 WHERE YEAR(timestamp) = :year AND MONTH(timestamp) = :month
+                 WHERE timestamp >= :month_start AND timestamp < :month_start + INTERVAL 1 MONTH
              ) f ON d.timestamp = f.min_ts
              LIMIT 1'
         );
-        $stmt->execute(['year' => $year, 'month' => $month]);
+        $stmt->execute(['month_start' => $monthStart]);
         $first = $stmt->fetch() ?: null;
 
         if ($first === null) {
@@ -238,6 +240,7 @@ final class LegacyDailyRepository implements LegacyDailyRepositoryInterface
         // has no data yet (i.e. the current ongoing month).
         $nextYear  = $month === 12 ? $year + 1 : $year;
         $nextMonth = $month === 12 ? 1 : $month + 1;
+        $nextMonthStart = sprintf('%04d-%02d-01 00:00:00', $nextYear, $nextMonth);
 
         $stmt = $this->pdo->prepare(
             'SELECT d.timestamp, d.Prelev_jour, d.Prelev_nuit, d.Injec_jour, d.Injec_nuit
@@ -245,11 +248,11 @@ final class LegacyDailyRepository implements LegacyDailyRepositoryInterface
              INNER JOIN (
                  SELECT MIN(timestamp) AS min_ts
                  FROM Data_Dries
-                 WHERE YEAR(timestamp) = :year AND MONTH(timestamp) = :month
+                 WHERE timestamp >= :month_start AND timestamp < :month_start + INTERVAL 1 MONTH
              ) f ON d.timestamp = f.min_ts
              LIMIT 1'
         );
-        $stmt->execute(['year' => $nextYear, 'month' => $nextMonth]);
+        $stmt->execute(['month_start' => $nextMonthStart]);
         $latest = $stmt->fetch() ?: null;
 
         // No first reading of next month → use last reading of the requested month
@@ -257,10 +260,10 @@ final class LegacyDailyRepository implements LegacyDailyRepositoryInterface
             $stmt = $this->pdo->prepare(
                 'SELECT timestamp, Prelev_jour, Prelev_nuit, Injec_jour, Injec_nuit
                  FROM Data_Dries
-                 WHERE YEAR(timestamp) = :year AND MONTH(timestamp) = :month
+                 WHERE timestamp >= :month_start AND timestamp < :month_start + INTERVAL 1 MONTH
                  ORDER BY timestamp DESC LIMIT 1'
             );
-            $stmt->execute(['year' => $year, 'month' => $month]);
+            $stmt->execute(['month_start' => $monthStart]);
             $latest = $stmt->fetch() ?: null;
         }
 
@@ -285,11 +288,11 @@ final class LegacyDailyRepository implements LegacyDailyRepositoryInterface
              INNER JOIN (
                  SELECT MIN(timestamp) AS min_ts
                  FROM {$table}
-                 WHERE YEAR(timestamp) = :year AND MONTH(timestamp) = :month
+                 WHERE timestamp >= :month_start AND timestamp < :month_start + INTERVAL 1 MONTH
              ) f ON s.timestamp = f.min_ts
              LIMIT 1"
         );
-        $stmt->execute(['year' => $year, 'month' => $month]);
+        $stmt->execute(['month_start' => $monthStart]);
         $firstSolar = $stmt->fetch() ?: null;
 
         // First reading of next month for solar (same boundary logic as electricity)
@@ -299,21 +302,21 @@ final class LegacyDailyRepository implements LegacyDailyRepositoryInterface
              INNER JOIN (
                  SELECT MIN(timestamp) AS min_ts
                  FROM {$table}
-                 WHERE YEAR(timestamp) = :year AND MONTH(timestamp) = :month
+                 WHERE timestamp >= :month_start AND timestamp < :month_start + INTERVAL 1 MONTH
              ) f ON s.timestamp = f.min_ts
              LIMIT 1"
         );
-        $stmt->execute(['year' => $nextYear, 'month' => $nextMonth]);
+        $stmt->execute(['month_start' => $nextMonthStart]);
         $latestSolar = $stmt->fetchColumn();
 
         // Fallback to last reading of the month
         if ($latestSolar === false) {
             $stmt = $this->pdo->prepare(
                 "SELECT production FROM {$table}
-                 WHERE YEAR(timestamp) = :year AND MONTH(timestamp) = :month
+                 WHERE timestamp >= :month_start AND timestamp < :month_start + INTERVAL 1 MONTH
                  ORDER BY timestamp DESC LIMIT 1"
             );
-            $stmt->execute(['year' => $year, 'month' => $month]);
+            $stmt->execute(['month_start' => $monthStart]);
             $latestSolar = $stmt->fetchColumn();
         }
 
