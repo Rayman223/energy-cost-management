@@ -44,8 +44,10 @@ if (!function_exists('fmtCost')) {
 <title>Manage Energy — Brussels</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<!-- defer : ne bloque pas le parsing du HTML ; s'exécute avant dashboard.js (aussi defer, ordre du document préservé). -->
+<script defer src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <link rel="stylesheet" href="<?= \App\Support\Assets::url('assets/css/tokens.css') ?>">
 <link rel="stylesheet" href="<?= \App\Support\Assets::url('assets/css/dashboard.css') ?>">
 </head>
@@ -356,6 +358,6 @@ if (!function_exists('fmtCost')) {
 
 </div><!-- /wrap -->
 
-<script src="<?= \App\Support\Assets::url('assets/js/dashboard.js') ?>"></script>
+<script defer src="<?= \App\Support\Assets::url('assets/js/dashboard.js') ?>"></script>
 </body>
 </html>
