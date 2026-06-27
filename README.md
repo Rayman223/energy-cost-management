@@ -14,6 +14,7 @@ Application PHP de suivi et d'estimation des coûts énergétiques (électricit�
 - [Base de données](#base-de-données)
 - [Crons](#crons)
 - [Dashboard & pages](#dashboard--pages)
+- [Tests & qualité](#tests--qualité)
 - [Sécurité](#sécurité)
 - [EnergyID](#energyid)
 - [À faire](#à-faire)
@@ -36,48 +37,55 @@ Application PHP de suivi et d'estimation des coûts énergétiques (électricit�
 
 ```
 app/
-├── bootstrap.php                      ← chargement config + autoloader
-├── config/
-│   ├── config.example.php             ← modèle à copier
-│   └── config.php                     ← ⚠ ignoré par git (credentials)
-├── docs/
-│   ├── energyid-v2-model.md           ← doc protocole EnergyID V2
-│   └── suivi.md                       ← journal de développement
-├── public/
-│   ├── index.php                      ← dashboard principal
-│   ├── tariffs.php                    ← gestion des grilles tarifaires
-│   ├── api.php                        ← API JSON interne (GET + POST)
-│   └── login.php                      ← page d'authentification
-├── scripts/
-│   ├── cron_hourly.php                ← ingestion horaire (compteurs)
-│   └── cron_daily_webhook.php         ← envoi quotidien vers EnergyID
-├── sql/
-│   └── schema.sql                     ← schéma complet de la base
-├── src/
-│   ├── Domain/
-│   │   ├── EnergyReading.php
-│   │   └── TariffGrid.php
-│   ├── Infrastructure/
-│   │   ├── Database.php               ← connexion PDO
-│   │   └── HttpClient.php
-│   ├── Repository/
-│   │   ├── GasRepository.php
-│   │   ├── LegacyDailyRepository.php  ← source principale des données
-│   │   ├── LegacyIngestionRepository.php
-│   │   └── TariffRepository.php
-│   ├── Security/
-│   │   └── WebAccessGuard.php         ← protection IP + Basic Auth
-│   └── Service/
-│       ├── CostCalculationService.php
-│       ├── DailyLegacyWebhookSyncService.php
-│       ├── EnergyIdPayloadFactory.php
-│       ├── EnergyIdV2Client.php
-│       ├── GasManualEntryService.php
-│       ├── MeterApiService.php
-│       └── TariffCalculatorService.php
-└── tools/
-    └── conversion_solaire.php         ← outil de migration (conservé)
+├── autoload.php                  ← autoloader App\ → app/src/
+├── bootstrap.php                 ← autoload + chargement config
+├── config/                       ← config.example.php · config.php (⚠ gitignore)
+├── docs/                         ← api-contract.md · sql-audit.md · page-states.md · plan/ · …
+├── public/                       ← entrées minces : bootstrap → données → rendu
+│   ├── index.php · tariffs.php   ← préparent les données puis View::render(…)
+│   ├── login.php
+│   ├── api.php                   ← câblage Router + dispatch (couche HTTP)
+│   └── assets/                   ← CSS/JS statiques, versionnés (cache-busting)
+│       ├── css/  tokens · dashboard · tariffs · login
+│       └── js/   dashboard · tariffs
+├── scripts/                      ← cron_hourly.php · cron_daily_webhook.php
+├── sql/                          ← schema.sql · migrations/
+├── templates/                    ← vues HTML : dashboard · tariffs · login
+└── src/
+    ├── Domain/                   ← TariffGrid · TariffLineCatalog
+    ├── Http/                     ← Request · JsonResponse · Router · ValidationException
+    │   └── Controller/           ← Meter · Readings · Cost · Tariff · MeterEntry
+    ├── Infrastructure/           ← Database (PDO) · HttpClient
+    ├── Repository/
+    │   ├── Contract/             ← interfaces (seams de test)
+    │   └── Legacy · Gas · Water · Tariff · LegacyIngestion
+    ├── Security/                 ← WebAccessGuard (IP + Basic Auth)
+    ├── Service/                  ← CostCalculation · TariffCalculator · GasMonthInterpolator ·
+    │                                ElectricityReadingMerger · EnergyId* · MeterApi · …
+    ├── Support/                  ← Assets (URL d'assets + cache-busting)
+    └── View/                     ← View (moteur de rendu + échappement centralisé)
+
+tests/                            ← PHPUnit
+├── Unit/         Domain · Http · Service
+├── Integration/  BDD (s'auto-skippe sans base)
+└── Fake/         doublures des repos (via interfaces)
+
+composer.json · phpunit.xml.dist · phpstan.dist.neon (niveau 6)
 ```
+
+### Couches & responsabilités
+
+Une requête web entre par une **entrée mince** (`app/public/*.php`) :
+
+- **Pages** (`index.php`, `tariffs.php`, `login.php`) : bootstrap → préparation des
+  données → rendu via `View` (templates dans `app/templates/`, échappement
+  centralisé `View::e()`).
+- **API** (`api.php`) : `Router` → **contrôleur** (`src/Http/Controller/`) →
+  `JsonResponse` (validation centralisée, codes HTTP normalisés).
+
+Sous les entrées : **Service** (logique métier) → **Repository** (accès données,
+type-hinté sur des interfaces `Repository/Contract/`) → **Infrastructure** (PDO,
+HTTP). Le front (`assets/js/`) consomme l'API JSON via `fetch`.
 
 ### Flux de données
 
@@ -230,6 +238,34 @@ Ajouter dans la crontab (`crontab -e`) :
 | `/tariffs.php`   | Gestion des grilles tarifaires (ajout, modification)        |
 | `/api.php`       | API JSON interne (lecture et écriture des données)          |
 | `/login.php`     | Page d'authentification                                     |
+
+---
+
+## Tests & qualité
+
+Outillage de dev géré par **Composer** (`require-dev` uniquement — `vendor/` n'est
+pas déployé). L'application garde son autoloader maison ; Composer ne sert qu'aux
+outils.
+
+```bash
+composer install          # installe PHPUnit (dev)
+
+vendor/bin/phpunit        # tests (les tests d'intégration BDD s'auto-skippent sans base)
+phpstan analyse --configuration=phpstan.dist.neon   # analyse statique (niveau 6)
+find app -name '*.php' -print0 | xargs -0 -n1 php -l # lint de syntaxe
+```
+
+- **PHPUnit** — `tests/Unit/` (calculs tarifaires, interpolation gaz, couche HTTP,
+  catalogue tarifaire…) et `tests/Fake/` (doublures des repos via interfaces).
+  `tests/Integration/` teste les requêtes SQL contre une vraie base **si elle est
+  joignable**, sinon se **skippe** (CI sans base → vert).
+- **PHPStan niveau 6** — typage strict ; baseline résiduelle dans
+  `phpstan-baseline.neon`.
+- **CI** ([.github/workflows/ci.yml](.github/workflows/ci.yml)) : à chaque push/PR,
+  `php -l` (PHP 8.1/8.2/8.3) + **PHPStan niveau 6** + **PHPUnit** (8.1/8.2/8.3).
+- **Assets** : CSS/JS statiques sous `app/public/assets/`, référencés avec
+  cache-busting via `App\Support\Assets::url()` (suffixe `?v=<mtime>`).
+- **Contrat d'API** : [app/docs/api-contract.md](app/docs/api-contract.md).
 
 ---
 

@@ -73,3 +73,45 @@ jobs:
 
       - name: Run PHPUnit
         run: vendor/bin/phpunit
+
+  tests-db:
+    name: PHPUnit (intégration BDD)
+    runs-on: ubuntu-latest
+    services:
+      mariadb:
+        image: mariadb:10.11
+        env:
+          MARIADB_ROOT_PASSWORD: root
+          MARIADB_DATABASE: energy_test
+          MARIADB_USER: energy_user
+          MARIADB_PASSWORD: energy_pass
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="healthcheck.sh --connect --innodb_initialized"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          coverage: none
+          tools: composer:v2
+          extensions: pdo_mysql
+
+      - name: Install dev dependencies
+        run: composer install --no-progress --prefer-dist --no-interaction
+
+      - name: Importer le schéma
+        run: mysql -h 127.0.0.1 -P 3306 -u energy_user -penergy_pass energy_test < app/sql/schema.sql
+
+      - name: Config de test (pointe sur la base du service CI)
+        run: |
+          echo "<?php declare(strict_types=1); return ['database' => ['host' => '127.0.0.1', 'port' => 3306, 'name' => 'energy_test', 'user' => 'energy_user', 'password' => 'energy_pass', 'charset' => 'utf8mb4']];" > app/config/config.php
+
+      - name: PHPUnit — suite d'intégration (s'exécute contre la base)
+        run: vendor/bin/phpunit --testsuite integration
