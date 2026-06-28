@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use App\Infrastructure\Database;
+use App\Repository\DynamicPriceRepository;
 use App\Repository\GasRepository;
 use App\Repository\WaterRepository;
 use App\Repository\LegacyDailyRepository;
@@ -34,10 +35,19 @@ try {
     $gasRepo    = new GasRepository($pdo);
     $waterRepo  = new WaterRepository($pdo);
     $tariffRepo = new TariffRepository($pdo);
-    $costSvc    = new CostCalculationService($legacyRepo, $tariffRepo, $gasRepo, new TariffCalculatorService());
+    $dynPriceRepo = new DynamicPriceRepository($pdo);
+    $costSvc    = new CostCalculationService(
+        legacyRepo: $legacyRepo,
+        tariffRepo: $tariffRepo,
+        gasRepo: $gasRepo,
+        calculator: new TariffCalculatorService(),
+        dynamicPriceRepo: $dynPriceRepo,
+        dynamicConfig: $config['dynamic_prices'] ?? [],
+    );
 
     $deltas      = $legacyRepo->getMonthlyDeltas();
     $cost        = $costSvc->estimateCurrentMonthElectricity();
+    $cost['dynamic'] = $costSvc->estimateCurrentMonthElectricityDynamic();
     $gasCostData = $costSvc->estimateLastGasPeriod();
     if (!empty($gasCostData['period_from'])) {
         $gasPeriodFrom = new DateTimeImmutable($gasCostData['period_from']);

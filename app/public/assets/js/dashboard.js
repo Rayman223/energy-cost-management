@@ -135,6 +135,74 @@
         </div>
       </div>
     </div>`;
+
+    // ── Comparaison tarif dynamique (day-ahead) ───────────────────────────
+    if (data.dynamic) {
+      el.innerHTML += renderDynamicSection(data.dynamic, c);
+    }
+  }
+
+  function renderDynamicSection(dyn, classic) {
+    const head = `<div class="cost-group-label cost-group-label--solar" style="margin-top:8px">⚡ Tarif dynamique (day-ahead)</div>`;
+
+    if (!dyn || !dyn.available) {
+      return `<div class="cost-wrap" style="margin-top:18px"><div class="cost-lines">
+        ${head}
+        <div class="no-tariff" style="margin-top:10px">${(dyn && dyn.reason) ? dyn.reason : 'Prix dynamiques indisponibles. Lancez cron_dynamic_prices.'}</div>
+      </div></div>`;
+    }
+
+    const dc            = dyn.cost || {};
+    const classicTotal  = classic ? classic.total : null;
+    const classicEnergy = classic ? ((classic.energy_t1 || 0) + (classic.energy_t2 || 0)) : null;
+    const dynTotal      = dc.total;
+    const diff          = (classicTotal != null && dynTotal != null) ? (dynTotal - classicTotal) : null;
+    const diffPct       = (diff != null && classicTotal) ? (diff / Math.abs(classicTotal) * 100) : null;
+
+    const eur = (v) => {
+      if (v == null) return '<span style="color:var(--muted)">—</span>';
+      const s = v < 0 ? '−' : '';
+      return `${s}${Math.abs(v).toFixed(2)} €`;
+    };
+    const line = (label, detailStr, amount, cls = '') => `<div class="cost-line ${cls}">
+        <span class="cl-label">${label}</span>
+        <span class="cl-detail">${detailStr}</span>
+        <span class="cl-amount">${eur(amount)}</span>
+      </div>`;
+
+    let dailyRows = '';
+    (dyn.daily || []).forEach(d => {
+      dailyRows += `<tr>
+        <td style="padding:5px 10px">${d.day}</td>
+        <td style="text-align:right;padding:5px 10px">${Number(d.import_kwh).toFixed(2)} kWh</td>
+        <td style="text-align:right;padding:5px 10px">${Number(d.energy_dynamic).toFixed(2)} €</td></tr>`;
+    });
+    const dailyTable = dailyRows ? `<div class="cost-group-label">Coût énergie par jour</div>
+      <div style="max-height:220px;overflow:auto;border:1px solid var(--border);border-radius:6px;margin-top:6px">
+        <table style="width:100%;border-collapse:collapse;font-family:var(--mono);font-size:.78rem">
+          <thead><tr style="color:var(--muted)">
+            <th style="text-align:left;padding:6px 10px">Jour</th>
+            <th style="text-align:right;padding:6px 10px">Import</th>
+            <th style="text-align:right;padding:6px 10px">Énergie €</th>
+          </tr></thead>
+          <tbody>${dailyRows}</tbody>
+        </table>
+      </div>` : '';
+
+    const diffLabel = diff == null ? '' : (diff <= 0 ? 'Économie vs classique' : 'Surcoût vs classique');
+
+    return `<div class="cost-wrap" style="margin-top:18px"><div class="cost-lines">
+      ${head}
+      ${line('Énergie dynamique (spot + marge, TTC)',
+            `${Number(dyn.matched_kwh ?? 0).toFixed(2)} kWh × ${dyn.avg_price_kwh != null ? Number(dyn.avg_price_kwh).toFixed(5) : '—'} €/kWh moy. · couverture ${Number(dyn.coverage_pct ?? 0).toFixed(0)} %`,
+            dyn.energy_dynamic)}
+      ${line('Énergie classique (T1 + T2)', '', classicEnergy)}
+      <div class="cost-group-sep"></div>
+      ${line('Total dynamique (estimé)', '', dynTotal, 'total')}
+      ${line('Total classique', '', classicTotal)}
+      ${diff != null ? line(diffLabel, diffPct != null ? `${diffPct > 0 ? '+' : ''}${diffPct.toFixed(1)} %` : '', diff, diff <= 0 ? 'credit' : '') : ''}
+      ${dailyTable}
+    </div></div>`;
   }
 
   async function loadMonthCost(year, month) {

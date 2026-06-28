@@ -159,6 +159,45 @@ final class TariffCalculatorServiceTest extends TestCase
         self::assertEqualsWithDelta(10.0, $r['subscription'], self::DELTA);
     }
 
+    public function testDynamicEqualsClassicWhenEnergyMatchesT1T2(): void
+    {
+        $tariff  = $this->electricityTariff();
+        $classic = $this->calc->calculateElectricityCost(100.0, 50.0, 20.0, 10.0, 30, $tariff, 100.0);
+
+        // Énergie dynamique = exactement la part fournisseur classique (T1+T2).
+        $dynEnergy = 100.0 * 0.10 + 50.0 * 0.08; // 14.0
+        $dynamic   = $this->calc->calculateElectricityCostDynamic(100.0, 50.0, 20.0, 10.0, 30, $tariff, $dynEnergy, 100.0);
+
+        self::assertSame('dynamic', $dynamic['mode']);
+        self::assertEqualsWithDelta(14.0, $dynamic['energy_dynamic'], self::DELTA);
+
+        // Total, HTVA et tous les composants fixes restent identiques au classique.
+        self::assertEqualsWithDelta($classic['total'], $dynamic['total'], self::DELTA);
+        self::assertEqualsWithDelta($classic['htva'], $dynamic['htva'], self::DELTA);
+        foreach ([
+            'subscription', 'distribution_t1', 'distribution_t2', 'transport', 'management_fee',
+            'prosumer_fee', 'excise_duty', 'green_contribution', 'public_service_fee',
+            'injection_t1', 'injection_t2', 'solar_savings',
+        ] as $k) {
+            self::assertEqualsWithDelta($classic[$k], $dynamic[$k], self::DELTA, $k);
+        }
+    }
+
+    public function testDynamicEnergyDrivesTheTotal(): void
+    {
+        $tariff        = $this->electricityTariff();
+        $classicEnergy = 100.0 * 0.10 + 50.0 * 0.08; // 14.0
+
+        $base    = $this->calc->calculateElectricityCostDynamic(100.0, 50.0, 20.0, 10.0, 30, $tariff, $classicEnergy);
+        $cheaper = $this->calc->calculateElectricityCostDynamic(100.0, 50.0, 20.0, 10.0, 30, $tariff, $classicEnergy / 2);
+
+        // Énergie deux fois moins chère → total réduit d'exactement la moitié de l'énergie.
+        self::assertEqualsWithDelta($base['total'] - $classicEnergy / 2, $cheaper['total'], self::DELTA);
+        // La part dynamique remplace energy_t1/energy_t2 (absents de la sortie dynamique).
+        self::assertArrayNotHasKey('energy_t1', $cheaper);
+        self::assertArrayHasKey('energy_dynamic', $cheaper);
+    }
+
     public function testGasFullBreakdown(): void
     {
         $tariff = [

@@ -60,6 +60,106 @@ final class TariffCalculatorService
         array $tariff,
         float $kwhSolar = 0.0,
     ): array {
+        // ── Fournisseur (part énergie classique T1/T2) ───────────────────────
+        $energyT1 = $kwhT1 * ($tariff['energy_t1'] ?? 0.0);
+        $energyT2 = $kwhT2 * ($tariff['energy_t2'] ?? 0.0);
+
+        $common = $this->electricityCommonComponents(
+            $kwhT1,
+            $kwhT2,
+            $kwhExportT1,
+            $kwhExportT2,
+            $days,
+            $tariff,
+            $kwhSolar,
+        );
+
+        // All tariff amounts are already TTC (VAT-inclusive).
+        $totalTtc    = $energyT1 + $energyT2 + $common['non_energy_total'];
+        $htva        = $totalTtc / (1 + self::TVA);
+        $vatIncluded = $totalTtc - $htva;
+
+        return array_merge(
+            [
+                'energy_t1' => round($energyT1, 4),
+                'energy_t2' => round($energyT2, 4),
+            ],
+            $common['billed'],
+            [
+                'total'        => round($totalTtc, 2),
+                'htva'         => round($htva, 2),
+                'vat_included' => round($vatIncluded, 2),
+            ],
+            $common['info'],
+        );
+    }
+
+    /**
+     * Variante « tarif dynamique » : la part énergie fournisseur est remplacée
+     * par un coût pré-calculé indexé au prix de marché horaire ($dynamicEnergyTtc,
+     * déjà TTC, marge incluse). Tous les autres postes (distribution, taxes,
+     * abonnement, injection, solaire) restent identiques au tarif classique.
+     *
+     * @param array<string, mixed> $tariff
+     * @param float $dynamicEnergyTtc Coût énergie dynamique total de la période, TTC.
+     * @return array<string, mixed>
+     */
+    public function calculateElectricityCostDynamic(
+        float $kwhT1,
+        float $kwhT2,
+        float $kwhExportT1,
+        float $kwhExportT2,
+        int   $days,
+        array $tariff,
+        float $dynamicEnergyTtc,
+        float $kwhSolar = 0.0,
+    ): array {
+        $common = $this->electricityCommonComponents(
+            $kwhT1,
+            $kwhT2,
+            $kwhExportT1,
+            $kwhExportT2,
+            $days,
+            $tariff,
+            $kwhSolar,
+        );
+
+        $totalTtc    = $dynamicEnergyTtc + $common['non_energy_total'];
+        $htva        = $totalTtc / (1 + self::TVA);
+        $vatIncluded = $totalTtc - $htva;
+
+        return array_merge(
+            [
+                'mode'           => 'dynamic',
+                'energy_dynamic' => round($dynamicEnergyTtc, 4),
+            ],
+            $common['billed'],
+            [
+                'total'        => round($totalTtc, 2),
+                'htva'         => round($htva, 2),
+                'vat_included' => round($vatIncluded, 2),
+            ],
+            $common['info'],
+        );
+    }
+
+    /**
+     * Composants de coût électricité communs aux tarifs classique et dynamique :
+     * tout sauf la part énergie fournisseur. Centralise abonnement, distribution,
+     * taxes, crédits d'injection et l'auto-consommation solaire (informative).
+     *
+     * @param array<string, mixed> $tariff
+     * @return array{non_energy_total: float, billed: array<string, float>, info: array<string, float|null>}
+     */
+    private function electricityCommonComponents(
+        float $kwhT1,
+        float $kwhT2,
+        float $kwhExportT1,
+        float $kwhExportT2,
+        int   $days,
+        array $tariff,
+        float $kwhSolar,
+    ): array {
         $totalKwh    = $kwhT1 + $kwhT2;
         $totalExport = $kwhExportT1 + $kwhExportT2;
 
@@ -67,36 +167,27 @@ final class TariffCalculatorService
         // has 28, 29, 30 or 31 days. We round to the nearest whole month.
         $wholeMonths = $this->wholeMonths($days);
 
-        // ── Fournisseur ──────────────────────────────────────────────────────
-        //$energySimple   = $totalKwh  * ($tariff['energy_simple']  ?? 0.0);
-        $energyT1       = $kwhT1       * ($tariff['energy_t1']      ?? 0.0);
-        $energyT2       = $kwhT2       * ($tariff['energy_t2']      ?? 0.0);
-        $subscription   = $wholeMonths * ($tariff['subscription']   ?? 0.0);
+        // ── Abonnement (fixe mensuel) ────────────────────────────────────────
+        $subscription = $wholeMonths * ($tariff['subscription'] ?? 0.0);
 
         // ── Distribution (Sibelga) ───────────────────────────────────────────
-        $distributionT1   = $kwhT1    * ($tariff['distribution_t1'] ?? 0.0);
-        $distributionT2   = $kwhT2    * ($tariff['distribution_t2'] ?? 0.0);
-        $transport        = $totalKwh * ($tariff['transport']        ?? 0.0);
-        $managementFee    = $this->prorateAnnual($tariff['management_annual'] ?? 0.0, $days);
+        $distributionT1 = $kwhT1    * ($tariff['distribution_t1'] ?? 0.0);
+        $distributionT2 = $kwhT2    * ($tariff['distribution_t2'] ?? 0.0);
+        $transport      = $totalKwh * ($tariff['transport']        ?? 0.0);
+        $managementFee  = $this->prorateAnnual($tariff['management_annual'] ?? 0.0, $days);
 
         // ── Taxes & contributions ────────────────────────────────────────────
-        $prosumerFee          = $this->prorateAnnual($tariff['prosumer_annual'] ?? 0.0, $days);
-        $exciseDuty           = $totalKwh * ($tariff['excise_duty']            ?? 0.0);
-        $energyContribution   = $totalKwh * ($tariff['energy_contribution']    ?? 0.0);
-        $greenContribution    = $totalKwh * ($tariff['green_contribution']     ?? 0.0);
-        $publicServiceFee     = $this->prorateAnnual($tariff['public_service_annual'] ?? 0.0, $days);
+        $prosumerFee        = $this->prorateAnnual($tariff['prosumer_annual'] ?? 0.0, $days);
+        $exciseDuty         = $totalKwh * ($tariff['excise_duty']            ?? 0.0);
+        $energyContribution = $totalKwh * ($tariff['energy_contribution']    ?? 0.0);
+        $greenContribution  = $totalKwh * ($tariff['green_contribution']     ?? 0.0);
+        $publicServiceFee   = $this->prorateAnnual($tariff['public_service_annual'] ?? 0.0, $days);
 
         // ── Injection credits (negative = reduce the bill) ────────────────────
         $injectionT1 = -($kwhExportT1 * ($tariff['injection_t1'] ?? 0.0));
         $injectionT2 = -($kwhExportT2 * ($tariff['injection_t2'] ?? 0.0));
 
-        // All tariff amounts are already TTC (VAT-inclusive).
-        // total_ttc = sum of all lines (already includes VAT)
-        // htva      = total_ttc / 1.21
-        // vat_in    = total_ttc - htva  (the portion that goes to the state)
-        $totalTtc = $energyT1
-            + $energyT2
-            + $subscription
+        $nonEnergyTotal = $subscription
             + $distributionT1
             + $distributionT2
             + $transport
@@ -109,67 +200,46 @@ final class TariffCalculatorService
             + $injectionT1
             + $injectionT2;
 
-        $htva        = $totalTtc / (1 + self::TVA);
-        $vatIncluded = $totalTtc - $htva;
-
-        // ── Solar self-consumption ────────────────────────────────────────────
+        // ── Solar self-consumption (informational, excluded from the billed total) ─
         // Solar production occurs during daytime → T1 (day) variable rates apply.
-        // All tariff rates are already TTC so no additional TVA factor is needed.
-        //
-        // self_consumed  = production − exported to grid  (≥ 0)
-        // savings_rate   = sum of all T1 variable per-kWh costs (TTC)
-        // savings        = self_consumed × savings_rate
-        //
-        // Fixed costs (subscription, management_annual, prosumer_annual,
-        // public_service_annual) are NOT included: self-consumed solar doesn't
-        // change those fixed charges.
-        $solarConsumed = max(0.0, $kwhSolar - $totalExport);
-
-        // Variable cost per kWh at T1 rate (all TTC already):
+        // self_consumed = production − exported to grid (≥ 0).
+        $solarConsumed  = max(0.0, $kwhSolar - $totalExport);
         $savingsRateTtc = ($tariff['energy_t1']           ?? 0.0)
                         + ($tariff['distribution_t1']     ?? 0.0)
                         + ($tariff['transport']           ?? 0.0)
                         + ($tariff['excise_duty']         ?? 0.0)
                         + ($tariff['energy_contribution'] ?? 0.0)
                         + ($tariff['green_contribution']  ?? 0.0);
-
-        $solarSavings          = $solarConsumed * $savingsRateTtc;
-        $selfConsumptionPct    = $kwhSolar > 0.0
+        $solarSavings       = $solarConsumed * $savingsRateTtc;
+        $selfConsumptionPct = $kwhSolar > 0.0
             ? round($solarConsumed / $kwhSolar * 100.0, 1)
             : null;
 
         return [
-            // Fournisseur
-            //'energy_simple'         => round($energySimple, 4),
-            'energy_t1'             => round($energyT1, 4),
-            'energy_t2'             => round($energyT2, 4),
-            'subscription'          => round($subscription, 4),
-            // Distribution
-            'distribution_t1'       => round($distributionT1, 4),
-            'distribution_t2'       => round($distributionT2, 4),
-            'transport'             => round($transport, 4),
-            'management_fee'        => round($managementFee, 4),
-            // Taxes
-            'prosumer_fee'          => round($prosumerFee, 4),
-            'excise_duty'           => round($exciseDuty, 4),
-            'energy_contribution'   => round($energyContribution, 7),
-            'green_contribution'    => round($greenContribution, 4),
-            'public_service_fee'    => round($publicServiceFee, 4),
-            // Injection
-            'injection_t1'          => round($injectionT1, 4),
-            'injection_t2'          => round($injectionT2, 4),
-            // Totals
-            'total'                 => round($totalTtc, 2),
-            'htva'                  => round($htva, 2),
-            'vat_included'          => round($vatIncluded, 2),
-            'import_kwh'            => round($totalKwh, 3),
-            'export_kwh'            => round($totalExport, 3),
-            // Solar self-consumption (null when no solar data available)
-            'solar_produced'        => $kwhSolar > 0.0 ? round($kwhSolar, 3)        : null,
-            'solar_consumed'        => $kwhSolar > 0.0 ? round($solarConsumed, 3)   : null,
-            'self_consumption_pct'  => $selfConsumptionPct,
-            'solar_savings_rate'    => $kwhSolar > 0.0 ? round($savingsRateTtc, 6)  : null,
-            'solar_savings'         => $kwhSolar > 0.0 ? round($solarSavings, 2)    : null,
+            'non_energy_total' => (float) $nonEnergyTotal,
+            'billed' => [
+                'subscription'        => round((float) $subscription, 4),
+                'distribution_t1'     => round($distributionT1, 4),
+                'distribution_t2'     => round($distributionT2, 4),
+                'transport'           => round($transport, 4),
+                'management_fee'      => round($managementFee, 4),
+                'prosumer_fee'        => round($prosumerFee, 4),
+                'excise_duty'         => round($exciseDuty, 4),
+                'energy_contribution' => round($energyContribution, 7),
+                'green_contribution'  => round($greenContribution, 4),
+                'public_service_fee'  => round($publicServiceFee, 4),
+                'injection_t1'        => round($injectionT1, 4),
+                'injection_t2'        => round($injectionT2, 4),
+            ],
+            'info' => [
+                'import_kwh'           => round($totalKwh, 3),
+                'export_kwh'           => round($totalExport, 3),
+                'solar_produced'       => $kwhSolar > 0.0 ? round($kwhSolar, 3)       : null,
+                'solar_consumed'       => $kwhSolar > 0.0 ? round($solarConsumed, 3)  : null,
+                'self_consumption_pct' => $selfConsumptionPct,
+                'solar_savings_rate'   => $kwhSolar > 0.0 ? round((float) $savingsRateTtc, 6) : null,
+                'solar_savings'        => $kwhSolar > 0.0 ? round($solarSavings, 2)   : null,
+            ],
         ];
     }
 
@@ -224,7 +294,7 @@ final class TariffCalculatorService
 
         return [
             'energy'              => round($energy, 4),
-            'subscription'        => round($subscription, 4),
+            'subscription'        => round((float) $subscription, 4),
             'distribution'        => round($distribution, 4),
             'distribution_fixed'  => round($distributionFixed, 4),
             'transport'           => round($transport, 4),

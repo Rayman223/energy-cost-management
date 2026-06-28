@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Repository\Contract;
 
+use DateTimeImmutable;
+
 /**
  * Lecture des deltas journaliers électricité/solaire consommés par
  * CostCalculationService. Seam de test : permet de substituer une fausse
@@ -28,4 +30,12 @@ interface LegacyDailyRepositoryInterface
      * @return array<string, mixed>
      */
     public function getMonthlyDeltasForMonth(int $year, int $month): array;
+
+    /**
+     * Consommation IMPORT (T1+T2) ventilée par heure sur [$from, $to], pour
+     * croiser avec un prix dynamique horaire (tarif dynamique).
+     *
+     * @return array<int, array{hour: string, import_kwh: float}>
+     */
+    public function getHourlyImportDeltas(DateTimeImmutable $from, DateTimeImmutable $to): array;
 }

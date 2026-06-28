@@ -22,12 +22,18 @@ final class CostController
     {
         [$year, $month] = $this->yearMonth($request);
 
-        return JsonResponse::ok($this->costSvc->estimateMonthElectricity($year, $month));
+        $data            = $this->costSvc->estimateMonthElectricity($year, $month);
+        $data['dynamic'] = $this->costSvc->estimateMonthElectricityDynamic($year, $month);
+
+        return JsonResponse::ok($data);
     }
 
     public function costEstimate(Request $request): JsonResponse
     {
-        return JsonResponse::ok($this->costSvc->estimateCurrentMonthElectricity());
+        $data            = $this->costSvc->estimateCurrentMonthElectricity();
+        $data['dynamic'] = $this->costSvc->estimateCurrentMonthElectricityDynamic();
+
+        return JsonResponse::ok($data);
     }
 
     public function gasCost(Request $request): JsonResponse

@@ -411,6 +411,56 @@ final class LegacyDailyRepository implements LegacyDailyRepositoryInterface
     }
 
     // -------------------------------------------------------------------------
+    // Dynamic tariff: hourly import consumption
+    // -------------------------------------------------------------------------
+
+    /**
+     * Consommation IMPORT (T1+T2) ventilée par heure sur [$from, $to].
+     *
+     * Calque la logique de deltas consécutifs de getDailyDeltasForChart(), mais
+     * au pas horaire : chaque delta entre deux relevés consécutifs est attribué
+     * à l'heure de début de l'intervalle. Sert à croiser la conso avec un prix
+     * dynamique horaire.
+     *
+     * @return array<int, array{hour: string, import_kwh: float}>
+     */
+    public function getHourlyImportDeltas(DateTimeImmutable $from, DateTimeImmutable $to): array
+    {
+        $stmt = $this->pdo->prepare(
+            'SELECT timestamp, Prelev_jour, Prelev_nuit
+             FROM Data_Dries
+             WHERE timestamp >= :from AND timestamp <= :to
+             ORDER BY timestamp ASC'
+        );
+        $stmt->execute([
+            'from' => $from->format('Y-m-d H:i:s'),
+            'to'   => $to->format('Y-m-d H:i:s'),
+        ]);
+        /** @var array<int, array{timestamp: string, Prelev_jour: string, Prelev_nuit: string}> $rows */
+        $rows = $stmt->fetchAll();
+
+        $buckets = [];
+        for ($i = 1, $iMax = count($rows); $i < $iMax; $i++) {
+            $prev  = $rows[$i - 1];
+            $curr  = $rows[$i];
+            $delta = ((float) $curr['Prelev_jour'] + (float) $curr['Prelev_nuit'])
+                   - ((float) $prev['Prelev_jour'] + (float) $prev['Prelev_nuit']);
+
+            // L'index est cumulatif et croissant entre deux relevés au top de l'heure :
+            // la conso de l'intervalle est imputée à l'heure de début.
+            $hour            = substr($prev['timestamp'], 0, 13) . ':00:00';
+            $buckets[$hour]  = ($buckets[$hour] ?? 0.0) + max(0.0, $delta);
+        }
+
+        $out = [];
+        foreach ($buckets as $hour => $kwh) {
+            $out[] = ['hour' => $hour, 'import_kwh' => round($kwh, 3)];
+        }
+
+        return $out;
+    }
+
+    // -------------------------------------------------------------------------
     // Batch / cron queries (used by DailyLegacyWebhookSyncService)
     // -------------------------------------------------------------------------
 

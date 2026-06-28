@@ -9,6 +9,7 @@ use App\Service\CostCalculationService;
 use App\Service\TariffCalculatorService;
 use DateTimeImmutable;
 use PHPUnit\Framework\TestCase;
+use Tests\Fake\FakeDynamicPriceRepository;
 use Tests\Fake\FakeGasReadingRepository;
 use Tests\Fake\FakeLegacyDailyRepository;
 use Tests\Fake\FakeTariffRepository;
@@ -146,6 +147,85 @@ final class CostCalculationServiceTest extends TestCase
         self::assertTrue($r['available']);
         self::assertSame(15, $r['days']);
         self::assertArrayHasKey('total', $r['cost']);
+    }
+
+    // ── Électricité : tarif dynamique ────────────────────────────────────────
+
+    private function makeDynamicService(
+        FakeLegacyDailyRepository $legacy,
+        FakeTariffRepository $tariff,
+        FakeDynamicPriceRepository $dynamic,
+        bool $enabled = true,
+    ): CostCalculationService {
+        return new CostCalculationService(
+            legacyRepo: $legacy,
+            tariffRepo: $tariff,
+            gasRepo: new FakeGasReadingRepository(),
+            calculator: new TariffCalculatorService(),
+            dynamicPriceRepo: $dynamic,
+            dynamicConfig: ['enabled' => $enabled, 'vat_rate' => 0.21, 'supplier_markup_per_kwh' => 0.0],
+        );
+    }
+
+    public function testMonthElectricityDynamicHappyPathWithFallback(): void
+    {
+        $legacy = new FakeLegacyDailyRepository(
+            monthlyDeltasForMonth: $this->electricityDeltas(),
+            hourlyImportDeltas: [
+                ['hour' => '2026-06-10 10:00:00', 'import_kwh' => 10.0],
+                ['hour' => '2026-06-10 23:00:00', 'import_kwh' => 5.0],
+            ],
+        );
+        // Seule l'heure de jour a un prix ; l'heure de nuit retombe sur energy_t2 (0.08).
+        $dynamic = new FakeDynamicPriceRepository(pricesByHour: ['2026-06-10 10:00:00' => 0.20]);
+
+        $svc = $this->makeDynamicService($legacy, new FakeTariffRepository(grid: $this->electricityGrid()), $dynamic);
+        $r   = $svc->estimateMonthElectricityDynamic(2026, 6);
+
+        self::assertTrue($r['available']);
+        // 10 × (0.20 × 1.21) + 5 × 0.08 = 2.42 + 0.40
+        self::assertEqualsWithDelta(2.82, $r['energy_dynamic'], 0.0001);
+        self::assertEqualsWithDelta(15.0, $r['matched_kwh'], 0.0001);
+        self::assertEqualsWithDelta(66.7, $r['coverage_pct'], 0.1); // 10/15 couverts
+        self::assertSame('dynamic', $r['cost']['mode']);
+        self::assertCount(1, $r['daily']);
+    }
+
+    public function testMonthElectricityDynamicUnavailableWithoutPrices(): void
+    {
+        $legacy = new FakeLegacyDailyRepository(
+            monthlyDeltasForMonth: $this->electricityDeltas(),
+            hourlyImportDeltas: [['hour' => '2026-06-10 10:00:00', 'import_kwh' => 10.0]],
+        );
+
+        $svc = $this->makeDynamicService(
+            $legacy,
+            new FakeTariffRepository(grid: $this->electricityGrid()),
+            new FakeDynamicPriceRepository(),
+        );
+        $r = $svc->estimateMonthElectricityDynamic(2026, 6);
+
+        self::assertFalse($r['available']);
+    }
+
+    public function testDynamicUnavailableWhenDisabled(): void
+    {
+        $legacy = new FakeLegacyDailyRepository(
+            monthlyDeltasForMonth: $this->electricityDeltas(),
+            hourlyImportDeltas: [['hour' => '2026-06-10 10:00:00', 'import_kwh' => 10.0]],
+        );
+        $dynamic = new FakeDynamicPriceRepository(pricesByHour: ['2026-06-10 10:00:00' => 0.20]);
+
+        $svc = $this->makeDynamicService(
+            $legacy,
+            new FakeTariffRepository(grid: $this->electricityGrid()),
+            $dynamic,
+            enabled: false,
+        );
+        $r = $svc->estimateMonthElectricityDynamic(2026, 6);
+
+        self::assertFalse($r['available']);
+        self::assertSame('Tarif dynamique non configuré.', $r['reason']);
     }
 
     // ── Gaz : dernière période ───────────────────────────────────────────────

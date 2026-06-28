@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Service;
 
 use App\Domain\TariffGrid;
+use App\Repository\Contract\DynamicPriceRepositoryInterface;
 use App\Repository\Contract\GasReadingRepositoryInterface;
 use App\Repository\Contract\LegacyDailyRepositoryInterface;
 use App\Repository\Contract\TariffRepositoryInterface;
@@ -23,12 +24,18 @@ final class CostCalculationService
     /** Coefficient PCS gaz par défaut (kWh/m³) en l'absence de valeur configurée. */
     private const DEFAULT_PCS = 10.55;
 
+    /**
+     * @param array<string, mixed> $dynamicConfig Bloc de config `dynamic_prices`
+     *        (enabled, supplier_markup_per_kwh, vat_rate…). Vide = tarif dynamique désactivé.
+     */
     public function __construct(
         private readonly LegacyDailyRepositoryInterface $legacyRepo,
         private readonly TariffRepositoryInterface $tariffRepo,
         private readonly GasReadingRepositoryInterface $gasRepo,
         private readonly TariffCalculatorService $calculator,
         private readonly GasMonthInterpolator $gasInterpolator = new GasMonthInterpolator(),
+        private readonly ?DynamicPriceRepositoryInterface $dynamicPriceRepo = null,
+        private readonly array $dynamicConfig = [],
     ) {
     }
 
@@ -83,6 +90,56 @@ final class CostCalculationService
         }
 
         return $this->buildElectricityResponse($deltas, $tariff, $days);
+    }
+
+    /**
+     * Estimation « tarif dynamique » du mois courant (part énergie indexée au spot).
+     *
+     * @return array<string, mixed>
+     */
+    public function estimateCurrentMonthElectricityDynamic(): array
+    {
+        $deltas = $this->legacyRepo->getMonthlyDeltas();
+        if (empty($deltas)) {
+            return ['available' => false, 'reason' => 'No data for current month'];
+        }
+
+        $from = new DateTimeImmutable($deltas['from']);
+        $to   = new DateTimeImmutable($deltas['to']);
+        $days = $this->computeDays($from, $to);
+
+        $tariff = $this->tariffRepo->findActiveGrid('electricity', $to);
+        if ($tariff === null) {
+            return ['available' => false, 'reason' => 'No active electricity tariff configured'];
+        }
+
+        return $this->buildDynamicResponse($deltas, $tariff, $days);
+    }
+
+    /**
+     * Estimation « tarif dynamique » pour un mois calendaire donné.
+     *
+     * @return array<string, mixed>
+     */
+    public function estimateMonthElectricityDynamic(int $year, int $month): array
+    {
+        $deltas = $this->legacyRepo->getMonthlyDeltasForMonth($year, $month);
+        if (empty($deltas)) {
+            return ['available' => false, 'reason' => sprintf('No data for %04d-%02d', $year, $month)];
+        }
+
+        $from = new DateTimeImmutable($deltas['from']);
+        $to   = new DateTimeImmutable($deltas['to']);
+        $days = $this->computeDays($from, $to);
+
+        $tariff = $this->tariffRepo->findActiveGrid('electricity', $from)
+               ?? $this->tariffRepo->findActiveGrid('electricity', $to);
+
+        if ($tariff === null) {
+            return ['available' => false, 'reason' => sprintf('No active electricity tariff for %04d-%02d', $year, $month)];
+        }
+
+        return $this->buildDynamicResponse($deltas, $tariff, $days);
     }
 
     /**
@@ -264,5 +321,118 @@ final class CostCalculationService
             'deltas'       => $deltas,
             'cost'         => $breakdown,
         ];
+    }
+
+    /**
+     * Construit la réponse « tarif dynamique » : croise la conso horaire avec les
+     * prix de marché horaires, indexe la part énergie et réutilise tous les
+     * composants fixes du tarif classique. Repli sur le tarif classique pour les
+     * heures sans prix dynamique (couverture exposée via coverage_pct).
+     *
+     * @param array<string, mixed> $deltas
+     * @return array<string, mixed>
+     */
+    private function buildDynamicResponse(array $deltas, TariffGrid $tariff, int $days): array
+    {
+        if ($this->dynamicPriceRepo === null || ($this->dynamicConfig['enabled'] ?? false) !== true) {
+            return ['available' => false, 'reason' => 'Tarif dynamique non configuré.'];
+        }
+
+        $from      = new DateTimeImmutable($deltas['from']);
+        $to        = new DateTimeImmutable($deltas['to']);
+        $tariffArr = $tariff->toTariffArray();
+
+        $hourlyImport = $this->legacyRepo->getHourlyImportDeltas($from, $to);
+        if ($hourlyImport === []) {
+            return ['available' => false, 'reason' => 'Pas de relevés horaires sur la période.'];
+        }
+
+        $prices = $this->dynamicPriceRepo->getAveragePriceByHour($from, $to->modify('+1 hour'));
+        if ($prices === []) {
+            return ['available' => false, 'reason' => 'Aucun prix dynamique pour cette période (lancez cron_dynamic_prices).'];
+        }
+
+        $vat    = (float) ($this->dynamicConfig['vat_rate'] ?? 0.21);
+        $markup = (float) ($this->dynamicConfig['supplier_markup_per_kwh'] ?? 0.0);
+
+        $energyTtc  = 0.0;
+        $totalKwh   = 0.0;
+        $coveredKwh = 0.0;
+        /** @var array<string, array{day: string, import_kwh: float, energy_dynamic: float}> $daily */
+        $daily = [];
+
+        foreach ($hourlyImport as $row) {
+            $hour = $row['hour'];
+            $kwh  = $row['import_kwh'];
+            $totalKwh += $kwh;
+
+            if (isset($prices[$hour])) {
+                $rateTtc     = $prices[$hour] * (1.0 + $vat) + $markup;
+                $coveredKwh += $kwh;
+            } else {
+                // Heure sans prix dynamique → repli sur le tarif fournisseur classique (déjà TTC).
+                $rateTtc = $this->classicEnergyRateForHour($hour, $tariffArr);
+            }
+
+            $lineCost   = $kwh * $rateTtc;
+            $energyTtc += $lineCost;
+
+            $day = substr($hour, 0, 10);
+            if (!isset($daily[$day])) {
+                $daily[$day] = ['day' => $day, 'import_kwh' => 0.0, 'energy_dynamic' => 0.0];
+            }
+            $daily[$day]['import_kwh']     += $kwh;
+            $daily[$day]['energy_dynamic'] += $lineCost;
+        }
+
+        $breakdown = $this->calculator->calculateElectricityCostDynamic(
+            kwhT1:            (float) ($deltas['prelev_jour'] ?? 0.0),
+            kwhT2:            (float) ($deltas['prelev_nuit'] ?? 0.0),
+            kwhExportT1:      (float) ($deltas['injec_jour']  ?? 0.0),
+            kwhExportT2:      (float) ($deltas['injec_nuit']  ?? 0.0),
+            days:             $days,
+            tariff:           $tariffArr,
+            dynamicEnergyTtc: $energyTtc,
+            kwhSolar:         (float) ($deltas['solar'] ?? 0.0),
+        );
+
+        $dailyOut = array_values(array_map(
+            static fn (array $d): array => [
+                'day'            => $d['day'],
+                'import_kwh'     => round($d['import_kwh'], 3),
+                'energy_dynamic' => round($d['energy_dynamic'], 2),
+            ],
+            $daily
+        ));
+
+        return [
+            'available'      => true,
+            'period_from'    => $deltas['from'],
+            'period_to'      => $deltas['to'],
+            'days'           => $days,
+            'tariff_name'    => $tariff->name,
+            'tariff_rates'   => $tariffArr,
+            'deltas'         => $deltas,
+            'energy_dynamic' => round($energyTtc, 2),
+            'avg_price_kwh'  => $totalKwh > 0.0 ? round($energyTtc / $totalKwh, 6) : null,
+            'coverage_pct'   => $totalKwh > 0.0 ? round($coveredKwh / $totalKwh * 100.0, 1) : 0.0,
+            'matched_kwh'    => round($totalKwh, 3),
+            'cost'           => $breakdown,
+            'daily'          => $dailyOut,
+        ];
+    }
+
+    /**
+     * Tarif fournisseur classique (TTC) applicable à une heure donnée, pour le repli
+     * des heures sans prix dynamique. T1 (jour) 07h–23h, T2 (nuit) sinon.
+     *
+     * @param array<string, mixed> $tariff
+     */
+    private function classicEnergyRateForHour(string $hour, array $tariff): float
+    {
+        $h     = (int) substr($hour, 11, 2);
+        $isDay = $h >= 7 && $h < 23;
+
+        return (float) ($isDay ? ($tariff['energy_t1'] ?? 0.0) : ($tariff['energy_t2'] ?? 0.0));
     }
 }

@@ -48,7 +48,7 @@ app/
 │   └── assets/                   ← CSS/JS statiques, versionnés (cache-busting)
 │       ├── css/  tokens · dashboard · tariffs · login
 │       └── js/   dashboard · tariffs
-├── scripts/                      ← cron_hourly.php · cron_daily_webhook.php
+├── scripts/                      ← cron_hourly.php · cron_daily_webhook.php · cron_dynamic_prices.php
 ├── sql/                          ← schema.sql · migrations/
 ├── templates/                    ← vues HTML : dashboard · tariffs · login
 └── src/
@@ -226,7 +226,21 @@ Ajouter dans la crontab (`crontab -e`) :
 
 # Envoi quotidien vers EnergyID (01:15)
 15 1 * * * /usr/bin/php /workspace/app/scripts/cron_daily_webhook.php >> /var/log/energy-daily.log 2>&1
+
+# Prix dynamiques day-ahead, après publication du marché (~13h30)
+30 13 * * * /usr/bin/php /workspace/app/scripts/cron_dynamic_prices.php >> /var/log/energy-dynamic.log 2>&1
 ```
+
+### Tarif dynamique (prix day-ahead)
+
+Le bloc `dynamic_prices` de `config.php` active la récupération des prix spot
+horaires/quart-horaires (par défaut **ENTSO-E**, zone BE) — token gratuit à obtenir
+sur [transparency.entsoe.eu](https://transparency.entsoe.eu/) (champ `security_token`).
+`cron_dynamic_prices.php` alimente la table `dynamic_prices` ; le dashboard affiche
+alors une **comparaison** classique vs dynamique (la part énergie suit le prix de marché,
+les autres postes restent ceux du tarif régulé).
+
+> Base existante : appliquer `app/sql/migrations/2026-06-27_dynamic_prices.sql`.
 
 ---
 

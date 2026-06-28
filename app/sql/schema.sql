@@ -76,6 +76,22 @@ CREATE TABLE IF NOT EXISTS tariff_grid_lines (
         ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+-- ── Prix dynamiques day-ahead (marché spot, ex. ENTSO-E) ─────────────────
+-- price_eur_kwh = prix spot BRUT HTVA (€/kWh) ; marge fournisseur et TVA sont
+-- appliquées au moment du calcul, pas au stockage.
+CREATE TABLE IF NOT EXISTS dynamic_prices (
+    id             BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    energy_type    ENUM('electricity') NOT NULL DEFAULT 'electricity',
+    period_start   DATETIME NOT NULL COMMENT 'Début intervalle (timezone locale)',
+    period_end     DATETIME NOT NULL,
+    resolution_min SMALLINT UNSIGNED NOT NULL COMMENT '15 ou 60',
+    price_eur_kwh  DECIMAL(12,7) NOT NULL COMMENT 'Prix spot day-ahead €/kWh (HTVA, hors marge)',
+    source         VARCHAR(50) NOT NULL DEFAULT 'entsoe',
+    fetched_at     DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY uq_dynamic_prices (energy_type, period_start),
+    INDEX idx_dynamic_prices_period (period_start)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 -- ── État de synchronisation webhook EnergyID ─────────────────────────────
 CREATE TABLE IF NOT EXISTS webhook_sync_state (
     source_name  VARCHAR(120) PRIMARY KEY COMMENT 'prelevement-jour | prelevement-nuit | injection-jour | injection-nuit | production-solaire | gas-index | water-index',

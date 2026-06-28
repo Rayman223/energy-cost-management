@@ -11,6 +11,7 @@ use App\Http\JsonResponse;
 use App\Http\Request;
 use App\Http\Router;
 use App\Infrastructure\Database;
+use App\Repository\DynamicPriceRepository;
 use App\Repository\GasRepository;
 use App\Repository\LegacyDailyRepository;
 use App\Repository\TariffRepository;
@@ -37,7 +38,15 @@ try {
     $gasRepo    = new GasRepository($pdo);
     $waterRepo  = new WaterRepository($pdo);
     $tariffRepo = new TariffRepository($pdo);
-    $costSvc    = new CostCalculationService($legacyRepo, $tariffRepo, $gasRepo, new TariffCalculatorService());
+    $dynPriceRepo = new DynamicPriceRepository($pdo);
+    $costSvc    = new CostCalculationService(
+        legacyRepo: $legacyRepo,
+        tariffRepo: $tariffRepo,
+        gasRepo: $gasRepo,
+        calculator: new TariffCalculatorService(),
+        dynamicPriceRepo: $dynPriceRepo,
+        dynamicConfig: $config['dynamic_prices'] ?? [],
+    );
 } catch (\Throwable $e) {
     JsonResponse::error('DB connection failed: ' . $e->getMessage(), 503)->send();
     exit;
