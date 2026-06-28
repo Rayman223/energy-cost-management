@@ -1,16 +1,54 @@
-/* ── Reset & design tokens partagés (dashboard + tarifs) ─────────────────────
+/* ── Reset & design tokens partagés (dashboard + tarifs + login) ─────────────
    Source unique des variables de thème. Chargé avant les CSS de page.
-   `login.css` n'en dépend pas (style autonome). */
+   Bi-thème piloté par l'attribut `data-theme` sur <html> (posé par un snippet
+   anti-FOUC en <head>, puis basculé par assets/js/theme.js).
+   - `:root`                  → thème CLAIR (défaut)
+   - `:root[data-theme="dark"]` → thème SOMBRE
+   La préférence système (prefers-color-scheme) est résolue en JS, pas en CSS :
+   pas de @media ici, donc pas de duplication de palette. */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
+/* ── Thème CLAIR (défaut) ──────────────────────────────────────────────────
+   Palette repensée : fonds clairs neutres, accents assombris/désaturés pour
+   rester lisibles (visée WCAG AA) sur surfaces blanches. */
 :root {
-  --bg:        #0b0d10;
-  --surface:   #111318;
-  --surface2:  #181c23;
-  --border:    #1f2530;
-  --border2:   #2a3040;
-  --text:      #c8d0dc;
-  --muted:     #556070;
+  --bg:          #f4f6f9;
+  --surface:     #ffffff;
+  --surface2:    #eceff4;
+  --border:      #e1e6ee;
+  --border2:     #ccd3df;
+  --text:        #242b38;   /* corps — AA sur --surface/--bg */
+  --text-strong: #11161f;   /* titres & valeurs */
+  --muted:       #5a6473;   /* secondaire — AA sur fonds clairs */
+  --dotgrid:     #e3e8f0;   /* fond pointillé */
+  --on-amber:    #ffffff;   /* texte sur bouton/accent ambre */
+
+  --amber:     #b8650a;
+  --amber-dim: rgba(184,101,10,.10);
+  --green:     #0c8f5f;
+  --green-dim: rgba(12,143,95,.10);
+  --blue:      #2563c9;
+  --blue-dim:  rgba(37,99,201,.10);
+  --red:       #cf3d3d;
+  --red-dim:   rgba(207,61,61,.09);
+
+  --mono: 'Space Mono', monospace;
+  --sans: 'Syne', sans-serif;
+}
+
+/* ── Thème SOMBRE ─────────────────────────────────────────────────────────── */
+:root[data-theme="dark"] {
+  --bg:          #0b0d10;
+  --surface:     #111318;
+  --surface2:    #181c23;
+  --border:      #1f2530;
+  --border2:     #2a3040;
+  --text:        #c8d0dc;
+  --text-strong: #eef2f8;
+  --muted:       #8b97a8;   /* relevé vs ancien #556070 pour le contraste */
+  --dotgrid:     #1e2530;
+  --on-amber:    #0b0d10;
+
   --amber:     #f5a623;
   --amber-dim: rgba(245,166,35,.12);
   --green:     #2fd58e;
@@ -19,6 +57,18 @@
   --blue-dim:  rgba(65,179,245,.10);
   --red:       #f56565;
   --red-dim:   rgba(245,101,101,.10);
-  --mono: 'Space Mono', monospace;
-  --sans: 'Syne', sans-serif;
 }
+
+/* Bascule douce du fond/texte lors du changement de thème. */
+body { transition: background-color .25s ease, color .25s ease; }
+
+/* ── Bouton de bascule de thème ───────────────────────────────────────────── */
+.theme-toggle {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 36px; height: 36px; border-radius: 8px;
+  border: 1px solid var(--border2); background: var(--surface);
+  color: var(--muted); cursor: pointer; font-size: 1rem; line-height: 1;
+  transition: color .15s, border-color .15s, background .15s;
+}
+.theme-toggle:hover { color: var(--text); border-color: var(--amber); }
+.theme-toggle:focus-visible { outline: 2px solid var(--amber); outline-offset: 2px; }

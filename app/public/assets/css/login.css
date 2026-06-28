@@ -1,7 +1,11 @@
-    body { font-family: Arial, sans-serif; background: #101826; color: #e9eef8; margin: 0; display: grid; place-items: center; min-height: 100vh; }
-    .box { width: min(420px, 90vw); background: #182337; border-radius: 12px; padding: 24px; box-shadow: 0 8px 26px rgba(0,0,0,.35); }
-    h1 { margin-top: 0; font-size: 1.3rem; }
-    label { display: block; margin-top: 12px; margin-bottom: 6px; }
-    input { width: 100%; box-sizing: border-box; border: 1px solid #2f3f5f; border-radius: 8px; background: #0f1726; color: #e9eef8; padding: 10px; }
-    button { margin-top: 16px; width: 100%; border: none; border-radius: 8px; background: #2f87ff; color: #fff; padding: 10px; cursor: pointer; font-weight: 700; }
-    .error { margin-top: 10px; color: #ff9da6; }
+    /* Dépend désormais de tokens.css (variables de thème) : la page de login
+       suit automatiquement le thème clair/sombre mémorisé/système. */
+    body { font-family: var(--sans), Arial, sans-serif; background: var(--bg); color: var(--text); margin: 0; font-size: .95rem; display: grid; place-items: center; min-height: 100vh; transition: background-color .25s ease, color .25s ease; }
+    .box { width: min(420px, 90vw); background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 24px; box-shadow: 0 8px 26px rgba(0,0,0,.12); }
+    h1 { margin-top: 0; font-size: 1.5rem; color: var(--text-strong); }
+    label { display: block; margin-top: 12px; margin-bottom: 6px; font-size: .95rem; }
+    input { width: 100%; box-sizing: border-box; border: 1px solid var(--border2); border-radius: 8px; background: var(--bg); color: var(--text); padding: 10px; font-size: .95rem; outline: none; transition: border-color .2s; }
+    input:focus { border-color: var(--amber); }
+    button { margin-top: 16px; width: 100%; border: none; border-radius: 8px; background: var(--amber); color: var(--on-amber); padding: 11px; cursor: pointer; font-weight: 700; font-size: .95rem; }
+    button:hover { opacity: .92; }
+    .error { margin-top: 10px; color: var(--red); font-size: .9rem; }

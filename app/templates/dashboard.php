@@ -42,6 +42,8 @@ if (!function_exists('fmtCost')) {
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Manage Energy — Brussels</title>
+<!-- Anti-FOUC : pose le thème (clair/sombre) avant le 1er rendu (localStorage > système). -->
+<script>(function(){try{var t=localStorage.getItem('theme');if(!t)t=window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';document.documentElement.setAttribute('data-theme',t);}catch(e){document.documentElement.setAttribute('data-theme','light');}})();</script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
@@ -77,6 +79,7 @@ if (!function_exists('fmtCost')) {
         <span class="sync-dot <?= $syncClass === 'error' ? 'error' : ($syncClass === 'stale' ? 'stale' : '') ?>"></span>
         <?= $dbError ? 'DB offline' : 'Live' ?>
       </div>
+      <button type="button" class="theme-toggle" id="theme-toggle" aria-label="Changer de thème">🌙</button>
     </div>
   </header>
 
@@ -92,7 +95,7 @@ if (!function_exists('fmtCost')) {
   <div class="section-header">
     <span class="section-title">Puissance instantanée — temps réel</span>
     <span class="section-line"></span>
-    <span id="live-ts" style="font-family:var(--mono);font-size:.68rem;color:var(--muted)">—</span>
+    <span id="live-ts" style="font-family:var(--mono);font-size:.76rem;color:var(--muted)">—</span>
   </div>
 
   <div class="cards cards-2">
@@ -117,7 +120,7 @@ if (!function_exists('fmtCost')) {
     <span class="section-title">Consommation — mois en cours</span>
     <span class="section-line"></span>
     <?php if ($deltas): ?>
-    <span style="font-family:var(--mono);font-size:.68rem;color:var(--muted)">
+    <span style="font-family:var(--mono);font-size:.76rem;color:var(--muted)">
       <?= $this->e(substr($deltas['from'] ?? '', 0, 10)) ?>
       → <?= $this->e(substr($deltas['to'] ?? '', 0, 10)) ?>
     </span>
@@ -213,7 +216,7 @@ if (!function_exists('fmtCost')) {
     </div>
 
     <div class="gas-form">
-      <div style="font-size:.72rem;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin-bottom:18px">
+      <div style="font-size:.78rem;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin-bottom:18px">
         Nouvel index gaz
       </div>
       <?php if ($gasLatest): ?>
@@ -282,7 +285,7 @@ if (!function_exists('fmtCost')) {
     </div>
 
     <div class="gas-form">
-      <div style="font-size:.72rem;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin-bottom:18px">
+      <div style="font-size:.78rem;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin-bottom:18px">
         Nouvel index eau
       </div>
       <?php if ($waterLatest): ?>
@@ -350,7 +353,7 @@ if (!function_exists('fmtCost')) {
   </div>
 
   <div style="margin-top:48px;padding-top:20px;border-top:1px solid var(--border);
-              font-family:var(--mono);font-size:.68rem;color:var(--muted);display:flex;
+              font-family:var(--mono);font-size:.76rem;color:var(--muted);display:flex;
               justify-content:space-between;flex-wrap:wrap;gap:8px">
     <span>Manage Energy v2 — Brussels</span>
     <span>PHP <?= PHP_VERSION ?> · <?= date('d/m/Y H:i:s') ?></span>
@@ -358,6 +361,7 @@ if (!function_exists('fmtCost')) {
 
 </div><!-- /wrap -->
 
+<script defer src="<?= \App\Support\Assets::url('assets/js/theme.js') ?>"></script>
 <script defer src="<?= \App\Support\Assets::url('assets/js/dashboard.js') ?>"></script>
 </body>
 </html>

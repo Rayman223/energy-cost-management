@@ -5,7 +5,7 @@
     font-family: var(--sans);
     min-height: 100vh;
     /* Subtle dot-grid background */
-    background-image: radial-gradient(circle, #1e2530 1px, transparent 1px);
+    background-image: radial-gradient(circle, var(--dotgrid) 1px, transparent 1px);
     background-size: 28px 28px;
   }
 
@@ -29,8 +29,8 @@
     flex-shrink: 0;
     box-shadow: 0 0 20px rgba(245,166,35,.35);
   }
-  .logo-text { font-size: 1.15rem; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; color: #eef2f8; }
-  .logo-sub  { font-family: var(--mono); font-size: .7rem; color: var(--muted); letter-spacing: .08em; margin-top: 1px; }
+  .logo-text { font-size: 1.15rem; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; color: var(--text-strong); }
+  .logo-sub  { font-family: var(--mono); font-size: .76rem; color: var(--muted); letter-spacing: .08em; margin-top: 1px; }
 
   .header-right { display: flex; align-items: center; gap: 20px; flex-wrap: wrap; }
   .clock { font-family: var(--mono); font-size: .8rem; color: var(--muted); text-align: right; }
@@ -41,7 +41,7 @@
     display: flex; align-items: center; gap: 8px;
     background: var(--surface); border: 1px solid var(--border);
     border-radius: 6px; padding: 6px 12px;
-    font-family: var(--mono); font-size: .72rem; color: var(--muted);
+    font-family: var(--mono); font-size: .78rem; color: var(--muted);
   }
   .sync-dot {
     width: 7px; height: 7px; border-radius: 50%;
@@ -84,7 +84,7 @@
   }
   .card:hover { border-color: var(--border2); }
   .card-label {
-    font-size: .72rem; font-weight: 700; letter-spacing: .12em;
+    font-size: .78rem; font-weight: 700; letter-spacing: .12em;
     text-transform: uppercase; color: var(--muted);
     margin-bottom: 10px;
     display: flex; align-items: center; gap: 6px;
@@ -106,7 +106,7 @@
     font-weight: 700;
     letter-spacing: -.02em;
     line-height: 1;
-    color: #eef2f8;
+    color: var(--text-strong);
   }
   /*.card-value .val { }*/
   .card-value .unit { font-size: .9rem; font-weight: 400; color: var(--muted); margin-left: 4px; }
@@ -148,7 +148,7 @@
   .cost-line.subtotal-sep     { border-top: 1px solid var(--border2); margin-top: 4px; padding-top: 14px; }
 
   .cost-group-label {
-    font-size: .68rem; font-weight: 700; letter-spacing: .13em;
+    font-size: .76rem; font-weight: 700; letter-spacing: .13em;
     text-transform: uppercase; color: var(--muted);
     padding: 14px 0 6px; border-bottom: 1px solid var(--border2);
     margin-bottom: 2px;
@@ -166,7 +166,7 @@
     display: flex; flex-direction: column; justify-content: space-between;
   }
   .cost-total-label {
-    font-size: .72rem; font-weight: 700; letter-spacing: .15em;
+    font-size: .78rem; font-weight: 700; letter-spacing: .15em;
     text-transform: uppercase; color: var(--muted); margin-bottom: 16px;
   }
   .cost-total-amount {
@@ -207,22 +207,22 @@
   table { width: 100%; border-collapse: collapse; font-size: .9rem; }
   thead th {
     background: var(--surface2); color: var(--muted);
-    font-size: .72rem; font-weight: 700; letter-spacing: .1em; text-transform: uppercase;
+    font-size: .78rem; font-weight: 700; letter-spacing: .1em; text-transform: uppercase;
     padding: 10px 16px; text-align: left;
   }
   tbody tr { border-top: 1px solid var(--border); }
   tbody tr:hover { background: var(--surface2); }
-  tbody td { padding: 10px 16px; font-family: var(--mono); color: var(--text); font-size: .85rem; }
+  tbody td { padding: 10px 16px; font-family: var(--mono); color: var(--text); font-size: .9rem; }
   .td-delta { color: var(--blue); }
   .td-empty { padding: 24px 16px; color: var(--muted); font-style: italic; font-size: .88rem; }
 
   .gas-form { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 22px 24px; }
   .form-row { margin-bottom: 16px; }
-  .form-label { display: block; font-size: .65rem; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); margin-bottom: 8px; }
+  .form-label { display: block; font-size: .75rem; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); margin-bottom: 8px; }
   .form-input {
     width: 100%; background: var(--bg);
     border: 1px solid var(--border2); border-radius: 6px;
-    padding: 9px 14px; color: var(--text); font-family: var(--mono); font-size: .88rem;
+    padding: 9px 14px; color: var(--text); font-family: var(--mono); font-size: .92rem;
     outline: none; transition: border-color .2s;
   }
   .form-input:focus { border-color: var(--amber); }
@@ -234,7 +234,7 @@
     cursor: pointer; border: none; transition: opacity .15s, transform .1s;
   }
   .btn:active { transform: scale(.97); }
-  .btn-amber { background: var(--amber); color: #0b0d10; }
+  .btn-amber { background: var(--amber); color: var(--on-amber); }
   .btn-ghost { background: transparent; color: var(--muted); border: 1px solid var(--border2); }
   .btn-ghost:hover { color: var(--text); border-color: var(--border2); }
   .btn:disabled { opacity: .4; cursor: not-allowed; }
@@ -283,7 +283,7 @@
     display: flex; gap: 4px; margin-left: 6px;
   }
   .month-nav-mode button {
-    padding: 5px 12px; border-radius: 6px; font-size: .72rem; font-weight: 700;
+    padding: 5px 12px; border-radius: 6px; font-size: .76rem; font-weight: 700;
     letter-spacing: .06em; text-transform: uppercase; cursor: pointer;
     border: 1px solid var(--border2); background: transparent; color: var(--muted);
     transition: color .15s, border-color .15s, background .15s;
@@ -303,10 +303,10 @@
   }
   .year-month-card:hover { border-color: var(--amber); }
   .year-month-card.active { border-color: var(--amber); background: var(--amber-dim); }
-  .year-month-card .ymc-label { font-size: .7rem; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; }
+  .year-month-card .ymc-label { font-size: .76rem; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; }
   .year-month-card .ymc-cost    { font-family: var(--mono); font-size: 1.05rem; font-weight: 700; color: var(--amber); }
-  .year-month-card .ymc-kwh     { font-family: var(--mono); font-size: .72rem; color: var(--muted); margin-top: 2px; }
-  .year-month-card .ymc-savings { font-family: var(--mono); font-size: .72rem; color: var(--green); margin-top: 2px; }
+  .year-month-card .ymc-kwh     { font-family: var(--mono); font-size: .76rem; color: var(--muted); margin-top: 2px; }
+  .year-month-card .ymc-savings { font-family: var(--mono); font-size: .76rem; color: var(--green); margin-top: 2px; }
   .year-month-card .ymc-nd      { color: var(--muted); font-size: .8rem; }
   .ymc-loading { opacity: .4; }
 

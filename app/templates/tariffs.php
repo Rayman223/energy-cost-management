@@ -26,6 +26,8 @@ use App\Domain\TariffGrid;
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Tarifs — Manage Energy</title>
+<!-- Anti-FOUC : pose le thème (clair/sombre) avant le 1er rendu (localStorage > système). -->
+<script>(function(){try{var t=localStorage.getItem('theme');if(!t)t=window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';document.documentElement.setAttribute('data-theme',t);}catch(e){document.documentElement.setAttribute('data-theme','light');}})();</script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
@@ -43,7 +45,10 @@ use App\Domain\TariffGrid;
       <div class="logo-sub">Gestion des tarifs</div>
     </div>
   </div>
-  <a href="index.php" class="back">← Dashboard</a>
+  <div class="header-right">
+    <a href="index.php" class="back">← Dashboard</a>
+    <button type="button" class="theme-toggle" id="theme-toggle" aria-label="Changer de thème">🌙</button>
+  </div>
 </header>
 
 <?php if ($success): ?>
@@ -240,7 +245,7 @@ use App\Domain\TariffGrid;
 </div>
 
 <div style="margin-top:40px;padding-top:16px;border-top:1px solid var(--border);
-            font-family:var(--mono);font-size:.68rem;color:var(--muted);display:flex;
+            font-family:var(--mono);font-size:.76rem;color:var(--muted);display:flex;
             justify-content:space-between;flex-wrap:wrap;gap:8px;">
   <span>Manage Energy v2 — Tarifs</span>
   <a href="../tools/migrate_db.php" style="color:var(--blue);text-decoration:none">→ Migration DB</a>
@@ -248,6 +253,7 @@ use App\Domain\TariffGrid;
 
 </div>
 
+<script defer src="<?= \App\Support\Assets::url('assets/js/theme.js') ?>"></script>
 <script src="<?= \App\Support\Assets::url('assets/js/tariffs.js') ?>"></script>
 </body>
 </html>
