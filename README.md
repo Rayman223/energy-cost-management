@@ -126,6 +126,30 @@ cp app/config/config.example.php app/config/config.php
 mysql -u <user> -p <database> < app/sql/schema.sql
 ```
 
+### Déploiement Unraid (SWAG)
+
+Sur le serveur Unraid (app servie par le container **SWAG**), le script
+[`app/scripts/deploy_unraid.sh`](app/scripts/deploy_unraid.sh) met à jour `energyv2`
+en une commande, à partir d'un **tag git** (ou du dernier `main`), de façon idempotente :
+
+```bash
+./app/scripts/deploy_unraid.sh            # déploie le dernier commit de main
+./app/scripts/deploy_unraid.sh beta-0.3   # déploie le tag git beta-0.3
+```
+
+Il enchaîne : `git fetch`/`reset --hard` sur la cible, `composer install --no-dev`
+(dans le container SWAG), puis applique `app/sql/schema.sql`. Le `git clean` est lancé
+**sans `-x`** : `app/config/config.php` (credentials, non versionné) et `/vendor/` sont
+**préservés**.
+
+Les variables de configuration (chemins, noms de containers) sont en tête du script.
+Lancement possible en SSH ou via le plugin **User Scripts** d'Unraid (schedule manuel
+ou « At Startup of Array »).
+
+> ⚠️ Le script applique uniquement `schema.sql` (`CREATE TABLE IF NOT EXISTS`). Les
+> migrations de schéma (`app/sql/migrations/*.sql`, ex. `ALTER TABLE`) restent à appliquer
+> **manuellement** — il n'y a pas encore de runner de migration versionné.
+
 ---
 
 ## Configuration
