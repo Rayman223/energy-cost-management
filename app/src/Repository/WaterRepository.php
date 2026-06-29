@@ -81,6 +81,17 @@ final class WaterRepository implements MeterReadingRepositoryInterface
     }
 
     /**
+     * Fenêtre de relevés pour l'interpolation à minuit d'un mois calendaire
+     * (cf. MonthlyConsumptionInterpolator). Même logique que le gaz.
+     *
+     * @return list<array{reading_at: string, counter_m3: float}>
+     */
+    public function getReadingsForInterpolation(int $year, int $month): array
+    {
+        return GasRepository::fetchInterpolationWindow($this->pdo, self::TABLE, $year, $month);
+    }
+
+    /**
      * Fetch water readings strictly after $fromExclusive and up to $toInclusive.
      * Returns rows shaped as {timestamp, value} to match the sync service contract.
      *

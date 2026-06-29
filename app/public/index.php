@@ -21,8 +21,11 @@ $gasCostData  = null;
 $syncStatus   = null;
 $gasLatest    = null;
 $waterLatest  = null;
+$waterCostData = null;
 $gasInitYear  = (int) date('Y');
 $gasInitMonth = (int) date('n');
+$waterInitYear  = (int) date('Y');
+$waterInitMonth = (int) date('n');
 
 try {
     $config     = require __DIR__ . '/../bootstrap.php';
@@ -43,6 +46,7 @@ try {
         calculator: new TariffCalculatorService(),
         dynamicPriceRepo: $dynPriceRepo,
         dynamicConfig: $config['dynamic_prices'] ?? [],
+        waterRepo: $waterRepo,
     );
 
     $deltas      = $legacyRepo->getMonthlyDeltas();
@@ -56,6 +60,12 @@ try {
     }
     $gasLatest   = $gasRepo->getLatest();
     $waterLatest = $waterRepo->getLatest();
+    if ($waterLatest !== null && !empty($waterLatest['reading_at'])) {
+        $waterPeriod    = new DateTimeImmutable((string) $waterLatest['reading_at']);
+        $waterInitYear  = (int) $waterPeriod->format('Y');
+        $waterInitMonth = (int) $waterPeriod->format('n');
+    }
+    $waterCostData = $costSvc->estimateMonthWater($waterInitYear, $waterInitMonth);
 
     $syncStatus = [
         'prelevement_jour'   => $legacyRepo->getLastSentAt('prelevement-jour')?->format('d/m H:i'),
@@ -77,9 +87,12 @@ echo (new View(__DIR__ . '/../templates'))->render('dashboard', [
     'gasCostData'  => $gasCostData,
     'gasLatest'    => $gasLatest,
     'waterLatest'  => $waterLatest,
+    'waterCostData' => $waterCostData,
     'syncStatus'   => $syncStatus,
     'initYear'     => (int) date('Y'),
     'initMonth'    => (int) date('n'),
     'gasInitYear'  => $gasInitYear,
     'gasInitMonth' => $gasInitMonth,
+    'waterInitYear'  => $waterInitYear,
+    'waterInitMonth' => $waterInitMonth,
 ]);

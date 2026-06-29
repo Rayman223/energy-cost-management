@@ -48,6 +48,13 @@ final class CostController
         return JsonResponse::ok($this->costSvc->estimateMonthGas($year, $month));
     }
 
+    public function waterMonthCost(Request $request): JsonResponse
+    {
+        [$year, $month] = $this->yearMonth($request);
+
+        return JsonResponse::ok($this->costSvc->estimateMonthWater($year, $month));
+    }
+
     /**
      * Année/mois depuis la requête (défaut : période courante), validés.
      *

@@ -107,23 +107,26 @@ final class GasRepository implements GasReadingRepositoryInterface, MeterReading
     }
 
     /**
-     * Get the two readings that BRACKET a calendar month for linear interpolation.
+     * Fenêtre de relevés pour l'interpolation à minuit d'un mois calendaire :
+     * le dernier relevé AVANT minuit le 1er de M, TOUS les relevés du mois, et le
+     * premier relevé À/APRÈS minuit le 1er de M+1. Cette fenêtre fournit les
+     * segments adjacents nécessaires pour interpoler (ou extrapoler) l'index aux
+     * deux bornes du mois — cf. MonthlyConsumptionInterpolator.
      *
-     * Strategy:
-     *   $from = last reading STRICTLY BEFORE the 1st of month M at 00:00.
-     *           Fallback: first reading inside month M (partial coverage — no
-     *           backward extrapolation possible).
-     *
-     *   $to   = first reading ON OR AFTER the 1st of month M+1 at 00:00.
-     *           Fallback: latest reading available (current/incomplete month).
-     *
-     * CostCalculationService uses these two rows to interpolate the exact m³
-     * consumed within the calendar month, no matter when the readings were taken
-     * (e.g. an Aug-31 reading instead of a Sep-01 one).
-     *
-     * @return array{from: array<string, mixed>|null, to: array<string, mixed>|null}
+     * @return list<array{reading_at: string, counter_m3: float}>
      */
-    public function getTwoReadingsForMonth(int $year, int $month): array
+    public function getReadingsForInterpolation(int $year, int $month): array
+    {
+        return self::fetchInterpolationWindow($this->pdo, self::TABLE, $year, $month);
+    }
+
+    /**
+     * Logique partagée gaz/eau de la fenêtre d'interpolation (même schéma de
+     * table : reading_at + counter_m3).
+     *
+     * @return list<array{reading_at: string, counter_m3: float}>
+     */
+    public static function fetchInterpolationWindow(PDO $pdo, string $table, int $year, int $month): array
     {
         $firstOfMonth = sprintf('%04d-%02d-01 00:00:00', $year, $month);
 
@@ -131,62 +134,24 @@ final class GasRepository implements GasReadingRepositoryInterface, MeterReading
         $nextMonth   = $month === 12 ? 1         : $month + 1;
         $firstOfNext = sprintf('%04d-%02d-01 00:00:00', $nextYear, $nextMonth);
 
-        // ── $from : last reading strictly before the 1st of month M ─────────
-        $stmt = $this->pdo->prepare(
-            'SELECT id, reading_at, counter_m3
-             FROM ' . self::TABLE . '
-             WHERE reading_at < :ref
-             ORDER BY reading_at DESC
-             LIMIT 1'
+        // Dernier relevé avant le mois ∪ relevés du mois ∪ premier relevé après le mois.
+        $sql = '(SELECT reading_at, counter_m3 FROM ' . $table . ' WHERE reading_at < :start ORDER BY reading_at DESC LIMIT 1)'
+            . ' UNION ALL '
+            . '(SELECT reading_at, counter_m3 FROM ' . $table . ' WHERE reading_at >= :start AND reading_at < :next ORDER BY reading_at ASC)'
+            . ' UNION ALL '
+            . '(SELECT reading_at, counter_m3 FROM ' . $table . ' WHERE reading_at >= :next ORDER BY reading_at ASC LIMIT 1)'
+            . ' ORDER BY reading_at ASC';
+
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute(['start' => $firstOfMonth, 'next' => $firstOfNext]);
+
+        return array_map(
+            static fn (array $row): array => [
+                'reading_at' => (string) $row['reading_at'],
+                'counter_m3' => (float) $row['counter_m3'],
+            ],
+            $stmt->fetchAll(),
         );
-        $stmt->execute(['ref' => $firstOfMonth]);
-        $from = $stmt->fetch() ?: null;
-
-        // Fallback: no reading before the month → use the first reading inside it
-        if ($from === null) {
-            $stmt = $this->pdo->prepare(
-                'SELECT id, reading_at, counter_m3
-                 FROM ' . self::TABLE . '
-                 WHERE reading_at >= :ref
-                 ORDER BY reading_at ASC
-                 LIMIT 1'
-            );
-            $stmt->execute(['ref' => $firstOfMonth]);
-            $from = $stmt->fetch() ?: null;
-        }
-
-        if ($from === null) {
-            return ['from' => null, 'to' => null];
-        }
-
-        // ── $to : first reading on or after the 1st of month M+1 ────────────
-        $stmt = $this->pdo->prepare(
-            'SELECT id, reading_at, counter_m3
-             FROM ' . self::TABLE . '
-             WHERE reading_at >= :ref
-             ORDER BY reading_at ASC
-             LIMIT 1'
-        );
-        $stmt->execute(['ref' => $firstOfNext]);
-        $to = $stmt->fetch() ?: null;
-
-        // Fallback: incomplete month → use the latest reading available
-        if ($to === null) {
-            $stmt = $this->pdo->query(
-                'SELECT id, reading_at, counter_m3
-                 FROM ' . self::TABLE . '
-                 ORDER BY reading_at DESC
-                 LIMIT 1'
-            );
-            $to = $stmt->fetch() ?: null;
-        }
-
-        // Safety: $from and $to must not be the same row
-        if ($to !== null && $to['id'] === $from['id']) {
-            return ['from' => $from, 'to' => null];
-        }
-
-        return ['from' => $from, 'to' => $to];
     }
 
     /**

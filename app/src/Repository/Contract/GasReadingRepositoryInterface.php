@@ -20,9 +20,11 @@ interface GasReadingRepositoryInterface
     public function getLastTwoReadings(): array;
 
     /**
-     * Les deux relevés encadrant un mois calendaire (interpolation linéaire).
+     * Fenêtre de relevés nécessaire à l'interpolation à minuit d'un mois (le
+     * dernier relevé avant le mois, ceux du mois, le premier après le mois),
+     * triés par horodatage croissant.
      *
-     * @return array{from: array<string, mixed>|null, to: array<string, mixed>|null}
+     * @return list<array{reading_at: string, counter_m3: float}>
      */
-    public function getTwoReadingsForMonth(int $year, int $month): array;
+    public function getReadingsForInterpolation(int $year, int $month): array;
 }

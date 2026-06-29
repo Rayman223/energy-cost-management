@@ -12,6 +12,7 @@ use PHPUnit\Framework\TestCase;
 use Tests\Fake\FakeDynamicPriceRepository;
 use Tests\Fake\FakeGasReadingRepository;
 use Tests\Fake\FakeLegacyDailyRepository;
+use Tests\Fake\FakeMeterReadingRepository;
 use Tests\Fake\FakeTariffRepository;
 
 /**
@@ -25,12 +26,14 @@ final class CostCalculationServiceTest extends TestCase
         FakeLegacyDailyRepository $legacy,
         FakeTariffRepository $tariff,
         FakeGasReadingRepository $gas,
+        ?FakeMeterReadingRepository $water = null,
     ): CostCalculationService {
         return new CostCalculationService(
             legacyRepo: $legacy,
             tariffRepo: $tariff,
             gasRepo: $gas,
             calculator: new TariffCalculatorService(),
+            waterRepo: $water,
         );
     }
 
@@ -280,75 +283,114 @@ final class CostCalculationServiceTest extends TestCase
         self::assertEqualsWithDelta(1000.0, $r['kwh'], 0.0001); // 100 m³ × PCS 10.0
     }
 
-    // ── Gaz : mois calendaire (interpolation) ────────────────────────────────
+    // ── Gaz : mois calendaire (interpolation à minuit) ───────────────────────
 
     public function testMonthGasUnavailableWhenNoReadings(): void
     {
         $svc = $this->makeService(
             new FakeLegacyDailyRepository(),
             new FakeTariffRepository(grid: $this->gasGrid(10.0)),
-            new FakeGasReadingRepository(twoForMonth: ['from' => null, 'to' => null]),
+            new FakeGasReadingRepository(forInterpolation: []),
         );
 
         $r = $svc->estimateMonthGas(2026, 4);
 
         self::assertFalse($r['available']);
+        self::assertSame('Aucun relevé disponible pour cette période.', $r['reason']);
     }
 
-    public function testMonthGasFullMonthNoInterpolation(): void
+    public function testMonthGasFullMonthAlignedBoundaries(): void
     {
         $svc = $this->makeService(
             new FakeLegacyDailyRepository(),
             new FakeTariffRepository(grid: $this->gasGrid(10.0)),
-            new FakeGasReadingRepository(twoForMonth: [
-                'from' => ['reading_at' => '2026-04-01 00:00:00', 'counter_m3' => 1000.0],
-                'to'   => ['reading_at' => '2026-05-01 00:00:00', 'counter_m3' => 1300.0],
+            new FakeGasReadingRepository(forInterpolation: [
+                ['reading_at' => '2026-04-01 00:00:00', 'counter_m3' => 1000.0],
+                ['reading_at' => '2026-05-01 00:00:00', 'counter_m3' => 1300.0],
             ]),
         );
 
         $r = $svc->estimateMonthGas(2026, 4);
 
         self::assertTrue($r['available']);
-        self::assertTrue($r['is_full_month']);
-        self::assertFalse($r['interpolated']);
+        self::assertFalse($r['is_projection']);
         self::assertSame(30, $r['days']);          // avril = 30 jours
         self::assertSame(30, $r['calendar_days']);
         self::assertEqualsWithDelta(300.0, $r['delta_m3'], 0.0001);
+        self::assertEqualsWithDelta(3000.0, $r['kwh'], 0.0001); // 300 m³ × PCS 10
     }
 
-    public function testMonthGasPartialCoverageInterpolates(): void
+    public function testMonthGasRecoversMidnightOffsetIssueExample(): void
     {
+        // Exemple chiffré de l'issue #34 : relevés à 07:54 / 08:05 → janvier doit
+        // valoir 999,754 m³ (et non ~989 comme l'ancien calcul « clampé »).
         $svc = $this->makeService(
             new FakeLegacyDailyRepository(),
             new FakeTariffRepository(grid: $this->gasGrid(10.0)),
-            new FakeGasReadingRepository(twoForMonth: [
-                'from' => ['reading_at' => '2026-04-01 00:00:00', 'counter_m3' => 1000.0],
-                'to'   => ['reading_at' => '2026-04-16 00:00:00', 'counter_m3' => 1150.0],
+            new FakeGasReadingRepository(forInterpolation: [
+                ['reading_at' => '2026-01-01 07:54:00', 'counter_m3' => 74000.0],
+                ['reading_at' => '2026-02-01 08:05:00', 'counter_m3' => 75000.0],
             ]),
         );
 
-        $r = $svc->estimateMonthGas(2026, 4);
+        $r = $svc->estimateMonthGas(2026, 1);
 
         self::assertTrue($r['available']);
-        self::assertFalse($r['is_full_month']);
-        self::assertSame(15, $r['days']);          // couverture réelle
-        self::assertEqualsWithDelta(150.0, $r['delta_m3'], 0.0001);
+        self::assertEqualsWithDelta(999.754, $r['delta_m3'], 0.001);
+        self::assertSame('2026-01-01 00:00:00', $r['month_start']);
+        self::assertSame('2026-02-01 00:00:00', $r['month_end']);
     }
 
-    public function testMonthGasRejectsIdenticalTimestamps(): void
+    public function testMonthGasMissingReadingForOngoingMonth(): void
     {
+        // Un seul relevé pour un mois sans relevé après sa fin → message d'attente.
         $svc = $this->makeService(
             new FakeLegacyDailyRepository(),
             new FakeTariffRepository(grid: $this->gasGrid(10.0)),
-            new FakeGasReadingRepository(twoForMonth: [
-                'from' => ['reading_at' => '2026-04-10 00:00:00', 'counter_m3' => 1000.0],
-                'to'   => ['reading_at' => '2026-04-10 00:00:00', 'counter_m3' => 1000.0],
+            new FakeGasReadingRepository(forInterpolation: [
+                ['reading_at' => '2026-06-10 09:00:00', 'counter_m3' => 1000.0],
             ]),
         );
 
-        $r = $svc->estimateMonthGas(2026, 4);
+        $r = $svc->estimateMonthGas(2026, 6);
 
         self::assertFalse($r['available']);
-        self::assertSame('Les deux relevés ont le même horodatage.', $r['reason']);
+        self::assertSame('Relevé manquant : le calcul se fera dès le prochain relevé.', $r['reason']);
+    }
+
+    // ── Eau : conso mensuelle (volume, sans coût) ────────────────────────────
+
+    public function testMonthWaterUnavailableWithoutWaterRepo(): void
+    {
+        $svc = $this->makeService(
+            new FakeLegacyDailyRepository(),
+            new FakeTariffRepository(grid: null),
+            new FakeGasReadingRepository(),
+        );
+
+        $r = $svc->estimateMonthWater(2026, 4);
+
+        self::assertFalse($r['available']);
+        self::assertSame('Relevés eau indisponibles.', $r['reason']);
+    }
+
+    public function testMonthWaterHappyPathVolumeOnly(): void
+    {
+        $svc = $this->makeService(
+            new FakeLegacyDailyRepository(),
+            new FakeTariffRepository(grid: null),
+            new FakeGasReadingRepository(),
+            new FakeMeterReadingRepository(forInterpolation: [
+                ['reading_at' => '2026-04-01 00:00:00', 'counter_m3' => 100.0],
+                ['reading_at' => '2026-05-01 00:00:00', 'counter_m3' => 130.0],
+            ]),
+        );
+
+        $r = $svc->estimateMonthWater(2026, 4);
+
+        self::assertTrue($r['available']);
+        self::assertEqualsWithDelta(30.0, $r['delta_m3'], 0.0001);
+        self::assertSame(30, $r['days']);
+        self::assertArrayNotHasKey('cost', $r); // pas de coût pour l'eau
     }
 }

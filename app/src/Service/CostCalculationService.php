@@ -8,6 +8,7 @@ use App\Domain\TariffGrid;
 use App\Repository\Contract\DynamicPriceRepositoryInterface;
 use App\Repository\Contract\GasReadingRepositoryInterface;
 use App\Repository\Contract\LegacyDailyRepositoryInterface;
+use App\Repository\Contract\MeterReadingRepositoryInterface;
 use App\Repository\Contract\TariffRepositoryInterface;
 use DateTimeImmutable;
 
@@ -33,9 +34,10 @@ final class CostCalculationService
         private readonly TariffRepositoryInterface $tariffRepo,
         private readonly GasReadingRepositoryInterface $gasRepo,
         private readonly TariffCalculatorService $calculator,
-        private readonly GasMonthInterpolator $gasInterpolator = new GasMonthInterpolator(),
+        private readonly MonthlyConsumptionInterpolator $interpolator = new MonthlyConsumptionInterpolator(),
         private readonly ?DynamicPriceRepositoryInterface $dynamicPriceRepo = null,
         private readonly array $dynamicConfig = [],
+        private readonly ?MeterReadingRepositoryInterface $waterRepo = null,
     ) {
     }
 
@@ -191,40 +193,21 @@ final class CostCalculationService
     }
 
     /**
-     * Estimate gas cost for any given calendar month using LINEAR INTERPOLATION.
+     * Estimate gas cost for any given calendar month using LINEAR INTERPOLATION
+     * TO MIDNIGHT (cf. MonthlyConsumptionInterpolator).
      *
-     * The two readings bracketing the month (from GasRepository::getTwoReadingsForMonth)
-     * may fall on any date — e.g. Aug-31 and Oct-01 for a September month with no
-     * reading on Sep-01. We interpolate linearly by Unix timestamp to derive the
-     * theoretical index at exactly midnight on the 1st of month M and the 1st of
-     * month M+1, then compute the difference as the monthly consumption.
-     *
-     * Fixed daily costs (abonnement, redevance, …) are prorated over the number of
-     * calendar days actually covered by data within the month.
+     * On estime l'index théorique à minuit le 1er de M et le 1er de M+1 à partir
+     * de la fenêtre de relevés (le dernier avant le mois, ceux du mois, le premier
+     * après le mois). Les relevés intermédiaires servent d'ancrages et le décalage
+     * horaire des relevés manuels (relevé à 07:54 → minuit) est récupéré par
+     * extrapolation aux bornes. Mois en cours → projection jusqu'à fin de mois.
      *
      * @return array<string, mixed>
      */
     public function estimateMonthGas(int $year, int $month): array
     {
-        $pair = $this->gasRepo->getTwoReadingsForMonth($year, $month);
-
-        if ($pair['from'] === null || $pair['to'] === null) {
-            return [
-                'available' => false,
-                'reason'    => 'Aucun relevé disponible pour encadrer cette période.',
-            ];
-        }
-
-        $fromDt = new DateTimeImmutable($pair['from']['reading_at']);
-        $toDt   = new DateTimeImmutable($pair['to']['reading_at']);
-
-        // Interpolation linéaire de la consommation du mois (logique pure, testée
-        // indépendamment dans GasMonthInterpolatorTest).
-        $interp = $this->gasInterpolator->interpolate(
-            $fromDt,
-            (float) $pair['from']['counter_m3'],
-            $toDt,
-            (float) $pair['to']['counter_m3'],
+        $interp = $this->interpolator->interpolateMonth(
+            $this->toSeries($this->gasRepo->getReadingsForInterpolation($year, $month)),
             $year,
             $month,
         );
@@ -233,9 +216,12 @@ final class CostCalculationService
             return ['available' => false, 'reason' => $interp->reason];
         }
 
+        $startDt = new DateTimeImmutable($interp->monthStart);
+        $endDt   = new DateTimeImmutable($interp->monthEnd);
+
         // ── Tariff & PCS ──────────────────────────────────────────────────────
-        $tariff = $this->tariffRepo->findActiveGrid('gas', $fromDt)
-               ?? $this->tariffRepo->findActiveGrid('gas', $toDt);
+        $tariff = $this->tariffRepo->findActiveGrid('gas', $startDt)
+               ?? $this->tariffRepo->findActiveGrid('gas', $endDt);
 
         if ($tariff === null) {
             return [
@@ -245,35 +231,87 @@ final class CostCalculationService
         }
 
         $pcs = $tariff->pcsCoefficient
-            ?? $this->tariffRepo->findMostRecentPcs('gas', $fromDt)
+            ?? $this->tariffRepo->findMostRecentPcs('gas', $startDt)
             ?? self::DEFAULT_PCS;
 
-        $kWh = $this->calculator->m3ToKwh($interp->monthlyM3, $pcs);
+        $kWh = $this->calculator->m3ToKwh($interp->monthlyDelta, $pcs);
 
         $breakdown = $this->calculator->calculateGasCost($kWh, $interp->days, $tariff->toTariffArray());
 
         return [
-            'available'           => true,
-            // Show the exact reading timestamps used, for transparency
-            'period_from'         => $pair['from']['reading_at'],
-            'period_to'           => $pair['to']['reading_at'],
-            // Effective window within the calendar month
-            'month_start'         => $interp->monthStart,
-            'month_end'           => $interp->monthEnd,
-            'interpolated'        => $interp->interpolated,
-            'days'                => $interp->days,
-            'calendar_days'       => $interp->calendarDays,
-            'is_full_month'       => $interp->isFull,
-            'delta_m3'            => round($interp->monthlyM3, 3),
-            'kwh'                 => round($kWh, 2),
-            'pcs_coefficient'     => $pcs,
-            'tariff_name'         => $tariff->name,
-            'tariff_rates'        => $tariff->toTariffArray(),
-            'cost'                => $breakdown,
+            'available'       => true,
+            // Fenêtre calendaire effective (bornes interpolées à minuit).
+            'period_from'     => $interp->monthStart,
+            'period_to'       => $interp->monthEnd,
+            'month_start'     => $interp->monthStart,
+            'month_end'       => $interp->monthEnd,
+            'days'            => $interp->days,
+            'calendar_days'   => $interp->calendarDays,
+            'is_projection'   => $interp->isProjection,
+            'delta_m3'        => round($interp->monthlyDelta, 3),
+            'kwh'             => round($kWh, 2),
+            'pcs_coefficient' => $pcs,
+            'tariff_name'     => $tariff->name,
+            'tariff_rates'    => $tariff->toTariffArray(),
+            'cost'            => $breakdown,
+        ];
+    }
+
+    /**
+     * Estimate water CONSUMPTION (volume m³) for a calendar month, using the same
+     * midnight interpolation as gas. L'eau n'a pas de tarif → on renvoie le volume
+     * uniquement (aucun coût).
+     *
+     * @return array<string, mixed>
+     */
+    public function estimateMonthWater(int $year, int $month): array
+    {
+        if ($this->waterRepo === null) {
+            return ['available' => false, 'reason' => 'Relevés eau indisponibles.'];
+        }
+
+        $interp = $this->interpolator->interpolateMonth(
+            $this->toSeries($this->waterRepo->getReadingsForInterpolation($year, $month)),
+            $year,
+            $month,
+        );
+
+        if (!$interp->available) {
+            return ['available' => false, 'reason' => $interp->reason];
+        }
+
+        return [
+            'available'     => true,
+            'period_from'   => $interp->monthStart,
+            'period_to'     => $interp->monthEnd,
+            'month_start'   => $interp->monthStart,
+            'month_end'     => $interp->monthEnd,
+            'days'          => $interp->days,
+            'calendar_days' => $interp->calendarDays,
+            'is_projection' => $interp->isProjection,
+            'delta_m3'      => round($interp->monthlyDelta, 3),
         ];
     }
 
     // ── Helpers privés ─────────────────────────────────────────────────────────
+
+    /**
+     * Convertit une fenêtre de relevés compteur (reading_at + counter_m3) en série
+     * {ts, value} consommée par MonthlyConsumptionInterpolator.
+     *
+     * @param list<array{reading_at: string, counter_m3: float}> $readings
+     * @return list<array{ts: int, value: float}>
+     */
+    private function toSeries(array $readings): array
+    {
+        return array_map(
+            static fn (array $r): array => [
+                'ts'    => (new DateTimeImmutable($r['reading_at']))->getTimestamp(),
+                'value' => (float) $r['counter_m3'],
+            ],
+            $readings,
+        );
+    }
 
     /**
      * Calcule le nombre de jours pour une période électricité.

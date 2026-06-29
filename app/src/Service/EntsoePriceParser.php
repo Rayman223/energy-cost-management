@@ -12,7 +12,7 @@ use SimpleXMLElement;
 /**
  * Parse un document ENTSO-E « Publication_MarketDocument » (prix day-ahead A44).
  *
- * Logique pure (aucun I/O) → testable sans réseau, à la manière de GasMonthInterpolator.
+ * Logique pure (aucun I/O) → testable sans réseau, à la manière de MonthlyConsumptionInterpolator.
  * Normalise les prix en €/kWh HTVA dans la timezone locale de l'application.
  */
 final class EntsoePriceParser

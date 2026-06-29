@@ -8,11 +8,14 @@
  * @var array<string,mixed>|null $gasCostData
  * @var array<string,mixed>|null $gasLatest
  * @var array<string,mixed>|null $waterLatest
+ * @var array<string,mixed>|null $waterCostData
  * @var array<string,string|null>|null $syncStatus
  * @var int                      $initYear
  * @var int                      $initMonth
  * @var int                      $gasInitYear
  * @var int                      $gasInitMonth
+ * @var int                      $waterInitYear
+ * @var int                      $waterInitMonth
  */
 
 // Helpers de présentation (rendu de valeurs numériques / coûts).
@@ -182,6 +185,9 @@ if (!function_exists('fmtCost')) {
     window.__INIT_GAS_COST__ = <?= json_encode($gasCostData ?? ['available' => false, 'reason' => 'No data']) ?>;
     window.__INIT_GAS_YEAR__  = <?= (int) $gasInitYear ?>;
     window.__INIT_GAS_MONTH__ = <?= (int) $gasInitMonth ?>;
+    window.__INIT_WATER_COST__ = <?= json_encode($waterCostData ?? ['available' => false, 'reason' => 'No data']) ?>;
+    window.__INIT_WATER_YEAR__  = <?= (int) $waterInitYear ?>;
+    window.__INIT_WATER_MONTH__ = <?= (int) $waterInitMonth ?>;
   </script>
 
   <!-- ── Chart ─────────────────────────────────────────────────────────── -->
@@ -309,6 +315,31 @@ if (!function_exists('fmtCost')) {
       <button class="btn btn-amber" id="water-btn" onclick="submitWater()">Enregistrer</button>
       <div class="form-feedback" id="water-feedback"></div>
     </div>
+  </div>
+
+  <!-- ── Consommation eau ─────────────────────────────────────────────── -->
+  <div class="section-header">
+    <span class="section-title">Consommation eau</span>
+    <span class="section-line"></span>
+    <div class="month-nav">
+      <button class="month-nav-btn" id="water-nav-prev" title="Mois précédent">&#8592;</button>
+      <span class="month-nav-current" id="water-nav-label">…</span>
+      <button class="month-nav-btn" id="water-nav-next" title="Mois suivant">&#8594;</button>
+      <div class="month-nav-mode">
+        <button id="water-mode-month" class="active" onclick="setWaterNavMode('month')">Mois</button>
+        <button id="water-mode-year"  onclick="setWaterNavMode('year')">Année</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Year overview eau (hidden by default) -->
+  <div id="water-year-overview-wrap" style="display:none">
+    <div class="year-overview" id="water-year-overview-grid"></div>
+  </div>
+
+  <!-- Water consumption content (volume m³, pas de coût) -->
+  <div id="water-cost-content">
+    <div style="font-family:var(--mono);font-size:.85rem;color:var(--muted);padding:24px 0">Chargement…</div>
   </div>
 
   <!-- ── Webhook Sync Status ────────────────────────────────────────────── -->

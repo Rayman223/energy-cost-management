@@ -57,6 +57,7 @@
 | `cost_estimate` | — | `estimateCurrentMonthElectricity()`. |
 | `gas_cost` | — | `estimateLastGasPeriod()`. |
 | `gas_month_cost` | `year`, `month` (mêmes défauts/validations que `month_cost`) | `estimateMonthGas(year, month)`. |
+| `water_month_cost` | `year`, `month` (mêmes défauts/validations que `month_cost`) | `estimateMonthWater(year, month)` — **volume m³ uniquement** (pas de coût : aucun tarif eau). |
 | `sync_status` | — | Dates ISO‑8601 du dernier envoi EnergyID par flux (`prelevement_jour`, `prelevement_nuit`, `injection_jour`, `injection_nuit`, `production_solaire`, `gaz_index`, `water_index`) ; `null` si jamais envoyé. |
 | `tariffs` | — | `{ electricity: [...], gas: [...] }` ; chaque grille : `{ id, name, valid_from (Y-m-d), valid_to (Y-m-d|null), lines }`. |
 | *(autre)* | — | `400 { ok:false, error:"Unknown action" }`. |
@@ -81,8 +82,22 @@
 
 `available: true` avec `period_from/to`, `days`, `delta_m3`, `kwh`,
 `pcs_coefficient`, `tariff_name`, `tariff_rates`, `cost` (sortie de
-`calculateGasCost`). `gas_month_cost` ajoute `month_start/end`, `interpolated`,
-`calendar_days`, `is_full_month`. Sinon `{ available:false, reason }`.
+`calculateGasCost`). `gas_month_cost` ajoute `month_start/end`, `calendar_days`,
+`is_projection` (true quand le mois en cours est projeté jusqu'à sa fin). Sinon
+`{ available:false, reason }`.
+
+La consommation mensuelle est **interpolée à minuit** le 1er du mois et le 1er du
+mois suivant (cf. `MonthlyConsumptionInterpolator`) : le décalage horaire des
+relevés manuels est récupéré par extrapolation aux bornes, et les relevés
+intermédiaires servent d'ancrages. Même méthode pour l'électricité (`month_cost`)
+et l'eau (`water_month_cost`).
+
+### Forme d'une consommation eau (`water_month_cost`)
+
+`available: true` avec `period_from/to`, `month_start/end`, `days`,
+`calendar_days`, `is_projection`, `delta_m3` (**volume m³, sans coût** : l'eau n'a
+pas de tarif). Sinon `{ available:false, reason }` (ex. « Relevé manquant : le
+calcul se fera dès le prochain relevé. »).
 
 ---
 

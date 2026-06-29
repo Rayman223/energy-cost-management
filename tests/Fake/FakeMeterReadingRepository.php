@@ -19,10 +19,12 @@ final class FakeMeterReadingRepository implements MeterReadingRepositoryInterfac
     /**
      * @param array<string, mixed>|null $latest
      * @param array<int,array{id:int,reading_at:string,counter_m3:float,delta_m3:float|null}> $all
+     * @param list<array{reading_at: string, counter_m3: float}> $forInterpolation
      */
     public function __construct(
         public ?array $latest = null,
         public array $all = [],
+        public array $forInterpolation = [],
     ) {
     }
 
@@ -41,5 +43,11 @@ final class FakeMeterReadingRepository implements MeterReadingRepositoryInterfac
     public function getLatest(): ?array
     {
         return $this->latest;
+    }
+
+    /** @return list<array{reading_at: string, counter_m3: float}> */
+    public function getReadingsForInterpolation(int $year, int $month): array
+    {
+        return $this->forInterpolation;
     }
 }

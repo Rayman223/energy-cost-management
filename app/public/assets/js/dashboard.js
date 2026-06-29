@@ -581,6 +581,180 @@
   });
 })();
 
+// ── Water consumption navigation (volume m³, sans coût) ────────────────────
+(function () {
+  const MONTHS_FR   = ['Jan','Fév','Mar','Avr','Mai','Jun','Jul','Aoû','Sep','Oct','Nov','Déc'];
+  const MONTH_NAMES = ['Janvier','Février','Mars','Avril','Mai','Juin',
+                       'Juillet','Août','Septembre','Octobre','Novembre','Décembre'];
+
+  let wNavYear  = window.__INIT_WATER_YEAR__;
+  let wNavMonth = window.__INIT_WATER_MONTH__;
+  let wNavMode  = 'month';
+
+  const NOW_YEAR  = window.__INIT_YEAR__;
+  const NOW_MONTH = window.__INIT_MONTH__;
+
+  function renderWaterContent(data) {
+    const el = document.getElementById('water-cost-content');
+    if (!el) return;
+    if (!data || !data.available) {
+      el.innerHTML = `<div class="no-tariff">
+        <strong style="color:var(--text);margin-bottom:6px;display:block">Aucune consommation eau disponible</strong>
+        ${data?.reason ?? 'Enregistrez au moins deux relevés d’eau.'}
+      </div>`;
+      return;
+    }
+
+    const from = data.period_from ? data.period_from.slice(0, 10) : '—';
+    const to   = data.period_to   ? data.period_to.slice(0, 10)   : '—';
+    const isCurrent = (wNavYear === NOW_YEAR && wNavMonth === NOW_MONTH);
+    const label = isCurrent ? 'Estimation mois en cours' : `${MONTHS_FR[wNavMonth-1]} ${wNavYear}`;
+    const projNote = data.is_projection ? ' <span style="opacity:.6">(projection fin de mois)</span>' : '';
+
+    el.innerHTML = `<div class="cost-total-card">
+      <div>
+        <div class="cost-total-label">${label}</div>
+        <div class="cost-total-amount">${Number(data.delta_m3).toFixed(3)} m³</div>
+      </div>
+      <div class="cost-total-meta">
+        <span>${from} → ${to}${projNote}</span>
+        <span>${data.days} jour${data.days > 1 ? 's' : ''}</span>
+      </div>
+    </div>`;
+  }
+
+  async function loadMonthWater(year, month) {
+    const el = document.getElementById('water-cost-content');
+    el.innerHTML = '<div style="font-family:var(--mono);font-size:.85rem;color:var(--muted);padding:24px 0">Chargement…</div>';
+    if (year === window.__INIT_WATER_YEAR__ && month === window.__INIT_WATER_MONTH__ && window.__INIT_WATER_COST__) {
+      renderWaterContent(window.__INIT_WATER_COST__);
+      return;
+    }
+    try {
+      const res  = await fetch(`api.php?action=water_month_cost&year=${year}&month=${month}`);
+      renderWaterContent(await res.json());
+    } catch (e) {
+      el.innerHTML = '<div style="color:var(--red);font-family:var(--mono);font-size:.85rem;padding:24px 0">Erreur de chargement.</div>';
+    }
+  }
+
+  const waterYearCache = {};
+
+  async function loadWaterYearOverview(year) {
+    const grid = document.getElementById('water-year-overview-grid');
+    grid.innerHTML = '';
+    const curY = NOW_YEAR, curM = NOW_MONTH;
+
+    for (let m = 1; m <= 12; m++) {
+      const isFuture = (year > curY || (year === curY && m > curM));
+      const card     = document.createElement('div');
+      card.className = 'year-month-card' + (m === wNavMonth && year === wNavYear ? ' active' : '');
+      card.dataset.month = m;
+      card.innerHTML = `<div class="ymc-label">${MONTH_NAMES[m-1]}</div>
+        <div class="ymc-cost ymc-loading">${isFuture ? '<span class="ymc-nd">—</span>' : '…'}</div>
+        <div class="ymc-kwh"></div>`;
+
+      card.addEventListener('click', () => {
+        wNavMonth = m;
+        setWaterNavMode('month');
+        updateWaterNav();
+        loadMonthWater(wNavYear, wNavMonth);
+      });
+      grid.appendChild(card);
+
+      if (!isFuture) {
+        const key = `${year}-${m}`;
+        if (waterYearCache[key]) {
+          updateWaterYearCard(card, waterYearCache[key]);
+        } else {
+          (async (card, m) => {
+            try {
+              const d = (year === window.__INIT_WATER_YEAR__ && m === window.__INIT_WATER_MONTH__ && window.__INIT_WATER_COST__)
+                ? window.__INIT_WATER_COST__
+                : await (await fetch(`api.php?action=water_month_cost&year=${year}&month=${m}`)).json();
+              waterYearCache[key] = d;
+              updateWaterYearCard(card, d);
+            } catch {
+              card.querySelector('.ymc-cost').innerHTML = '<span class="ymc-nd">err</span>';
+            }
+          })(card, m);
+        }
+      }
+    }
+  }
+
+  function updateWaterYearCard(card, data) {
+    const costEl = card.querySelector('.ymc-cost');
+    costEl.classList.remove('ymc-loading');
+    if (!data || !data.available) {
+      costEl.innerHTML = '<span class="ymc-nd">—</span>';
+    } else {
+      costEl.textContent = Number(data.delta_m3).toFixed(2) + ' m³';
+    }
+  }
+
+  function updateWaterNav() {
+    const label = document.getElementById('water-nav-label');
+    label.textContent = wNavMode === 'year'
+      ? String(wNavYear)
+      : MONTH_NAMES[wNavMonth - 1] + ' ' + wNavYear;
+    const nextBtn = document.getElementById('water-nav-next');
+    nextBtn.disabled = wNavMode === 'month'
+      ? (wNavYear === NOW_YEAR && wNavMonth === NOW_MONTH)
+      : (wNavYear >= NOW_YEAR);
+    nextBtn.style.opacity = nextBtn.disabled ? '.3' : '';
+  }
+
+  document.getElementById('water-nav-prev').addEventListener('click', () => {
+    if (wNavMode === 'month') {
+      wNavMonth--;
+      if (wNavMonth < 1) { wNavMonth = 12; wNavYear--; }
+      loadMonthWater(wNavYear, wNavMonth);
+    } else {
+      wNavYear--;
+      loadWaterYearOverview(wNavYear);
+    }
+    updateWaterNav();
+  });
+
+  document.getElementById('water-nav-next').addEventListener('click', () => {
+    if (wNavMode === 'month') {
+      if (wNavYear === NOW_YEAR && wNavMonth === NOW_MONTH) return;
+      wNavMonth++;
+      if (wNavMonth > 12) { wNavMonth = 1; wNavYear++; }
+      loadMonthWater(wNavYear, wNavMonth);
+    } else {
+      if (wNavYear >= NOW_YEAR) return;
+      wNavYear++;
+      loadWaterYearOverview(wNavYear);
+    }
+    updateWaterNav();
+  });
+
+  window.setWaterNavMode = function (mode) {
+    wNavMode = mode;
+    document.getElementById('water-mode-month').classList.toggle('active', mode === 'month');
+    document.getElementById('water-mode-year').classList.toggle('active', mode === 'year');
+    document.getElementById('water-year-overview-wrap').style.display = mode === 'year'  ? 'block' : 'none';
+    document.getElementById('water-cost-content').style.display       = mode === 'month' ? 'block' : 'none';
+    if (mode === 'year') loadWaterYearOverview(wNavYear);
+    updateWaterNav();
+  };
+
+  // Init
+  updateWaterNav();
+  renderWaterContent(window.__INIT_WATER_COST__ ?? { available: false, reason: 'Données non chargées' });
+
+  // Refresh after a new water reading is saved
+  document.addEventListener('water-entry-saved', async function () {
+    try {
+      const data = await (await fetch(`api.php?action=water_month_cost&year=${wNavYear}&month=${wNavMonth}`)).json();
+      delete waterYearCache[`${wNavYear}-${wNavMonth}`];
+      renderWaterContent(data);
+    } catch { /* silent */ }
+  });
+})();
+
 // ── Clock ──────────────────────────────────────────────────────────────────
 (function clock() {
   const timeEl = document.getElementById('clock-time');
@@ -824,6 +998,8 @@ async function submitWater() {
       document.getElementById('water-value').value = '';
       // Reload water table
       await loadWaterHistory();
+      // Refresh water consumption block
+      document.dispatchEvent(new Event('water-entry-saved'));
     } else {
       feedback.textContent = '✗ ' + (data.error || 'Erreur inconnue.');
       feedback.className   = 'form-feedback err';

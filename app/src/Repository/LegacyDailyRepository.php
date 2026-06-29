@@ -129,72 +129,75 @@ final class LegacyDailyRepository implements LegacyDailyRepositoryInterface
     }
 
     /**
-     * Compute current-month consumption/injection deltas for electricity and solar.
-     * Delta = latest available reading − first reading of the current calendar month.
+     * Deltas du mois courant — délègue à la logique d'interpolation à minuit.
      *
      * @return array<string, mixed>
      */
     private function computeMonthlyDeltas(): array
     {
-        // First reading of the current month
-        $stmt = $this->pdo->query(
-            'SELECT d.timestamp, d.Prelev_jour, d.Prelev_nuit, d.Injec_jour, d.Injec_nuit
-             FROM Data_Dries d
-             INNER JOIN (
-                 SELECT MIN(timestamp) AS min_ts
-                 FROM Data_Dries
-                 WHERE timestamp >= DATE_FORMAT(CURDATE(), \'%Y-%m-01\')
-                   AND timestamp < DATE_FORMAT(CURDATE(), \'%Y-%m-01\') + INTERVAL 1 MONTH
-             ) f ON d.timestamp = f.min_ts
-             LIMIT 1'
-        );
-        $first = $stmt->fetch() ?: null;
+        return $this->interpolatedMonthlyDeltas((int) date('Y'), (int) date('n'));
+    }
 
-        if ($first === null) {
+    /**
+     * Deltas électricité/solaire d'un mois, avec INTERPOLATION À MINUIT des bornes
+     * (même méthode que le gaz/eau, cf. MonthlyConsumptionInterpolator) : on estime
+     * l'index théorique à minuit le 1er de M et le 1er de M+1 par interpolation
+     * linéaire entre les relevés horaires encadrants. Les index étant horaires et
+     * denses, seuls les relevés qui entourent chaque borne sont nécessaires.
+     *
+     * Mois en cours (aucun relevé après la fin du mois) → borne de fin = dernier
+     * relevé disponible (conso à ce jour, pas de projection — cohérent avec le
+     * tarif dynamique horaire). Renvoie [] si le mois n'a aucun relevé.
+     *
+     * @return array<string, mixed>
+     */
+    private function interpolatedMonthlyDeltas(int $year, int $month): array
+    {
+        $monthStart = sprintf('%04d-%02d-01 00:00:00', $year, $month);
+
+        $nextYear       = $month === 12 ? $year + 1 : $year;
+        $nextMonth      = $month === 12 ? 1         : $month + 1;
+        $nextMonthStart = sprintf('%04d-%02d-01 00:00:00', $nextYear, $nextMonth);
+
+        $cols = ['Prelev_jour', 'Prelev_nuit', 'Injec_jour', 'Injec_nuit'];
+
+        // Aucun relevé dans le mois → indisponible (même sémantique qu'avant).
+        if ($this->firstReadingInMonth('Data_Dries', $monthStart, $nextMonthStart) === null) {
             return [];
         }
 
-        // Latest available reading
-        $stmt   = $this->pdo->query(
-            'SELECT timestamp, Prelev_jour, Prelev_nuit, Injec_jour, Injec_nuit
-             FROM Data_Dries ORDER BY timestamp DESC LIMIT 1'
-        );
-        $latest = $stmt->fetch() ?: null;
-
-        if ($latest === null) {
+        $start = $this->interpolatedRowAt('Data_Dries', $cols, $monthStart);
+        if ($start === null) {
             return [];
         }
+
+        // Borne de fin : interpolée à minuit le 1er de M+1 si un relevé existe au-delà.
+        // Sinon (mois en cours) interpolatedRowAt clampe sur le dernier relevé, et son
+        // 'timestamp' de retour vaut alors l'horodatage de ce relevé → on l'utilise
+        // directement comme borne de fin (conso jusqu'au dernier relevé, sans projection).
+        $end = $this->interpolatedRowAt('Data_Dries', $cols, $nextMonthStart);
+        if ($end === null) {
+            return [];
+        }
+        $to = (string) $end['timestamp'];
 
         $result = [
-            'from'        => $first['timestamp'],
-            'to'          => $latest['timestamp'],
-            'prelev_jour' => max(0.0, round((float) $latest['Prelev_jour'] - (float) $first['Prelev_jour'], 3)),
-            'prelev_nuit' => max(0.0, round((float) $latest['Prelev_nuit'] - (float) $first['Prelev_nuit'], 3)),
-            'injec_jour'  => max(0.0, round((float) $latest['Injec_jour']  - (float) $first['Injec_jour'],  3)),
-            'injec_nuit'  => max(0.0, round((float) $latest['Injec_nuit']  - (float) $first['Injec_nuit'],  3)),
+            'from'        => $monthStart,
+            'to'          => $to,
+            'prelev_jour' => max(0.0, round((float) $end['Prelev_jour'] - (float) $start['Prelev_jour'], 3)),
+            'prelev_nuit' => max(0.0, round((float) $end['Prelev_nuit'] - (float) $start['Prelev_nuit'], 3)),
+            'injec_jour'  => max(0.0, round((float) $end['Injec_jour']  - (float) $start['Injec_jour'],  3)),
+            'injec_nuit'  => max(0.0, round((float) $end['Injec_nuit']  - (float) $start['Injec_nuit'],  3)),
         ];
 
-        // Solar delta (cumulative source: Data_Solaire stores cumulative kWh after migration)
-        $table = $this->solarTable();
-        $stmt  = $this->pdo->query(
-            "SELECT s.timestamp, s.production
-             FROM {$table} s
-             INNER JOIN (
-                 SELECT MIN(timestamp) AS min_ts
-                 FROM {$table}
-                 WHERE timestamp >= DATE_FORMAT(CURDATE(), '%Y-%m-01')
-                   AND timestamp < DATE_FORMAT(CURDATE(), '%Y-%m-01') + INTERVAL 1 MONTH
-             ) f ON s.timestamp = f.min_ts
-             LIMIT 1"
-        );
-        $firstSolar = $stmt->fetch() ?: null;
+        // Solaire : interpolé aux mêmes instants (début = minuit, fin = $to).
+        $table      = $this->solarTable();
+        $solarStart = $this->interpolatedRowAt($table, ['production'], $monthStart);
+        $solarEnd   = $this->interpolatedRowAt($table, ['production'], $to);
 
-        $stmt       = $this->pdo->query("SELECT production FROM {$table} ORDER BY timestamp DESC LIMIT 1");
-        $latestSolar = $stmt->fetchColumn();
-
-        if ($firstSolar !== null && $latestSolar !== false) {
-            $unit = ($table === 'Data_Solaire') ? 'kwh' : 'wh';
-            $raw  = max(0.0, (float) $latestSolar - (float) $firstSolar['production']);
+        if ($solarStart !== null && $solarEnd !== null) {
+            $unit                 = ($table === 'Data_Solaire') ? 'kwh' : 'wh';
+            $raw                  = max(0.0, (float) $solarEnd['production'] - (float) $solarStart['production']);
             $result['solar']      = round($unit === 'kwh' ? $raw : $raw / 1000, 3);
             $result['solar_unit'] = 'kwh';
         } else {
@@ -206,131 +209,95 @@ final class LegacyDailyRepository implements LegacyDailyRepositoryInterface
     }
 
     /**
-     * Compute electricity/solar deltas for a specific calendar month.
-     * Returns [] if no data is available for that month.
+     * Index interpolé à minuit (ou tout instant) : interpolation linéaire entre le
+     * relevé juste avant et juste après l'instant. Si l'instant est hors de la
+     * plage des relevés, on prend le relevé le plus proche (clamp). null si la
+     * table ne contient aucun relevé.
+     *
+     * @param list<string> $columns colonnes numériques (liste contrôlée, non issue de l'utilisateur)
+     * @return array<string, mixed>|null  valeurs par colonne (+ 'timestamp' du relevé de bord)
+     */
+    private function interpolatedRowAt(string $table, array $columns, string $instant): ?array
+    {
+        $cols = implode(', ', $columns);
+
+        $stmt = $this->pdo->prepare(
+            "SELECT timestamp, {$cols} FROM {$table} WHERE timestamp <= :i ORDER BY timestamp DESC LIMIT 1"
+        );
+        $stmt->execute(['i' => $instant]);
+        $before = $stmt->fetch() ?: null;
+
+        $stmt = $this->pdo->prepare(
+            "SELECT timestamp, {$cols} FROM {$table} WHERE timestamp >= :i ORDER BY timestamp ASC LIMIT 1"
+        );
+        $stmt->execute(['i' => $instant]);
+        $after = $stmt->fetch() ?: null;
+
+        if ($before === null && $after === null) {
+            return null;
+        }
+        if ($before === null) {
+            return $this->rowToFloats($after, $columns);   // instant avant tout relevé → clamp
+        }
+        if ($after === null || $before['timestamp'] === $instant) {
+            return $this->rowToFloats($before, $columns);
+        }
+        if ($after['timestamp'] === $instant) {
+            return $this->rowToFloats($after, $columns);
+        }
+
+        // Interpolation linéaire par timestamp Unix.
+        $aTs   = (int) strtotime((string) $before['timestamp']);
+        $bTs   = (int) strtotime((string) $after['timestamp']);
+        $iTs   = (int) strtotime($instant);
+        $span  = $bTs - $aTs;
+        $frac  = $span > 0 ? ($iTs - $aTs) / $span : 0.0;
+
+        $out = ['timestamp' => $instant];
+        foreach ($columns as $c) {
+            $a       = (float) $before[$c];
+            $b       = (float) $after[$c];
+            $out[$c] = $a + ($b - $a) * $frac;
+        }
+
+        return $out;
+    }
+
+    /**
+     * @param array<string, mixed> $row
+     * @param list<string> $columns
+     * @return array<string, mixed>
+     */
+    private function rowToFloats(array $row, array $columns): array
+    {
+        $out = ['timestamp' => $row['timestamp']];
+        foreach ($columns as $c) {
+            $out[$c] = (float) $row[$c];
+        }
+
+        return $out;
+    }
+
+    /** @return array<string, mixed>|null */
+    private function firstReadingInMonth(string $table, string $monthStart, string $nextMonthStart): ?array
+    {
+        $stmt = $this->pdo->prepare(
+            "SELECT timestamp FROM {$table} WHERE timestamp >= :start AND timestamp < :next ORDER BY timestamp ASC LIMIT 1"
+        );
+        $stmt->execute(['start' => $monthStart, 'next' => $nextMonthStart]);
+
+        return $stmt->fetch() ?: null;
+    }
+
+    /**
+     * Compute electricity/solar deltas for a specific calendar month, interpolated
+     * to midnight on the 1st of M and the 1st of M+1. Returns [] if no data.
      *
      * @return array<string, mixed>
      */
     public function getMonthlyDeltasForMonth(int $year, int $month): array
     {
-        $monthStart = sprintf('%04d-%02d-01 00:00:00', $year, $month);
-
-        // First reading of the given month
-        $stmt = $this->pdo->prepare(
-            'SELECT d.timestamp, d.Prelev_jour, d.Prelev_nuit, d.Injec_jour, d.Injec_nuit
-             FROM Data_Dries d
-             INNER JOIN (
-                 SELECT MIN(timestamp) AS min_ts
-                 FROM Data_Dries
-                 WHERE timestamp >= :month_start AND timestamp < :month_start + INTERVAL 1 MONTH
-             ) f ON d.timestamp = f.min_ts
-             LIMIT 1'
-        );
-        $stmt->execute(['month_start' => $monthStart]);
-        $first = $stmt->fetch() ?: null;
-
-        if ($first === null) {
-            return [];
-        }
-
-        // Upper bound: first reading of the next calendar month.
-        // This is the most accurate boundary — it captures the full month including
-        // the last hour, exactly like daily deltas use "first of day N+1".
-        // Falls back to the last reading of the requested month when next month
-        // has no data yet (i.e. the current ongoing month).
-        $nextYear  = $month === 12 ? $year + 1 : $year;
-        $nextMonth = $month === 12 ? 1 : $month + 1;
-        $nextMonthStart = sprintf('%04d-%02d-01 00:00:00', $nextYear, $nextMonth);
-
-        $stmt = $this->pdo->prepare(
-            'SELECT d.timestamp, d.Prelev_jour, d.Prelev_nuit, d.Injec_jour, d.Injec_nuit
-             FROM Data_Dries d
-             INNER JOIN (
-                 SELECT MIN(timestamp) AS min_ts
-                 FROM Data_Dries
-                 WHERE timestamp >= :month_start AND timestamp < :month_start + INTERVAL 1 MONTH
-             ) f ON d.timestamp = f.min_ts
-             LIMIT 1'
-        );
-        $stmt->execute(['month_start' => $nextMonthStart]);
-        $latest = $stmt->fetch() ?: null;
-
-        // No first reading of next month → use last reading of the requested month
-        if ($latest === null) {
-            $stmt = $this->pdo->prepare(
-                'SELECT timestamp, Prelev_jour, Prelev_nuit, Injec_jour, Injec_nuit
-                 FROM Data_Dries
-                 WHERE timestamp >= :month_start AND timestamp < :month_start + INTERVAL 1 MONTH
-                 ORDER BY timestamp DESC LIMIT 1'
-            );
-            $stmt->execute(['month_start' => $monthStart]);
-            $latest = $stmt->fetch() ?: null;
-        }
-
-        if ($latest === null) {
-            return [];
-        }
-
-        $result = [
-            'from'        => $first['timestamp'],
-            'to'          => $latest['timestamp'],
-            'prelev_jour' => max(0.0, round((float) $latest['Prelev_jour'] - (float) $first['Prelev_jour'], 3)),
-            'prelev_nuit' => max(0.0, round((float) $latest['Prelev_nuit'] - (float) $first['Prelev_nuit'], 3)),
-            'injec_jour'  => max(0.0, round((float) $latest['Injec_jour']  - (float) $first['Injec_jour'],  3)),
-            'injec_nuit'  => max(0.0, round((float) $latest['Injec_nuit']  - (float) $first['Injec_nuit'],  3)),
-        ];
-
-        // Solar delta — same boundary logic
-        $table = $this->solarTable();
-        $stmt  = $this->pdo->prepare(
-            "SELECT s.timestamp, s.production
-             FROM {$table} s
-             INNER JOIN (
-                 SELECT MIN(timestamp) AS min_ts
-                 FROM {$table}
-                 WHERE timestamp >= :month_start AND timestamp < :month_start + INTERVAL 1 MONTH
-             ) f ON s.timestamp = f.min_ts
-             LIMIT 1"
-        );
-        $stmt->execute(['month_start' => $monthStart]);
-        $firstSolar = $stmt->fetch() ?: null;
-
-        // First reading of next month for solar (same boundary logic as electricity)
-        $stmt = $this->pdo->prepare(
-            "SELECT s.production
-             FROM {$table} s
-             INNER JOIN (
-                 SELECT MIN(timestamp) AS min_ts
-                 FROM {$table}
-                 WHERE timestamp >= :month_start AND timestamp < :month_start + INTERVAL 1 MONTH
-             ) f ON s.timestamp = f.min_ts
-             LIMIT 1"
-        );
-        $stmt->execute(['month_start' => $nextMonthStart]);
-        $latestSolar = $stmt->fetchColumn();
-
-        // Fallback to last reading of the month
-        if ($latestSolar === false) {
-            $stmt = $this->pdo->prepare(
-                "SELECT production FROM {$table}
-                 WHERE timestamp >= :month_start AND timestamp < :month_start + INTERVAL 1 MONTH
-                 ORDER BY timestamp DESC LIMIT 1"
-            );
-            $stmt->execute(['month_start' => $monthStart]);
-            $latestSolar = $stmt->fetchColumn();
-        }
-
-        if ($firstSolar !== null && $latestSolar !== false) {
-            $unit                 = ($table === 'Data_Solaire') ? 'kwh' : 'wh';
-            $raw                  = max(0.0, (float) $latestSolar - (float) $firstSolar['production']);
-            $result['solar']      = round($unit === 'kwh' ? $raw : $raw / 1000, 3);
-            $result['solar_unit'] = 'kwh';
-        } else {
-            $result['solar']      = null;
-            $result['solar_unit'] = null;
-        }
-
-        return $result;
+        return $this->interpolatedMonthlyDeltas($year, $month);
     }
 
     // -------------------------------------------------------------------------

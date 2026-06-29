@@ -7,17 +7,17 @@ namespace Tests\Fake;
 use App\Repository\Contract\GasReadingRepositoryInterface;
 
 /**
- * Faux repository de relevés gaz : renvoie des paires de relevés en mémoire.
+ * Faux repository de relevés gaz : renvoie des relevés en mémoire.
  */
 final class FakeGasReadingRepository implements GasReadingRepositoryInterface
 {
     /**
-     * @param array{from:array|null, to:array|null} $lastTwo
-     * @param array{from:array|null, to:array|null} $twoForMonth
+     * @param array{from:array|null, to:array|null}        $lastTwo
+     * @param list<array{reading_at: string, counter_m3: float}> $forInterpolation
      */
     public function __construct(
         public array $lastTwo = ['from' => null, 'to' => null],
-        public array $twoForMonth = ['from' => null, 'to' => null],
+        public array $forInterpolation = [],
     ) {
     }
 
@@ -26,8 +26,8 @@ final class FakeGasReadingRepository implements GasReadingRepositoryInterface
         return $this->lastTwo;
     }
 
-    public function getTwoReadingsForMonth(int $year, int $month): array
+    public function getReadingsForInterpolation(int $year, int $month): array
     {
-        return $this->twoForMonth;
+        return $this->forInterpolation;
     }
 }

@@ -46,6 +46,7 @@ try {
         calculator: new TariffCalculatorService(),
         dynamicPriceRepo: $dynPriceRepo,
         dynamicConfig: $config['dynamic_prices'] ?? [],
+        waterRepo: $waterRepo,
     );
 } catch (\Throwable $e) {
     JsonResponse::error('DB connection failed: ' . $e->getMessage(), 503)->send();
@@ -77,6 +78,7 @@ $router->add('GET', 'month_cost',     $cost->monthCost(...));
 $router->add('GET', 'cost_estimate',  $cost->costEstimate(...));
 $router->add('GET', 'gas_cost',       $cost->gasCost(...));
 $router->add('GET', 'gas_month_cost', $cost->gasMonthCost(...));
+$router->add('GET', 'water_month_cost', $cost->waterMonthCost(...));
 $router->add('GET', 'tariffs',        $tariffs->index(...));
 
 // ── POST ─────────────────────────────────────────────────────────────────────

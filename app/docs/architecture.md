@@ -43,8 +43,9 @@ graphique, tables gaz/eau).
   les services et contrôleurs dépendent d'abstractions, ce qui permet de les tester
   avec des fakes (`tests/Fake/`) sans base.
 - **Logique pure extraite & testée** : `TariffCalculatorService`,
-  `GasMonthInterpolator` (interpolation gaz), `ElectricityReadingMerger` (fusion
-  des relevés), `TariffLineCatalog` (source unique des lignes tarifaires).
+  `MonthlyConsumptionInterpolator` (interpolation à minuit de la conso mensuelle,
+  partagée gaz/eau/électricité), `ElectricityReadingMerger` (fusion des relevés),
+  `TariffLineCatalog` (source unique des lignes tarifaires).
 - **Pipeline d'assets** : `App\Support\Assets::url()` ajoute un cache-busting
   `?v=<mtime>` sans build tooling.
 - **Qualité** : PHPStan **niveau 6**, suite PHPUnit, CI lint + PHPStan + tests sur
