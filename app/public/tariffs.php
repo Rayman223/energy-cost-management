@@ -5,15 +5,15 @@ use App\Domain\TariffLineCatalog;
 use App\Http\SecurityHeaders;
 use App\Infrastructure\Database;
 use App\Repository\TariffRepository;
+use App\Security\AuthGuard;
 use App\Security\Csrf;
-use App\Security\WebAccessGuard;
 use App\View\View;
 
 $config = require __DIR__ . '/../bootstrap.php';
 
 SecurityHeaders::send();
 
-WebAccessGuard::protect($config['web_security'] ?? []);
+AuthGuard::protect($config);
 
 $db          = new Database($config['database']);
 $tariffRepo  = new TariffRepository($db->pdo());

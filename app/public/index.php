@@ -11,7 +11,7 @@ use App\Repository\TariffRepository;
 use App\Service\CostCalculationService;
 use App\Service\TariffCalculatorService;
 use App\Http\SecurityHeaders;
-use App\Security\WebAccessGuard;
+use App\Security\AuthGuard;
 use App\View\View;
 
 // Bootstrap — dégradation gracieuse si la base est indisponible.
@@ -33,7 +33,7 @@ try {
 
     SecurityHeaders::send();
 
-    WebAccessGuard::protect($config['web_security'] ?? []);
+    AuthGuard::protect($config);
 
     $db         = new Database($config['database']);
     $pdo        = $db->pdo();

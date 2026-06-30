@@ -12,12 +12,12 @@ use App\Http\Request;
 use App\Http\Router;
 use App\Http\SecurityHeaders;
 use App\Infrastructure\Database;
+use App\Security\AuthGuard;
 use App\Repository\DynamicPriceRepository;
 use App\Repository\GasRepository;
 use App\Repository\LegacyDailyRepository;
 use App\Repository\TariffRepository;
 use App\Repository\WaterRepository;
-use App\Security\WebAccessGuard;
 use App\Service\CostCalculationService;
 use App\Service\MeterApiService;
 use App\Service\TariffCalculatorService;
@@ -30,7 +30,7 @@ $config = require __DIR__ . '/../bootstrap.php';
 
 SecurityHeaders::send();
 
-WebAccessGuard::protect($config['web_security'] ?? [], true);
+AuthGuard::protect($config, true);
 
 $request = Request::fromGlobals();
 

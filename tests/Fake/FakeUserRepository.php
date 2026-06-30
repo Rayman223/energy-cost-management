@@ -1,0 +1,85 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Tests\Fake;
+
+use App\Domain\User;
+use App\Repository\Contract\UserRepositoryInterface;
+
+final class FakeUserRepository implements UserRepositoryInterface
+{
+    /** @var array<int, User> */
+    public array $users = [];
+
+    /** @var list<int> */
+    public array $loginTouches = [];
+
+    /** Simule une création concurrente (compte semé) suivie d'une violation d'unicité. */
+    public bool $throwRaceOnCreate = false;
+
+    /** Simule un échec de création sans création effective (vraie erreur). */
+    public bool $failCreate = false;
+
+    private int $autoId = 0;
+
+    public function findByOidc(string $iss, string $sub): ?User
+    {
+        foreach ($this->users as $user) {
+            if ($user->oidcIss === $iss && $user->oidcSub === $sub) {
+                return $user;
+            }
+        }
+
+        return null;
+    }
+
+    public function findById(int $id): ?User
+    {
+        return $this->users[$id] ?? null;
+    }
+
+    public function create(string $iss, string $sub, string $provider, string $displayName): User
+    {
+        if ($this->failCreate) {
+            throw new \RuntimeException('Échec de création (simulé).');
+        }
+
+        $id = ++$this->autoId;
+        $user = new User($id, $iss, $sub, $provider, $displayName, 'user', 'active');
+        $this->users[$id] = $user;
+
+        if ($this->throwRaceOnCreate) {
+            throw new \RuntimeException('Duplicate entry (course simulée).');
+        }
+
+        return $user;
+    }
+
+    public function updateDisplayName(int $userId, string $displayName): void
+    {
+        if (isset($this->users[$userId])) {
+            $this->users[$userId] = $this->users[$userId]->withDisplayName($displayName);
+        }
+    }
+
+    public function touchLastLogin(int $userId): void
+    {
+        $this->loginTouches[] = $userId;
+    }
+
+    public function getProfile(int $userId): ?array
+    {
+        if (!isset($this->users[$userId])) {
+            return null;
+        }
+
+        return [
+            'country' => null,
+            'timezone' => 'Europe/Brussels',
+            'currency' => 'EUR',
+            'bidding_zone' => null,
+            'locale' => 'fr',
+        ];
+    }
+}

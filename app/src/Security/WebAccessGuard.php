@@ -20,9 +20,7 @@ final class WebAccessGuard
 
         $lang = self::resolveLanguage();
 
-        if (self::isIpDenied($security) === true) {
-            self::deny(403, self::message($lang, 'forbidden'), $jsonResponse);
-        }
+        self::enforceIp($security, $jsonResponse);
 
         $basicEnabled = (bool) ($security['basic_auth']['enabled'] ?? false);
         if ($basicEnabled === false) {
@@ -85,6 +83,33 @@ final class WebAccessGuard
         }
 
         return false;
+    }
+
+    /**
+     * Applique uniquement l'allowlist IP (sans Basic Auth). Utilisé par AuthGuard
+     * en mode OIDC, où l'authentification est portée par la session.
+     *
+     * @param array<string, mixed> $security
+     */
+    public static function enforceIp(array $security, bool $jsonResponse = false): void
+    {
+        if (PHP_SAPI === 'cli' || PHP_SAPI === 'phpdbg') {
+            return;
+        }
+
+        if ((bool) ($security['enabled'] ?? false) === false) {
+            return;
+        }
+
+        if (self::isIpDenied($security) === true) {
+            self::deny(403, self::message(self::resolveLanguage(), 'forbidden'), $jsonResponse);
+        }
+    }
+
+    /** Préfixe de chemin de l'application (pour construire des URLs absolues). */
+    public static function basePath(): string
+    {
+        return self::applicationBasePath();
     }
 
     private static function isLoginPageRequest(): bool

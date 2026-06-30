@@ -1,0 +1,66 @@
+<?php
+
+declare(strict_types=1);
+
+namespace App\I18n;
+
+/**
+ * Service de traduction minimal basé sur des catalogues plats (clé => texte)
+ * par locale, dans `app/translations/<locale>.php`. Remplace les paramètres
+ * `{name}` et retombe sur la locale par défaut puis sur la clé brute.
+ */
+final class Translator
+{
+    /** @var array<string, string> */
+    private array $messages;
+
+    /** @var array<string, string> */
+    private array $fallback;
+
+    public function __construct(string $translationsDir, string $locale, string $fallbackLocale = 'fr')
+    {
+        $this->messages = self::loadCatalog($translationsDir, $locale);
+        $this->fallback = $locale === $fallbackLocale
+            ? $this->messages
+            : self::loadCatalog($translationsDir, $fallbackLocale);
+    }
+
+    /**
+     * @param array<string, string|int|float> $params
+     */
+    public function t(string $key, array $params = []): string
+    {
+        $message = $this->messages[$key] ?? $this->fallback[$key] ?? $key;
+
+        foreach ($params as $name => $value) {
+            $message = str_replace('{' . $name . '}', (string) $value, $message);
+        }
+
+        return $message;
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private static function loadCatalog(string $translationsDir, string $locale): array
+    {
+        $file = rtrim($translationsDir, '/') . '/' . $locale . '.php';
+        if (!is_file($file)) {
+            return [];
+        }
+
+        $data = require $file;
+        if (!is_array($data)) {
+            return [];
+        }
+
+        $messages = [];
+        foreach ($data as $key => $value) {
+            if (is_string($key) && is_string($value)) {
+                $messages[$key] = $value;
+            }
+        }
+
+        return $messages;
+    }
+}

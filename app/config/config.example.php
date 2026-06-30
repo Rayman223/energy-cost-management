@@ -70,5 +70,25 @@ return [
         ],
     ],
 
+    // Authentification OpenID Connect (générique, configurable).
+    // enabled=false → comportement historique (Basic Auth ci-dessus) inchangé.
+    // enabled=true  → connexion déléguée à l'issuer OIDC, comptes multi-utilisateurs.
+    'oidc' => [
+        'enabled'       => false,
+        'issuer'        => 'https://accounts.google.com',
+        'client_id'     => 'change_me',
+        'client_secret' => 'change_me',
+        // Laisser vide pour dériver automatiquement l'URL de /auth/login.php.
+        'redirect_uri'  => '',
+        // Pas d'e-mail demandé : openid (obligatoire) + profile (nom d'affichage).
+        'scopes'        => ['openid', 'profile'],
+    ],
+
+    // Internationalisation.
+    'i18n' => [
+        'default_locale' => 'fr',
+        'available'      => ['fr', 'en', 'nl', 'de'],
+    ],
+
     'timezone' => 'Europe/Brussels',
 ];
