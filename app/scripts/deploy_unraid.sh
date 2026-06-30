@@ -12,8 +12,9 @@
 #               donc app/config/config.php et /vendor/ sont préservés).
 #   2. Deps   — composer install --no-dev dans le container SWAG.
 #   3. Schéma — applique app/sql/schema.sql (CREATE TABLE IF NOT EXISTS) sur
-#               le container MariaDB. Les migrations ALTER (app/sql/migrations/)
-#               restent MANUELLES — voir le README.
+#               le container MariaDB.
+#   4. Migr.  — applique les migrations versionnées (app/sql/migrations/) via
+#               app/scripts/migrate.php (idempotent, tracé dans schema_migrations).
 #
 # Usage (SSH ou plugin Unraid « User Scripts ») :
 #   ./deploy_unraid.sh              # déploie le dernier commit de main
@@ -40,7 +41,7 @@ log() {
 }
 
 # ── Étape 1 : Git ────────────────────────────────────────────────────────────
-log "=== Étape 1/3 — Git (cible : ${TAG:-main}) ==="
+log "=== Étape 1/4 — Git (cible : ${TAG:-main}) ==="
 mkdir -p "$APP_DIR"
 cd "$APP_DIR"
 
@@ -75,14 +76,14 @@ log "Clean des fichiers non suivis (config.php et vendor/ préservés)"
 git clean -fd
 
 # ── Étape 2 : Dépendances ────────────────────────────────────────────────────
-log "=== Étape 2/3 — composer install (--no-dev) ==="
+log "=== Étape 2/4 — composer install (--no-dev) ==="
 # Seule dépendance runtime actuelle : php >=8.1. Étape conservée pour rester
 # cohérent et préparer d'éventuelles dépendances futures.
 docker exec -w "$CONTAINER_APP_DIR" "$CONTAINER" \
     composer install --no-dev --optimize-autoloader --no-interaction --no-progress
 
 # ── Étape 3 : Schéma DB ──────────────────────────────────────────────────────
-log "=== Étape 3/3 — Application de schema.sql ==="
+log "=== Étape 3/4 — Application de schema.sql ==="
 # Credentials lus depuis config.php (source de vérité unique) via le PHP du
 # container SWAG, pour ne rien coder en dur dans ce script.
 mapfile -t DB_CFG < <(docker exec -w "$CONTAINER_APP_DIR" "$CONTAINER" php -r \
@@ -94,5 +95,9 @@ DB_PASS="${DB_CFG[2]}"
 log "Schéma sur la base '$DB_NAME' (container $DB_CONTAINER)"
 docker exec -i "$DB_CONTAINER" mysql -u"$DB_USER" -p"$DB_PASS" "$DB_NAME" \
     < "$APP_DIR/app/sql/schema.sql"
+
+# ── Étape 4 : Migrations versionnées ─────────────────────────────────────────
+log "=== Étape 4/4 — Migrations versionnées (migrate.php) ==="
+docker exec -w "$CONTAINER_APP_DIR" "$CONTAINER" php app/scripts/migrate.php
 
 log "=== Déploiement OK (${TAG:-main}) ==="

@@ -29,6 +29,7 @@
 
     <input type="hidden" name="next" value="<?= $this->e($next) ?>">
     <input type="hidden" name="lang" value="<?= $this->e($lang) ?>">
+    <?= \App\Security\Csrf::field() ?>
 
     <label for="username"><?= $this->e($t['username']) ?></label>
     <input id="username" name="username" autocomplete="username" required>

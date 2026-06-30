@@ -2,6 +2,11 @@
 
 declare(strict_types=1);
 
+$composerAutoload = __DIR__ . '/../vendor/autoload.php';
+if (is_file($composerAutoload)) {
+    require_once $composerAutoload;
+}
+
 require __DIR__ . '/autoload.php';
 
 $configPath = __DIR__ . '/config/config.php';

@@ -10,6 +10,7 @@ use App\Repository\LegacyDailyRepository;
 use App\Repository\TariffRepository;
 use App\Service\CostCalculationService;
 use App\Service\TariffCalculatorService;
+use App\Http\SecurityHeaders;
 use App\Security\WebAccessGuard;
 use App\View\View;
 
@@ -29,6 +30,8 @@ $waterInitMonth = (int) date('n');
 
 try {
     $config     = require __DIR__ . '/../bootstrap.php';
+
+    SecurityHeaders::send();
 
     WebAccessGuard::protect($config['web_security'] ?? []);
 

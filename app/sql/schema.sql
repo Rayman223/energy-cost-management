@@ -98,3 +98,16 @@ CREATE TABLE IF NOT EXISTS webhook_sync_state (
     last_sent_at DATETIME NULL,
     updated_at   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ── Suivi des migrations versionnées ─────────────────────────────────────
+CREATE TABLE IF NOT EXISTS schema_migrations (
+    version    VARCHAR(255) NOT NULL PRIMARY KEY,
+    applied_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Baseline : les migrations antérieures à l'introduction du runner sont déjà
+-- reflétées dans ce schema.sql ; on les marque appliquées pour ne pas les rejouer
+-- (certaines ne sont pas idempotentes, ex. DROP INDEX).
+INSERT IGNORE INTO schema_migrations (version) VALUES
+    ('2026-06-26_drop_redundant_reading_indexes.sql'),
+    ('2026-06-27_dynamic_prices.sql');

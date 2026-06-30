@@ -86,6 +86,7 @@ use App\Domain\TariffGrid;
       <form method="post" onsubmit="return confirm('Supprimer ce tarif ?')">
         <input type="hidden" name="action"  value="delete">
         <input type="hidden" name="grid_id" value="<?= $g->id ?>">
+        <?= \App\Security\Csrf::field() ?>
         <button type="submit" class="btn btn-red btn-sm">Suppr.</button>
       </form>
     </div>
@@ -133,6 +134,7 @@ use App\Domain\TariffGrid;
       <form method="post" onsubmit="return confirm('Supprimer ce tarif ?')">
         <input type="hidden" name="action"  value="delete">
         <input type="hidden" name="grid_id" value="<?= $g->id ?>">
+        <?= \App\Security\Csrf::field() ?>
         <button type="submit" class="btn btn-red btn-sm">Suppr.</button>
       </form>
     </div>
@@ -169,6 +171,7 @@ use App\Domain\TariffGrid;
     <input type="hidden" name="action" value="save">
     <input type="hidden" name="edit_id" value="<?= $this->e((string) ($editGrid?->id ?? '')) ?>">
     <input type="hidden" name="energy_type" id="energy_type_field" value="<?= $this->e($et) ?>">
+    <?= \App\Security\Csrf::field() ?>
 
     <div class="form-grid">
       <div class="form-row">

@@ -10,6 +10,7 @@ use App\Http\Controller\TariffController;
 use App\Http\JsonResponse;
 use App\Http\Request;
 use App\Http\Router;
+use App\Http\SecurityHeaders;
 use App\Infrastructure\Database;
 use App\Repository\DynamicPriceRepository;
 use App\Repository\GasRepository;
@@ -26,6 +27,8 @@ header('X-Content-Type-Options: nosniff');
 header('Cache-Control: no-store');
 
 $config = require __DIR__ . '/../bootstrap.php';
+
+SecurityHeaders::send();
 
 WebAccessGuard::protect($config['web_security'] ?? [], true);
 

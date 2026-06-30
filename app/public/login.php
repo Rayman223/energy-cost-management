@@ -2,10 +2,14 @@
 
 declare(strict_types=1);
 
+use App\Http\SecurityHeaders;
+use App\Security\Csrf;
 use App\Security\WebAccessGuard;
 use App\View\View;
 
 $config = require __DIR__ . '/../bootstrap.php';
+
+SecurityHeaders::send();
 
 
 $scriptName = str_replace('\\', '/', (string) ($_SERVER['SCRIPT_NAME'] ?? '/login.php'));
@@ -39,6 +43,7 @@ $messages = [
         'password' => 'Mot de passe',
         'submit' => 'Se connecter',
         'error' => 'Identifiants invalides.',
+        'csrf' => 'Session expirée, veuillez réessayer.',
     ],
     'en' => [
         'title' => 'Secure sign in',
@@ -47,6 +52,7 @@ $messages = [
         'password' => 'Password',
         'submit' => 'Sign in',
         'error' => 'Invalid credentials.',
+        'csrf' => 'Session expired, please try again.',
     ],
 ];
 
@@ -57,15 +63,19 @@ if ($next === '' || str_starts_with($next, '/') === false || str_starts_with($ne
 
 $error = '';
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $username = (string) ($_POST['username'] ?? '');
-    $password = (string) ($_POST['password'] ?? '');
+    if (Csrf::validate($_POST['_csrf'] ?? null) === false) {
+        $error = $messages[$lang]['csrf'];
+    } else {
+        $username = (string) ($_POST['username'] ?? '');
+        $password = (string) ($_POST['password'] ?? '');
 
-    if (WebAccessGuard::authenticateForm($security, $username, $password)) {
-        header('Location: ' . $next, true, 302);
-        exit;
+        if (WebAccessGuard::authenticateForm($security, $username, $password)) {
+            header('Location: ' . $next, true, 302);
+            exit;
+        }
+
+        $error = $messages[$lang]['error'];
     }
-
-    $error = $messages[$lang]['error'];
 }
 
 $view = new View(__DIR__ . '/../templates');

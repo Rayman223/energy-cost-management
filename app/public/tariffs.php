@@ -2,12 +2,16 @@
 declare(strict_types=1);
 
 use App\Domain\TariffLineCatalog;
+use App\Http\SecurityHeaders;
 use App\Infrastructure\Database;
 use App\Repository\TariffRepository;
+use App\Security\Csrf;
 use App\Security\WebAccessGuard;
 use App\View\View;
 
 $config = require __DIR__ . '/../bootstrap.php';
+
+SecurityHeaders::send();
 
 WebAccessGuard::protect($config['web_security'] ?? []);
 
@@ -21,6 +25,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? '';
 
     try {
+        if (Csrf::validate($_POST['_csrf'] ?? null) === false) {
+            throw new \RuntimeException('Requête invalide (jeton CSRF manquant ou expiré). Veuillez réessayer.');
+        }
+
         if ($action === 'save') {
             $editId     = filter_var($_POST['edit_id'] ?? null, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]) ?: null;
             $energyType = $_POST['energy_type'] ?? '';
