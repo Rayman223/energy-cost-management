@@ -4,10 +4,11 @@ declare(strict_types=1);
 
 use App\Infrastructure\Database;
 use App\Repository\DynamicPriceRepository;
-use App\Repository\GasRepository;
-use App\Repository\WaterRepository;
-use App\Repository\LegacyDailyRepository;
+use App\Repository\ElectricityReadingRepository;
 use App\Repository\TariffRepository;
+use App\Repository\UtilityReadingRepository;
+use App\Repository\WebhookSyncStateRepository;
+use App\Security\UserContext;
 use App\Service\CostCalculationService;
 use App\Service\TariffCalculatorService;
 use App\Http\SecurityHeaders;
@@ -39,13 +40,18 @@ try {
 
     $db         = new Database($config['database']);
     $pdo        = $db->pdo();
-    $legacyRepo = new LegacyDailyRepository($pdo);
-    $gasRepo    = new GasRepository($pdo);
-    $waterRepo  = new WaterRepository($pdo);
+
+    // Tenant courant : session OIDC, ou tenant unique en mode Basic Auth.
+    $userId     = UserContext::currentWebUserId($pdo, $config);
+
+    $elecRepo   = new ElectricityReadingRepository($pdo, $userId);
+    $gasRepo    = new UtilityReadingRepository($pdo, $userId, 'gas');
+    $waterRepo  = new UtilityReadingRepository($pdo, $userId, 'water');
+    $syncState  = new WebhookSyncStateRepository($pdo, $userId);
     $tariffRepo = new TariffRepository($pdo);
     $dynPriceRepo = new DynamicPriceRepository($pdo);
     $costSvc    = new CostCalculationService(
-        legacyRepo: $legacyRepo,
+        legacyRepo: $elecRepo,
         tariffRepo: $tariffRepo,
         gasRepo: $gasRepo,
         calculator: new TariffCalculatorService(),
@@ -54,7 +60,7 @@ try {
         waterRepo: $waterRepo,
     );
 
-    $deltas      = $legacyRepo->getMonthlyDeltas();
+    $deltas      = $elecRepo->getMonthlyDeltas();
     $cost        = $costSvc->estimateCurrentMonthElectricity();
     $cost['dynamic'] = $costSvc->estimateCurrentMonthElectricityDynamic();
     $gasCostData = $costSvc->estimateLastGasPeriod();
@@ -73,13 +79,13 @@ try {
     $waterCostData = $costSvc->estimateMonthWater($waterInitYear, $waterInitMonth);
 
     $syncStatus = [
-        'prelevement_jour'   => $legacyRepo->getLastSentAt('prelevement-jour')?->format('d/m H:i'),
-        'prelevement_nuit'   => $legacyRepo->getLastSentAt('prelevement-nuit')?->format('d/m H:i'),
-        'injection_jour'     => $legacyRepo->getLastSentAt('injection-jour')?->format('d/m H:i'),
-        'injection_nuit'     => $legacyRepo->getLastSentAt('injection-nuit')?->format('d/m H:i'),
-        'production_solaire' => $legacyRepo->getLastSentAt('production-solaire')?->format('d/m H:i'),
-        'gaz_index'          => $legacyRepo->getLastSentAt('gas-index')?->format('d/m H:i'),
-        'water_index'        => $legacyRepo->getLastSentAt('water-index')?->format('d/m H:i'),
+        'prelevement_jour'   => $syncState->getLastSentAt('prelevement-jour')?->format('d/m H:i'),
+        'prelevement_nuit'   => $syncState->getLastSentAt('prelevement-nuit')?->format('d/m H:i'),
+        'injection_jour'     => $syncState->getLastSentAt('injection-jour')?->format('d/m H:i'),
+        'injection_nuit'     => $syncState->getLastSentAt('injection-nuit')?->format('d/m H:i'),
+        'production_solaire' => $syncState->getLastSentAt('production-solaire')?->format('d/m H:i'),
+        'gaz_index'          => $syncState->getLastSentAt('gas-index')?->format('d/m H:i'),
+        'water_index'        => $syncState->getLastSentAt('water-index')?->format('d/m H:i'),
     ];
 } catch (\Throwable $e) {
     $dbError = $e->getMessage();

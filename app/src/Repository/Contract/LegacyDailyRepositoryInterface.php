@@ -11,7 +11,7 @@ use DateTimeImmutable;
  * CostCalculationService. Seam de test : permet de substituer une fausse
  * implémentation sans base de données.
  *
- * @see \App\Repository\LegacyDailyRepository implémentation concrète (PDO/MySQL).
+ * @see \App\Repository\ElectricityReadingRepository implémentation concrète (modèle à registres).
  */
 interface LegacyDailyRepositoryInterface
 {

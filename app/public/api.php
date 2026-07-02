@@ -14,10 +14,11 @@ use App\Http\SecurityHeaders;
 use App\Infrastructure\Database;
 use App\Security\AuthGuard;
 use App\Repository\DynamicPriceRepository;
-use App\Repository\GasRepository;
-use App\Repository\LegacyDailyRepository;
+use App\Repository\ElectricityReadingRepository;
 use App\Repository\TariffRepository;
-use App\Repository\WaterRepository;
+use App\Repository\UtilityReadingRepository;
+use App\Repository\WebhookSyncStateRepository;
+use App\Security\UserContext;
 use App\Service\CostCalculationService;
 use App\Service\MeterApiService;
 use App\Service\TariffCalculatorService;
@@ -37,13 +38,18 @@ $request = Request::fromGlobals();
 try {
     $db         = new Database($config['database']);
     $pdo        = $db->pdo();
-    $legacyRepo = new LegacyDailyRepository($pdo);
-    $gasRepo    = new GasRepository($pdo);
-    $waterRepo  = new WaterRepository($pdo);
+
+    // Tenant courant : session OIDC, ou tenant unique en mode Basic Auth.
+    $userId     = UserContext::currentWebUserId($pdo, $config);
+
+    $elecRepo   = new ElectricityReadingRepository($pdo, $userId);
+    $gasRepo    = new UtilityReadingRepository($pdo, $userId, 'gas');
+    $waterRepo  = new UtilityReadingRepository($pdo, $userId, 'water');
+    $syncState  = new WebhookSyncStateRepository($pdo, $userId);
     $tariffRepo = new TariffRepository($pdo);
     $dynPriceRepo = new DynamicPriceRepository($pdo);
     $costSvc    = new CostCalculationService(
-        legacyRepo: $legacyRepo,
+        legacyRepo: $elecRepo,
         tariffRepo: $tariffRepo,
         gasRepo: $gasRepo,
         calculator: new TariffCalculatorService(),
@@ -62,7 +68,7 @@ $meters   = new MeterController(
     (string) ($config['meters']['dries_url'] ?? ''),
     (string) ($config['meters']['solar_url'] ?? ''),
 );
-$readings = new ReadingsController($legacyRepo, $gasRepo, $waterRepo);
+$readings = new ReadingsController($elecRepo, $gasRepo, $waterRepo, $syncState);
 $cost     = new CostController($costSvc);
 $tariffs  = new TariffController($tariffRepo);
 $entries  = new MeterEntryController($gasRepo, $waterRepo);

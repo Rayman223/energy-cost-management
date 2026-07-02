@@ -16,7 +16,7 @@ use DateTimeImmutable;
  * Orchestrates cost calculation for a given period using active tariff grids.
  *
  * Data flow:
- *  1. Fetch daily first-values from Data_Dries / Data_Solaire (LegacyDailyRepository).
+ *  1. Fetch monthly/hourly deltas from the register model (ElectricityReadingRepository).
  *  2. Resolve active tariff grids from DB (TariffRepository).
  *  3. Delegate cost maths to TariffCalculatorService.
  */

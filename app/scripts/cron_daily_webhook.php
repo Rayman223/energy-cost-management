@@ -4,9 +4,10 @@ declare(strict_types=1);
 
 use App\Infrastructure\Database;
 use App\Infrastructure\HttpClient;
-use App\Repository\GasRepository;
-use App\Repository\LegacyDailyRepository;
-use App\Repository\WaterRepository;
+use App\Repository\ElectricityReadingRepository;
+use App\Repository\UtilityReadingRepository;
+use App\Repository\WebhookSyncStateRepository;
+use App\Security\UserContext;
 use App\Service\DailyLegacyWebhookSyncService;
 use App\Service\EnergyIdPayloadFactory;
 use App\Service\EnergyIdV2Client;
@@ -29,9 +30,11 @@ try {
     $logger('[db] Connexion OK.');
 
     $pdo             = $database->pdo();
-    $repository      = new LegacyDailyRepository($pdo);
-    $gasRepository   = new GasRepository($pdo);
-    $waterRepository = new WaterRepository($pdo);
+    $userId          = UserContext::cliUserId($pdo, UserContext::parseCliUserArg());
+    $repository      = new ElectricityReadingRepository($pdo, $userId);
+    $gasRepository   = new UtilityReadingRepository($pdo, $userId, 'gas');
+    $waterRepository = new UtilityReadingRepository($pdo, $userId, 'water');
+    $syncState       = new WebhookSyncStateRepository($pdo, $userId);
     $energyIdClient  = new EnergyIdV2Client(
         http:               new HttpClient(),
         provisioningKey:    $config['energyid']['provisioning_key'],
@@ -40,9 +43,10 @@ try {
     );
 
     $service = new DailyLegacyWebhookSyncService(
-        repository:      $repository,
+        electricityRepository: $repository,
         gasRepository:   $gasRepository,
         waterRepository: $waterRepository,
+        syncState:       $syncState,
         payloadFactory:  new EnergyIdPayloadFactory(),
         energyIdClient:  $energyIdClient,
         device:          $config['energyid']['device'],

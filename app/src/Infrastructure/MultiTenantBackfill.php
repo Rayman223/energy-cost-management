@@ -44,8 +44,9 @@ final class MultiTenantBackfill
     public function run(?int $ownerUserId = null): array
     {
         $ownerId = $this->resolveOwnerId($ownerUserId);
-        $meterId = $this->ensureElectricityMeter($ownerId);
-        $registers = $this->ensureRegisters($meterId);
+        $topology = new MeterTopology($this->pdo);
+        $meterId = $topology->ensureElectricityMeter($ownerId);
+        $registers = $topology->ensureRegisters($meterId, array_keys(self::ELECTRICITY_MAP));
 
         $counts = ['owner_user_id' => $ownerId];
 
@@ -94,48 +95,6 @@ final class MultiTenantBackfill
         $id = $stmt->fetchColumn();
 
         return $id === false ? null : (int) $id;
-    }
-
-    private function ensureElectricityMeter(int $ownerId): int
-    {
-        $stmt = $this->pdo->prepare(
-            "SELECT id FROM meters WHERE user_id = :uid AND energy_type = 'electricity' ORDER BY id LIMIT 1"
-        );
-        $stmt->execute(['uid' => $ownerId]);
-        $id = $stmt->fetchColumn();
-        if ($id !== false) {
-            return (int) $id;
-        }
-
-        $this->pdo->prepare(
-            "INSERT INTO meters (user_id, energy_type, label) VALUES (:uid, 'electricity', 'Compteur électrique')"
-        )->execute(['uid' => $ownerId]);
-
-        return (int) $this->pdo->lastInsertId();
-    }
-
-    /**
-     * @return array<string, int> clé de registre → id
-     */
-    private function ensureRegisters(int $meterId): array
-    {
-        foreach (array_keys(self::ELECTRICITY_MAP) as $key) {
-            $this->pdo->prepare(
-                "INSERT IGNORE INTO meter_registers (meter_id, register_key, unit) VALUES (:mid, :key, 'kWh')"
-            )->execute(['mid' => $meterId, 'key' => $key]);
-        }
-
-        $stmt = $this->pdo->prepare('SELECT id, register_key FROM meter_registers WHERE meter_id = :mid');
-        $stmt->execute(['mid' => $meterId]);
-
-        $map = [];
-        foreach ($stmt->fetchAll() as $row) {
-            if (is_array($row)) {
-                $map[(string) $row['register_key']] = (int) $row['id'];
-            }
-        }
-
-        return $map;
     }
 
     private function copyMeterReadings(int $registerId, string $table, string $column): int

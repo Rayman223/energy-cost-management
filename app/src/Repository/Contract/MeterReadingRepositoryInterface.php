@@ -7,9 +7,9 @@ namespace App\Repository\Contract;
 use DateTimeImmutable;
 
 /**
- * Relevés de compteur manuels (gaz / eau) : lecture et écriture. Implémenté à
- * l'identique par GasRepository et WaterRepository ; seam de test des contrôleurs
- * (MeterEntryController, ReadingsController) sans base de données.
+ * Relevés de compteur manuels (gaz / eau) : lecture et écriture. Implémenté par
+ * UtilityReadingRepository (table unifiée utility_readings) ; seam de test des
+ * contrôleurs (MeterEntryController, ReadingsController) sans base de données.
  */
 interface MeterReadingRepositoryInterface
 {

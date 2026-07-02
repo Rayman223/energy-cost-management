@@ -43,6 +43,10 @@ final class MultiTenantBackfillDbTest extends TestCase
             self::markTestSkipped('Base injoignable — test BDD ignoré : ' . $e->getMessage());
         }
 
+        // Les tables legacy ne font plus partie de schema.sql : le backfill ne
+        // s'exécute que sur une installation existante qui les possède encore.
+        // On les recrée ici pour reproduire ce scénario.
+        $this->createLegacyTables();
         $this->clean();
     }
 
@@ -50,6 +54,39 @@ final class MultiTenantBackfillDbTest extends TestCase
     {
         if ($this->pdo !== null) {
             $this->clean();
+            $this->pdo()->exec('DROP TABLE IF EXISTS Data_Dries, Data_Solaire, Data_gaz, Data_eau');
+        }
+    }
+
+    private function createLegacyTables(): void
+    {
+        $this->pdo()->exec(
+            'CREATE TABLE IF NOT EXISTS Data_Dries (
+                id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+                timestamp DATETIME NOT NULL,
+                Prelev_jour DECIMAL(12,3) NOT NULL, Prelev_nuit DECIMAL(12,3) NOT NULL,
+                Injec_jour DECIMAL(12,3) NOT NULL, Injec_nuit DECIMAL(12,3) NOT NULL,
+                UNIQUE KEY uq_data_dries_timestamp (timestamp)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4'
+        );
+        $this->pdo()->exec(
+            'CREATE TABLE IF NOT EXISTS Data_Solaire (
+                id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+                timestamp DATETIME NOT NULL,
+                production DECIMAL(12,3) NOT NULL,
+                UNIQUE KEY uq_data_solaire_timestamp (timestamp)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4'
+        );
+        foreach (['Data_gaz', 'Data_eau'] as $table) {
+            $this->pdo()->exec(
+                "CREATE TABLE IF NOT EXISTS {$table} (
+                    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+                    reading_at DATETIME NOT NULL,
+                    counter_m3 DECIMAL(12,3) NOT NULL,
+                    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE KEY uq_{$table}_reading (reading_at)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
+            );
         }
     }
 

@@ -7,51 +7,10 @@
 SET NAMES utf8mb4;
 SET time_zone = '+00:00';
 
--- ── Relevés électricité (compteur P1 Dries) ──────────────────────────────
-CREATE TABLE IF NOT EXISTS Data_Dries (
-    id           BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-    timestamp    DATETIME NOT NULL,
-    Prelev_jour  DECIMAL(12,3) NOT NULL COMMENT 'Import T1 (jour) kWh cumulatif',
-    Prelev_nuit  DECIMAL(12,3) NOT NULL COMMENT 'Import T2 (nuit) kWh cumulatif',
-    Injec_jour   DECIMAL(12,3) NOT NULL COMMENT 'Export T1 (jour) kWh cumulatif',
-    Injec_nuit   DECIMAL(12,3) NOT NULL COMMENT 'Export T2 (nuit) kWh cumulatif',
-    UNIQUE KEY uq_data_dries_timestamp (timestamp)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-
--- ── Production solaire (dongle P1 sur onduleur) ───────────────────────────
--- Production = total_power_export_kwh, index cumulatif en kWh.
--- Data_Brusol est le fallback historique tant que Data_Solaire n'est pas fiable.
-CREATE TABLE IF NOT EXISTS Data_Solaire (
-    id         BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-    timestamp  DATETIME NOT NULL,
-    production DECIMAL(12,3) NOT NULL COMMENT 'Index cumulatif kWh (total_power_export_kwh)',
-    UNIQUE KEY uq_data_solaire_timestamp (timestamp)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-
-CREATE TABLE IF NOT EXISTS Data_Brusol (
-    id         BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-    timestamp  DATETIME NOT NULL,
-    production DECIMAL(12,3) NOT NULL COMMENT 'Production journalière Wh (source Brusol)',
-    UNIQUE KEY uq_data_brusol_timestamp (timestamp)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-
--- ── Relevés gaz (encodage manuel) ────────────────────────────────────────
-CREATE TABLE IF NOT EXISTS Data_gaz (
-    id          BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-    reading_at  DATETIME NOT NULL,
-    counter_m3  DECIMAL(12,3) NOT NULL COMMENT 'Index compteur gaz en m³',
-    created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE KEY uq_data_gaz_reading (reading_at)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-
--- ── Relevés eau (encodage manuel) ────────────────────────────────────────
-CREATE TABLE IF NOT EXISTS Data_eau (
-    id          BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-    reading_at  DATETIME NOT NULL,
-    counter_m3  DECIMAL(12,3) NOT NULL COMMENT 'Index compteur eau en m³',
-    created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE KEY uq_data_eau_reading (reading_at)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+-- NB : les anciennes tables mono-tenant (Data_Dries, Data_Solaire, Data_Brusol,
+-- Data_gaz, Data_eau) ne font plus partie du schéma. Sur une installation
+-- existante, elles sont migrées puis supprimées par
+-- app/scripts/finalize_multitenant.php (après backfill vers le compte owner).
 
 -- ── Tarifs énergétiques ───────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS tariff_grids (
@@ -92,11 +51,13 @@ CREATE TABLE IF NOT EXISTS dynamic_prices (
     INDEX idx_dynamic_prices_period (period_start)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
--- ── État de synchronisation webhook EnergyID ─────────────────────────────
+-- ── État de synchronisation webhook EnergyID (scopé par utilisateur) ─────
 CREATE TABLE IF NOT EXISTS webhook_sync_state (
-    source_name  VARCHAR(120) PRIMARY KEY COMMENT 'prelevement-jour | prelevement-nuit | injection-jour | injection-nuit | production-solaire | gas-index | water-index',
+    user_id      BIGINT UNSIGNED NOT NULL DEFAULT 0,
+    source_name  VARCHAR(120) NOT NULL COMMENT 'prelevement-jour | prelevement-nuit | injection-jour | injection-nuit | production-solaire | gas-index | water-index',
     last_sent_at DATETIME NULL,
-    updated_at   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    updated_at   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (user_id, source_name)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- ── Comptes utilisateurs (identité OpenID Connect, sans mot de passe) ────
@@ -171,9 +132,12 @@ CREATE TABLE IF NOT EXISTS schema_migrations (
     applied_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
--- Baseline : les migrations antérieures à l'introduction du runner sont déjà
--- reflétées dans ce schema.sql ; on les marque appliquées pour ne pas les rejouer
--- (certaines ne sont pas idempotentes, ex. DROP INDEX).
+-- Baseline : toute migration déjà reflétée dans ce schema.sql est marquée
+-- appliquée pour ne pas être rejouée sur une base fraîche (certaines ne sont
+-- pas idempotentes, ex. DROP INDEX / ALTER). À maintenir à chaque migration.
 INSERT IGNORE INTO schema_migrations (version) VALUES
     ('2026-06-26_drop_redundant_reading_indexes.sql'),
-    ('2026-06-27_dynamic_prices.sql');
+    ('2026-06-27_dynamic_prices.sql'),
+    ('2026-06-30_users.sql'),
+    ('2026-07-01_multitenant_index_tables.sql'),
+    ('2026-07-02_webhook_sync_state_user.sql');

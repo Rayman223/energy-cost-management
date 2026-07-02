@@ -2,46 +2,55 @@
 
 declare(strict_types=1);
 
+/**
+ * Ingestion horaire des index électricité + solaire depuis les API locales des
+ * compteurs (HomeWizard P1 + dongle solaire), écrits dans le modèle à registres
+ * pour l'utilisateur propriétaire.
+ *
+ * Usage : php app/scripts/cron_hourly.php [--user=<id>]
+ * Sans --user : premier compte de la table users (le propriétaire).
+ */
+
 use App\Infrastructure\Database;
-use App\Repository\LegacyIngestionRepository;
+use App\Repository\ElectricityReadingRepository;
+use App\Security\UserContext;
 use App\Service\MeterApiService;
 
 $config   = require __DIR__ . '/../bootstrap.php';
 $database = new Database($config['database']);
-$repo     = new LegacyIngestionRepository($database->pdo());
+$pdo      = $database->pdo();
+$userId   = UserContext::cliUserId($pdo, UserContext::parseCliUserArg());
+$repo     = new ElectricityReadingRepository($pdo, $userId);
 $meterApi = new MeterApiService((int) ($config['meters']['timeout'] ?? 10));
 $paths    = $config['meters']['paths'] ?? [];
 $ts       = new DateTimeImmutable('now');
 $errors   = [];
 
-// ── P1 meter (Dries) ──────────────────────────────────────────────────────
+// ── Compteur P1 (électricité, 4 registres) ────────────────────────────────
 try {
-    $dries = $meterApi->fetchJson($config['meters']['dries_url']);
+    $p1 = $meterApi->fetchJson($config['meters']['dries_url']);
 
-    $repo->insertDataDries(
-        timestamp:  $ts,
-        prelevJour: $meterApi->readNumericValue($dries, $paths['prelev_jour'] ?? []),
-        prelevNuit: $meterApi->readNumericValue($dries, $paths['prelev_nuit'] ?? []),
-        injecJour:  $meterApi->readNumericValue($dries, $paths['injec_jour']  ?? []),
-        injecNuit:  $meterApi->readNumericValue($dries, $paths['injec_nuit']  ?? []),
-    );
+    $repo->insertIndexes($ts, [
+        'import_t1' => $meterApi->readNumericValue($p1, $paths['prelev_jour'] ?? []),
+        'import_t2' => $meterApi->readNumericValue($p1, $paths['prelev_nuit'] ?? []),
+        'export_t1' => $meterApi->readNumericValue($p1, $paths['injec_jour']  ?? []),
+        'export_t2' => $meterApi->readNumericValue($p1, $paths['injec_nuit']  ?? []),
+    ]);
 
-    echo "[OK] Data_Dries enregistre.\n";
+    echo "[OK] Index electricite enregistres (user #$userId).\n";
 } catch (\Throwable $e) {
-    $errors[] = '[ERROR] Dries: ' . $e->getMessage();
+    $errors[] = '[ERROR] Electricite: ' . $e->getMessage();
 }
 
-// ── Solar dongle ──────────────────────────────────────────────────────────
-// total_power_export_kwh : index cumulatif kWh, meme structure que P1 meter.
+// ── Dongle solaire (registre production, index cumulatif kWh) ─────────────
 try {
     $solar = $meterApi->fetchJson($config['meters']['solar_url']);
 
-    $repo->insertDataSolaire(
-        timestamp:     $ts,
-        productionKwh: $meterApi->readNumericValue($solar, $paths['solar_production_wh'] ?? []),
-    );
+    $repo->insertIndexes($ts, [
+        'production' => $meterApi->readNumericValue($solar, $paths['solar_production_wh'] ?? []),
+    ]);
 
-    echo "[OK] Data_Solaire enregistre.\n";
+    echo "[OK] Index solaire enregistre (user #$userId).\n";
 } catch (\Throwable $e) {
     $errors[] = '[ERROR] Solaire: ' . $e->getMessage();
 }

@@ -3,11 +3,11 @@
 declare(strict_types=1);
 
 /**
- * Import CSV gaz -> table Data_gaz
+ * Import CSV gaz -> table utility_readings (energy_type=gas)
  *
  * Usage :
- *   php import_gaz.php           <- dry-run (aucune ecriture)
- *   php import_gaz.php --execute <- import reel
+ *   php import_gaz.php                         <- dry-run (aucune ecriture)
+ *   php import_gaz.php --execute [--user=<id>] <- import reel (defaut: 1er compte)
  *
  * Le script trie les lignes par date croissante avant l'insertion.
  * Il est idempotent : les doublons sont ignores via INSERT IGNORE.
@@ -149,9 +149,12 @@ if ($dryRun) {
 // ── Import reel ───────────────────────────────────────────────────────────
 echo "\n[IMPORT] Debut de l'import (" . count($rows) . " lignes, ordre croissant)...\n";
 
+$userId = \App\Security\UserContext::cliUserId($pdo, \App\Security\UserContext::parseCliUserArg());
+echo "[INFO] Import vers l'utilisateur #{$userId}.\n";
+
 $stmt = $pdo->prepare(
-    'INSERT IGNORE INTO Data_gaz (reading_at, counter_m3)
-     VALUES (:reading_at, :counter_m3)'
+    "INSERT IGNORE INTO utility_readings (user_id, energy_type, reading_at, counter_m3)
+     VALUES ({$userId}, 'gas', :reading_at, :counter_m3)"
 );
 
 $inserted = 0;

@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace App\Service;
 
-use App\Repository\GasRepository;
-use App\Repository\LegacyDailyRepository;
-use App\Repository\WaterRepository;
+use App\Repository\ElectricityReadingRepository;
+use App\Repository\UtilityReadingRepository;
+use App\Repository\WebhookSyncStateRepository;
 use DateTimeImmutable;
 
 final class DailyLegacyWebhookSyncService
@@ -27,9 +27,10 @@ final class DailyLegacyWebhookSyncService
 
     /** @param array<string, mixed> $device */
     public function __construct(
-        private readonly LegacyDailyRepository $repository,
-        private readonly GasRepository $gasRepository,
-        private readonly WaterRepository $waterRepository,
+        private readonly ElectricityReadingRepository $electricityRepository,
+        private readonly UtilityReadingRepository $gasRepository,
+        private readonly UtilityReadingRepository $waterRepository,
+        private readonly WebhookSyncStateRepository $syncState,
         private readonly EnergyIdPayloadFactory $payloadFactory,
         private readonly EnergyIdV2Client $energyIdClient,
         private readonly array $device,
@@ -92,12 +93,12 @@ final class DailyLegacyWebhookSyncService
         $from = $this->resolveElecFrom();
         $this->log(sprintf('[elec] Envoi à partir du: %s', $from->format('Y-m-d')));
 
-        // Récupérer les 5 jeux de données
-        $driesT1 = $this->repository->fetchDriesDailyFirstValues('Prelev_jour',  $from, $until);
-        $driesT2 = $this->repository->fetchDriesDailyFirstValues('Prelev_nuit',  $from, $until);
-        $driesI1 = $this->repository->fetchDriesDailyFirstValues('Injec_jour',   $from, $until);
-        $driesI2 = $this->repository->fetchDriesDailyFirstValues('Injec_nuit',   $from, $until);
-        $solar   = $this->repository->fetchSolaireDailyFirstValues($from, $until);
+        // Récupérer les 5 jeux de données (un registre par flux)
+        $driesT1 = $this->electricityRepository->fetchDailyFirstValues('import_t1',  $from, $until);
+        $driesT2 = $this->electricityRepository->fetchDailyFirstValues('import_t2',  $from, $until);
+        $driesI1 = $this->electricityRepository->fetchDailyFirstValues('export_t1',  $from, $until);
+        $driesI2 = $this->electricityRepository->fetchDailyFirstValues('export_t2',  $from, $until);
+        $solar   = $this->electricityRepository->fetchDailyFirstValues('production', $from, $until);
 
         // Fusion par date + assemblage des points (logique pure, testée dans
         // ElectricityReadingMergerTest).
@@ -122,7 +123,7 @@ final class DailyLegacyWebhookSyncService
             $lastTs = new DateTimeImmutable($elec->lastTimestamp);
 
             foreach (self::ELEC_STATE_KEYS as $stateKey) {
-                $this->repository->saveLastSentAt($stateKey, $lastTs);
+                $this->syncState->saveLastSentAt($stateKey, $lastTs);
             }
 
             $this->log(sprintf(
@@ -151,7 +152,7 @@ final class DailyLegacyWebhookSyncService
      */
     private function syncGas(array &$session, DateTimeImmutable $until): ?array
     {
-        $from = $this->repository->getLastSentAt(self::GAS_STATE_KEY);
+        $from = $this->syncState->getLastSentAt(self::GAS_STATE_KEY);
         $this->log(sprintf(
             '[gas] Envoi à partir du: %s',
             $from !== null ? $from->format('Y-m-d H:i:s') : '(aucun historique)'
@@ -183,7 +184,7 @@ final class DailyLegacyWebhookSyncService
 
         if ($result['ok']) {
             $lastTs = new DateTimeImmutable($rows[array_key_last($rows)]['timestamp']);
-            $this->repository->saveLastSentAt(self::GAS_STATE_KEY, $lastTs);
+            $this->syncState->saveLastSentAt(self::GAS_STATE_KEY, $lastTs);
 
             $this->log(sprintf(
                 '[gas] OK (attempt %d) — last_sent_at mis a jour: %s',
@@ -200,7 +201,7 @@ final class DailyLegacyWebhookSyncService
             ));
         }
 
-        return ['source' => 'Data_gaz', 'remoteId' => 'gas', 'result' => $result];
+        return ['source' => 'gas-readings', 'remoteId' => 'gas', 'result' => $result];
     }
 
     // ── Privé — Eau ───────────────────────────────────────────────────────────
@@ -211,7 +212,7 @@ final class DailyLegacyWebhookSyncService
      */
     private function syncWater(array &$session, DateTimeImmutable $until): ?array
     {
-        $from = $this->repository->getLastSentAt(self::WATER_STATE_KEY);
+        $from = $this->syncState->getLastSentAt(self::WATER_STATE_KEY);
         $this->log(sprintf(
             '[water] Envoi à partir du: %s',
             $from !== null ? $from->format('Y-m-d H:i:s') : '(aucun historique)'
@@ -244,7 +245,7 @@ final class DailyLegacyWebhookSyncService
 
         if ($result['ok']) {
             $lastTs = new DateTimeImmutable($rows[array_key_last($rows)]['timestamp']);
-            $this->repository->saveLastSentAt(self::WATER_STATE_KEY, $lastTs);
+            $this->syncState->saveLastSentAt(self::WATER_STATE_KEY, $lastTs);
 
             $this->log(sprintf(
                 '[water] OK (attempt %d) — last_sent_at mis a jour: %s',
@@ -261,7 +262,7 @@ final class DailyLegacyWebhookSyncService
             ));
         }
 
-        return ['source' => 'Data_eau', 'remoteId' => 'water', 'result' => $result];
+        return ['source' => 'water-readings', 'remoteId' => 'water', 'result' => $result];
     }
 
     // ── Privé — Helpers ───────────────────────────────────────────────────────
@@ -275,7 +276,7 @@ final class DailyLegacyWebhookSyncService
         $earliest = null;
 
         foreach (self::ELEC_STATE_KEYS as $stateKey) {
-            $lastSentAt = $this->repository->getLastSentAt($stateKey);
+            $lastSentAt = $this->syncState->getLastSentAt($stateKey);
 
             if ($lastSentAt === null) {
                 return new DateTimeImmutable('1970-01-01 00:00:00');

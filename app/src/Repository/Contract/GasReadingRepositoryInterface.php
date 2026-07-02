@@ -8,7 +8,7 @@ namespace App\Repository\Contract;
  * Lecture des relevés gaz manuels consommés par CostCalculationService.
  * Seam de test (sans base de données).
  *
- * @see \App\Repository\GasRepository implémentation concrète (PDO/MySQL).
+ * @see \App\Repository\UtilityReadingRepository implémentation concrète (PDO/MySQL).
  */
 interface GasReadingRepositoryInterface
 {
