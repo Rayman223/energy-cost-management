@@ -2,7 +2,6 @@
 
 declare(strict_types=1);
 
-use App\Http\Controller\ApiTokenController;
 use App\Http\Controller\CostController;
 use App\Http\Controller\IngestController;
 use App\Http\Controller\MeterEntryController;
@@ -149,11 +148,7 @@ if ($viaToken === false) {
     $router->add('POST', 'water_entry', $entries->water(...));
     $router->add('POST', 'save_tariff', $tariffs->save(...));
 
-    // Gestion des jetons : SESSION UNIQUEMENT (un jeton ne gère pas les jetons).
-    $tokenCtl = new ApiTokenController(new ApiTokenRepository($pdo), $userId);
-    $router->add('GET',  'api_tokens',       $tokenCtl->index(...));
-    $router->add('POST', 'api_token_create', $tokenCtl->create(...));
-    $router->add('POST', 'api_token_revoke', $tokenCtl->revoke(...));
+    // La gestion des jetons API se fait sur la page « Mon compte » (account.php).
 }
 
 $router->dispatch($request)->send();

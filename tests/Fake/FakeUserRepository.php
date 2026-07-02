@@ -63,6 +63,14 @@ final class FakeUserRepository implements UserRepositoryInterface
         }
     }
 
+    /** @var list<int> */
+    public array $termsAccepted = [];
+
+    public function acceptTermsIfNeeded(int $userId): void
+    {
+        $this->termsAccepted[] = $userId;
+    }
+
     public function touchLastLogin(int $userId): void
     {
         $this->loginTouches[] = $userId;

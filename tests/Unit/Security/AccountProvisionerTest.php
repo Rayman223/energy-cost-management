@@ -19,6 +19,7 @@ final class AccountProvisionerTest extends TestCase
         self::assertSame('user', $user->role);
         self::assertCount(1, $repo->users);
         self::assertSame([$user->id], $repo->loginTouches);
+        self::assertSame([$user->id], $repo->termsAccepted); // consentement enregistré à l'inscription
     }
 
     public function testReusesExistingAccountAndRefreshesName(): void

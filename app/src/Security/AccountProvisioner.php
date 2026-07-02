@@ -37,6 +37,9 @@ final class AccountProvisioner
             $user = $user->withDisplayName($displayName);
         }
 
+        // Inscription = acceptation des CGU/confidentialité (horodatée). Le lien
+        // vers les pages légales est affiché à la connexion et sur la page compte.
+        $this->users->acceptTermsIfNeeded($user->id);
         $this->users->touchLastLogin($user->id);
 
         return $user;

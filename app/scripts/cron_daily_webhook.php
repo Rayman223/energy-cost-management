@@ -5,16 +5,21 @@ declare(strict_types=1);
 use App\Infrastructure\Database;
 use App\Infrastructure\HttpClient;
 use App\Repository\ElectricityReadingRepository;
+use App\Repository\EnergyIdIntegrationRepository;
 use App\Repository\UtilityReadingRepository;
 use App\Repository\WebhookSyncStateRepository;
-use App\Security\UserContext;
 use App\Service\DailyLegacyWebhookSyncService;
 use App\Service\EnergyIdPayloadFactory;
 use App\Service\EnergyIdV2Client;
 
+/**
+ * Sync quotidienne vers EnergyID, PAR UTILISATEUR ayant activé l'intégration
+ * (opt-in, BE/NL). Chaque membre a un device dérivé de son id ; le claim se fait
+ * dans son propre compte EnergyID (le claimCode est loggué la 1re fois).
+ */
+
 $config = require __DIR__ . '/../bootstrap.php';
 
-// Logger : préfixe chaque ligne avec l'heure exacte et flush immédiat.
 $logger = static function (string $message): void {
     echo '[' . date('H:i:s') . '] ' . $message . "\n";
     if (ob_get_level() > 0) {
@@ -25,76 +30,86 @@ $logger = static function (string $message): void {
 
 $logger('[start] Lancement sync EnergyID — ' . date('Y-m-d H:i:s'));
 
-try {
-    $database = new Database($config['database']);
-    $logger('[db] Connexion OK.');
-
-    $pdo             = $database->pdo();
-    $userId          = UserContext::cliUserId($pdo, UserContext::parseCliUserArg());
-    $repository      = new ElectricityReadingRepository($pdo, $userId);
-    $gasRepository   = new UtilityReadingRepository($pdo, $userId, 'gas');
-    $waterRepository = new UtilityReadingRepository($pdo, $userId, 'water');
-    $syncState       = new WebhookSyncStateRepository($pdo, $userId);
-    $energyIdClient  = new EnergyIdV2Client(
-        http:               new HttpClient(),
-        provisioningKey:    $config['energyid']['provisioning_key'],
-        provisioningSecret: $config['energyid']['provisioning_secret'],
-        timeout:            (int) ($config['energyid']['timeout'] ?? 15)
-    );
-
-    $service = new DailyLegacyWebhookSyncService(
-        electricityRepository: $repository,
-        gasRepository:   $gasRepository,
-        waterRepository: $waterRepository,
-        syncState:       $syncState,
-        payloadFactory:  new EnergyIdPayloadFactory(),
-        energyIdClient:  $energyIdClient,
-        device:          $config['energyid']['device'],
-        logger:          $logger,
-    );
-
-    $until   = new DateTimeImmutable('now');
-    $reports = $service->syncUntil($until);
-
-} catch (\Throwable $e) {
-    $logger('[FATAL] ' . $e->getMessage());
-    $logger('[FATAL] ' . $e->getFile() . ':' . $e->getLine());
-    exit(1);
-}
-
-if ($reports === []) {
-    $logger('[OK] Rien a envoyer, tout est a jour.');
+$energyCfg = $config['energyid'] ?? [];
+if (($energyCfg['enabled'] ?? true) === false) {
+    $logger('[SKIP] EnergyID désactivé globalement (energyid.enabled = false).');
     exit(0);
 }
 
-$errors = array_filter($reports, static fn (array $r): bool => ($r['result']['ok'] ?? false) === false);
-
-if ($errors !== []) {
-    foreach ($errors as $error) {
-        if (($error['result']['type'] ?? '') === 'not_claimed') {
-            $logger(sprintf(
-                '[ACTION] Device not claimed. claimCode=%s claimUrl=%s exp=%s',
-                $error['result']['claimCode'] ?? '-',
-                $error['result']['claimUrl'] ?? '-',
-                $error['result']['exp'] ?? '-'
-            ));
-            continue;
-        }
-
-        $logger(sprintf(
-            '[ERROR] %s/%s - attempts=%s status=%s error=%s body=%s type=%s',
-            $error['source'],
-            $error['remoteId'],
-            $error['result']['attempts'] ?? 'n/a',
-            $error['result']['status'] ?? 'n/a',
-            $error['result']['error'] ?? '-',
-            $error['result']['body'] ?? '-',
-            $error['result']['type'] ?? '-'
-        ));
-    }
-    $logger('[end] Termine avec erreurs.');
+try {
+    $database = new Database($config['database']);
+    $pdo      = $database->pdo();
+    $logger('[db] Connexion OK.');
+} catch (\Throwable $e) {
+    $logger('[FATAL] ' . $e->getMessage());
     exit(1);
 }
 
-$logger('[OK] Sync quotidienne EnergyID terminee (' . count($reports) . ' envoi(s) effectue(s)).');
-exit(0);
+$integrationRepo = new EnergyIdIntegrationRepository($pdo);
+$enabled = $integrationRepo->listEnabled();
+
+if ($enabled === []) {
+    $logger('[OK] Aucun utilisateur avec EnergyID activé.');
+    exit(0);
+}
+
+$energyIdClient = new EnergyIdV2Client(
+    http:               new HttpClient(),
+    provisioningKey:    $energyCfg['provisioning_key'] ?? '',
+    provisioningSecret: $energyCfg['provisioning_secret'] ?? '',
+    timeout:            (int) ($energyCfg['timeout'] ?? 15),
+);
+
+/** @var array<string, mixed> $deviceTemplate */
+$deviceTemplate = is_array($energyCfg['device'] ?? null) ? $energyCfg['device'] : [];
+$until          = new DateTimeImmutable('now');
+$hadError       = false;
+
+foreach ($enabled as $entry) {
+    $userId   = $entry['user_id'];
+    $deviceId = $entry['device_id'];
+    $logger(sprintf('[user %d] Sync (device %s)...', $userId, $deviceId));
+
+    // Device par utilisateur : template global + deviceId propre au membre.
+    $device = array_merge($deviceTemplate, ['deviceId' => $deviceId]);
+
+    $service = new DailyLegacyWebhookSyncService(
+        electricityRepository: new ElectricityReadingRepository($pdo, $userId),
+        gasRepository:         new UtilityReadingRepository($pdo, $userId, 'gas'),
+        waterRepository:       new UtilityReadingRepository($pdo, $userId, 'water'),
+        syncState:             new WebhookSyncStateRepository($pdo, $userId),
+        payloadFactory:        new EnergyIdPayloadFactory(),
+        energyIdClient:        $energyIdClient,
+        device:                $device,
+        logger:                static function (string $m) use ($logger, $userId): void {
+            $logger('[user ' . $userId . '] ' . $m);
+        },
+    );
+
+    try {
+        $reports = $service->syncUntil($until);
+    } catch (\Throwable $e) {
+        $logger(sprintf('[user %d] [ERROR] %s', $userId, $e->getMessage()));
+        $hadError = true;
+        continue;
+    }
+
+    // Un envoi réussi (webhook obtenu) → device réclamé côté EnergyID.
+    foreach ($reports as $report) {
+        if (($report['result']['ok'] ?? false) === true) {
+            $integrationRepo->markClaimed($userId);
+            break;
+        }
+        if (($report['result']['type'] ?? '') === 'not_claimed') {
+            $logger(sprintf(
+                '[user %d] [ACTION] Device non réclamé. claimCode=%s claimUrl=%s',
+                $userId,
+                $report['result']['claimCode'] ?? '-',
+                $report['result']['claimUrl'] ?? '-',
+            ));
+        }
+    }
+}
+
+$logger('[end] Sync EnergyID terminée' . ($hadError ? ' (avec erreurs).' : '.'));
+exit($hadError ? 1 : 0);

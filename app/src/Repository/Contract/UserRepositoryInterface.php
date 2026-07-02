@@ -19,6 +19,8 @@ interface UserRepositoryInterface
 
     public function updateDisplayName(int $userId, string $displayName): void;
 
+    public function acceptTermsIfNeeded(int $userId): void;
+
     public function touchLastLogin(int $userId): void;
 
     /**

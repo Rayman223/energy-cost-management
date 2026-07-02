@@ -74,6 +74,7 @@ CREATE TABLE IF NOT EXISTS users (
     display_name  VARCHAR(190) NOT NULL DEFAULT '' COMMENT 'Nom d''affichage (aucun e-mail)',
     role          ENUM('user', 'admin')     NOT NULL DEFAULT 'user',
     status        ENUM('active', 'blocked') NOT NULL DEFAULT 'active',
+    terms_accepted_at DATETIME NULL COMMENT 'Acceptation CGU/confidentialité',
     created_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     last_login_at DATETIME NULL,
     UNIQUE KEY uq_users_oidc (oidc_iss, oidc_sub)
@@ -131,6 +132,16 @@ CREATE TABLE IF NOT EXISTS utility_readings (
     CONSTRAINT fk_utility_readings_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+-- ── Intégration EnergyID par utilisateur (opt-in, BE/NL) ─────────────────
+CREATE TABLE IF NOT EXISTS energyid_integrations (
+    user_id    BIGINT UNSIGNED NOT NULL PRIMARY KEY,
+    enabled    TINYINT(1) NOT NULL DEFAULT 0,
+    device_id  VARCHAR(120) NOT NULL,
+    claimed_at DATETIME NULL,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    CONSTRAINT fk_energyid_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 -- ── Jetons API (authentification machine des agents) ─────────────────────
 CREATE TABLE IF NOT EXISTS api_tokens (
     id           BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
@@ -165,4 +176,5 @@ INSERT IGNORE INTO schema_migrations (version) VALUES
     ('2026-07-01_multitenant_index_tables.sql'),
     ('2026-07-02_webhook_sync_state_user.sql'),
     ('2026-07-03_tariffs_eu.sql'),
-    ('2026-07-04_api_tokens.sql');
+    ('2026-07-04_api_tokens.sql'),
+    ('2026-07-05_account_energyid.sql');

@@ -80,8 +80,10 @@ if (!function_exists('fmtCost')) {
       ?>
       <div class="sync-badge">
         <span class="sync-dot <?= $syncClass === 'error' ? 'error' : ($syncClass === 'stale' ? 'stale' : '') ?>"></span>
-        <?= $dbError ? 'DB offline' : 'Live' ?>
+        <?= $dbError ? 'DB offline' : 'Sync' ?>
       </div>
+      <a href="tariffs.php" class="theme-toggle" title="Tarifs" style="text-decoration:none">€</a>
+      <a href="account.php" class="theme-toggle" title="Mon compte" style="text-decoration:none">👤</a>
       <button type="button" class="theme-toggle" id="theme-toggle" aria-label="Changer de thème">🌙</button>
     </div>
   </header>

@@ -81,6 +81,42 @@ final class UserRepository implements UserRepositoryInterface
             ->execute(['name' => $displayName, 'id' => $userId]);
     }
 
+    /** Marque l'acceptation des CGU/confidentialité si ce n'est pas déjà fait. */
+    public function acceptTermsIfNeeded(int $userId): void
+    {
+        $this->pdo->prepare('UPDATE users SET terms_accepted_at = NOW() WHERE id = :id AND terms_accepted_at IS NULL')
+            ->execute(['id' => $userId]);
+    }
+
+    /**
+     * Met à jour le profil de l'utilisateur (crée la ligne si absente).
+     */
+    public function updateProfile(
+        int $userId,
+        ?string $country,
+        string $timezone,
+        string $currency,
+        ?string $biddingZone,
+        string $locale,
+    ): void {
+        $stmt = $this->pdo->prepare(
+            'INSERT INTO user_profiles (user_id, country, timezone, currency, bidding_zone, locale)
+             VALUES (:uid, :country, :tz, :currency, :zone, :locale)
+             ON DUPLICATE KEY UPDATE
+                country = VALUES(country), timezone = VALUES(timezone),
+                currency = VALUES(currency), bidding_zone = VALUES(bidding_zone),
+                locale = VALUES(locale)'
+        );
+        $stmt->execute([
+            'uid'      => $userId,
+            'country'  => $country,
+            'tz'       => $timezone,
+            'currency' => $currency,
+            'zone'     => $biddingZone,
+            'locale'   => $locale,
+        ]);
+    }
+
     public function touchLastLogin(int $userId): void
     {
         $this->pdo->prepare('UPDATE users SET last_login_at = NOW() WHERE id = :id')
