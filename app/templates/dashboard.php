@@ -94,29 +94,9 @@ if (!function_exists('fmtCost')) {
   </div>
   <?php endif; ?>
 
-  <!-- ── Live power (direct dongle read) ──────────────────────────────── -->
-  <div class="section-header">
-    <span class="section-title">Puissance instantanée — temps réel</span>
-    <span class="section-line"></span>
-    <span id="live-ts" style="font-family:var(--mono);font-size:.76rem;color:var(--muted)">—</span>
-  </div>
-
-  <div class="cards cards-2">
-    <div class="card amber">
-      <div class="card-label">
-        <span class="dot" style="background:var(--amber)"></span>Consommation réseau
-        <a href="http://192.168.1.5/api/v1/data" target="_blank" rel="noopener" class="card-api-link" title="Ouvrir l'API HomeWizard"><svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg></a>
-      </div>
-      <div class="card-value" id="live-dries-w"><span class="nd">…</span></div>
-    </div>
-    <div class="card green">
-      <div class="card-label">
-        <span class="dot" style="background:var(--green)"></span>Production solaire
-        <a href="http://192.168.1.7/api/v1/data" target="_blank" rel="noopener" class="card-api-link" title="Ouvrir l'API HomeWizard"><svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg></a>
-      </div>
-      <div class="card-value" id="live-solar-w"><span class="nd">…</span></div>
-    </div>
-  </div>
+  <!-- Le widget « temps réel » a été retiré (P4, #47) : le serveur communautaire
+       ne peut pas atteindre les compteurs sur le LAN des membres. Les index
+       arrivent par push (agent → API) ou saisie manuelle. -->
 
   <!-- ── Monthly deltas ────────────────────────────────────────────────── -->
   <div class="section-header">

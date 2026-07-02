@@ -6,6 +6,7 @@ namespace App\Repository;
 
 use App\Repository\Contract\GasReadingRepositoryInterface;
 use App\Repository\Contract\MeterReadingRepositoryInterface;
+use App\Repository\Contract\UtilityIngestionInterface;
 use DateTimeImmutable;
 use InvalidArgumentException;
 use PDO;
@@ -15,7 +16,7 @@ use PDO;
  * Un seul repository pour les deux fluides : la structure est identique
  * (un index m³ par relevé) — l'energy_type distingue les flux.
  */
-final class UtilityReadingRepository implements GasReadingRepositoryInterface, MeterReadingRepositoryInterface
+final class UtilityReadingRepository implements GasReadingRepositoryInterface, MeterReadingRepositoryInterface, UtilityIngestionInterface
 {
     public function __construct(
         private readonly PDO $pdo,
@@ -39,6 +40,27 @@ final class UtilityReadingRepository implements GasReadingRepositoryInterface, M
             'reading_at' => $readingAt->format('Y-m-d H:i:s'),
             'counter_m3' => $counterM3,
         ]);
+    }
+
+    /**
+     * Variante idempotente pour l'ingestion API/batch : INSERT IGNORE sur
+     * l'unicité (user, type, horodatage). Contrairement à save(), n'échoue pas
+     * sur un renvoi du même relevé.
+     */
+    public function saveIgnore(DateTimeImmutable $readingAt, float $counterM3): bool
+    {
+        $stmt = $this->pdo->prepare(
+            'INSERT IGNORE INTO utility_readings (user_id, energy_type, reading_at, counter_m3)
+             VALUES (:uid, :etype, :reading_at, :counter_m3)'
+        );
+        $stmt->execute([
+            'uid'        => $this->userId,
+            'etype'      => $this->energyType,
+            'reading_at' => $readingAt->format('Y-m-d H:i:s'),
+            'counter_m3' => $counterM3,
+        ]);
+
+        return $stmt->rowCount() > 0;
     }
 
     /**

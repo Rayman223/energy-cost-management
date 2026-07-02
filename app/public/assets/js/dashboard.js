@@ -832,45 +832,10 @@ function renderChart(data) {
 }
 
 // ── Live dongle polling ────────────────────────────────────────────────────
-const LIVE_INTERVAL = 2_000;
-
-function fmtWatt(v) {
-  if (v === undefined || v === null) return '<span class="nd">—</span>';
-  const w = parseFloat(v);
-  if (w >= 1000 || w <= -1000) {
-    return '<span class="val">' + (w / 1000).toLocaleString('fr-BE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + '</span> <span class="unit">kW</span>';
-  }
-  return '<span class="val">' + w.toLocaleString('fr-BE', { minimumFractionDigits: 0, maximumFractionDigits: 0 }) + '</span> <span class="unit">W</span>';
-}
-
-async function fetchLive() {
-  const syncDot = document.querySelector('.sync-dot');
-  try {
-    const res  = await fetch('api.php?action=live');
-    const data = await res.json();
-
-    document.getElementById('live-ts').textContent = data.timestamp
-      ? data.timestamp.slice(0, 19).replace('T', ' ')
-      : '—';
-
-    document.getElementById('live-dries-w').innerHTML = data.dries_error
-      ? '<span class="nd" title="' + data.dries_error + '">err</span>'
-      : fmtWatt(data.dries_w);
-
-    document.getElementById('live-solar-w').innerHTML = data.solar_error
-      ? '<span class="nd" title="' + data.solar_error + '">err</span>'
-      : fmtWatt(Math.abs(data.solar_w));
-
-    if (syncDot) syncDot.className = (data.dries_error && data.solar_error) ? 'sync-dot error' : 'sync-dot';
-  } catch (e) {
-    if (syncDot) syncDot.className = 'sync-dot error';
-    console.warn('Live fetch failed:', e);
-  }
-}
+// Retiré (P4, #47) : le serveur communautaire ne peut pas atteindre les
+// compteurs sur le LAN des membres. Les index arrivent par push (agent → API).
 
 loadChart(30);
-fetchLive();
-setInterval(fetchLive, LIVE_INTERVAL);
 loadGasHistory();
 loadWaterHistory();
 

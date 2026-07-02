@@ -2,8 +2,9 @@
 
 declare(strict_types=1);
 
+use App\Http\Controller\ApiTokenController;
 use App\Http\Controller\CostController;
-use App\Http\Controller\MeterController;
+use App\Http\Controller\IngestController;
 use App\Http\Controller\MeterEntryController;
 use App\Http\Controller\ReadingsController;
 use App\Http\Controller\TariffController;
@@ -12,16 +13,18 @@ use App\Http\Request;
 use App\Http\Router;
 use App\Http\SecurityHeaders;
 use App\Infrastructure\Database;
-use App\Security\AuthGuard;
+use App\Repository\ApiTokenRepository;
 use App\Repository\DynamicPriceRepository;
 use App\Repository\ElectricityReadingRepository;
 use App\Repository\TariffRepository;
 use App\Repository\UserRepository;
 use App\Repository\UtilityReadingRepository;
 use App\Repository\WebhookSyncStateRepository;
+use App\Security\ApiToken;
+use App\Security\AuthGuard;
 use App\Security\UserContext;
+use App\Security\WebAccessGuard;
 use App\Service\CostCalculationService;
-use App\Service\MeterApiService;
 use App\Service\TariffCalculatorService;
 
 header('Content-Type: application/json; charset=utf-8');
@@ -32,17 +35,53 @@ $config = require __DIR__ . '/../bootstrap.php';
 
 SecurityHeaders::send();
 
-AuthGuard::protect($config, true);
-
 $request = Request::fromGlobals();
 
+// ── Connexion BDD (avant l'auth : les jetons Bearer y sont vérifiés) ────────
 try {
-    $db         = new Database($config['database']);
-    $pdo        = $db->pdo();
+    $db  = new Database($config['database']);
+    $pdo = $db->pdo();
+} catch (\Throwable $e) {
+    JsonResponse::error('DB connection failed: ' . $e->getMessage(), 503)->send();
+    exit;
+}
 
-    // Tenant courant : session OIDC, ou tenant unique en mode Basic Auth.
-    $userId     = UserContext::currentWebUserId($pdo, $config);
+// ── Authentification : jeton Bearer (machines) OU session/Basic (navigateur) ─
+$security = $config['web_security'] ?? [];
+$security = is_array($security) ? $security : [];
 
+$bearer   = ApiToken::fromAuthorizationHeader(
+    isset($_SERVER['HTTP_AUTHORIZATION']) ? (string) $_SERVER['HTTP_AUTHORIZATION']
+        : (isset($_SERVER['REDIRECT_HTTP_AUTHORIZATION']) ? (string) $_SERVER['REDIRECT_HTTP_AUTHORIZATION'] : null)
+);
+$viaToken = false;
+
+if ($bearer !== null && str_starts_with($bearer, ApiToken::TOKEN_PREFIX)) {
+    // L'allowlist IP (si configurée) s'applique aussi aux agents.
+    WebAccessGuard::enforceIp($security, true);
+
+    $tokenRepo = new ApiTokenRepository($pdo);
+    $auth = $tokenRepo->authenticate($bearer);
+    if ($auth === null) {
+        JsonResponse::error('Invalid or revoked token', 401)->send();
+        exit;
+    }
+
+    $rateLimit = (int) ($config['api']['rate_limit_per_hour'] ?? 600);
+    if ($tokenRepo->consumeRateLimit($auth['token_id'], $rateLimit) === false) {
+        JsonResponse::error('Rate limit exceeded', 429)->send();
+        exit;
+    }
+
+    $userId   = $auth['user_id'];
+    $viaToken = true;
+} else {
+    AuthGuard::protect($config, true);
+    $userId = UserContext::currentWebUserId($pdo, $config);
+}
+
+// ── Wiring des repositories scopés ──────────────────────────────────────────
+try {
     $users      = new UserRepository($pdo);
     $isAdmin    = ($users->findById($userId)?->isAdmin()) ?? false;
     $profile    = $users->getProfile($userId);
@@ -69,41 +108,52 @@ try {
         waterRepo: $waterRepo,
     );
 } catch (\Throwable $e) {
-    JsonResponse::error('DB connection failed: ' . $e->getMessage(), 503)->send();
+    JsonResponse::error('Bootstrap failed: ' . $e->getMessage(), 503)->send();
     exit;
 }
 
-$meterApi = new MeterApiService((int) ($config['meters']['timeout'] ?? 10));
-$meters   = new MeterController(
-    $meterApi,
-    (string) ($config['meters']['dries_url'] ?? ''),
-    (string) ($config['meters']['solar_url'] ?? ''),
-);
 $readings = new ReadingsController($elecRepo, $gasRepo, $waterRepo, $syncState);
 $cost     = new CostController($costSvc);
 $tariffs  = new TariffController($tariffRepo);
 $entries  = new MeterEntryController($gasRepo, $waterRepo);
+$ingest   = new IngestController($elecRepo, $gasRepo, $waterRepo);
 
 $router = new Router();
 
-// ── GET ──────────────────────────────────────────────────────────────────────
-$router->add('GET', 'live',           $meters->live(...));
-$router->add('GET', 'today',          $readings->today(...));
-$router->add('GET', 'monthly_delta',  $readings->monthlyDelta(...));
-$router->add('GET', 'chart_data',     $readings->chartData(...));
-$router->add('GET', 'gas_history',    $readings->gasHistory(...));
-$router->add('GET', 'water_history',  $readings->waterHistory(...));
-$router->add('GET', 'sync_status',    $readings->syncStatus(...));
-$router->add('GET', 'month_cost',     $cost->monthCost(...));
-$router->add('GET', 'cost_estimate',  $cost->costEstimate(...));
-$router->add('GET', 'gas_cost',       $cost->gasCost(...));
-$router->add('GET', 'gas_month_cost', $cost->gasMonthCost(...));
-$router->add('GET', 'water_month_cost', $cost->waterMonthCost(...));
-$router->add('GET', 'tariffs',        $tariffs->index(...));
+// ── Ingestion (agents) : unitaire + batch, idempotente. ───────────────────────
+// SEULES routes autorisées à un jeton Bearer (scope « ingest ») : un jeton
+// d'agent compromis ne peut donc que pousser des index, pas lire les données ni
+// écrire des tarifs. L'affinage multi-scopes viendra en P7.
+$router->add('POST', 'ingest_electricity', $ingest->electricity(...));
+$router->add('POST', 'ingest_gas',         $ingest->gas(...));
+$router->add('POST', 'ingest_water',       $ingest->water(...));
 
-// ── POST ─────────────────────────────────────────────────────────────────────
-$router->add('POST', 'gas_entry',   $entries->gas(...));
-$router->add('POST', 'water_entry', $entries->water(...));
-$router->add('POST', 'save_tariff', $tariffs->save(...));
+// ── Routes de session (navigateur) : refusées aux requêtes par jeton ──────────
+if ($viaToken === false) {
+    // GET (la route « live » a été retirée en P4 : plus de polling des compteurs LAN)
+    $router->add('GET', 'today',          $readings->today(...));
+    $router->add('GET', 'monthly_delta',  $readings->monthlyDelta(...));
+    $router->add('GET', 'chart_data',     $readings->chartData(...));
+    $router->add('GET', 'gas_history',    $readings->gasHistory(...));
+    $router->add('GET', 'water_history',  $readings->waterHistory(...));
+    $router->add('GET', 'sync_status',    $readings->syncStatus(...));
+    $router->add('GET', 'month_cost',     $cost->monthCost(...));
+    $router->add('GET', 'cost_estimate',  $cost->costEstimate(...));
+    $router->add('GET', 'gas_cost',       $cost->gasCost(...));
+    $router->add('GET', 'gas_month_cost', $cost->gasMonthCost(...));
+    $router->add('GET', 'water_month_cost', $cost->waterMonthCost(...));
+    $router->add('GET', 'tariffs',        $tariffs->index(...));
+
+    // POST (saisie manuelle + tarifs)
+    $router->add('POST', 'gas_entry',   $entries->gas(...));
+    $router->add('POST', 'water_entry', $entries->water(...));
+    $router->add('POST', 'save_tariff', $tariffs->save(...));
+
+    // Gestion des jetons : SESSION UNIQUEMENT (un jeton ne gère pas les jetons).
+    $tokenCtl = new ApiTokenController(new ApiTokenRepository($pdo), $userId);
+    $router->add('GET',  'api_tokens',       $tokenCtl->index(...));
+    $router->add('POST', 'api_token_create', $tokenCtl->create(...));
+    $router->add('POST', 'api_token_revoke', $tokenCtl->revoke(...));
+}
 
 $router->dispatch($request)->send();

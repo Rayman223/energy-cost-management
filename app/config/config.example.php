@@ -90,5 +90,19 @@ return [
         'available'      => ['fr', 'en', 'nl', 'de'],
     ],
 
+    // API publique d'ingestion.
+    'api' => [
+        'rate_limit_per_hour' => 600, // requêtes/heure par jeton
+    ],
+
+    // Agent client (app/scripts/agent_push.php) : pousse les index des
+    // compteurs locaux vers le serveur communautaire. Membre uniquement —
+    // inutile sur le serveur central.
+    'agent' => [
+        'api_url'   => '',           // ex. https://energie.example.eu/api.php
+        'api_token' => 'change_me',  // créé via l'action api_token_create
+        'timeout'   => 15,
+    ],
+
     'timezone' => 'Europe/Brussels',
 ];

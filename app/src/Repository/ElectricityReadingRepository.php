@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Repository;
 
 use App\Infrastructure\MeterTopology;
+use App\Repository\Contract\ElectricityIngestionInterface;
 use App\Repository\Contract\LegacyDailyRepositoryInterface;
 use DateTimeImmutable;
 use PDO;
@@ -19,7 +20,7 @@ use PDO;
  * Le contrat JSON du dashboard (clés Prelev_jour/…) est conservé : seul le
  * stockage change ; le renommage du contrat front viendra avec l'API publique.
  */
-final class ElectricityReadingRepository implements LegacyDailyRepositoryInterface
+final class ElectricityReadingRepository implements LegacyDailyRepositoryInterface, ElectricityIngestionInterface
 {
     private const IMPORT_KEYS = ['import_t1', 'import_t2'];
 
@@ -51,11 +52,12 @@ final class ElectricityReadingRepository implements LegacyDailyRepositoryInterfa
 
     /**
      * Insère un jeu d'index au même horodatage. Crée compteur/registres au
-     * besoin. INSERT IGNORE : idempotent en cas de relance dans la même heure.
+     * besoin. INSERT IGNORE : idempotent en cas de relance ou de renvoi.
      *
      * @param array<string, float> $indexByRegister register_key => index cumulé
+     * @return int Nombre de lignes réellement insérées (doublons exclus).
      */
-    public function insertIndexes(DateTimeImmutable $timestamp, array $indexByRegister): void
+    public function insertIndexes(DateTimeImmutable $timestamp, array $indexByRegister): int
     {
         $topology = new MeterTopology($this->pdo);
         $meterId = $topology->ensureElectricityMeter($this->userId);
@@ -65,6 +67,7 @@ final class ElectricityReadingRepository implements LegacyDailyRepositoryInterfa
         $stmt = $this->pdo->prepare(
             'INSERT IGNORE INTO meter_readings (register_id, reading_at, index_value) VALUES (:rid, :at, :val)'
         );
+        $inserted = 0;
         foreach ($indexByRegister as $key => $value) {
             if (!isset($map[$key])) {
                 continue;
@@ -74,7 +77,10 @@ final class ElectricityReadingRepository implements LegacyDailyRepositoryInterfa
                 'at'  => $timestamp->format('Y-m-d H:i:s'),
                 'val' => $value,
             ]);
+            $inserted += $stmt->rowCount();
         }
+
+        return $inserted;
     }
 
     // -------------------------------------------------------------------------

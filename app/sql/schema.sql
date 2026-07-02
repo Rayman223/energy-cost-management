@@ -131,6 +131,24 @@ CREATE TABLE IF NOT EXISTS utility_readings (
     CONSTRAINT fk_utility_readings_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+-- ── Jetons API (authentification machine des agents) ─────────────────────
+CREATE TABLE IF NOT EXISTS api_tokens (
+    id           BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    user_id      BIGINT UNSIGNED NOT NULL,
+    name         VARCHAR(120) NOT NULL DEFAULT '' COMMENT 'Libellé choisi par l''utilisateur',
+    token_hash   CHAR(64) NOT NULL COMMENT 'SHA-256 hex du jeton complet',
+    prefix       CHAR(12) NOT NULL COMMENT 'Préfixe non-secret pour identification dans l''UI',
+    scopes       VARCHAR(255) NOT NULL DEFAULT 'ingest',
+    last_used_at DATETIME NULL,
+    window_start DATETIME NULL COMMENT 'Début de la fenêtre de rate-limit courante',
+    window_count INT UNSIGNED NOT NULL DEFAULT 0,
+    created_at   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    revoked_at   DATETIME NULL,
+    UNIQUE KEY uq_api_tokens_hash (token_hash),
+    INDEX idx_api_tokens_user (user_id),
+    CONSTRAINT fk_api_tokens_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 -- ── Suivi des migrations versionnées ─────────────────────────────────────
 CREATE TABLE IF NOT EXISTS schema_migrations (
     version    VARCHAR(255) NOT NULL PRIMARY KEY,
@@ -146,4 +164,5 @@ INSERT IGNORE INTO schema_migrations (version) VALUES
     ('2026-06-30_users.sql'),
     ('2026-07-01_multitenant_index_tables.sql'),
     ('2026-07-02_webhook_sync_state_user.sql'),
-    ('2026-07-03_tariffs_eu.sql');
+    ('2026-07-03_tariffs_eu.sql'),
+    ('2026-07-04_api_tokens.sql');
