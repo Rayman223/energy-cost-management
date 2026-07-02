@@ -23,8 +23,8 @@ use App\Service\MeterApiService;
 use App\Service\TariffCalculatorService;
 
 header('Content-Type: application/json; charset=utf-8');
-header('X-Content-Type-Options: nosniff');
 header('Cache-Control: no-store');
+// X-Content-Type-Options est posé par SecurityHeaders::send() ci-dessous.
 
 $config = require __DIR__ . '/../bootstrap.php';
 

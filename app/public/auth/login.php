@@ -29,8 +29,7 @@ if (is_array($security)) {
     WebAccessGuard::enforceIp($security);
 }
 
-$base = WebAccessGuard::basePath();
-$home = $base . '/';
+$home = WebAccessGuard::appRootPath() . '/';
 
 $oidcConfig = $config['oidc'] ?? [];
 if (!is_array($oidcConfig) || ($oidcConfig['enabled'] ?? false) !== true) {

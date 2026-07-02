@@ -112,6 +112,32 @@ final class WebAccessGuard
         return self::applicationBasePath();
     }
 
+    /**
+     * Racine de l'application vue depuis n'importe quel script, y compris ceux
+     * du sous-répertoire /auth/ : dirname(SCRIPT_NAME) y vaut « …/auth », qu'il
+     * faut retirer pour retrouver la racine (sinon les redirections « accueil »
+     * pointent sur /auth/).
+     */
+    public static function appRootPath(): string
+    {
+        return self::stripTrailingSegment(self::applicationBasePath(), 'auth');
+    }
+
+    /** Retire un segment terminal donné (« /auth ») d'un préfixe de chemin. */
+    public static function stripTrailingSegment(string $basePath, string $segment): string
+    {
+        $suffix = '/' . $segment;
+        if ($basePath === $suffix) {
+            return '';
+        }
+
+        if (str_ends_with($basePath, $suffix)) {
+            return substr($basePath, 0, -strlen($suffix));
+        }
+
+        return $basePath;
+    }
+
     private static function isLoginPageRequest(): bool
     {
         $script = (string) ($_SERVER['SCRIPT_NAME'] ?? '');

@@ -28,10 +28,12 @@ $gasInitMonth = (int) date('n');
 $waterInitYear  = (int) date('Y');
 $waterInitMonth = (int) date('n');
 
+require_once __DIR__ . '/../autoload.php';
+
+SecurityHeaders::send();
+
 try {
     $config     = require __DIR__ . '/../bootstrap.php';
-
-    SecurityHeaders::send();
 
     AuthGuard::protect($config);
 

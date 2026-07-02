@@ -22,5 +22,5 @@ if (is_array($security)) {
 
 AuthSession::logout();
 
-header('Location: ' . WebAccessGuard::basePath() . '/', true, 302);
+header('Location: ' . WebAccessGuard::appRootPath() . '/', true, 302);
 exit;
