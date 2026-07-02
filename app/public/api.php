@@ -16,6 +16,7 @@ use App\Security\AuthGuard;
 use App\Repository\DynamicPriceRepository;
 use App\Repository\ElectricityReadingRepository;
 use App\Repository\TariffRepository;
+use App\Repository\UserRepository;
 use App\Repository\UtilityReadingRepository;
 use App\Repository\WebhookSyncStateRepository;
 use App\Security\UserContext;
@@ -42,12 +43,22 @@ try {
     // Tenant courant : session OIDC, ou tenant unique en mode Basic Auth.
     $userId     = UserContext::currentWebUserId($pdo, $config);
 
+    $users      = new UserRepository($pdo);
+    $isAdmin    = ($users->findById($userId)?->isAdmin()) ?? false;
+    $profile    = $users->getProfile($userId);
+
+    // Zone de marché ENTSO-E de l'utilisateur (profil), sinon celle de la config.
+    $zone = $profile['bidding_zone'] ?? null;
+    $zone = ($zone !== null && $zone !== '')
+        ? $zone
+        : (string) ($config['dynamic_prices']['bidding_zone'] ?? DynamicPriceRepository::DEFAULT_ZONE);
+
     $elecRepo   = new ElectricityReadingRepository($pdo, $userId);
     $gasRepo    = new UtilityReadingRepository($pdo, $userId, 'gas');
     $waterRepo  = new UtilityReadingRepository($pdo, $userId, 'water');
     $syncState  = new WebhookSyncStateRepository($pdo, $userId);
-    $tariffRepo = new TariffRepository($pdo);
-    $dynPriceRepo = new DynamicPriceRepository($pdo);
+    $tariffRepo = new TariffRepository($pdo, $userId, $isAdmin);
+    $dynPriceRepo = new DynamicPriceRepository($pdo, $zone);
     $costSvc    = new CostCalculationService(
         legacyRepo: $elecRepo,
         tariffRepo: $tariffRepo,

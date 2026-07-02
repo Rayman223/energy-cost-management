@@ -12,16 +12,20 @@ SET time_zone = '+00:00';
 -- existante, elles sont migrées puis supprimées par
 -- app/scripts/finalize_multitenant.php (après backfill vers le compte owner).
 
--- ── Tarifs énergétiques ───────────────────────────────────────────────────
+-- ── Tarifs énergétiques (catalogue partagé + surcharges personnelles) ─────
 CREATE TABLE IF NOT EXISTS tariff_grids (
     id               BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    user_id          BIGINT UNSIGNED NULL COMMENT 'NULL = grille du catalogue partagé (admin) ; sinon surcharge personnelle',
     energy_type      ENUM('electricity', 'gas', 'water') NOT NULL,
+    country          VARCHAR(2) NULL COMMENT 'ISO 3166-1 alpha-2 (NULL = générique)',
+    currency         CHAR(3) NOT NULL DEFAULT 'EUR' COMMENT 'Devise ISO 4217 (pas de conversion automatique)',
     name             VARCHAR(120) NOT NULL,
     valid_from       DATE NOT NULL,
     valid_to         DATE NULL COMMENT 'NULL = actif indéfiniment',
     pcs_coefficient  DECIMAL(8,4) NULL COMMENT 'Gaz uniquement : coefficient PCS m3->kWh.',
     created_at       DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    INDEX idx_tariff_grids_type_date (energy_type, valid_from)
+    INDEX idx_tariff_grids_type_date (energy_type, valid_from),
+    INDEX idx_tariff_grids_user (user_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS tariff_grid_lines (
@@ -41,13 +45,14 @@ CREATE TABLE IF NOT EXISTS tariff_grid_lines (
 CREATE TABLE IF NOT EXISTS dynamic_prices (
     id             BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     energy_type    ENUM('electricity') NOT NULL DEFAULT 'electricity',
+    bidding_zone   VARCHAR(32) NOT NULL DEFAULT '10YBE----------2' COMMENT 'Zone de marché ENTSO-E',
     period_start   DATETIME NOT NULL COMMENT 'Début intervalle (timezone locale)',
     period_end     DATETIME NOT NULL,
     resolution_min SMALLINT UNSIGNED NOT NULL COMMENT '15 ou 60',
     price_eur_kwh  DECIMAL(12,7) NOT NULL COMMENT 'Prix spot day-ahead €/kWh (HTVA, hors marge)',
     source         VARCHAR(50) NOT NULL DEFAULT 'entsoe',
     fetched_at     DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE KEY uq_dynamic_prices (energy_type, period_start),
+    UNIQUE KEY uq_dynamic_prices (energy_type, bidding_zone, period_start),
     INDEX idx_dynamic_prices_period (period_start)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
@@ -140,4 +145,5 @@ INSERT IGNORE INTO schema_migrations (version) VALUES
     ('2026-06-27_dynamic_prices.sql'),
     ('2026-06-30_users.sql'),
     ('2026-07-01_multitenant_index_tables.sql'),
-    ('2026-07-02_webhook_sync_state_user.sql');
+    ('2026-07-02_webhook_sync_state_user.sql'),
+    ('2026-07-03_tariffs_eu.sql');

@@ -187,6 +187,7 @@ final class CostCalculationService
             'kwh'             => $kWh,
             'pcs_coefficient' => $pcs,
             'tariff_name'     => $tariff->name,
+            'currency'        => $tariff->currency,
             'tariff_rates'    => $tariff->toTariffArray(),
             'cost'            => $breakdown,
         ];
@@ -252,6 +253,7 @@ final class CostCalculationService
             'kwh'             => round($kWh, 2),
             'pcs_coefficient' => $pcs,
             'tariff_name'     => $tariff->name,
+            'currency'        => $tariff->currency,
             'tariff_rates'    => $tariff->toTariffArray(),
             'cost'            => $breakdown,
         ];
@@ -355,6 +357,7 @@ final class CostCalculationService
             'period_to'    => $deltas['to'],
             'days'         => $days,
             'tariff_name'  => $tariff->name,
+            'currency'        => $tariff->currency,
             'tariff_rates' => $tariff->toTariffArray(),
             'deltas'       => $deltas,
             'cost'         => $breakdown,
@@ -449,6 +452,7 @@ final class CostCalculationService
             'period_to'      => $deltas['to'],
             'days'           => $days,
             'tariff_name'    => $tariff->name,
+            'currency'        => $tariff->currency,
             'tariff_rates'   => $tariffArr,
             'deltas'         => $deltas,
             'energy_dynamic' => round($energyTtc, 2),

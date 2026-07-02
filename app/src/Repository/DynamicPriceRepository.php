@@ -16,13 +16,19 @@ use PDO;
  */
 final class DynamicPriceRepository implements DynamicPriceRepositoryInterface
 {
-    public function __construct(private readonly PDO $pdo)
-    {
+    /** Zone de marché ENTSO-E par défaut (Belgique). */
+    public const DEFAULT_ZONE = '10YBE----------2';
+
+    public function __construct(
+        private readonly PDO $pdo,
+        private readonly string $biddingZone = self::DEFAULT_ZONE,
+    ) {
     }
 
     /**
-     * Insère / met à jour une série de prix. La clé unique (energy_type, period_start)
-     * garantit l'idempotence : ré-exécuter le cron écrase proprement les valeurs.
+     * Insère / met à jour une série de prix pour la zone du repository. La clé
+     * unique (energy_type, bidding_zone, period_start) garantit l'idempotence :
+     * ré-exécuter le cron écrase proprement les valeurs.
      *
      * @param array<int, array{period_start: DateTimeImmutable, resolution_min: int, price_eur_kwh: float}> $prices
      * @return int Nombre de lignes traitées.
@@ -35,9 +41,9 @@ final class DynamicPriceRepository implements DynamicPriceRepositoryInterface
 
         $sql = <<<'SQL'
             INSERT INTO dynamic_prices
-                (energy_type, period_start, period_end, resolution_min, price_eur_kwh, source)
+                (energy_type, bidding_zone, period_start, period_end, resolution_min, price_eur_kwh, source)
             VALUES
-                ('electricity', :period_start, :period_end, :resolution_min, :price_eur_kwh, :source)
+                ('electricity', :zone, :period_start, :period_end, :resolution_min, :price_eur_kwh, :source)
             ON DUPLICATE KEY UPDATE
                 period_end     = VALUES(period_end),
                 resolution_min = VALUES(resolution_min),
@@ -55,6 +61,7 @@ final class DynamicPriceRepository implements DynamicPriceRepositoryInterface
                 $end   = $start->modify(sprintf('+%d minutes', $price['resolution_min']));
 
                 $stmt->execute([
+                    'zone'           => $this->biddingZone,
                     'period_start'   => $start->format('Y-m-d H:i:s'),
                     'period_end'     => $end->format('Y-m-d H:i:s'),
                     'resolution_min' => $price['resolution_min'],
@@ -72,7 +79,7 @@ final class DynamicPriceRepository implements DynamicPriceRepositoryInterface
     }
 
     /**
-     * Prix moyen €/kWh (HTVA) par heure sur [$from, $to[.
+     * Prix moyen €/kWh (HTVA) par heure sur [$from, $to[, pour la zone du repository.
      *
      * @return array<string, float> Map 'Y-m-d H:00:00' => prix moyen €/kWh HTVA.
      */
@@ -83,12 +90,14 @@ final class DynamicPriceRepository implements DynamicPriceRepositoryInterface
                     AVG(price_eur_kwh) AS avg_price
              FROM dynamic_prices
              WHERE energy_type = 'electricity'
+               AND bidding_zone = :zone
                AND period_start >= :from
                AND period_start <  :to
              GROUP BY hour
              ORDER BY hour"
         );
         $stmt->execute([
+            'zone' => $this->biddingZone,
             'from' => $from->format('Y-m-d H:i:s'),
             'to'   => $to->format('Y-m-d H:i:s'),
         ]);
@@ -105,7 +114,9 @@ final class DynamicPriceRepository implements DynamicPriceRepositoryInterface
 
     public function latestPeriodEnd(): ?DateTimeImmutable
     {
-        $value = $this->pdo->query('SELECT MAX(period_end) FROM dynamic_prices')->fetchColumn();
+        $stmt = $this->pdo->prepare('SELECT MAX(period_end) FROM dynamic_prices WHERE bidding_zone = :zone');
+        $stmt->execute(['zone' => $this->biddingZone]);
+        $value = $stmt->fetchColumn();
 
         return is_string($value) ? new DateTimeImmutable($value) : null;
     }

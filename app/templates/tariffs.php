@@ -80,6 +80,7 @@ use App\Domain\TariffGrid;
       </div>
     </div>
     <span class="grid-active <?= $active ? 'yes' : 'no' ?>"><?= $active ? 'Actif' : 'Inactif' ?></span>
+    <?php if ($g->isShared()): ?><span class="grid-active yes" title="Grille du catalogue communautaire">Partagé<?= $g->country ? ' · ' . $this->e($g->country) : '' ?></span><?php endif; ?>
     <button class="btn btn-ghost btn-sm" onclick="toggleLines('<?= $rowId ?>')">Détail</button>
     <div class="grid-actions">
       <a href="?edit=<?= $g->id ?>#form" class="btn btn-ghost btn-sm">Modifier</a>
@@ -128,6 +129,7 @@ use App\Domain\TariffGrid;
       </div>
     </div>
     <span class="grid-active <?= $active ? 'yes' : 'no' ?>"><?= $active ? 'Actif' : 'Inactif' ?></span>
+    <?php if ($g->isShared()): ?><span class="grid-active yes" title="Grille du catalogue communautaire">Partagé<?= $g->country ? ' · ' . $this->e($g->country) : '' ?></span><?php endif; ?>
     <button class="btn btn-ghost btn-sm" onclick="toggleLines('<?= $rowId ?>')">Détail</button>
     <div class="grid-actions">
       <a href="?edit=<?= $g->id ?>#form" class="btn btn-ghost btn-sm">Modifier</a>
@@ -194,6 +196,24 @@ use App\Domain\TariffGrid;
         <input type="date" name="valid_to" class="form-input"
                value="<?= $this->e($editGrid?->validTo?->format('Y-m-d') ?? '') ?>">
       </div>
+      <div class="form-row">
+        <label class="form-label">Pays <span class="unit">ISO-2, optionnel</span></label>
+        <input type="text" name="country" class="form-input" maxlength="2" placeholder="BE"
+               value="<?= $this->e($editGrid?->country ?? '') ?>">
+      </div>
+      <div class="form-row">
+        <label class="form-label">Devise <span class="unit">ISO 4217</span></label>
+        <input type="text" name="currency" class="form-input" maxlength="3" placeholder="EUR"
+               value="<?= $this->e($editGrid?->currency ?? 'EUR') ?>">
+      </div>
+      <?php if ($isAdmin && !$editGrid): ?>
+      <div class="form-row">
+        <label class="form-label">
+          <input type="checkbox" name="shared" value="1">
+          Grille du catalogue partagé <span class="unit">visible par toute la communauté</span>
+        </label>
+      </div>
+      <?php endif; ?>
     </div>
 
     <!-- Electricity lines -->

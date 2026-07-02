@@ -63,6 +63,9 @@ final class TariffController
             'valid_from' => $g->validFrom->format('Y-m-d'),
             'valid_to'   => $g->validTo?->format('Y-m-d'),
             'lines'      => $g->toTariffArray(),
+            'country'    => $g->country,
+            'currency'   => $g->currency,
+            'shared'     => $g->isShared(),
         ];
     }
 }

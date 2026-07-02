@@ -8,16 +8,28 @@ use App\Domain\TariffGrid;
 use App\Repository\Contract\TariffRepositoryInterface;
 use DateTimeImmutable;
 use PDO;
+use RuntimeException;
 
+/**
+ * Grilles tarifaires : catalogue communautaire partagé (user_id NULL, géré par
+ * un admin) + surcharges personnelles (user_id renseigné). La résolution de la
+ * grille active privilégie la surcharge personnelle sur le catalogue.
+ */
 final class TariffRepository implements TariffRepositoryInterface
 {
-    public function __construct(private readonly PDO $pdo)
-    {
+    private const COLUMNS = 'id, user_id, energy_type, country, currency, name, valid_from, valid_to, pcs_coefficient';
+
+    public function __construct(
+        private readonly PDO $pdo,
+        private readonly int $userId,
+        private readonly bool $isAdmin = false,
+    ) {
     }
 
     /**
-     * Find the active tariff grid for a given energy type and date.
-     * Returns the most recently started grid that was valid on that date.
+     * Grille active pour un type d'énergie à une date : la surcharge
+     * personnelle prime sur le catalogue partagé ; à priorité égale, la grille
+     * démarrée le plus récemment gagne.
      */
     public function findActiveGrid(string $energyType, ?DateTimeImmutable $on = null): ?TariffGrid
     {
@@ -25,15 +37,16 @@ final class TariffRepository implements TariffRepositoryInterface
         $date = $on->format('Y-m-d');
 
         $stmt = $this->pdo->prepare(
-            'SELECT id, energy_type, name, valid_from, valid_to, pcs_coefficient
+            'SELECT ' . self::COLUMNS . '
              FROM tariff_grids
              WHERE energy_type = :type
+               AND (user_id = :uid OR user_id IS NULL)
                AND valid_from <= :date
                AND (valid_to IS NULL OR valid_to >= :date)
-             ORDER BY valid_from DESC
+             ORDER BY (user_id IS NOT NULL) DESC, valid_from DESC
              LIMIT 1'
         );
-        $stmt->execute(['type' => $energyType, 'date' => $date]);
+        $stmt->execute(['type' => $energyType, 'uid' => $this->userId, 'date' => $date]);
         $row = $stmt->fetch();
 
         return $row ? $this->hydrate($row) : null;
@@ -42,10 +55,11 @@ final class TariffRepository implements TariffRepositoryInterface
     public function findById(int $id): ?TariffGrid
     {
         $stmt = $this->pdo->prepare(
-            'SELECT id, energy_type, name, valid_from, valid_to, pcs_coefficient
-             FROM tariff_grids WHERE id = :id'
+            'SELECT ' . self::COLUMNS . '
+             FROM tariff_grids
+             WHERE id = :id AND (user_id = :uid OR user_id IS NULL)'
         );
-        $stmt->execute(['id' => $id]);
+        $stmt->execute(['id' => $id, 'uid' => $this->userId]);
         $row = $stmt->fetch();
 
         return $row ? $this->hydrate($row) : null;
@@ -55,12 +69,12 @@ final class TariffRepository implements TariffRepositoryInterface
     public function findAll(string $energyType): array
     {
         $stmt = $this->pdo->prepare(
-            'SELECT id, energy_type, name, valid_from, valid_to, pcs_coefficient
+            'SELECT ' . self::COLUMNS . '
              FROM tariff_grids
-             WHERE energy_type = :type
+             WHERE energy_type = :type AND (user_id = :uid OR user_id IS NULL)
              ORDER BY valid_from DESC'
         );
-        $stmt->execute(['type' => $energyType]);
+        $stmt->execute(['type' => $energyType, 'uid' => $this->userId]);
         $rows = $stmt->fetchAll();
 
         if ($rows === []) {
@@ -85,19 +99,27 @@ final class TariffRepository implements TariffRepositoryInterface
         ?DateTimeImmutable $validTo,
         array $lines,
         ?float $pcsCoefficient = null,
+        ?string $country = null,
+        string $currency = 'EUR',
+        bool $shared = false,
     ): int {
+        $this->assertCanManageShared($shared);
+
         $this->pdo->beginTransaction();
         try {
             $stmt = $this->pdo->prepare(
-                'INSERT INTO tariff_grids (energy_type, name, valid_from, valid_to, pcs_coefficient)
-                 VALUES (:type, :name, :from, :to, :pcs)'
+                'INSERT INTO tariff_grids (user_id, energy_type, country, currency, name, valid_from, valid_to, pcs_coefficient)
+                 VALUES (:user_id, :type, :country, :currency, :name, :from, :to, :pcs)'
             );
             $stmt->execute([
-                'type' => $energyType,
-                'name' => $name,
-                'from' => $validFrom->format('Y-m-d'),
-                'to'   => $validTo?->format('Y-m-d'),
-                'pcs'  => $pcsCoefficient,
+                'user_id'  => $shared ? null : $this->userId,
+                'type'     => $energyType,
+                'country'  => $country,
+                'currency' => $currency,
+                'name'     => $name,
+                'from'     => $validFrom->format('Y-m-d'),
+                'to'       => $validTo?->format('Y-m-d'),
+                'pcs'      => $pcsCoefficient,
             ]);
             $id = (int) $this->pdo->lastInsertId();
 
@@ -118,7 +140,6 @@ final class TariffRepository implements TariffRepositoryInterface
         return $id;
     }
 
-
     /** @param array<string, mixed> $lines */
     public function updateGrid(
         int $id,
@@ -128,12 +149,18 @@ final class TariffRepository implements TariffRepositoryInterface
         ?DateTimeImmutable $validTo,
         array $lines,
         ?float $pcsCoefficient = null,
+        ?string $country = null,
+        string $currency = 'EUR',
     ): void {
+        $this->assertCanModify($id);
+
         $this->pdo->beginTransaction();
         try {
             $stmt = $this->pdo->prepare(
                 'UPDATE tariff_grids
                  SET energy_type = :type,
+                     country = :country,
+                     currency = :currency,
                      name = :name,
                      valid_from = :from,
                      valid_to = :to,
@@ -141,21 +168,15 @@ final class TariffRepository implements TariffRepositoryInterface
                  WHERE id = :id'
             );
             $stmt->execute([
-                'id' => $id,
-                'type' => $energyType,
-                'name' => $name,
-                'from' => $validFrom->format('Y-m-d'),
-                'to'   => $validTo?->format('Y-m-d'),
-                'pcs'  => $pcsCoefficient,
+                'id'       => $id,
+                'type'     => $energyType,
+                'country'  => $country,
+                'currency' => $currency,
+                'name'     => $name,
+                'from'     => $validFrom->format('Y-m-d'),
+                'to'       => $validTo?->format('Y-m-d'),
+                'pcs'      => $pcsCoefficient,
             ]);
-
-            if ($stmt->rowCount() === 0) {
-                $existsStmt = $this->pdo->prepare('SELECT 1 FROM tariff_grids WHERE id = :id');
-                $existsStmt->execute(['id' => $id]);
-                if ($existsStmt->fetchColumn() === false) {
-                    throw new \RuntimeException('Tarif introuvable.');
-                }
-            }
 
             $deleteStmt = $this->pdo->prepare('DELETE FROM tariff_grid_lines WHERE tariff_grid_id = :grid_id');
             $deleteStmt->execute(['grid_id' => $id]);
@@ -177,6 +198,8 @@ final class TariffRepository implements TariffRepositoryInterface
 
     public function closeGrid(int $id, DateTimeImmutable $validTo): void
     {
+        $this->assertCanModify($id);
+
         $stmt = $this->pdo->prepare(
             'UPDATE tariff_grids SET valid_to = :valid_to WHERE id = :id'
         );
@@ -185,8 +208,74 @@ final class TariffRepository implements TariffRepositoryInterface
 
     public function deleteGrid(int $id): void
     {
+        $this->assertCanModify($id);
+
         $stmt = $this->pdo->prepare('DELETE FROM tariff_grids WHERE id = :id');
         $stmt->execute(['id' => $id]);
+    }
+
+    /**
+     * Coefficient PCS le plus récent visible (surcharges perso + catalogue).
+     */
+    public function findMostRecentPcs(string $energyType, DateTimeImmutable $before): ?float
+    {
+        $stmt = $this->pdo->prepare(
+            'SELECT pcs_coefficient
+             FROM tariff_grids
+             WHERE energy_type     = :type
+               AND (user_id = :uid OR user_id IS NULL)
+               AND pcs_coefficient IS NOT NULL
+               AND valid_from      <= :date
+             ORDER BY (user_id IS NOT NULL) DESC, valid_from DESC
+             LIMIT 1'
+        );
+        $stmt->execute([
+            'type' => $energyType,
+            'uid'  => $this->userId,
+            'date' => $before->format('Y-m-d'),
+        ]);
+
+        $val = $stmt->fetchColumn();
+
+        return $val !== false ? (float) $val : null;
+    }
+
+    // -------------------------------------------------------------------------
+    // Privé
+    // -------------------------------------------------------------------------
+
+    private function assertCanManageShared(bool $shared): void
+    {
+        if ($shared && $this->isAdmin === false) {
+            throw new RuntimeException('Seul un administrateur peut gérer le catalogue partagé.');
+        }
+    }
+
+    /**
+     * Une grille n'est modifiable que par son propriétaire ; une grille du
+     * catalogue partagé n'est modifiable que par un admin.
+     */
+    private function assertCanModify(int $id): void
+    {
+        $stmt = $this->pdo->prepare('SELECT user_id FROM tariff_grids WHERE id = :id');
+        $stmt->execute(['id' => $id]);
+        $owner = $stmt->fetch();
+
+        if ($owner === false) {
+            throw new RuntimeException('Tarif introuvable.');
+        }
+
+        $ownerId = $owner['user_id'] !== null ? (int) $owner['user_id'] : null;
+
+        if ($ownerId === null) {
+            $this->assertCanManageShared(true);
+
+            return;
+        }
+
+        if ($ownerId !== $this->userId) {
+            throw new RuntimeException('Tarif introuvable.'); // pas de fuite d'existence cross-tenant
+        }
     }
 
     /** @return array<string,float> */
@@ -251,34 +340,9 @@ final class TariffRepository implements TariffRepositoryInterface
             validTo: $row['valid_to'] ? new DateTimeImmutable($row['valid_to']) : null,
             lines: $lines,
             pcsCoefficient: isset($row['pcs_coefficient']) ? (float) $row['pcs_coefficient'] : null,
+            userId: $row['user_id'] !== null ? (int) $row['user_id'] : null,
+            country: $row['country'] !== null ? (string) $row['country'] : null,
+            currency: (string) $row['currency'],
         );
-    }
-
-    /**
-     * Find the most recent PCS coefficient available for a given energy type
-     * at or before a reference date.
-     *
-     * Used as fallback when the active tariff has no pcs_coefficient set.
-     * Searches backwards in time regardless of valid_to.
-     */
-    public function findMostRecentPcs(string $energyType, DateTimeImmutable $before): ?float
-    {
-        $stmt = $this->pdo->prepare(
-            'SELECT pcs_coefficient
-             FROM tariff_grids
-             WHERE energy_type     = :type
-               AND pcs_coefficient IS NOT NULL
-               AND valid_from      <= :date
-             ORDER BY valid_from DESC
-             LIMIT 1'
-        );
-        $stmt->execute([
-            'type' => $energyType,
-            'date' => $before->format('Y-m-d'),
-        ]);
-
-        $val = $stmt->fetchColumn();
-
-        return $val !== false ? (float) $val : null;
     }
 }

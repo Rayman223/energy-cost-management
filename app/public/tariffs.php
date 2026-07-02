@@ -5,8 +5,10 @@ use App\Domain\TariffLineCatalog;
 use App\Http\SecurityHeaders;
 use App\Infrastructure\Database;
 use App\Repository\TariffRepository;
+use App\Repository\UserRepository;
 use App\Security\AuthGuard;
 use App\Security\Csrf;
+use App\Security\UserContext;
 use App\View\View;
 
 $config = require __DIR__ . '/../bootstrap.php';
@@ -16,7 +18,10 @@ SecurityHeaders::send();
 AuthGuard::protect($config);
 
 $db          = new Database($config['database']);
-$tariffRepo  = new TariffRepository($db->pdo());
+$pdo         = $db->pdo();
+$userId      = UserContext::currentWebUserId($pdo, $config);
+$isAdmin     = ((new UserRepository($pdo))->findById($userId)?->isAdmin()) ?? false;
+$tariffRepo  = new TariffRepository($pdo, $userId, $isAdmin);
 $error       = null;
 $success     = null;
 
@@ -56,6 +61,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $pcs = (float) $_POST['pcs_coefficient'];
             }
 
+            $country = strtoupper(trim((string) ($_POST['country'] ?? '')));
+            $country = preg_match('/^[A-Z]{2}$/', $country) === 1 ? $country : null;
+
+            $currency = strtoupper(trim((string) ($_POST['currency'] ?? 'EUR')));
+            if (preg_match('/^[A-Z]{3}$/', $currency) !== 1) {
+                throw new \InvalidArgumentException('Devise invalide (code ISO 4217 attendu, ex. EUR).');
+            }
+
+            $shared = $isAdmin && ($_POST['shared'] ?? '') === '1';
+
             if ($editId !== null) {
                 $tariffRepo->updateGrid(
                     $editId,
@@ -65,6 +80,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $validTo ? new \DateTimeImmutable($validTo) : null,
                     $lines,
                     $pcs,
+                    $country,
+                    $currency,
                 );
                 $success = "Tarif « $name » enregistré.";
             } else {
@@ -75,6 +92,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $validTo ? new \DateTimeImmutable($validTo) : null,
                     $lines,
                     $pcs,
+                    $country,
+                    $currency,
+                    $shared,
                 );
                 $success = "Tarif « $name » enregistré.";
             }
@@ -152,4 +172,5 @@ echo (new View(__DIR__ . '/../templates'))->render('tariffs', [
     'elLines'    => $elLines,
     'glLines'    => $glLines,
     'today'      => $today,
+    'isAdmin'    => $isAdmin,
 ]);

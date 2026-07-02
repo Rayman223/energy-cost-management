@@ -17,7 +17,16 @@ final class TariffGrid
         public readonly ?DateTimeImmutable $validTo,
         public readonly array $lines,
         public readonly ?float $pcsCoefficient = null,
+        public readonly ?int $userId = null,
+        public readonly ?string $country = null,
+        public readonly string $currency = 'EUR',
     ) {
+    }
+
+    /** Grille du catalogue communautaire partagé (gérée par un admin). */
+    public function isShared(): bool
+    {
+        return $this->userId === null;
     }
 
     public function isActiveOn(DateTimeImmutable $date): bool
