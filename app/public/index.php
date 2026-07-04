@@ -13,10 +13,14 @@ use App\Security\UserContext;
 use App\Service\CostCalculationService;
 use App\Service\TariffCalculatorService;
 use App\Http\SecurityHeaders;
+use App\I18n\Locale;
 use App\Security\AuthGuard;
-use App\View\View;
+use App\View\ViewFactory;
 
 // Bootstrap — dégradation gracieuse si la base est indisponible.
+$config       = [];
+$view         = null;
+$locale       = null;
 $dbError      = null;
 $deltas       = null;
 $cost         = null;
@@ -48,6 +52,14 @@ try {
     $users      = new UserRepository($pdo);
     $isAdmin    = ($users->findById($userId)?->isAdmin()) ?? false;
     $profile    = $users->getProfile($userId);
+
+    // Locale (profil, surchargée par ?lang persisté) → View configurée.
+    $locale = Locale::resolve($config, $profile['locale'] ?? null);
+    $choice = Locale::explicitChoice($config);
+    if ($choice !== null && $choice !== ($profile['locale'] ?? null)) {
+        $users->setLocale($userId, $choice);
+    }
+    $view = ViewFactory::create(__DIR__ . '/../templates', $locale, (string) ($config['i18n']['default_locale'] ?? 'fr'));
 
     // Zone de marché ENTSO-E de l'utilisateur (profil), sinon celle de la config.
     $zone = $profile['bidding_zone'] ?? null;
@@ -102,7 +114,9 @@ try {
     $dbError = $e->getMessage();
 }
 
-echo (new View(__DIR__ . '/../templates'))->render('dashboard', [
+$view ??= ViewFactory::create(__DIR__ . '/../templates', $locale ?? Locale::resolve($config, null), (string) ($config['i18n']['default_locale'] ?? 'fr'));
+
+echo $view->render('dashboard', [
     'dbError'      => $dbError,
     'deltas'       => $deltas,
     'cost'         => $cost,
@@ -117,4 +131,5 @@ echo (new View(__DIR__ . '/../templates'))->render('dashboard', [
     'gasInitMonth' => $gasInitMonth,
     'waterInitYear'  => $waterInitYear,
     'waterInitMonth' => $waterInitMonth,
+    'available'    => Locale::available($config),
 ]);

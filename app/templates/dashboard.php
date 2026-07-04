@@ -40,7 +40,7 @@ if (!function_exists('fmtCost')) {
 }
 ?>
 <!DOCTYPE html>
-<html lang="fr">
+<html lang="<?= $this->e($this->locale()) ?>">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -84,6 +84,7 @@ if (!function_exists('fmtCost')) {
       </div>
       <a href="tariffs.php" class="theme-toggle" title="Tarifs" style="text-decoration:none">€</a>
       <a href="account.php" class="theme-toggle" title="Mon compte" style="text-decoration:none">👤</a>
+      <span class="langs" style="font-size:.72rem;letter-spacing:.03em"><?php foreach ($available as $loc): ?><a href="?lang=<?= $this->e($loc) ?>" style="text-decoration:none;margin:0 3px<?= $loc === $this->locale() ? ';font-weight:700' : '' ?>"><?= $this->e(strtoupper($loc)) ?></a><?php endforeach; ?></span>
       <button type="button" class="theme-toggle" id="theme-toggle" aria-label="Changer de thème">🌙</button>
     </div>
   </header>
@@ -102,7 +103,7 @@ if (!function_exists('fmtCost')) {
 
   <!-- ── Monthly deltas ────────────────────────────────────────────────── -->
   <div class="section-header">
-    <span class="section-title">Consommation — mois en cours</span>
+    <span class="section-title"><?= $this->te('dash.month') ?></span>
     <span class="section-line"></span>
     <?php if ($deltas): ?>
     <span style="font-family:var(--mono);font-size:.76rem;color:var(--muted)">
@@ -188,7 +189,7 @@ if (!function_exists('fmtCost')) {
 
   <!-- ── Gas + Sync ────────────────────────────────────────────────────── -->
   <div class="section-header">
-    <span class="section-title">Gaz</span>
+    <span class="section-title"><?= $this->te('dash.gas') ?></span>
     <span class="section-line"></span>
   </div>
 
@@ -257,7 +258,7 @@ if (!function_exists('fmtCost')) {
 
   <!-- ── Eau ──────────────────────────────────────────────────────────── -->
   <div class="section-header">
-    <span class="section-title">Eau</span>
+    <span class="section-title"><?= $this->te('dash.water') ?></span>
     <span class="section-line"></span>
   </div>
 
@@ -375,6 +376,7 @@ if (!function_exists('fmtCost')) {
 </div><!-- /wrap -->
 
 <script defer src="<?= \App\Support\Assets::url('assets/js/theme.js') ?>"></script>
+<script>window.APP_LOCALE=<?= json_encode($this->locale()) ?>;</script>
 <script defer src="<?= \App\Support\Assets::url('assets/js/dashboard.js') ?>"></script>
 </body>
 </html>

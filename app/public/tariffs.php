@@ -3,13 +3,14 @@ declare(strict_types=1);
 
 use App\Domain\TariffLineCatalog;
 use App\Http\SecurityHeaders;
+use App\I18n\Locale;
 use App\Infrastructure\Database;
 use App\Repository\TariffRepository;
 use App\Repository\UserRepository;
 use App\Security\AuthGuard;
 use App\Security\Csrf;
 use App\Security\UserContext;
-use App\View\View;
+use App\View\ViewFactory;
 
 $config = require __DIR__ . '/../bootstrap.php';
 
@@ -20,7 +21,17 @@ AuthGuard::protect($config);
 $db          = new Database($config['database']);
 $pdo         = $db->pdo();
 $userId      = UserContext::currentWebUserId($pdo, $config);
-$isAdmin     = ((new UserRepository($pdo))->findById($userId)?->isAdmin()) ?? false;
+$users       = new UserRepository($pdo);
+$isAdmin     = ($users->findById($userId)?->isAdmin()) ?? false;
+
+$profile     = $users->getProfile($userId);
+$locale      = Locale::resolve($config, $profile['locale'] ?? null);
+$choice      = Locale::explicitChoice($config);
+if ($choice !== null && $choice !== ($profile['locale'] ?? null)) {
+    $users->setLocale($userId, $choice);
+}
+$view        = ViewFactory::create(__DIR__ . '/../templates', $locale, (string) ($config['i18n']['default_locale'] ?? 'fr'));
+
 $tariffRepo  = new TariffRepository($pdo, $userId, $isAdmin);
 $error       = null;
 $success     = null;
@@ -31,7 +42,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     try {
         if (Csrf::validate($_POST['_csrf'] ?? null) === false) {
-            throw new \RuntimeException('Requête invalide (jeton CSRF manquant ou expiré). Veuillez réessayer.');
+            throw new \RuntimeException($view->t('common.csrf_invalid'));
         }
 
         if ($action === 'save') {
@@ -41,9 +52,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $validFrom  = $_POST['valid_from'] ?? '';
             $validTo    = trim($_POST['valid_to'] ?? '') ?: null;
 
-            if (!in_array($energyType, ['electricity', 'gas'], true)) throw new \InvalidArgumentException('Type énergie invalide.');
-            if ($name === '')     throw new \InvalidArgumentException('Le nom est requis.');
-            if ($validFrom === '') throw new \InvalidArgumentException('La date de début est requise.');
+            if (!in_array($energyType, ['electricity', 'gas'], true)) throw new \InvalidArgumentException($view->t('tariffs.invalid_energy'));
+            if ($name === '')     throw new \InvalidArgumentException($view->t('tariffs.name_required'));
+            if ($validFrom === '') throw new \InvalidArgumentException($view->t('tariffs.from_required'));
 
             $lineKeys = TariffLineCatalog::keysFor($energyType);
 
@@ -52,7 +63,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $raw = $_POST['line_' . $key] ?? '';
                 if ($raw === '') continue;
                 $val = filter_var($raw, FILTER_VALIDATE_FLOAT);
-                if ($val === false) throw new \InvalidArgumentException("Valeur invalide pour $key.");
+                if ($val === false) throw new \InvalidArgumentException($view->t('tariffs.invalid_value', ['key' => $key]));
                 $lines[$key] = $val;
             }
 
@@ -66,7 +77,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             $currency = strtoupper(trim((string) ($_POST['currency'] ?? 'EUR')));
             if (preg_match('/^[A-Z]{3}$/', $currency) !== 1) {
-                throw new \InvalidArgumentException('Devise invalide (code ISO 4217 attendu, ex. EUR).');
+                throw new \InvalidArgumentException($view->t('account.invalid_currency'));
             }
 
             $shared = $isAdmin && ($_POST['shared'] ?? '') === '1';
@@ -83,7 +94,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $country,
                     $currency,
                 );
-                $success = "Tarif « $name » enregistré.";
+                $success = $view->t('tariffs.saved', ['name' => $name]);
             } else {
                 $tariffRepo->saveGrid(
                     $energyType,
@@ -96,24 +107,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $currency,
                     $shared,
                 );
-                $success = "Tarif « $name » enregistré.";
+                $success = $view->t('tariffs.saved', ['name' => $name]);
             }
         }
 
         if ($action === 'close') {
             $id      = (int) ($_POST['grid_id'] ?? 0);
             $validTo = $_POST['valid_to_close'] ?? '';
-            if ($id <= 0)       throw new \InvalidArgumentException('ID invalide.');
-            if ($validTo === '') throw new \InvalidArgumentException('Date de fin requise.');
+            if ($id <= 0)       throw new \InvalidArgumentException($view->t('tariffs.invalid_id'));
+            if ($validTo === '') throw new \InvalidArgumentException($view->t('tariffs.end_required'));
             $tariffRepo->closeGrid($id, new \DateTimeImmutable($validTo));
-            $success = 'Tarif clôturé.';
+            $success = $view->t('tariffs.closed');
         }
 
         if ($action === 'delete') {
             $id = (int) ($_POST['grid_id'] ?? 0);
-            if ($id <= 0) throw new \InvalidArgumentException('ID invalide.');
+            if ($id <= 0) throw new \InvalidArgumentException($view->t('tariffs.invalid_id'));
             $tariffRepo->deleteGrid($id);
-            $success = 'Tarif supprimé.';
+            $success = $view->t('tariffs.deleted');
         }
     } catch (\Throwable $e) {
         $error = $e->getMessage();
@@ -134,12 +145,12 @@ if (isset($_GET['edit'])) {
     $editId = filter_var($_GET['edit'], FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
 
     if ($editId === false) {
-        $error = 'ID invalide.';
+        $error = $view->t('tariffs.invalid_id');
     } else {
         try {
             $editGrid = $tariffRepo->findById($editId);
             if ($editGrid === null) {
-                $error = 'Tarif introuvable.';
+                $error = $view->t('tariffs.not_found');
             }
         } catch (\Throwable $e) {
             $error = $e->getMessage();
@@ -158,7 +169,7 @@ $glLines = ($editGrid && $editGrid->energyType === 'gas')         ? $editGrid->l
 
 $today = date('Y-m-d');
 
-echo (new View(__DIR__ . '/../templates'))->render('tariffs', [
+echo $view->render('tariffs', [
     'error'      => $error,
     'success'    => $success,
     'elecGrids'  => $elecGrids,
@@ -173,4 +184,5 @@ echo (new View(__DIR__ . '/../templates'))->render('tariffs', [
     'glLines'    => $glLines,
     'today'      => $today,
     'isAdmin'    => $isAdmin,
+    'available'  => Locale::available($config),
 ]);

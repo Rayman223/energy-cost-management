@@ -10,6 +10,9 @@
     "require-dev": {
         "phpunit/phpunit": "^10.5"
     },
+    "suggest": {
+        "ext-intl": "Formatage localisé (dates, nombres, devises) conforme à chaque locale ; sinon repli neutre."
+    },
     "autoload-dev": {
         "psr-4": {
             "Tests\\": "tests/"

@@ -12,16 +12,17 @@ use App\Domain\User;
  * @var array{country:?string,timezone:string,currency:string,bidding_zone:?string,locale:string} $profile
  * @var list<array{id:int,name:string,prefix:string,scopes:string,last_used_at:?string,created_at:string,revoked_at:?string}> $tokens
  * @var array{enabled:bool,device_id:string,claimed_at:?string}|null $energyId
- * @var string      $deviceId
+ * @var string       $deviceId
+ * @var list<string> $available
  */
 $csrf = \App\Security\Csrf::field();
 ?>
 <!DOCTYPE html>
-<html lang="fr">
+<html lang="<?= $this->e($this->locale()) ?>">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Mon compte — Manage Energy</title>
+<title><?= $this->te('account.title') ?> — <?= $this->te('app.title') ?></title>
 <script>(function(){try{var t=localStorage.getItem('theme');if(!t)t=window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';document.documentElement.setAttribute('data-theme',t);}catch(e){document.documentElement.setAttribute('data-theme','light');}})();</script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -54,16 +55,20 @@ $csrf = \App\Security\Csrf::field();
   .token-secret { word-break: break-all; padding: 12px; border: 1px dashed var(--blue); border-radius: 8px; }
   .muted { color: var(--muted); }
   .inline { display: inline; }
+  .langs a { margin-left: 8px; font-size: .8rem; }
 </style>
 </head>
 <body>
 <div class="wrap">
   <header>
     <div>
-      <div class="logo-text">⚡ Mon compte</div>
-      <div class="logo-sub"><?= $this->e($user?->displayName ?? 'Utilisateur') ?><?= $user?->isAdmin() ? ' · admin' : '' ?></div>
+      <div class="logo-text">⚡ <?= $this->te('account.title') ?></div>
+      <div class="logo-sub"><?= $this->e($user?->displayName ?? '') ?><?= $user?->isAdmin() ? ' · ' . $this->te('account.admin') : '' ?></div>
     </div>
-    <div><a href="index.php">← Tableau de bord</a></div>
+    <div>
+      <span class="langs"><?php foreach ($available as $loc): ?><a href="?lang=<?= $this->e($loc) ?>"<?= $loc === $this->locale() ? ' style="font-weight:700"' : '' ?>><?= $this->e(strtoupper($loc)) ?></a><?php endforeach; ?></span>
+      &nbsp; <a href="index.php"><?= $this->te('nav.back_dashboard') ?></a>
+    </div>
   </header>
 
   <?php if ($success !== null): ?><div class="banner ok"><?= $this->e($success) ?></div><?php endif; ?>
@@ -71,54 +76,54 @@ $csrf = \App\Security\Csrf::field();
 
   <?php if ($freshToken !== null): ?>
   <div class="card">
-    <h2>Nouveau jeton API</h2>
-    <p class="hint">Copiez-le maintenant : il ne sera plus jamais affiché.</p>
+    <h2><?= $this->te('account.token_fresh_title') ?></h2>
+    <p class="hint"><?= $this->te('account.token_fresh_hint') ?></p>
     <div class="token-secret"><code><?= $this->e($freshToken) ?></code></div>
   </div>
   <?php endif; ?>
 
   <!-- ── Profil ─────────────────────────────────────────────────────────── -->
   <div class="card">
-    <h2>Profil</h2>
-    <p class="hint">Pays, devise, fuseau et zone de marché servent aux tarifs et aux prix dynamiques.</p>
+    <h2><?= $this->te('account.profile') ?></h2>
+    <p class="hint"><?= $this->te('account.profile_hint') ?></p>
     <form method="post">
       <?= $csrf ?>
       <input type="hidden" name="action" value="save_profile">
       <div class="row">
-        <div><label>Pays (ISO-2)</label><input type="text" name="country" maxlength="2" value="<?= $this->e($profile['country'] ?? '') ?>" placeholder="BE"></div>
-        <div><label>Devise (ISO 4217)</label><input type="text" name="currency" maxlength="3" value="<?= $this->e($profile['currency']) ?>" placeholder="EUR"></div>
+        <div><label><?= $this->te('account.country') ?></label><input type="text" name="country" maxlength="2" value="<?= $this->e($profile['country'] ?? '') ?>" placeholder="BE"></div>
+        <div><label><?= $this->te('account.currency') ?></label><input type="text" name="currency" maxlength="3" value="<?= $this->e($profile['currency']) ?>" placeholder="EUR"></div>
       </div>
       <div class="row">
-        <div><label>Fuseau horaire</label><input type="text" name="timezone" value="<?= $this->e($profile['timezone']) ?>" placeholder="Europe/Brussels"></div>
-        <div><label>Langue</label><input type="text" name="locale" maxlength="5" value="<?= $this->e($profile['locale']) ?>" placeholder="fr"></div>
+        <div><label><?= $this->te('account.timezone') ?></label><input type="text" name="timezone" value="<?= $this->e($profile['timezone']) ?>" placeholder="Europe/Brussels"></div>
+        <div><label><?= $this->te('account.locale') ?></label><input type="text" name="locale" maxlength="5" value="<?= $this->e($profile['locale']) ?>" placeholder="fr"></div>
       </div>
-      <label>Zone de marché ENTSO-E (prix dynamiques)</label>
+      <label><?= $this->te('account.bidding_zone') ?></label>
       <input type="text" name="bidding_zone" value="<?= $this->e($profile['bidding_zone'] ?? '') ?>" placeholder="10YBE----------2">
-      <button type="submit">Enregistrer le profil</button>
+      <button type="submit"><?= $this->te('account.save_profile') ?></button>
     </form>
   </div>
 
   <!-- ── Jetons API ─────────────────────────────────────────────────────── -->
   <div class="card">
-    <h2>Jetons API</h2>
-    <p class="hint">Pour l'envoi automatique des index par un agent (scope <code>ingest</code> uniquement).</p>
+    <h2><?= $this->te('account.tokens') ?></h2>
+    <p class="hint"><?= $this->te('account.tokens_hint') ?></p>
     <?php if ($tokens === []): ?>
-      <p class="muted">Aucun jeton.</p>
+      <p class="muted"><?= $this->te('account.tokens_none') ?></p>
     <?php else: ?>
       <table>
-        <tr><th>Nom</th><th>Préfixe</th><th>Dernier usage</th><th>Statut</th><th></th></tr>
+        <tr><th><?= $this->te('account.token_name') ?></th><th><?= $this->te('account.token_prefix') ?></th><th><?= $this->te('account.token_last') ?></th><th><?= $this->te('account.token_status') ?></th><th></th></tr>
         <?php foreach ($tokens as $t): ?>
         <tr>
           <td><?= $this->e($t['name']) ?></td>
           <td><code><?= $this->e($t['prefix']) ?>…</code></td>
           <td class="muted"><?= $this->e($t['last_used_at'] ?? '—') ?></td>
-          <td><?= $t['revoked_at'] !== null ? '<span class="muted">révoqué</span>' : 'actif' ?></td>
+          <td><?= $t['revoked_at'] !== null ? '<span class="muted">' . $this->te('account.token_revoked') . '</span>' : $this->te('account.token_active') ?></td>
           <td><?php if ($t['revoked_at'] === null): ?>
-            <form method="post" class="inline" onsubmit="return confirm('Révoquer ce jeton ?')">
+            <form method="post" class="inline" onsubmit="return confirm('<?= $this->e($this->t('account.token_revoke_confirm')) ?>')">
               <?= $csrf ?>
               <input type="hidden" name="action" value="token_revoke">
               <input type="hidden" name="token_id" value="<?= $t['id'] ?>">
-              <button type="submit" class="ghost" style="margin:0;padding:4px 10px">Révoquer</button>
+              <button type="submit" class="ghost" style="margin:0;padding:4px 10px"><?= $this->te('account.token_revoke') ?></button>
             </form>
           <?php endif; ?></td>
         </tr>
@@ -128,44 +133,44 @@ $csrf = \App\Security\Csrf::field();
     <form method="post">
       <?= $csrf ?>
       <input type="hidden" name="action" value="token_create">
-      <label>Nouveau jeton — nom</label>
+      <label><?= $this->te('account.token_new') ?></label>
       <input type="text" name="token_name" placeholder="Agent HomeWizard" required>
-      <button type="submit">Créer un jeton</button>
+      <button type="submit"><?= $this->te('account.token_create') ?></button>
     </form>
   </div>
 
   <!-- ── EnergyID (opt-in BE/NL) ────────────────────────────────────────── -->
   <div class="card">
-    <h2>EnergyID <span class="muted">— Belgique / Pays-Bas</span></h2>
-    <p class="hint">Synchronise automatiquement vos index vers votre compte EnergyID (facultatif).</p>
+    <h2><?= $this->te('account.energyid') ?> <span class="muted"><?= $this->te('account.energyid_region') ?></span></h2>
+    <p class="hint"><?= $this->te('account.energyid_hint') ?></p>
     <?php if ($energyId !== null && $energyId['enabled']): ?>
-      <p>État : <strong>activé</strong>
+      <p><?= $this->te('account.token_status') ?> : <strong><?= $this->te('account.energyid_on') ?></strong>
         <?php if ($energyId['claimed_at'] !== null): ?>
-          · device réclamé le <?= $this->e($energyId['claimed_at']) ?>
+          · <?= $this->te('account.energyid_claimed', ['date' => $energyId['claimed_at']]) ?>
         <?php else: ?>
-          · <span class="muted">en attente de claim (le code apparaît dans le log de la sync quotidienne)</span>
+          · <span class="muted"><?= $this->te('account.energyid_pending') ?></span>
         <?php endif; ?>
       </p>
-      <p class="muted">Device : <code><?= $this->e($energyId['device_id']) ?></code></p>
-      <form method="post"><?= $csrf ?><input type="hidden" name="action" value="energyid_disable"><button type="submit" class="ghost">Désactiver</button></form>
+      <p class="muted"><?= $this->te('account.energyid_device') ?> : <code><?= $this->e($energyId['device_id']) ?></code></p>
+      <form method="post"><?= $csrf ?><input type="hidden" name="action" value="energyid_disable"><button type="submit" class="ghost"><?= $this->te('account.energyid_disable') ?></button></form>
     <?php else: ?>
-      <p class="muted">Non activé. Device qui sera utilisé : <code><?= $this->e($deviceId) ?></code></p>
-      <form method="post"><?= $csrf ?><input type="hidden" name="action" value="energyid_enable"><button type="submit">Activer EnergyID</button></form>
+      <p class="muted"><?= $this->te('account.energyid_off_hint') ?> <code><?= $this->e($deviceId) ?></code></p>
+      <form method="post"><?= $csrf ?><input type="hidden" name="action" value="energyid_enable"><button type="submit"><?= $this->te('account.energyid_enable') ?></button></form>
     <?php endif; ?>
   </div>
 
   <!-- ── Données personnelles (RGPD) ────────────────────────────────────── -->
   <div class="card">
-    <h2>Mes données (RGPD)</h2>
-    <p class="hint">En utilisant le service, vous acceptez les <a href="terms.php">CGU</a> et la
-      <a href="privacy.php">politique de confidentialité</a>.</p>
-    <p><a href="account.php?export=1">⬇ Exporter toutes mes données (JSON)</a></p>
-    <form method="post" onsubmit="return confirm('Supprimer définitivement votre compte et toutes vos données ?')">
+    <h2><?= $this->te('account.rgpd') ?></h2>
+    <p class="hint"><?= $this->te('account.rgpd_hint') ?>
+       (<a href="terms.php"><?= $this->te('legal.terms') ?></a> · <a href="privacy.php"><?= $this->te('legal.privacy') ?></a>)</p>
+    <p><a href="account.php?export=1"><?= $this->te('account.export') ?></a></p>
+    <form method="post" onsubmit="return confirm('<?= $this->e($this->t('account.delete_js_confirm')) ?>')">
       <?= $csrf ?>
       <input type="hidden" name="action" value="delete_account">
-      <label>Pour confirmer, tapez <code>SUPPRIMER</code></label>
+      <label><?= $this->te('account.delete_confirm_label') ?></label>
       <input type="text" name="confirm" placeholder="SUPPRIMER">
-      <button type="submit" class="danger">Supprimer mon compte</button>
+      <button type="submit" class="danger"><?= $this->te('account.delete') ?></button>
     </form>
   </div>
 </div>

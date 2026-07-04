@@ -1,8 +1,9 @@
 // ── Electricity cost navigation ────────────────────────────────────────────
 (function () {
-  const MONTHS_FR   = ['Jan','Fév','Mar','Avr','Mai','Jun','Jul','Aoû','Sep','Oct','Nov','Déc'];
-  const MONTH_NAMES = ['Janvier','Février','Mars','Avril','Mai','Juin',
-                       'Juillet','Août','Septembre','Octobre','Novembre','Décembre'];
+  const _APP_LOC = (typeof window !== 'undefined' && window.APP_LOCALE) ? window.APP_LOCALE : 'fr';
+  const _cap = (str) => str.charAt(0).toUpperCase() + str.slice(1);
+  const MONTHS_FR   = Array.from({ length: 12 }, (_, i) => _cap(new Date(2000, i, 1).toLocaleDateString(_APP_LOC, { month: 'short' })));
+  const MONTH_NAMES = Array.from({ length: 12 }, (_, i) => _cap(new Date(2000, i, 1).toLocaleDateString(_APP_LOC, { month: 'long' })));
 
   let navYear  = window.__INIT_YEAR__;
   let navMonth = window.__INIT_MONTH__;
@@ -343,9 +344,10 @@
 
 // ── Gas cost navigation ────────────────────────────────────────────────────
 (function () {
-  const MONTHS_FR   = ['Jan','Fév','Mar','Avr','Mai','Jun','Jul','Aoû','Sep','Oct','Nov','Déc'];
-  const MONTH_NAMES = ['Janvier','Février','Mars','Avril','Mai','Juin',
-                       'Juillet','Août','Septembre','Octobre','Novembre','Décembre'];
+  const _APP_LOC = (typeof window !== 'undefined' && window.APP_LOCALE) ? window.APP_LOCALE : 'fr';
+  const _cap = (str) => str.charAt(0).toUpperCase() + str.slice(1);
+  const MONTHS_FR   = Array.from({ length: 12 }, (_, i) => _cap(new Date(2000, i, 1).toLocaleDateString(_APP_LOC, { month: 'short' })));
+  const MONTH_NAMES = Array.from({ length: 12 }, (_, i) => _cap(new Date(2000, i, 1).toLocaleDateString(_APP_LOC, { month: 'long' })));
 
   let gasNavYear  = window.__INIT_GAS_YEAR__;
   let gasNavMonth = window.__INIT_GAS_MONTH__;
@@ -583,9 +585,10 @@
 
 // ── Water consumption navigation (volume m³, sans coût) ────────────────────
 (function () {
-  const MONTHS_FR   = ['Jan','Fév','Mar','Avr','Mai','Jun','Jul','Aoû','Sep','Oct','Nov','Déc'];
-  const MONTH_NAMES = ['Janvier','Février','Mars','Avril','Mai','Juin',
-                       'Juillet','Août','Septembre','Octobre','Novembre','Décembre'];
+  const _APP_LOC = (typeof window !== 'undefined' && window.APP_LOCALE) ? window.APP_LOCALE : 'fr';
+  const _cap = (str) => str.charAt(0).toUpperCase() + str.slice(1);
+  const MONTHS_FR   = Array.from({ length: 12 }, (_, i) => _cap(new Date(2000, i, 1).toLocaleDateString(_APP_LOC, { month: 'short' })));
+  const MONTH_NAMES = Array.from({ length: 12 }, (_, i) => _cap(new Date(2000, i, 1).toLocaleDateString(_APP_LOC, { month: 'long' })));
 
   let wNavYear  = window.__INIT_WATER_YEAR__;
   let wNavMonth = window.__INIT_WATER_MONTH__;

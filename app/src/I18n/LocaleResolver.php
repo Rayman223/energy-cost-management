@@ -5,9 +5,11 @@ declare(strict_types=1);
 namespace App\I18n;
 
 /**
- * Détermine la locale active selon l'ordre de préférence :
- * profil utilisateur > paramètre `?lang=` > en-tête Accept-Language > défaut.
- * Seules les locales `available` sont retenues.
+ * Résolveur générique bas-niveau : essaie les candidats dans l'ordre
+ * `$userLocale` > `$queryLang` > en-tête Accept-Language > `$default`.
+ * L'appelant décide de ce qu'il place dans chaque emplacement — c'est
+ * {@see Locale::resolve()} qui compose l'ordre métier (`?lang` > profil >
+ * cookie). Seules les locales `available` sont retenues.
  */
 final class LocaleResolver
 {

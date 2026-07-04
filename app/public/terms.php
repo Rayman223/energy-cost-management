@@ -3,13 +3,17 @@
 declare(strict_types=1);
 
 use App\Http\SecurityHeaders;
-use App\View\View;
+use App\I18n\Locale;
+use App\View\ViewFactory;
 
-require __DIR__ . '/../bootstrap.php';
+$config = require __DIR__ . '/../bootstrap.php';
 
 SecurityHeaders::send();
 
-echo (new View(__DIR__ . '/../templates'))->render('legal', [
-    'title' => "Conditions générales d'utilisation",
-    'page'  => 'terms',
+$locale = Locale::resolve($config, null);
+$view = ViewFactory::create(__DIR__ . '/../templates', $locale, (string) ($config['i18n']['default_locale'] ?? 'fr'));
+
+echo $view->render('legal', [
+    'page'      => 'terms',
+    'available' => Locale::available($config),
 ]);

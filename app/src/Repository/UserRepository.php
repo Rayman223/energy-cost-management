@@ -81,6 +81,15 @@ final class UserRepository implements UserRepositoryInterface
             ->execute(['name' => $displayName, 'id' => $userId]);
     }
 
+    /** Persiste la langue choisie dans le profil (crée la ligne au besoin). */
+    public function setLocale(int $userId, string $locale): void
+    {
+        $this->pdo->prepare(
+            'INSERT INTO user_profiles (user_id, locale) VALUES (:uid, :locale)
+             ON DUPLICATE KEY UPDATE locale = VALUES(locale)'
+        )->execute(['uid' => $userId, 'locale' => $locale]);
+    }
+
     /** Marque l'acceptation des CGU/confidentialité si ce n'est pas déjà fait. */
     public function acceptTermsIfNeeded(int $userId): void
     {

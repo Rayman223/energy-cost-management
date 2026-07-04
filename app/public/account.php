@@ -8,6 +8,7 @@ declare(strict_types=1);
  */
 
 use App\Http\SecurityHeaders;
+use App\I18n\Locale;
 use App\Infrastructure\Database;
 use App\Repository\ApiTokenRepository;
 use App\Repository\EnergyIdIntegrationRepository;
@@ -17,7 +18,7 @@ use App\Security\Csrf;
 use App\Security\UserContext;
 use App\Service\AccountDataExporter;
 use App\Service\AccountEraser;
-use App\View\View;
+use App\View\ViewFactory;
 
 $config = require __DIR__ . '/../bootstrap.php';
 
@@ -31,6 +32,16 @@ $userId = UserContext::currentWebUserId($pdo, $config);
 $users        = new UserRepository($pdo);
 $tokensRepo   = new ApiTokenRepository($pdo);
 $energyIdRepo = new EnergyIdIntegrationRepository($pdo);
+
+// Locale = celle du profil (surchargée par ?lang) → View configurée.
+$profileForLocale = $users->getProfile($userId);
+$locale = Locale::resolve($config, $profileForLocale['locale'] ?? null);
+// Persiste un switch explicite (?lang) valide dans le profil, seulement s'il diffère.
+$choice = Locale::explicitChoice($config);
+if ($choice !== null && $choice !== ($profileForLocale['locale'] ?? null)) {
+    $users->setLocale($userId, $choice);
+}
+$view   = ViewFactory::create(__DIR__ . '/../templates', $locale, (string) ($config['i18n']['default_locale'] ?? 'fr'));
 
 $error      = null;
 $success    = null;
@@ -52,7 +63,7 @@ if (($_GET['export'] ?? '') === '1') {
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     try {
         if (Csrf::validate($_POST['_csrf'] ?? null) === false) {
-            throw new \RuntimeException('Requête invalide (jeton CSRF manquant ou expiré). Veuillez réessayer.');
+            throw new \RuntimeException($view->t('common.csrf_invalid'));
         }
 
         $action = (string) ($_POST['action'] ?? '');
@@ -63,54 +74,54 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             $currency = strtoupper(trim((string) ($_POST['currency'] ?? 'EUR')));
             if (preg_match('/^[A-Z]{3}$/', $currency) !== 1) {
-                throw new \InvalidArgumentException('Devise invalide (code ISO 4217, ex. EUR).');
+                throw new \InvalidArgumentException($view->t('account.invalid_currency'));
             }
 
             $timezone = trim((string) ($_POST['timezone'] ?? 'Europe/Brussels'));
             if (!in_array($timezone, \DateTimeZone::listIdentifiers(), true)) {
-                throw new \InvalidArgumentException('Fuseau horaire invalide.');
+                throw new \InvalidArgumentException($view->t('account.invalid_timezone'));
             }
 
-            $locale = strtolower(substr(trim((string) ($_POST['locale'] ?? 'fr')), 0, 5));
-            $available = is_array($config['i18n']['available'] ?? null) ? $config['i18n']['available'] : ['fr', 'en'];
-            if (!in_array($locale, $available, true)) {
-                $locale = (string) ($config['i18n']['default_locale'] ?? 'fr');
+            $chosenLocale = strtolower(substr(trim((string) ($_POST['locale'] ?? 'fr')), 0, 5));
+            $available = Locale::available($config);
+            if (!in_array($chosenLocale, $available, true)) {
+                $chosenLocale = (string) ($config['i18n']['default_locale'] ?? 'fr');
             }
 
             $zone = trim((string) ($_POST['bidding_zone'] ?? '')) ?: null;
 
-            $users->updateProfile($userId, $country, $timezone, $currency, $zone, $locale);
-            $success = 'Profil enregistré.';
+            $users->updateProfile($userId, $country, $timezone, $currency, $zone, $chosenLocale);
+            $success = $view->t('account.profile_saved');
         } elseif ($action === 'token_create') {
             $name = trim((string) ($_POST['token_name'] ?? ''));
             if ($name === '') {
-                throw new \InvalidArgumentException('Nom du jeton requis.');
+                throw new \InvalidArgumentException($view->t('account.token_name_required'));
             }
             $created    = $tokensRepo->create($userId, $name);
             $freshToken = $created['token'];
-            $success    = 'Jeton créé. Copiez-le maintenant : il ne sera plus affiché.';
+            $success    = $view->t('account.token_created');
         } elseif ($action === 'token_revoke') {
             $id = filter_var($_POST['token_id'] ?? null, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
             if ($id === false || $tokensRepo->revoke($id, $userId) === false) {
-                throw new \RuntimeException('Jeton introuvable ou déjà révoqué.');
+                throw new \RuntimeException($view->t('account.token_not_found'));
             }
-            $success = 'Jeton révoqué.';
+            $success = $view->t('account.token_revoked_ok');
         } elseif ($action === 'energyid_enable') {
             $energyIdRepo->enable($userId, $deviceId);
-            $success = 'EnergyID activé. La synchronisation quotidienne fournira un code de claim à saisir dans votre compte EnergyID.';
+            $success = $view->t('account.energyid_enabled_msg');
         } elseif ($action === 'energyid_disable') {
             $energyIdRepo->disable($userId);
-            $success = 'EnergyID désactivé.';
+            $success = $view->t('account.energyid_disabled_msg');
         } elseif ($action === 'delete_account') {
             if (($_POST['confirm'] ?? '') !== 'SUPPRIMER') {
-                throw new \InvalidArgumentException('Tapez SUPPRIMER pour confirmer la suppression.');
+                throw new \InvalidArgumentException($view->t('account.delete_need_confirm'));
             }
             (new AccountEraser($pdo))->erase($userId);
             \App\Security\AuthSession::logout();
             header('Location: ' . \App\Security\WebAccessGuard::appRootPath() . '/', true, 302);
             exit;
         } else {
-            throw new \InvalidArgumentException('Action inconnue.');
+            throw new \InvalidArgumentException($view->t('common.action_unknown'));
         }
     } catch (\Throwable $e) {
         $error = $e->getMessage();
@@ -125,7 +136,7 @@ $profile  = $users->getProfile($userId) ?? [
 $tokens   = $tokensRepo->listForUser($userId);
 $energyId = $energyIdRepo->get($userId);
 
-echo (new View(__DIR__ . '/../templates'))->render('account', [
+echo $view->render('account', [
     'error'      => $error,
     'success'    => $success,
     'freshToken' => $freshToken,
@@ -134,4 +145,5 @@ echo (new View(__DIR__ . '/../templates'))->render('account', [
     'tokens'     => $tokens,
     'energyId'   => $energyId,
     'deviceId'   => $deviceId,
+    'available'  => Locale::available($config),
 ]);

@@ -3,14 +3,14 @@
 declare(strict_types=1);
 
 use App\Http\SecurityHeaders;
+use App\I18n\Locale;
 use App\Security\Csrf;
 use App\Security\WebAccessGuard;
-use App\View\View;
+use App\View\ViewFactory;
 
 $config = require __DIR__ . '/../bootstrap.php';
 
 SecurityHeaders::send();
-
 
 $scriptName = str_replace('\\', '/', (string) ($_SERVER['SCRIPT_NAME'] ?? '/login.php'));
 $basePath = str_replace('\\', '/', dirname($scriptName));
@@ -29,32 +29,8 @@ if ($securityEnabled === false || $basicEnabled === false) {
     exit;
 }
 
-$lang = strtolower((string) ($_GET['lang'] ?? $_POST['lang'] ?? ''));
-if ($lang !== 'fr' && $lang !== 'en') {
-    $accept = strtolower((string) ($_SERVER['HTTP_ACCEPT_LANGUAGE'] ?? ''));
-    $lang = (str_starts_with($accept, 'fr') || str_contains($accept, ',fr')) ? 'fr' : 'en';
-}
-
-$messages = [
-    'fr' => [
-        'title' => 'Connexion sécurisée',
-        'heading' => 'Authentification requise',
-        'username' => 'Nom d\'utilisateur',
-        'password' => 'Mot de passe',
-        'submit' => 'Se connecter',
-        'error' => 'Identifiants invalides.',
-        'csrf' => 'Session expirée, veuillez réessayer.',
-    ],
-    'en' => [
-        'title' => 'Secure sign in',
-        'heading' => 'Authentication required',
-        'username' => 'Username',
-        'password' => 'Password',
-        'submit' => 'Sign in',
-        'error' => 'Invalid credentials.',
-        'csrf' => 'Session expired, please try again.',
-    ],
-];
+$locale = Locale::resolve($config, null);
+$view = ViewFactory::create(__DIR__ . '/../templates', $locale, (string) ($config['i18n']['default_locale'] ?? 'fr'));
 
 $next = (string) ($_GET['next'] ?? $_POST['next'] ?? $appRoot);
 if ($next === '' || str_starts_with($next, '/') === false || str_starts_with($next, '//') || str_contains($next, "\r") || str_contains($next, "\n")) {
@@ -64,7 +40,7 @@ if ($next === '' || str_starts_with($next, '/') === false || str_starts_with($ne
 $error = '';
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (Csrf::validate($_POST['_csrf'] ?? null) === false) {
-        $error = $messages[$lang]['csrf'];
+        $error = $view->t('auth.csrf');
     } else {
         $username = (string) ($_POST['username'] ?? '');
         $password = (string) ($_POST['password'] ?? '');
@@ -74,16 +50,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             exit;
         }
 
-        $error = $messages[$lang]['error'];
+        $error = $view->t('auth.invalid');
     }
 }
 
-$view = new View(__DIR__ . '/../templates');
-
 echo $view->render('login', [
-    'lang'     => $lang,
-    't'        => $messages[$lang],
-    'error'    => $error,
-    'next'     => $next,
-    'basePath' => $basePath,
+    'error'     => $error,
+    'next'      => $next,
+    'basePath'  => $basePath,
+    'available' => Locale::available($config),
 ]);
