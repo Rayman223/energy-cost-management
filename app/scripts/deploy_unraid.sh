@@ -15,6 +15,13 @@
 #               le container MariaDB.
 #   4. Migr.  — applique les migrations versionnées (app/sql/migrations/) via
 #               app/scripts/migrate.php (idempotent, tracé dans schema_migrations).
+#   5. Config — contrôle non-bloquant de la config OIDC (section 'oidc').
+#
+# Config OIDC (multi-utilisateurs) : renseigner la section 'oidc' de
+# app/config/config.php (issuer, client_id, client_secret, redirect_uri,
+# enabled=true). Ce fichier est hors dépôt (.gitignore) et conservé par le
+# déploiement (clean sans -x). Ne jamais committer de secret : config.php reste
+# la source de vérité unique, lue par ce script sans rien coder en dur.
 #
 # Usage (SSH ou plugin Unraid « User Scripts ») :
 #   ./deploy_unraid.sh              # déploie le dernier commit de main
@@ -99,5 +106,24 @@ docker exec -i "$DB_CONTAINER" mysql -u"$DB_USER" -p"$DB_PASS" "$DB_NAME" \
 # ── Étape 4 : Migrations versionnées ─────────────────────────────────────────
 log "=== Étape 4/4 — Migrations versionnées (migrate.php) ==="
 docker exec -w "$CONTAINER_APP_DIR" "$CONTAINER" php app/scripts/migrate.php
+
+# ── Étape 5 : Contrôle de configuration (OIDC) ───────────────────────────────
+# Non-bloquant : signale si OIDC est activé sans issuer/client, ou désactivé
+# (mode Basic Auth historique, mono-tenant). N'interrompt jamais le déploiement.
+log "=== Étape 5/5 — Contrôle config OIDC ==="
+docker exec -w "$CONTAINER_APP_DIR" "$CONTAINER" php -r '
+    $c = require "app/config/config.php";
+    $o = $c["oidc"] ?? [];
+    if (!($o["enabled"] ?? false)) {
+        fwrite(STDOUT, "OIDC désactivé — mode Basic Auth (mono-tenant).\n");
+        exit(0);
+    }
+    $missing = array_values(array_filter(["issuer","client_id","client_secret","redirect_uri"], fn($k) => empty($o[$k])));
+    if ($missing) {
+        fwrite(STDOUT, "ATTENTION : OIDC activé mais champs manquants : " . implode(", ", $missing) . "\n");
+    } else {
+        fwrite(STDOUT, "OIDC activé et configuré (issuer=" . $o["issuer"] . ").\n");
+    }
+' || log "Contrôle config ignoré (config.php illisible ?)"
 
 log "=== Déploiement OK (${TAG:-main}) ==="

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Security;
 
 use App\Http\JsonResponse;
+use App\Infrastructure\Database;
 
 /**
  * Garde d'accès unifié.
@@ -43,10 +44,48 @@ final class AuthGuard
 
         WebAccessGuard::enforceIp($security, $jsonResponse);
 
-        if (AuthSession::userId() !== null) {
+        $userId = AuthSession::userId();
+        if ($userId !== null) {
+            self::enforceActiveAccount($config, $userId, $jsonResponse);
+
             return;
         }
 
+        self::requireLogin($jsonResponse);
+    }
+
+    /**
+     * Révoque immédiatement l'accès d'un compte bloqué (ou supprimé) même si sa
+     * session est encore ouverte : la connexion vérifie déjà `isActive()`, mais
+     * un blocage administratif doit prendre effet dès la requête suivante.
+     *
+     * Tolérant aux pannes : si la base est indisponible, on ne verrouille pas
+     * tout le monde (dégradation gracieuse, cohérente avec le reste de l'app).
+     *
+     * @param array<string, mixed> $config
+     */
+    private static function enforceActiveAccount(array $config, int $userId, bool $jsonResponse): void
+    {
+        $database = $config['database'] ?? null;
+        if (!is_array($database)) {
+            return;
+        }
+
+        try {
+            $stmt = (new Database($database))->pdo()->prepare('SELECT status FROM users WHERE id = :id LIMIT 1');
+            $stmt->execute(['id' => $userId]);
+            $status = $stmt->fetchColumn();
+        } catch (\Throwable) {
+            return; // Base injoignable : ne pas verrouiller abusivement.
+        }
+
+        // Compte encore actif → rien à faire.
+        if ($status === 'active') {
+            return;
+        }
+
+        // Bloqué ou disparu : on ferme la session et on exige une reconnexion.
+        AuthSession::logout();
         self::requireLogin($jsonResponse);
     }
 

@@ -132,6 +132,70 @@ final class UserRepository implements UserRepositoryInterface
             ->execute(['id' => $userId]);
     }
 
+    /**
+     * Liste tous les comptes pour l'administration (sans PII sensible).
+     *
+     * @return list<array{id: int, provider: string, display_name: string,
+     *                    role: string, status: string, created_at: string,
+     *                    last_login_at: ?string}>
+     */
+    public function listAll(): array
+    {
+        $stmt = $this->pdo->query(
+            'SELECT id, provider, display_name, role, status, created_at, last_login_at
+             FROM users ORDER BY created_at ASC, id ASC'
+        );
+        $rows = $stmt === false ? [] : $stmt->fetchAll();
+
+        $out = [];
+        foreach ($rows as $row) {
+            $out[] = [
+                'id'            => (int) $row['id'],
+                'provider'      => (string) $row['provider'],
+                'display_name'  => (string) $row['display_name'],
+                'role'          => (string) $row['role'],
+                'status'        => (string) $row['status'],
+                'created_at'    => (string) $row['created_at'],
+                'last_login_at' => $row['last_login_at'] !== null ? (string) $row['last_login_at'] : null,
+            ];
+        }
+
+        return $out;
+    }
+
+    /**
+     * Change le rôle d'un compte (« user » ou « admin »). Renvoie false si le
+     * rôle est invalide ou si aucune ligne n'a changé.
+     */
+    public function setRole(int $userId, string $role): bool
+    {
+        if (!in_array($role, ['user', 'admin'], true)) {
+            return false;
+        }
+
+        $stmt = $this->pdo->prepare('UPDATE users SET role = :role WHERE id = :id');
+        $stmt->execute(['role' => $role, 'id' => $userId]);
+
+        return $stmt->rowCount() > 0;
+    }
+
+    /**
+     * Change le statut d'un compte (« active » ou « blocked »). Un compte
+     * « blocked » perd l'accès (session refusée, jetons API rejetés). Renvoie
+     * false si le statut est invalide ou si aucune ligne n'a changé.
+     */
+    public function setStatus(int $userId, string $status): bool
+    {
+        if (!in_array($status, ['active', 'blocked'], true)) {
+            return false;
+        }
+
+        $stmt = $this->pdo->prepare('UPDATE users SET status = :status WHERE id = :id');
+        $stmt->execute(['status' => $status, 'id' => $userId]);
+
+        return $stmt->rowCount() > 0;
+    }
+
     public function getProfile(int $userId): ?array
     {
         $stmt = $this->pdo->prepare(

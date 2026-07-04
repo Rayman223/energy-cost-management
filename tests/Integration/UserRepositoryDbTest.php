@@ -94,6 +94,43 @@ final class UserRepositoryDbTest extends TestCase
         self::assertSame('Bobby', $reloaded->displayName);
     }
 
+    public function testListAllReturnsCreatedAccounts(): void
+    {
+        $repo = new UserRepository($this->pdo());
+
+        self::assertSame([], $repo->listAll());
+
+        $a = $repo->create('https://iss.example', 'sub-a', 'example', 'Alice');
+        $b = $repo->create('https://iss.example', 'sub-b', 'example', 'Bob');
+
+        $all = $repo->listAll();
+        self::assertCount(2, $all);
+        $ids = array_column($all, 'id');
+        self::assertContains($a->id, $ids);
+        self::assertContains($b->id, $ids);
+        self::assertSame('user', $all[0]['role']);
+        self::assertSame('active', $all[0]['status']);
+    }
+
+    public function testSetRoleAndStatus(): void
+    {
+        $repo = new UserRepository($this->pdo());
+        $user = $repo->create('https://iss.example', 'sub-c', 'example', 'Carol');
+
+        self::assertTrue($repo->setRole($user->id, 'admin'));
+        self::assertTrue($repo->findById($user->id)?->isAdmin());
+
+        self::assertTrue($repo->setStatus($user->id, 'blocked'));
+        self::assertFalse($repo->findById($user->id)?->isActive());
+
+        // Valeurs invalides rejetées, sans lever d'exception.
+        self::assertFalse($repo->setRole($user->id, 'superuser'));
+        self::assertFalse($repo->setStatus($user->id, 'paused'));
+
+        // Compte inconnu : aucune ligne affectée.
+        self::assertFalse($repo->setRole(999999, 'admin'));
+    }
+
     private function pdo(): PDO
     {
         if ($this->pdo === null) {

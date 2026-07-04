@@ -16,6 +16,8 @@
  * @var int                      $gasInitMonth
  * @var int                      $waterInitYear
  * @var int                      $waterInitMonth
+ * @var list<string>             $available
+ * @var bool                     $isAdmin
  */
 
 // Helpers de présentation (rendu de valeurs numériques / coûts).
@@ -82,6 +84,7 @@ if (!function_exists('fmtCost')) {
         <span class="sync-dot <?= $syncClass === 'error' ? 'error' : ($syncClass === 'stale' ? 'stale' : '') ?>"></span>
         <?= $dbError ? 'DB offline' : 'Sync' ?>
       </div>
+      <?php if (!empty($isAdmin)): ?><a href="admin.php" class="theme-toggle" title="<?= $this->te('admin.title') ?>" style="text-decoration:none">🛡</a><?php endif; ?>
       <a href="tariffs.php" class="theme-toggle" title="Tarifs" style="text-decoration:none">€</a>
       <a href="account.php" class="theme-toggle" title="Mon compte" style="text-decoration:none">👤</a>
       <span class="langs" style="font-size:.72rem;letter-spacing:.03em"><?php foreach ($available as $loc): ?><a href="?lang=<?= $this->e($loc) ?>" style="text-decoration:none;margin:0 3px<?= $loc === $this->locale() ? ';font-weight:700' : '' ?>"><?= $this->e(strtoupper($loc)) ?></a><?php endforeach; ?></span>

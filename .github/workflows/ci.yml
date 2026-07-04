@@ -35,6 +35,30 @@ jobs:
             | xargs -0 -n1 -P4 php -d display_errors=stderr -l
           echo "All PHP files passed syntax check."
 
+  js-lint:
+    name: JS Syntax (node --check)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Vérifier la syntaxe de tous les fichiers JS
+        run: |
+          shopt -s nullglob
+          files=(app/public/assets/js/*.js)
+          if [ ${#files[@]} -eq 0 ]; then
+            echo "Aucun fichier JS à vérifier."; exit 0
+          fi
+          for f in "${files[@]}"; do
+            echo "node --check $f"
+            node --check "$f"
+          done
+          echo "Tous les fichiers JS passent le contrôle de syntaxe."
+
   static-analysis:
     name: PHPStan (level 6)
     runs-on: ubuntu-latest

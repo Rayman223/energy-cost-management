@@ -33,6 +33,32 @@ Application PHP de suivi et d'estimation des coûts énergétiques (électricit�
 
 ---
 
+## Plateforme communautaire européenne (#47)
+
+Au-delà de l'usage mono-foyer belge historique, l'application évolue en plateforme
+**multi-utilisateurs**, **publique** et **européenne** (épopée [#47](https://github.com/Rayman223/Manage-energy-costs/issues/47), phases P0–P7, non-cassantes) :
+
+- **Authentification OpenID Connect** (générique, PKCE) — aucun mot de passe ni
+  e-mail stocké. Le mode Basic Auth historique reste actif tant qu'OIDC est
+  désactivé (`oidc.enabled = false`).
+- **Multi-tenant** : données cloisonnées par utilisateur ; électricité en modèle
+  à registres (EU-ready), gaz/eau unifiés.
+- **Catalogue tarifaire européen** partagé + surcharge perso, **multi-devises**,
+  zones de marché **ENTSO-E**.
+- **API d'ingestion** avec **jetons Bearer** par utilisateur (hachés, scopés,
+  rate-limités, révocables).
+- **Internationalisation complète** `fr/en/nl/de` (extensible) avec sélecteur de
+  langue et formatage localisé.
+- **Self-service & RGPD** : page compte, EnergyID **opt-in** (BE/NL), export et
+  suppression de compte.
+- **Administration** (`admin.php`, réservée aux admins) : gestion des membres
+  (rôle, statut ; un blocage prend effet immédiatement).
+
+Détails : [`app/docs/architecture.md`](app/docs/architecture.md) et la checklist
+[`app/docs/security-review.md`](app/docs/security-review.md).
+
+---
+
 ## Architecture
 
 ```
@@ -309,11 +335,17 @@ find app -name '*.php' -print0 | xargs -0 -n1 php -l # lint de syntaxe
 
 ## Sécurité
 
-La protection est gérée par `WebAccessGuard` et configurée dans `config.php` :
+La protection est gérée par `AuthGuard`/`WebAccessGuard` et configurée dans `config.php` :
 
 - **Liste blanche IP** (CIDR) : laisser `allowed_ips` vide pour ne pas restreindre.
-- **HTTP Basic Auth** : activée par défaut, protège toutes les pages et l'API.
+- **Authentification** : **OpenID Connect** si `oidc.enabled = true` (sessions
+  durcies, comptes multi-utilisateurs), sinon **HTTP Basic Auth** historique
+  (mono-tenant). Dans les deux cas l'allowlist IP s'applique.
+- **Comptes bloqués** : un compte passé en `blocked` (espace admin) perd l'accès
+  dès la requête suivante (session révoquée), et ses jetons API sont rejetés.
 - Les scripts CLI (`cron_*.php`) sont exemptés de la protection web.
+
+Posture complète et suivi (CSP, jetons, RGPD…) : [`app/docs/security-review.md`](app/docs/security-review.md).
 
 ---
 

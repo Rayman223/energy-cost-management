@@ -21,6 +21,7 @@ use App\View\ViewFactory;
 $config       = [];
 $view         = null;
 $locale       = null;
+$isAdmin      = false;
 $dbError      = null;
 $deltas       = null;
 $cost         = null;
@@ -132,4 +133,5 @@ echo $view->render('dashboard', [
     'waterInitYear'  => $waterInitYear,
     'waterInitMonth' => $waterInitMonth,
     'available'    => Locale::available($config),
+    'isAdmin'      => $isAdmin,
 ]);

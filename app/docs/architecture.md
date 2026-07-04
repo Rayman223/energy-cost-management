@@ -58,9 +58,45 @@ redondants, et **réécriture des filtres non-sargables** (`YEAR()/MONTH()/DATE(
 prédicats de plage) pour rendre l'index `timestamp` utilisable — validé sur une
 base MariaDB. Côté front, scripts en `defer` (chargement non-bloquant).
 
+## Plateforme communautaire européenne (épopée #47)
+
+Transformation du site mono-utilisateur belge en plateforme **multi-tenant**,
+**publique** et **européenne**, livrée en phases non-cassantes P0–P7.
+
+- **Authentification OIDC** (`App\Security\*`, `oidc` dans la config) : client
+  OpenID Connect générique (Authorization Code + PKCE/state/nonce). **Aucun
+  mot de passe ni e-mail stocké** — identité = `issuer` + `subject` + nom
+  d'affichage (`users`). Le mode Basic Auth historique reste actif tant qu'OIDC
+  est désactivé (`enabled=false`), donc strictement rétrocompatible.
+- **Multi-tenant** : `user_id` sur toutes les tables de données, `UNIQUE`
+  composites, repositories scopés via `App\Security\UserContext`. Électricité en
+  **modèle à registres** (`meters`/`meter_registers`/`meter_readings`) ; gaz/eau
+  unifiés (`utility_readings`).
+- **Catalogue tarifaire européen** : `tariff_grids.user_id` NULL = grille
+  **partagée** (communauté), renseigné = surcharge perso ; multi-devises (ISO
+  4217) ; zones de marché **ENTSO-E**.
+- **API d'ingestion** (`api.php`) : jetons Bearer par utilisateur (`api_tokens`,
+  hachés SHA-256, scope `ingest`, rate-limit à fenêtre fixe, révocables). Un
+  jeton Bearer est restreint aux routes d'ingestion ; le reste exige une session.
+- **i18n complète** (`App\I18n\*`, `App\View\ViewFactory`) : résolution de locale
+  (`?lang` > profil > cookie > Accept-Language > défaut), catalogues
+  `fr/en/nl/de` extensibles, formatage localisé (`Formatter`, ext-intl optionnel
+  avec repli). Voir [plan/i18n.md](plan/i18n.md).
+- **Self-service & RGPD** (`account.php`) : profil, jetons, EnergyID **opt-in**
+  (BE/NL), export JSON et suppression de compte en cascade.
+- **Administration** (`admin.php`, réservé aux `role=admin`) : gestion des
+  membres (rôle `user`/`admin`, statut `active`/`blocked`). Un blocage prend
+  effet **dès la requête suivante** (`AuthGuard` revérifie le statut, pas
+  seulement à la connexion). Le catalogue partagé se gère depuis la page Tarifs.
+- **Durcissement public** : CSRF sur les formulaires, en-têtes de sécurité
+  (`App\Http\SecurityHeaders` — CSP en Report-Only, enforcement à venir), cookies
+  de session durcis (`App\Security\Session`), secrets hors dépôt (config.php).
+  Checklist : [security-review.md](security-review.md).
+
 ## Références
 
 - [api-contract.md](api-contract.md) — contrat de l'API JSON.
+- [security-review.md](security-review.md) — checklist de revue sécurité (P7).
 - [sql-audit.md](sql-audit.md) — audit SQL & optimisation.
 - [page-states.md](page-states.md) — états de référence des pages (anti-régression).
 - [plan/](plan/) — plan détaillé de chaque incrément de l'épopée #25.
