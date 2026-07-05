@@ -53,6 +53,9 @@ Au-delà de l'usage mono-foyer belge historique, l'application évolue en platef
   suppression de compte.
 - **Administration** (`admin.php`, réservée aux admins) : gestion des membres
   (rôle, statut ; un blocage prend effet immédiatement).
+- **Import en masse** (CSV/JSON) idempotent avec rapport : self-service (mes
+  données) et capacité admin « pour le compte d'un autre » ; CLI
+  (`import_readings.php`) et API batch. Voir [`app/docs/import.md`](app/docs/import.md).
 
 Détails : [`app/docs/architecture.md`](app/docs/architecture.md) et la checklist
 [`app/docs/security-review.md`](app/docs/security-review.md).

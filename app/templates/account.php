@@ -14,6 +14,7 @@ use App\Domain\User;
  * @var array{enabled:bool,device_id:string,claimed_at:?string}|null $energyId
  * @var string       $deviceId
  * @var list<string> $available
+ * @var \App\Service\Import\ImportReport|null $importReport
  */
 $csrf = \App\Security\Csrf::field();
 ?>
@@ -157,6 +158,56 @@ $csrf = \App\Security\Csrf::field();
       <p class="muted"><?= $this->te('account.energyid_off_hint') ?> <code><?= $this->e($deviceId) ?></code></p>
       <form method="post"><?= $csrf ?><input type="hidden" name="action" value="energyid_enable"><button type="submit"><?= $this->te('account.energyid_enable') ?></button></form>
     <?php endif; ?>
+  </div>
+
+  <!-- ── Import en masse (self-service : mes propres données) ───────────── -->
+  <div class="card">
+    <h2><?= $this->te('import.title') ?></h2>
+    <p class="hint"><?= $this->te('import.hint') ?></p>
+
+    <?php if ($importReport !== null): ?>
+      <div class="banner ok" style="margin-bottom:12px">
+        <?= $this->te('import.imported') ?> : <strong><?= $this->e((string) $importReport->imported()) ?></strong> ·
+        <?= $this->te('import.duplicates') ?> : <strong><?= $this->e((string) $importReport->duplicates()) ?></strong> ·
+        <?= $this->te('import.errors') ?> : <strong><?= $this->e((string) $importReport->errors()) ?></strong>
+      </div>
+      <?php if ($importReport->errorSamples() !== []): ?>
+        <ul class="muted" style="font-size:.82rem;margin:0 0 12px">
+          <?php foreach ($importReport->errorSamples() as $msg): ?><li><?= $this->e($msg) ?></li><?php endforeach; ?>
+        </ul>
+      <?php endif; ?>
+    <?php endif; ?>
+
+    <form method="post" enctype="multipart/form-data">
+      <?= $csrf ?>
+      <input type="hidden" name="action" value="import">
+      <div class="row">
+        <div>
+          <label for="energy_type"><?= $this->te('import.energy_type') ?></label>
+          <select id="energy_type" name="energy_type">
+            <option value="electricity"><?= $this->te('import.type_electricity') ?></option>
+            <option value="gas"><?= $this->te('import.type_gas') ?></option>
+            <option value="water"><?= $this->te('import.type_water') ?></option>
+          </select>
+        </div>
+        <div>
+          <label for="import_file"><?= $this->te('import.file') ?></label>
+          <input id="import_file" type="file" name="import_file" accept=".csv,.json" required>
+        </div>
+      </div>
+      <div class="row">
+        <div>
+          <label for="ts_col"><?= $this->te('import.ts_col') ?></label>
+          <input id="ts_col" type="text" name="ts_col" placeholder="timestamp">
+        </div>
+        <div>
+          <label for="value_col"><?= $this->te('import.value_col') ?></label>
+          <input id="value_col" type="text" name="value_col" placeholder="counter_m3">
+        </div>
+      </div>
+      <label style="margin-top:12px"><input type="checkbox" name="dry_run" value="1" checked> <?= $this->te('import.dry_run') ?></label>
+      <button type="submit"><?= $this->te('import.submit') ?></button>
+    </form>
   </div>
 
   <!-- ── Données personnelles (RGPD) ────────────────────────────────────── -->

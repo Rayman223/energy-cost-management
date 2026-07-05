@@ -18,6 +18,7 @@ use App\Security\Csrf;
 use App\Security\UserContext;
 use App\Service\AccountDataExporter;
 use App\Service\AccountEraser;
+use App\Service\Import\ImportRunner;
 use App\View\ViewFactory;
 
 $config = require __DIR__ . '/../bootstrap.php';
@@ -43,9 +44,10 @@ if ($choice !== null && $choice !== ($profileForLocale['locale'] ?? null)) {
 }
 $view   = ViewFactory::create(__DIR__ . '/../templates', $locale, (string) ($config['i18n']['default_locale'] ?? 'fr'));
 
-$error      = null;
-$success    = null;
-$freshToken = null; // secret affiché une seule fois
+$error        = null;
+$success      = null;
+$freshToken   = null; // secret affiché une seule fois
+$importReport = null; // bilan du dernier import (self-service)
 
 // deviceId EnergyID dérivé de l'utilisateur (non secret).
 $deviceBase = (string) ($config['energyid']['device']['deviceId'] ?? 'manage-energy');
@@ -112,6 +114,30 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } elseif ($action === 'energyid_disable') {
             $energyIdRepo->disable($userId);
             $success = $view->t('account.energyid_disabled_msg');
+        } elseif ($action === 'import') {
+            // Import self-service : la cible est TOUJOURS l'utilisateur courant
+            // (aucun champ « utilisateur cible » ici — cf. page admin pour autrui).
+            $type = strtolower(trim((string) ($_POST['energy_type'] ?? '')));
+            $overrides = [];
+            $tsCol = trim((string) ($_POST['ts_col'] ?? ''));
+            if ($tsCol !== '') {
+                $overrides['ts_col'] = $tsCol;
+            }
+            $valueCol = trim((string) ($_POST['value_col'] ?? ''));
+            if ($valueCol !== '') {
+                $overrides['value_col'] = $valueCol;
+            }
+            $dryRun = ($_POST['dry_run'] ?? '') === '1';
+
+            $importReport = (new ImportRunner())->runUploaded(
+                $pdo,
+                $userId,
+                $type,
+                $overrides,
+                is_array($_FILES['import_file'] ?? null) ? $_FILES['import_file'] : [],
+                $dryRun,
+            );
+            $success = $view->t($dryRun ? 'import.done_dryrun' : 'import.done');
         } elseif ($action === 'delete_account') {
             if (($_POST['confirm'] ?? '') !== 'SUPPRIMER') {
                 throw new \InvalidArgumentException($view->t('account.delete_need_confirm'));
@@ -146,4 +172,5 @@ echo $view->render('account', [
     'energyId'   => $energyId,
     'deviceId'   => $deviceId,
     'available'  => Locale::available($config),
+    'importReport' => $importReport,
 ]);

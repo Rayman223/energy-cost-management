@@ -8,6 +8,7 @@
  * @var list<array{id:int,provider:string,display_name:string,role:string,status:string,created_at:string,last_login_at:?string}> $users
  * @var int          $currentId
  * @var list<string> $available
+ * @var \App\Service\Import\ImportReport|null $importReport
  */
 $csrf = \App\Security\Csrf::field();
 ?>
@@ -50,6 +51,10 @@ $csrf = \App\Security\Csrf::field();
   form.inline { display: inline; margin: 0; }
   .self { color: var(--muted); font-style: italic; font-size: .78rem; }
   .langs a { margin-left: 8px; font-size: .8rem; }
+  label { display: block; font-size: .82rem; color: var(--muted); margin: 4px 0; }
+  select, input[type=file], input[type=text] { width: 100%; box-sizing: border-box; padding: 8px 10px;
+    border-radius: 8px; border: 1px solid var(--border); background: var(--bg); color: var(--text); }
+  form button[type=submit] { margin-top: 12px; background: var(--blue); color: #fff; }
 </style>
 </head>
 <body>
@@ -126,6 +131,47 @@ $csrf = \App\Security\Csrf::field();
         </tbody>
       </table>
     </div>
+  </div>
+
+  <div class="card">
+    <h2><?= $this->te('import.admin_title') ?></h2>
+    <p class="hint"><?= $this->te('import.admin_hint') ?></p>
+
+    <?php if ($importReport !== null): ?>
+      <div class="banner ok" style="margin-bottom:12px">
+        <?= $this->te('import.imported') ?> : <strong><?= $this->e((string) $importReport->imported()) ?></strong> ·
+        <?= $this->te('import.duplicates') ?> : <strong><?= $this->e((string) $importReport->duplicates()) ?></strong> ·
+        <?= $this->te('import.errors') ?> : <strong><?= $this->e((string) $importReport->errors()) ?></strong>
+      </div>
+      <?php if ($importReport->errorSamples() !== []): ?>
+        <ul class="muted" style="font-size:.82rem;margin:0 0 12px">
+          <?php foreach ($importReport->errorSamples() as $msg): ?><li><?= $this->e($msg) ?></li><?php endforeach; ?>
+        </ul>
+      <?php endif; ?>
+    <?php endif; ?>
+
+    <form method="post" action="admin.php" enctype="multipart/form-data">
+      <?= $csrf ?>
+      <input type="hidden" name="action" value="import">
+      <label for="target_user_id"><?= $this->te('import.target_user') ?></label>
+      <select id="target_user_id" name="target_user_id">
+        <?php foreach ($users as $u): ?>
+          <option value="<?= $this->e((string) $u['id']) ?>"<?= $u['id'] === $currentId ? ' selected' : '' ?>>
+            #<?= $this->e((string) $u['id']) ?> — <?= $this->e($u['display_name'] !== '' ? $u['display_name'] : '—') ?><?= $u['id'] === $currentId ? ' ' . $this->te('admin.you') : '' ?>
+          </option>
+        <?php endforeach; ?>
+      </select>
+      <label for="a_energy_type" style="margin-top:10px"><?= $this->te('import.energy_type') ?></label>
+      <select id="a_energy_type" name="energy_type">
+        <option value="electricity"><?= $this->te('import.type_electricity') ?></option>
+        <option value="gas"><?= $this->te('import.type_gas') ?></option>
+        <option value="water"><?= $this->te('import.type_water') ?></option>
+      </select>
+      <label for="a_import_file" style="margin-top:10px"><?= $this->te('import.file') ?></label>
+      <input id="a_import_file" type="file" name="import_file" accept=".csv,.json" required>
+      <label style="margin-top:10px"><input type="checkbox" name="dry_run" value="1" checked> <?= $this->te('import.dry_run') ?></label>
+      <button type="submit"><?= $this->te('import.submit') ?></button>
+    </form>
   </div>
 
   <div class="card">

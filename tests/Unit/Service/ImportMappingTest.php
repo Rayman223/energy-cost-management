@@ -1,0 +1,57 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Tests\Unit\Service;
+
+use App\Service\Import\ImportMapping;
+use InvalidArgumentException;
+use PHPUnit\Framework\TestCase;
+
+final class ImportMappingTest extends TestCase
+{
+    public function testElectricityDefaultsMapEachRegisterToItself(): void
+    {
+        $m = ImportMapping::preset('electricity');
+
+        self::assertTrue($m->isElectricity());
+        self::assertSame('timestamp', $m->timestampColumn);
+        self::assertSame('import_t1', $m->registerColumns['import_t1']);
+        self::assertArrayHasKey('production', $m->registerColumns);
+    }
+
+    public function testUtilityDefaults(): void
+    {
+        $m = ImportMapping::preset('gas');
+
+        self::assertFalse($m->isElectricity());
+        self::assertSame('counter_m3', $m->valueColumn);
+    }
+
+    public function testOverridesAreNormalized(): void
+    {
+        $m = ImportMapping::preset('water', ['ts_col' => ' Date ', 'value_col' => ' Eau ']);
+
+        self::assertSame('date', $m->timestampColumn);
+        self::assertSame('eau', $m->valueColumn);
+    }
+
+    public function testElectricityRegisterOverride(): void
+    {
+        $m = ImportMapping::preset('electricity', ['registers' => ['Prelev' => 'import_t1']]);
+
+        self::assertSame(['prelev' => 'import_t1'], $m->registerColumns);
+    }
+
+    public function testInvalidEnergyTypeThrows(): void
+    {
+        $this->expectException(InvalidArgumentException::class);
+        ImportMapping::preset('oil');
+    }
+
+    public function testInvalidRegisterThrows(): void
+    {
+        $this->expectException(InvalidArgumentException::class);
+        ImportMapping::preset('electricity', ['registers' => ['col' => 'nonexistent']]);
+    }
+}

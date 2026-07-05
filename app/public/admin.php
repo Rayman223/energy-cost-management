@@ -16,6 +16,8 @@ use App\Repository\UserRepository;
 use App\Security\AuthGuard;
 use App\Security\Csrf;
 use App\Security\UserContext;
+use App\Service\Import\ImportRunner;
+use App\Service\Import\ImportTarget;
 use App\View\ViewFactory;
 
 $config = require __DIR__ . '/../bootstrap.php';
@@ -47,8 +49,9 @@ if ($me === null || $me->isAdmin() === false) {
     return;
 }
 
-$error   = null;
-$success = null;
+$error        = null;
+$success      = null;
+$importReport = null;
 
 // ── Traitement des actions (POST, protégées par CSRF) ────────────────────────
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -57,32 +60,75 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             throw new \RuntimeException($view->t('common.csrf_invalid'));
         }
 
-        $action  = $_POST['action'] ?? '';
-        $targetId = filter_var($_POST['user_id'] ?? null, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
-        if ($targetId === false) {
-            throw new \InvalidArgumentException($view->t('admin.invalid_user'));
-        }
+        $action = $_POST['action'] ?? '';
 
-        // Garde-fou anti-verrouillage : un admin ne peut ni se rétrograder ni se
-        // bloquer lui-même (il perdrait l'accès à cette page).
-        if ($targetId === $userId) {
-            throw new \RuntimeException($view->t('admin.no_self'));
-        }
+        if ($action === 'import') {
+            // Import « pour le compte d'un autre » : réservé admin (toute cette
+            // page l'est déjà) ; ImportTarget verrouille la règle. La cible peut
+            // aussi être soi-même. La cible choisie doit exister.
+            // Cible explicite : si le champ est fourni, il DOIT être un id valide
+            // (sinon on rejette, plutôt que de retomber silencieusement sur soi).
+            $rawTarget = $_POST['target_user_id'] ?? '';
+            $requested = null;
+            if (is_string($rawTarget) && $rawTarget !== '') {
+                $requested = filter_var($rawTarget, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
+                if ($requested === false) {
+                    throw new \InvalidArgumentException($view->t('admin.invalid_user'));
+                }
+            }
+            $targetId = ImportTarget::resolve($userId, $me->isAdmin(), $requested);
+            if ($users->findById($targetId) === null) {
+                throw new \InvalidArgumentException($view->t('admin.invalid_user'));
+            }
 
-        if ($action === 'set_role') {
-            $role = $_POST['role'] ?? '';
-            if ($users->setRole($targetId, $role) === false) {
-                throw new \InvalidArgumentException($view->t('admin.invalid_role'));
+            $type = strtolower(trim((string) ($_POST['energy_type'] ?? '')));
+            $overrides = [];
+            $tsCol = trim((string) ($_POST['ts_col'] ?? ''));
+            if ($tsCol !== '') {
+                $overrides['ts_col'] = $tsCol;
             }
-            $success = $view->t('admin.role_updated');
-        } elseif ($action === 'set_status') {
-            $status = $_POST['status'] ?? '';
-            if ($users->setStatus($targetId, $status) === false) {
-                throw new \InvalidArgumentException($view->t('admin.invalid_status'));
+            $valueCol = trim((string) ($_POST['value_col'] ?? ''));
+            if ($valueCol !== '') {
+                $overrides['value_col'] = $valueCol;
             }
-            $success = $view->t('admin.status_updated');
+            $dryRun = ($_POST['dry_run'] ?? '') === '1';
+
+            $importReport = (new ImportRunner())->runUploaded(
+                $pdo,
+                $targetId,
+                $type,
+                $overrides,
+                is_array($_FILES['import_file'] ?? null) ? $_FILES['import_file'] : [],
+                $dryRun,
+            );
+            $success = $view->t($dryRun ? 'import.done_dryrun' : 'import.done');
         } else {
-            throw new \InvalidArgumentException($view->t('common.action_unknown'));
+            $targetId = filter_var($_POST['user_id'] ?? null, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
+            if ($targetId === false) {
+                throw new \InvalidArgumentException($view->t('admin.invalid_user'));
+            }
+
+            // Garde-fou anti-verrouillage : un admin ne peut ni se rétrograder ni se
+            // bloquer lui-même (il perdrait l'accès à cette page).
+            if ($targetId === $userId) {
+                throw new \RuntimeException($view->t('admin.no_self'));
+            }
+
+            if ($action === 'set_role') {
+                $role = $_POST['role'] ?? '';
+                if ($users->setRole($targetId, $role) === false) {
+                    throw new \InvalidArgumentException($view->t('admin.invalid_role'));
+                }
+                $success = $view->t('admin.role_updated');
+            } elseif ($action === 'set_status') {
+                $status = $_POST['status'] ?? '';
+                if ($users->setStatus($targetId, $status) === false) {
+                    throw new \InvalidArgumentException($view->t('admin.invalid_status'));
+                }
+                $success = $view->t('admin.status_updated');
+            } else {
+                throw new \InvalidArgumentException($view->t('common.action_unknown'));
+            }
         }
     } catch (\Throwable $e) {
         $error = $e->getMessage();
@@ -90,9 +136,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 echo $view->render('admin', [
-    'error'     => $error,
-    'success'   => $success,
-    'users'     => $users->listAll(),
-    'currentId' => $userId,
-    'available' => Locale::available($config),
+    'error'        => $error,
+    'success'      => $success,
+    'users'        => $users->listAll(),
+    'currentId'    => $userId,
+    'available'    => Locale::available($config),
+    'importReport' => $importReport,
 ]);
