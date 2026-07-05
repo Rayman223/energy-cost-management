@@ -1,0 +1,177 @@
+# Installation & onboarding (Unraid)
+
+End-to-end setup of the community platform on **Unraid** (app served by the
+**SWAG** container = Nginx + PHP-FPM, with a **MariaDB** container): deploy the
+code, create the schema, bring up the **owner** account, migrate data from the old
+single-home project, and seed the first Belgian tariff templates.
+
+> All CLI commands run inside the SWAG container, from the app directory
+> (`/config/www/energyv2` by default), e.g.
+> `docker exec -w /config/www/energyv2 swag php app/scripts/migrate.php`.
+
+---
+
+## Prerequisites
+
+- Unraid with the **SWAG** container (PHP 8.1+, `pdo_mysql`, `curl`; `intl`
+  recommended) and a **MariaDB** (10.11+) container.
+- A database and user for the app (e.g. `energy` / `energy_user`).
+- For OIDC (recommended): an OpenID Connect client at your provider (Google, or a
+  self-hosted IdP) — client id/secret and the redirect URI
+  `https://<your-host>/auth/login.php`.
+
+---
+
+## 1. Deploy the code
+
+Use [`app/scripts/deploy_unraid.sh`](../scripts/deploy_unraid.sh). Edit the
+variables at the top (`APP_DIR`, `CONTAINER`, `CONTAINER_APP_DIR`, `DB_CONTAINER`)
+to match your install, then:
+
+```bash
+./app/scripts/deploy_unraid.sh            # deploy latest main
+./app/scripts/deploy_unraid.sh v1.0.0     # deploy a git tag
+```
+
+The script is idempotent and: `git fetch` + `reset --hard` to the target →
+`composer install --no-dev` → applies `app/sql/schema.sql` → runs
+`app/scripts/migrate.php` → checks the OIDC config. `git clean` runs **without
+`-x`**, so `app/config/config.php` and `/vendor/` are preserved.
+
+---
+
+## 2. Configure `config.php`
+
+Copy the example and fill it in (this file is gitignored and preserved across
+deployments):
+
+```bash
+cp app/config/config.example.php app/config/config.php
+```
+
+Set at least `database`, then choose the authentication mode:
+
+- **Community mode (recommended)** — set `oidc.enabled = true` and fill
+  `issuer` / `client_id` / `client_secret`; leave `redirect_uri` empty to derive it
+  from `/auth/login.php`. Multi-user accounts, no password/e-mail stored.
+- **Legacy single-tenant mode** — keep `oidc.enabled = false`; the historic HTTP
+  Basic Auth (`web_security.basic_auth`) protects everything and a single implicit
+  owner account is used.
+
+Optionally set `dynamic_prices` (ENTSO-E token), `energyid`, `i18n`, and `api`.
+
+---
+
+## 3. Create tables & apply migrations
+
+The deploy script already does this; to run it manually:
+
+```bash
+mysql -u energy_user -p energy < app/sql/schema.sql   # CREATE TABLE IF NOT EXISTS …
+php app/scripts/migrate.php                            # versioned migrations (tracked in schema_migrations)
+php app/scripts/migrate.php --dry-run                  # preview pending migrations
+```
+
+---
+
+## 4. Create the owner account
+
+The **owner** is simply the **first** user account.
+
+- **OIDC mode**: open the site and **sign in once**. On first login your account is
+  provisioned automatically (issuer + subject + display name).
+- **Legacy mode**: the first authenticated web request auto-creates a technical
+  `local/owner` account.
+
+Verify:
+
+```sql
+SELECT id, provider, display_name, role, status FROM users ORDER BY id;
+```
+
+---
+
+## 5. Promote the owner to admin
+
+The admin space (`admin.php`) requires an existing admin, so bootstrap the **first**
+admin directly in the database (there is no self-service escalation):
+
+```sql
+UPDATE users SET role = 'admin' WHERE id = 1;   -- the owner's id from step 4
+```
+
+After this, that member can manage roles/status and the shared tariff catalog from
+the UI.
+
+---
+
+## 6. Migrate data from the old project
+
+The historic tables migrated are `Data_Dries` (electricity T1/T2 + injection),
+`Data_Solaire` (production), `Data_gaz`, `Data_eau`. `Data_Brusol` is **not**
+migrated (dropped). Two options:
+
+**A. Legacy tables in the same database** — if the old `Data_*` tables were
+imported into this database, run the one-shot backfill **after** the owner exists
+(step 4). It attaches everything to the owner and is idempotent:
+
+```bash
+php app/scripts/backfill_multitenant.php            # → first user (the owner)
+php app/scripts/backfill_multitenant.php --user=42  # → a specific user id
+```
+
+**B. Fresh database / CSV export** — export the old readings to CSV and use the
+bulk importer (idempotent, re-runnable), targeting the owner:
+
+```bash
+php app/scripts/import_readings.php --type=electricity --file=elec.csv --user=1 --execute
+php app/scripts/import_readings.php --type=gas         --file=gas.csv  --user=1 --execute
+php app/scripts/import_readings.php --type=water       --file=water.csv --user=1 --execute
+```
+
+Both paths are safe to re-run: `INSERT IGNORE` on the composite unique keys means no
+duplicates. See [`import.md`](import.md) for CSV/JSON formats and column mapping.
+
+---
+
+## 7. Seed the first Belgian tariff templates
+
+The community catalog is made of **shared** tariff grids (`user_id NULL`) that every
+member can select. Seed the Belgian ones as an **admin**:
+
+1. Sign in as the admin (step 5) and open **`/tariffs.php`**.
+2. Create a grid, tick **“shared catalog”**, and set **country = `BE`**, currency
+   `EUR`.
+3. Fill the line values for the Belgian structure (keys from
+   [`app/src/Domain/TariffLineCatalog.php`](../src/Domain/TariffLineCatalog.php)):
+   - **Electricity (bi-hourly, Sibelga)** — `energy_t1` / `energy_t2`,
+     `distribution_t1` / `distribution_t2`, `transport`, `subscription`,
+     `management_annual`, `excise_duty`, `energy_contribution`, `green_contribution`,
+     `prosumer_annual`, `public_service_annual`, and `injection_t1` / `injection_t2`
+     for solar credit. (Use `energy_simple` instead of T1/T2 for a single-rate meter.)
+   - **Gas** — `energy`, `subscription`, `distribution`, `distribution_fixed`,
+     `transport`, `federal_excise`, `energy_contribution`, `meter_reading_annual`.
+4. Set the **valid-from** date. To supersede a grid later, create a new one starting
+   the next day (personal overrides always win over the shared catalog).
+
+Members can then pick a shared BE grid or create a personal override. To add another
+country, repeat with its country code and the relevant line keys.
+
+---
+
+## Verification
+
+- `SELECT role FROM users WHERE id = 1;` → `admin`.
+- The dashboard shows migrated/imported history; a re-run of the import/backfill
+  reports **duplicates**, not new rows (idempotent).
+- `/tariffs.php` lists the shared BE grids; cost estimates appear on the dashboard.
+- `/admin.php` is reachable by the admin and returns 403 to non-admins.
+
+---
+
+## Related docs
+
+- [`../../README.md`](../../README.md) — overview & configuration.
+- [`architecture.md`](architecture.md) — architecture & design decisions.
+- [`import.md`](import.md) — bulk import.
+- [`security-review.md`](security-review.md) — security checklist.
