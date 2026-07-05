@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ============================================================================
-# deploy_unraid.sh — Déploiement / mise à jour d'energyv2 sur Unraid (SWAG)
+# deploy_unraid.sh — Déploiement / mise à jour de l'application sur Unraid (SWAG)
 # ============================================================================
 #
 # Met à jour l'application dans le container SWAG (Nginx + PHP-FPM) à partir
@@ -35,12 +35,16 @@
 set -euo pipefail
 
 # ── Configuration (à adapter à votre installation) ──────────────────────────
-REPO_URL="https://github.com/Rayman223/Manage-energy-costs.git"
-APP_DIR="/mnt/user/appdata/swag/www/energyv2"   # chemin du code côté hôte Unraid
-CONTAINER="swag"                                 # container PHP (SWAG)
-CONTAINER_APP_DIR="/config/www/energyv2"         # même code, vu depuis le container
-DB_CONTAINER="mariadb"                            # container MariaDB
-TAG="${1:-}"                                      # vide → dernier commit de main
+# Nom du dossier de déploiement (hôte + container). Surchargable :
+#   APP_NAME=energyv4 ./deploy_unraid.sh
+APP_NAME="${APP_NAME:-energyv3}"
+
+REPO_URL="${REPO_URL:-https://github.com/Rayman223/Manage-energy-costs.git}"
+APP_DIR="${APP_DIR:-/mnt/user/appdata/swag/www/$APP_NAME}"    # code côté hôte Unraid
+CONTAINER="${CONTAINER:-swag}"                                # container PHP (SWAG)
+CONTAINER_APP_DIR="${CONTAINER_APP_DIR:-/config/www/$APP_NAME}" # même code, vu du container
+DB_CONTAINER="${DB_CONTAINER:-mariadb}"                       # container MariaDB
+TAG="${1:-}"                                                  # vide → dernier commit de main
 
 # ── Helpers ─────────────────────────────────────────────────────────────────
 log() {

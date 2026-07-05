@@ -6,8 +6,8 @@ code, create the schema, bring up the **owner** account, migrate data from the o
 single-home project, and seed the first Belgian tariff templates.
 
 > All CLI commands run inside the SWAG container, from the app directory
-> (`/config/www/energyv2` by default), e.g.
-> `docker exec -w /config/www/energyv2 swag php app/scripts/migrate.php`.
+> (`/config/www/energyv3` by default), e.g.
+> `docker exec -w /config/www/energyv3 swag php app/scripts/migrate.php`.
 
 ---
 
@@ -24,13 +24,15 @@ single-home project, and seed the first Belgian tariff templates.
 
 ## 1. Deploy the code
 
-Use [`app/scripts/deploy_unraid.sh`](../scripts/deploy_unraid.sh). Edit the
-variables at the top (`APP_DIR`, `CONTAINER`, `CONTAINER_APP_DIR`, `DB_CONTAINER`)
-to match your install, then:
+Use [`app/scripts/deploy_unraid.sh`](../scripts/deploy_unraid.sh). Every variable
+at the top is env-overridable. The simplest is `APP_NAME` (default `energyv3`),
+which derives both `APP_DIR` and `CONTAINER_APP_DIR`; override `CONTAINER` /
+`DB_CONTAINER` too if your install differs. Then:
 
 ```bash
-./app/scripts/deploy_unraid.sh            # deploy latest main
-./app/scripts/deploy_unraid.sh v1.0.0     # deploy a git tag
+./app/scripts/deploy_unraid.sh                     # deploy latest main
+./app/scripts/deploy_unraid.sh v1.0.0              # deploy a git tag
+APP_NAME=energyv3 ./app/scripts/deploy_unraid.sh   # pin the deploy directory
 ```
 
 The script is idempotent and: `git fetch` + `reset --hard` to the target →
