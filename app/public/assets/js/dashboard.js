@@ -842,6 +842,20 @@ loadChart(30);
 loadGasHistory();
 loadWaterHistory();
 
+// ── Câblage des interactions (ex-handlers inline, retirés pour la CSP enforced) ──
+// Les attributs onclick ont été remplacés par des data-attributes + addEventListener
+// (un attribut on* n'est pas couvert par le nonce CSP). Voir #73.
+document.querySelectorAll('[data-nav-mode]').forEach(el =>
+  el.addEventListener('click', () => setNavMode(el.dataset.navMode)));
+document.querySelectorAll('[data-gas-nav-mode]').forEach(el =>
+  el.addEventListener('click', () => setGasNavMode(el.dataset.gasNavMode)));
+document.querySelectorAll('[data-water-nav-mode]').forEach(el =>
+  el.addEventListener('click', () => setWaterNavMode(el.dataset.waterNavMode)));
+document.querySelectorAll('[data-chart-days]').forEach(el =>
+  el.addEventListener('click', () => loadChart(parseInt(el.dataset.chartDays, 10))));
+document.getElementById('gas-btn')?.addEventListener('click', submitGas);
+document.getElementById('water-btn')?.addEventListener('click', submitWater);
+
 // ── Meter reading tables (gas / water) ───────────────────────────────────────
 // Rendu désormais piloté par l'API (api.php?action=gas_history|water_history) au
 // chargement et après chaque saisie : un seul chemin de rendu, plus de duplication

@@ -48,7 +48,7 @@ if (!function_exists('fmtCost')) {
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Manage Energy — Brussels</title>
 <!-- Anti-FOUC : pose le thème (clair/sombre) avant le 1er rendu (localStorage > système). -->
-<script>(function(){try{var t=localStorage.getItem('theme');if(!t)t=window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';document.documentElement.setAttribute('data-theme',t);}catch(e){document.documentElement.setAttribute('data-theme','light');}})();</script>
+<script nonce="<?= $this->e(\App\Http\SecurityHeaders::nonce()) ?>">(function(){try{var t=localStorage.getItem('theme');if(!t)t=window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';document.documentElement.setAttribute('data-theme',t);}catch(e){document.documentElement.setAttribute('data-theme','light');}})();</script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
@@ -148,8 +148,8 @@ if (!function_exists('fmtCost')) {
       <span class="month-nav-current" id="nav-label">…</span>
       <button class="month-nav-btn" id="nav-next" title="Mois suivant">&#8594;</button>
       <div class="month-nav-mode">
-        <button id="mode-month" class="active" onclick="setNavMode('month')">Mois</button>
-        <button id="mode-year"  onclick="setNavMode('year')">Année</button>
+        <button id="mode-month" class="active" data-nav-mode="month">Mois</button>
+        <button id="mode-year"  data-nav-mode="year">Année</button>
       </div>
     </div>
   </div>
@@ -164,7 +164,7 @@ if (!function_exists('fmtCost')) {
     <div style="font-family:var(--mono);font-size:.85rem;color:var(--muted);padding:24px 0">Chargement…</div>
   </div>
 
-  <script>
+  <script nonce="<?= $this->e(\App\Http\SecurityHeaders::nonce()) ?>">
     window.__INIT_COST__ = <?= json_encode($cost ?? ['available' => false, 'reason' => 'No data']) ?>;
     window.__INIT_YEAR__  = <?= (int) $initYear ?>;
     window.__INIT_MONTH__ = <?= (int) $initMonth ?>;
@@ -181,9 +181,9 @@ if (!function_exists('fmtCost')) {
     <span class="section-title">Historique 30 jours</span>
     <span class="section-line"></span>
     <div style="display:flex;gap:6px">
-      <button class="btn btn-ghost" id="btn-30" onclick="loadChart(30)" style="padding:5px 12px;font-size:.7rem">30j</button>
-      <button class="btn btn-ghost" id="btn-60" onclick="loadChart(60)" style="padding:5px 12px;font-size:.7rem">60j</button>
-      <button class="btn btn-ghost" id="btn-90" onclick="loadChart(90)" style="padding:5px 12px;font-size:.7rem">90j</button>
+      <button class="btn btn-ghost" id="btn-30" data-chart-days="30" style="padding:5px 12px;font-size:.7rem">30j</button>
+      <button class="btn btn-ghost" id="btn-60" data-chart-days="60" style="padding:5px 12px;font-size:.7rem">60j</button>
+      <button class="btn btn-ghost" id="btn-90" data-chart-days="90" style="padding:5px 12px;font-size:.7rem">90j</button>
     </div>
   </div>
   <div class="chart-card">
@@ -229,7 +229,7 @@ if (!function_exists('fmtCost')) {
         <label class="form-label" for="gas-value">Index compteur (m³)</label>
         <input id="gas-value" type="number" step="0.001" class="form-input" placeholder="ex. 8523.456" min="0">
       </div>
-      <button class="btn btn-amber" id="gas-btn" onclick="submitGas()">Enregistrer</button>
+      <button class="btn btn-amber" id="gas-btn">Enregistrer</button>
       <div class="form-feedback" id="gas-feedback"></div>
     </div>
   </div>
@@ -243,8 +243,8 @@ if (!function_exists('fmtCost')) {
       <span class="month-nav-current" id="gas-nav-label">…</span>
       <button class="month-nav-btn" id="gas-nav-next" title="Période suivante">&#8594;</button>
       <div class="month-nav-mode">
-        <button id="gas-mode-month" class="active" onclick="setGasNavMode('month')">Mois</button>
-        <button id="gas-mode-year"  onclick="setGasNavMode('year')">Année</button>
+        <button id="gas-mode-month" class="active" data-gas-nav-mode="month">Mois</button>
+        <button id="gas-mode-year"  data-gas-nav-mode="year">Année</button>
       </div>
     </div>
   </div>
@@ -298,7 +298,7 @@ if (!function_exists('fmtCost')) {
         <label class="form-label" for="water-value">Index compteur (m³)</label>
         <input id="water-value" type="number" step="0.001" class="form-input" placeholder="ex. 1234.567" min="0">
       </div>
-      <button class="btn btn-amber" id="water-btn" onclick="submitWater()">Enregistrer</button>
+      <button class="btn btn-amber" id="water-btn">Enregistrer</button>
       <div class="form-feedback" id="water-feedback"></div>
     </div>
   </div>
@@ -312,8 +312,8 @@ if (!function_exists('fmtCost')) {
       <span class="month-nav-current" id="water-nav-label">…</span>
       <button class="month-nav-btn" id="water-nav-next" title="Mois suivant">&#8594;</button>
       <div class="month-nav-mode">
-        <button id="water-mode-month" class="active" onclick="setWaterNavMode('month')">Mois</button>
-        <button id="water-mode-year"  onclick="setWaterNavMode('year')">Année</button>
+        <button id="water-mode-month" class="active" data-water-nav-mode="month">Mois</button>
+        <button id="water-mode-year"  data-water-nav-mode="year">Année</button>
       </div>
     </div>
   </div>
@@ -379,7 +379,7 @@ if (!function_exists('fmtCost')) {
 </div><!-- /wrap -->
 
 <script defer src="<?= \App\Support\Assets::url('assets/js/theme.js') ?>"></script>
-<script>window.APP_LOCALE=<?= json_encode($this->locale()) ?>;</script>
+<script nonce="<?= $this->e(\App\Http\SecurityHeaders::nonce()) ?>">window.APP_LOCALE=<?= json_encode($this->locale()) ?>;</script>
 <script defer src="<?= \App\Support\Assets::url('assets/js/dashboard.js') ?>"></script>
 </body>
 </html>

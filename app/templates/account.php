@@ -24,7 +24,7 @@ $csrf = \App\Security\Csrf::field();
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title><?= $this->te('account.title') ?> — <?= $this->te('app.title') ?></title>
-<script>(function(){try{var t=localStorage.getItem('theme');if(!t)t=window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';document.documentElement.setAttribute('data-theme',t);}catch(e){document.documentElement.setAttribute('data-theme','light');}})();</script>
+<script nonce="<?= $this->e(\App\Http\SecurityHeaders::nonce()) ?>">(function(){try{var t=localStorage.getItem('theme');if(!t)t=window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';document.documentElement.setAttribute('data-theme',t);}catch(e){document.documentElement.setAttribute('data-theme','light');}})();</script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
@@ -120,7 +120,7 @@ $csrf = \App\Security\Csrf::field();
           <td class="muted"><?= $this->e($t['last_used_at'] ?? '—') ?></td>
           <td><?= $t['revoked_at'] !== null ? '<span class="muted">' . $this->te('account.token_revoked') . '</span>' : $this->te('account.token_active') ?></td>
           <td><?php if ($t['revoked_at'] === null): ?>
-            <form method="post" class="inline" onsubmit="return confirm('<?= $this->e($this->t('account.token_revoke_confirm')) ?>')">
+            <form method="post" class="inline" data-confirm="<?= $this->e($this->t('account.token_revoke_confirm')) ?>">
               <?= $csrf ?>
               <input type="hidden" name="action" value="token_revoke">
               <input type="hidden" name="token_id" value="<?= $t['id'] ?>">
@@ -216,7 +216,7 @@ $csrf = \App\Security\Csrf::field();
     <p class="hint"><?= $this->te('account.rgpd_hint') ?>
        (<a href="terms.php"><?= $this->te('legal.terms') ?></a> · <a href="privacy.php"><?= $this->te('legal.privacy') ?></a>)</p>
     <p><a href="account.php?export=1"><?= $this->te('account.export') ?></a></p>
-    <form method="post" onsubmit="return confirm('<?= $this->e($this->t('account.delete_js_confirm')) ?>')">
+    <form method="post" data-confirm="<?= $this->e($this->t('account.delete_js_confirm')) ?>">
       <?= $csrf ?>
       <input type="hidden" name="action" value="delete_account">
       <label><?= $this->te('account.delete_confirm_label') ?></label>
@@ -225,5 +225,6 @@ $csrf = \App\Security\Csrf::field();
     </form>
   </div>
 </div>
+<script defer src="<?= \App\Support\Assets::url('assets/js/confirm.js') ?>"></script>
 </body>
 </html>

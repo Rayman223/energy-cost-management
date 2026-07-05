@@ -27,7 +27,7 @@ use App\Domain\TariffGrid;
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title><?= $this->te('tariffs.title') ?> — <?= $this->te('app.title') ?></title>
 <!-- Anti-FOUC : pose le thème (clair/sombre) avant le 1er rendu (localStorage > système). -->
-<script>(function(){try{var t=localStorage.getItem('theme');if(!t)t=window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';document.documentElement.setAttribute('data-theme',t);}catch(e){document.documentElement.setAttribute('data-theme','light');}})();</script>
+<script nonce="<?= $this->e(\App\Http\SecurityHeaders::nonce()) ?>">(function(){try{var t=localStorage.getItem('theme');if(!t)t=window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';document.documentElement.setAttribute('data-theme',t);}catch(e){document.documentElement.setAttribute('data-theme','light');}})();</script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
@@ -81,10 +81,10 @@ use App\Domain\TariffGrid;
     </div>
     <span class="grid-active <?= $active ? 'yes' : 'no' ?>"><?= $active ? $this->te('common.active') : $this->te('common.inactive') ?></span>
     <?php if ($g->isShared()): ?><span class="grid-active yes" title="<?= $this->e($this->t('tariffs.shared_grid')) ?>"><?= $this->te('tariffs.shared') ?><?= $g->country ? ' · ' . $this->e($g->country) : '' ?></span><?php endif; ?>
-    <button class="btn btn-ghost btn-sm" onclick="toggleLines('<?= $rowId ?>')"><?= $this->te('tariffs.detail') ?></button>
+    <button class="btn btn-ghost btn-sm" data-toggle-lines="<?= $this->e($rowId) ?>"><?= $this->te('tariffs.detail') ?></button>
     <div class="grid-actions">
       <a href="?edit=<?= $g->id ?>#form" class="btn btn-ghost btn-sm"><?= $this->te('tariffs.edit') ?></a>
-      <form method="post" onsubmit="return confirm('<?= $this->e($this->t('tariffs.delete_confirm')) ?>')">
+      <form method="post" data-confirm="<?= $this->e($this->t('tariffs.delete_confirm')) ?>">
         <input type="hidden" name="action"  value="delete">
         <input type="hidden" name="grid_id" value="<?= $g->id ?>">
         <?= \App\Security\Csrf::field() ?>
@@ -130,10 +130,10 @@ use App\Domain\TariffGrid;
     </div>
     <span class="grid-active <?= $active ? 'yes' : 'no' ?>"><?= $active ? $this->te('common.active') : $this->te('common.inactive') ?></span>
     <?php if ($g->isShared()): ?><span class="grid-active yes" title="<?= $this->e($this->t('tariffs.shared_grid')) ?>"><?= $this->te('tariffs.shared') ?><?= $g->country ? ' · ' . $this->e($g->country) : '' ?></span><?php endif; ?>
-    <button class="btn btn-ghost btn-sm" onclick="toggleLines('<?= $rowId ?>')"><?= $this->te('tariffs.detail') ?></button>
+    <button class="btn btn-ghost btn-sm" data-toggle-lines="<?= $this->e($rowId) ?>"><?= $this->te('tariffs.detail') ?></button>
     <div class="grid-actions">
       <a href="?edit=<?= $g->id ?>#form" class="btn btn-ghost btn-sm"><?= $this->te('tariffs.edit') ?></a>
-      <form method="post" onsubmit="return confirm('<?= $this->e($this->t('tariffs.delete_confirm')) ?>')">
+      <form method="post" data-confirm="<?= $this->e($this->t('tariffs.delete_confirm')) ?>">
         <input type="hidden" name="action"  value="delete">
         <input type="hidden" name="grid_id" value="<?= $g->id ?>">
         <?= \App\Security\Csrf::field() ?>
@@ -165,8 +165,8 @@ use App\Domain\TariffGrid;
 
 <div class="form-card">
   <div class="form-tabs">
-    <button type="button" class="form-tab <?= $et === 'electricity' ? 'active' : '' ?>" onclick="switchTab('electricity', event)"><?= $this->te('tariffs.energy_electricity') ?></button>
-    <button type="button" class="form-tab <?= $et === 'gas' ? 'active' : '' ?>" onclick="switchTab('gas', event)"><?= $this->te('tariffs.energy_gas') ?></button>
+    <button type="button" class="form-tab <?= $et === 'electricity' ? 'active' : '' ?>" data-tab="electricity"><?= $this->te('tariffs.energy_electricity') ?></button>
+    <button type="button" class="form-tab <?= $et === 'gas' ? 'active' : '' ?>" data-tab="gas"><?= $this->te('tariffs.energy_gas') ?></button>
   </div>
 
   <form method="post">
@@ -277,6 +277,7 @@ use App\Domain\TariffGrid;
 </div>
 
 <script defer src="<?= \App\Support\Assets::url('assets/js/theme.js') ?>"></script>
-<script src="<?= \App\Support\Assets::url('assets/js/tariffs.js') ?>"></script>
+<script defer src="<?= \App\Support\Assets::url('assets/js/confirm.js') ?>"></script>
+<script defer src="<?= \App\Support\Assets::url('assets/js/tariffs.js') ?>"></script>
 </body>
 </html>
