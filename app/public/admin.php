@@ -18,7 +18,7 @@ use App\Security\Csrf;
 use App\Security\UserContext;
 use App\Service\Import\ImportRunner;
 use App\Service\Import\ImportTarget;
-use App\View\ViewFactory;
+use App\Support\LocaleContext;
 
 $config = require __DIR__ . '/../bootstrap.php';
 
@@ -33,12 +33,7 @@ $users = new UserRepository($pdo);
 
 // Locale (profil, surchargée par ?lang valide) → View configurée.
 $profile = $users->getProfile($userId);
-$locale  = Locale::resolve($config, $profile['locale'] ?? null);
-$choice  = Locale::explicitChoice($config);
-if ($choice !== null && $choice !== ($profile['locale'] ?? null)) {
-    $users->setLocale($userId, $choice);
-}
-$view = ViewFactory::create(__DIR__ . '/../templates', $locale, (string) ($config['i18n']['default_locale'] ?? 'fr'));
+$view = LocaleContext::viewFor($config, $users, $userId, $profile['locale'] ?? null, __DIR__ . '/../templates');
 
 // ── Garde admin : seuls les administrateurs accèdent à cette page ────────────
 $me = $users->findById($userId);

@@ -19,7 +19,7 @@ use App\Security\UserContext;
 use App\Service\AccountDataExporter;
 use App\Service\AccountEraser;
 use App\Service\Import\ImportRunner;
-use App\View\ViewFactory;
+use App\Support\LocaleContext;
 
 $config = require __DIR__ . '/../bootstrap.php';
 
@@ -36,13 +36,7 @@ $energyIdRepo = new EnergyIdIntegrationRepository($pdo);
 
 // Locale = celle du profil (surchargée par ?lang) → View configurée.
 $profileForLocale = $users->getProfile($userId);
-$locale = Locale::resolve($config, $profileForLocale['locale'] ?? null);
-// Persiste un switch explicite (?lang) valide dans le profil, seulement s'il diffère.
-$choice = Locale::explicitChoice($config);
-if ($choice !== null && $choice !== ($profileForLocale['locale'] ?? null)) {
-    $users->setLocale($userId, $choice);
-}
-$view   = ViewFactory::create(__DIR__ . '/../templates', $locale, (string) ($config['i18n']['default_locale'] ?? 'fr'));
+$view   = LocaleContext::viewFor($config, $users, $userId, $profileForLocale['locale'] ?? null, __DIR__ . '/../templates');
 
 $error        = null;
 $success      = null;
@@ -139,8 +133,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             );
             $success = $view->t($dryRun ? 'import.done_dryrun' : 'import.done');
         } elseif ($action === 'delete_account') {
-            if (($_POST['confirm'] ?? '') !== 'SUPPRIMER') {
-                throw new \InvalidArgumentException($view->t('account.delete_need_confirm'));
+            // Mot-clé de confirmation localisé (SUPPRIMER/DELETE/LÖSCHEN/…),
+            // comparé sans tenir compte de la casse ni des espaces.
+            $keyword = $view->t('account.delete_keyword');
+            if (mb_strtoupper(trim((string) ($_POST['confirm'] ?? ''))) !== mb_strtoupper($keyword)) {
+                throw new \InvalidArgumentException($view->t('account.delete_need_confirm', ['keyword' => $keyword]));
             }
             (new AccountEraser($pdo))->erase($userId);
             \App\Security\AuthSession::logout();

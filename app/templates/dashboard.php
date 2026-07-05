@@ -20,26 +20,14 @@
  * @var bool                     $isAdmin
  */
 
-// Helpers de présentation (rendu de valeurs numériques / coûts).
-if (!function_exists('fmt')) {
-    function fmt(mixed $v, int $dec = 3, string $unit = 'kWh'): string
-    {
-        if ($v === null || $v === false) {
-            return '<span class="nd">—</span>';
-        }
-        return '<span class="val">' . number_format((float) $v, $dec, '.', ' ') . '</span> <span class="unit">' . $unit . '</span>';
+// Helper de présentation : valeur numérique localisée via le Formatter (closure
+// liée à $this = View, pour router le formatage par $this->num()).
+$fmt = function (mixed $v, int $dec = 3, string $unit = 'kWh'): string {
+    if ($v === null || $v === false) {
+        return '<span class="nd">—</span>';
     }
-}
-if (!function_exists('fmtCost')) {
-    function fmtCost(mixed $v): string
-    {
-        if ($v === null) {
-            return '<span class="nd">—</span>';
-        }
-        $sign = (float) $v < 0 ? '−' : '';
-        return $sign . number_format(abs((float) $v), 2, '.', ' ') . ' €';
-    }
-}
+    return '<span class="val">' . $this->num((float) $v, $dec) . '</span> <span class="unit">' . $unit . '</span>';
+};
 ?>
 <!DOCTYPE html>
 <html lang="<?= $this->e($this->locale()) ?>">
@@ -119,23 +107,23 @@ if (!function_exists('fmtCost')) {
   <div class="cards cards-5">
     <div class="card amber">
       <div class="card-label"><span class="dot" style="background:var(--amber)"></span>Δ Import T1</div>
-      <div class="card-value"><?= fmt($deltas['prelev_jour'] ?? null) ?></div>
+      <div class="card-value"><?= $fmt($deltas['prelev_jour'] ?? null) ?></div>
     </div>
     <div class="card amber">
       <div class="card-label"><span class="dot" style="background:var(--amber);opacity:.6"></span>Δ Import T2</div>
-      <div class="card-value"><?= fmt($deltas['prelev_nuit'] ?? null) ?></div>
+      <div class="card-value"><?= $fmt($deltas['prelev_nuit'] ?? null) ?></div>
     </div>
     <div class="card blue">
       <div class="card-label"><span class="dot" style="background:var(--blue)"></span>Δ Export T1</div>
-      <div class="card-value"><?= fmt($deltas['injec_jour'] ?? null) ?></div>
+      <div class="card-value"><?= $fmt($deltas['injec_jour'] ?? null) ?></div>
     </div>
     <div class="card blue">
       <div class="card-label"><span class="dot" style="background:var(--blue);opacity:.6"></span>Δ Export T2</div>
-      <div class="card-value"><?= fmt($deltas['injec_nuit'] ?? null) ?></div>
+      <div class="card-value"><?= $fmt($deltas['injec_nuit'] ?? null) ?></div>
     </div>
     <div class="card green">
       <div class="card-label"><span class="dot" style="background:var(--green)"></span>Δ Production PV</div>
-      <div class="card-value"><?= fmt($deltas['solar'] ?? null) ?></div>
+      <div class="card-value"><?= $fmt($deltas['solar'] ?? null) ?></div>
     </div>
   </div>
 
@@ -213,7 +201,7 @@ if (!function_exists('fmtCost')) {
       </div>
       <?php if ($gasLatest): ?>
       <div style="font-family:var(--mono);font-size:.95rem;color:var(--muted);margin-bottom:14px;padding:8px 12px;background:var(--bg);border-radius:5px;border:1px solid var(--border)">
-        Dernier index : <strong style="color:var(--text)"><?= number_format((float)$gasLatest['counter_m3'], 3, '.', ' ') ?> m³</strong>
+        Dernier index : <strong style="color:var(--text)"><?= $this->num((float) $gasLatest['counter_m3'], 3) ?> m³</strong>
         le <?= $this->e(substr($gasLatest['reading_at'], 0, 10)) ?>
       </div>
       <?php endif; ?>
@@ -282,7 +270,7 @@ if (!function_exists('fmtCost')) {
       </div>
       <?php if ($waterLatest): ?>
       <div style="font-family:var(--mono);font-size:.95rem;color:var(--muted);margin-bottom:14px;padding:8px 12px;background:var(--bg);border-radius:5px;border:1px solid var(--border)">
-        Dernier index : <strong style="color:var(--text)"><?= number_format((float)$waterLatest['counter_m3'], 3, '.', ' ') ?> m³</strong>
+        Dernier index : <strong style="color:var(--text)"><?= $this->num((float) $waterLatest['counter_m3'], 3) ?> m³</strong>
         le <?= $this->e(substr($waterLatest['reading_at'], 0, 10)) ?>
       </div>
       <?php endif; ?>
@@ -379,7 +367,7 @@ if (!function_exists('fmtCost')) {
 </div><!-- /wrap -->
 
 <script defer src="<?= \App\Support\Assets::url('assets/js/theme.js') ?>"></script>
-<script nonce="<?= $this->e(\App\Http\SecurityHeaders::nonce()) ?>">window.APP_LOCALE=<?= json_encode($this->locale()) ?>;</script>
+<script nonce="<?= $this->e(\App\Http\SecurityHeaders::nonce()) ?>">window.APP_LOCALE=<?= json_encode($this->locale()) ?>;window.APP_CURRENCY=<?= json_encode($currency ?? 'EUR') ?>;</script>
 <script defer src="<?= \App\Support\Assets::url('assets/js/dashboard.js') ?>"></script>
 </body>
 </html>

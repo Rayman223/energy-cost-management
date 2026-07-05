@@ -32,7 +32,7 @@ final class Locale
         // puis le profil, puis le cookie mémorisé, puis Accept-Language, puis défaut.
         $normalizedQuery = null;
         if ($query !== null) {
-            $candidate = strtolower(substr(trim($query), 0, 2));
+            $candidate = self::normalize($query);
             if (in_array($candidate, $available, true)) {
                 $normalizedQuery = $candidate;
             }
@@ -66,9 +66,18 @@ final class Locale
             return null;
         }
 
-        $candidate = strtolower(substr(trim($query), 0, 2));
+        $candidate = self::normalize($query);
 
         return in_array($candidate, self::available($config), true) ? $candidate : null;
+    }
+
+    /**
+     * Normalise une valeur de langue brute en code 2 lettres minuscule
+     * (`" FR "` → `"fr"`), forme comparée à la liste des locales disponibles.
+     */
+    private static function normalize(string $raw): string
+    {
+        return strtolower(substr(trim($raw), 0, 2));
     }
 
     /**
@@ -106,7 +115,7 @@ final class Locale
             return;
         }
 
-        $normalized = strtolower(substr(trim($query), 0, 2));
+        $normalized = self::normalize($query);
         if (!in_array($normalized, $available, true)) {
             return;
         }

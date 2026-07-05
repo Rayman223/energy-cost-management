@@ -47,4 +47,23 @@ final class FormatterTest extends TestCase
     {
         self::assertSame('nl', (new Formatter('nl'))->locale());
     }
+
+    public function testCachedFormattersStayConsistentAcrossCalls(): void
+    {
+        // Les formatters intl sont mémoïsés par devise / décimales : des appels
+        // répétés (mêmes clés) ou entrelacés (clés différentes) doivent rester
+        // idempotents et indépendants.
+        $f = new Formatter('fr');
+
+        self::assertSame($f->money(12.5, 'EUR'), $f->money(12.5, 'EUR'));
+        self::assertSame($f->money(12.5, 'USD'), $f->money(12.5, 'USD'));
+        self::assertSame($f->number(3.14159, 2), $f->number(3.14159, 2));
+        self::assertSame($f->number(3.14159, 4), $f->number(3.14159, 4));
+
+        // Le cache par devise ne « contamine » pas une autre devise.
+        $eur = $f->money(1.0, 'EUR');
+        $usd = $f->money(1.0, 'USD');
+        self::assertSame($eur, $f->money(1.0, 'EUR'));
+        self::assertNotSame($eur, $usd);
+    }
 }

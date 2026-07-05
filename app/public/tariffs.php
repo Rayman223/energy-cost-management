@@ -10,7 +10,7 @@ use App\Repository\UserRepository;
 use App\Security\AuthGuard;
 use App\Security\Csrf;
 use App\Security\UserContext;
-use App\View\ViewFactory;
+use App\Support\LocaleContext;
 
 $config = require __DIR__ . '/../bootstrap.php';
 
@@ -25,12 +25,7 @@ $users       = new UserRepository($pdo);
 $isAdmin     = ($users->findById($userId)?->isAdmin()) ?? false;
 
 $profile     = $users->getProfile($userId);
-$locale      = Locale::resolve($config, $profile['locale'] ?? null);
-$choice      = Locale::explicitChoice($config);
-if ($choice !== null && $choice !== ($profile['locale'] ?? null)) {
-    $users->setLocale($userId, $choice);
-}
-$view        = ViewFactory::create(__DIR__ . '/../templates', $locale, (string) ($config['i18n']['default_locale'] ?? 'fr'));
+$view        = LocaleContext::viewFor($config, $users, $userId, $profile['locale'] ?? null, __DIR__ . '/../templates');
 
 $tariffRepo  = new TariffRepository($pdo, $userId, $isAdmin);
 $error       = null;

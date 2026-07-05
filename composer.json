@@ -5,6 +5,7 @@
     "license": "proprietary",
     "require": {
         "php": ">=8.1",
+        "ext-mbstring": "*",
         "jumbojett/openid-connect-php": "^1.0"
     },
     "require-dev": {

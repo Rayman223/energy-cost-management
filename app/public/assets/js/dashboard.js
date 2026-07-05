@@ -1,3 +1,14 @@
+// ── Formatage monétaire localisé (devise + séparateurs du profil) ───────────
+// Remplace les `toFixed(2) + ' €'` : le symbole et le format s'adaptent à la
+// devise/locale du profil (APP_CURRENCY/APP_LOCALE). Les unités composées
+// (€/kWh, €/mois…) restent littérales — lot i18n JS ultérieur (#73).
+const APP_LOCALE   = (typeof window !== 'undefined' && window.APP_LOCALE)   ? window.APP_LOCALE   : 'fr';
+const APP_CURRENCY = (typeof window !== 'undefined' && window.APP_CURRENCY) ? window.APP_CURRENCY : 'EUR';
+const _moneyFmt = new Intl.NumberFormat(APP_LOCALE, { style: 'currency', currency: APP_CURRENCY });
+function formatMoney(v) {
+  return _moneyFmt.format(Number(v) || 0);
+}
+
 // ── Electricity cost navigation ────────────────────────────────────────────
 (function () {
   const _APP_LOC = (typeof window !== 'undefined' && window.APP_LOCALE) ? window.APP_LOCALE : 'fr';
@@ -13,8 +24,7 @@
 
   function fmtEur(v) {
     if (v === null || v === undefined) return '<span style="color:var(--muted)">—</span>';
-    const sign = v < 0 ? '−' : '';
-    return sign + Math.abs(v).toFixed(2) + ' €';
+    return formatMoney(v);
   }
 
   function renderCostContent(data) {
@@ -49,7 +59,7 @@
     function row(label, detailStr, amount, cls = '') {
       const amtHtml = amount === null || amount === undefined
         ? '<span style="color:var(--muted)">—</span>'
-        : (() => { const s = amount < 0 ? '−' : ''; return `${s}${Math.abs(amount).toFixed(2)} €`; })();
+        : formatMoney(amount);
       return `<div class="cost-line ${cls}">
         <span class="cl-label">${label}</span>
         <span class="cl-detail">${detailStr}</span>
@@ -114,12 +124,12 @@
         <div class="cost-group-sep"></div>
         ${row('Total TTC', '',                                                                              c.total,       'total')}
         ${row('dont HTVA', '÷ 1.21',                                                                        c.htva,        'vat')}
-        ${row('dont TVA 21% incluse', `${Math.abs(c.total).toFixed(2)} − ${Math.abs(c.htva).toFixed(2)} €`, c.vat_included,'vat vat-highlight')}
+        ${row('dont TVA 21% incluse', `${formatMoney(Math.abs(c.total))} − ${formatMoney(Math.abs(c.htva))}`, c.vat_included,'vat vat-highlight')}
       </div>
       <div class="cost-total-card">
         <div>
           <div class="cost-total-label">${periodLabel}</div>
-          <div class="cost-total-amount">${(() => { const s = c.total < 0 ? '−' : ''; return `${s}${Math.abs(c.total).toFixed(2)} €`; })()}</div>
+          <div class="cost-total-amount">${formatMoney(c.total)}</div>
         </div>
         <div class="cost-total-meta">
           <span>Tarif : ${data.tariff_name ?? '—'}</span>
@@ -130,7 +140,7 @@
           ${c.solar_produced != null ? `
           <span style="color:var(--green)">☀ Prod. PV : ${Number(c.solar_produced).toFixed(2)} kWh</span>
           <span style="color:var(--green)">Auto-conso : ${Number(c.solar_consumed).toFixed(2)} kWh${c.self_consumption_pct != null ? ` (${Number(c.self_consumption_pct).toFixed(1)} %)` : ''}</span>
-          <span style="color:var(--green)">Économies : +${Number(c.solar_savings).toFixed(2)} €</span>
+          <span style="color:var(--green)">Économies : +${formatMoney(c.solar_savings)}</span>
           ` : (d.solar != null ? `<span>Solaire : ${Number(d.solar).toFixed(2)} kWh</span>` : '')}
           <span>Période : ${data.days} jours</span>
         </div>
@@ -162,8 +172,7 @@
 
     const eur = (v) => {
       if (v == null) return '<span style="color:var(--muted)">—</span>';
-      const s = v < 0 ? '−' : '';
-      return `${s}${Math.abs(v).toFixed(2)} €`;
+      return formatMoney(v);
     };
     const line = (label, detailStr, amount, cls = '') => `<div class="cost-line ${cls}">
         <span class="cl-label">${label}</span>
@@ -176,7 +185,7 @@
       dailyRows += `<tr>
         <td style="padding:5px 10px">${d.day}</td>
         <td style="text-align:right;padding:5px 10px">${Number(d.import_kwh).toFixed(2)} kWh</td>
-        <td style="text-align:right;padding:5px 10px">${Number(d.energy_dynamic).toFixed(2)} €</td></tr>`;
+        <td style="text-align:right;padding:5px 10px">${formatMoney(d.energy_dynamic)}</td></tr>`;
     });
     const dailyTable = dailyRows ? `<div class="cost-group-label">Coût énergie par jour</div>
       <div style="max-height:220px;overflow:auto;border:1px solid var(--border);border-radius:6px;margin-top:6px">
@@ -277,10 +286,10 @@
       const savings = data.cost?.solar_savings;
       const d       = data.deltas || {};
       const kwh     = (d.prelev_jour ?? 0) + (d.prelev_nuit ?? 0);
-      costEl.textContent = t != null ? (t < 0 ? '−' : '') + Math.abs(t).toFixed(2) + ' €' : '—';
+      costEl.textContent = t != null ? formatMoney(t) : '—';
       kwhEl.textContent  = kwh ? kwh.toFixed(1) + ' kWh' : '';
       if (savingsEl) {
-        savingsEl.textContent = savings != null && savings > 0 ? '☀ −' + savings.toFixed(2) + ' €' : '';
+        savingsEl.textContent = savings != null && savings > 0 ? '☀ −' + formatMoney(savings) : '';
       }
     }
   }
@@ -358,8 +367,7 @@
 
   function fmtE(v) {
     if (v === null || v === undefined) return '<span style="color:var(--muted)">—</span>';
-    const s = v < 0 ? '−' : '';
-    return `${s}${Math.abs(v).toFixed(2)} €`;
+    return formatMoney(v);
   }
   function detail(qty, qtyUnit, rate, rateUnit) {
     const qFmt = Number(qty).toFixed(3);
@@ -425,7 +433,7 @@
         <div class="cost-group-sep"></div>
         ${row('Total TTC',           '',                                                                       c.total,       'total')}
         ${row('dont HTVA',           '÷ 1.21',                                                                 c.htva,        'vat')}
-        ${row('dont TVA 21% incluse', `${Math.abs(c.total).toFixed(2)} − ${Math.abs(c.htva).toFixed(2)} €`,   c.vat_included,'vat vat-highlight')}
+        ${row('dont TVA 21% incluse', `${formatMoney(Math.abs(c.total))} − ${formatMoney(Math.abs(c.htva))}`,   c.vat_included,'vat vat-highlight')}
       </div>
       <div class="cost-total-card">
         <div>
@@ -512,7 +520,7 @@
       costEl.innerHTML = '<span class="ymc-nd">—</span>';
     } else {
       const t = data.cost?.total;
-      costEl.textContent = t != null ? (t < 0 ? '−' : '') + Math.abs(t).toFixed(2) + ' €' : '—';
+      costEl.textContent = t != null ? formatMoney(t) : '—';
       kwhEl.textContent  = data.kwh ? Number(data.kwh).toFixed(1) + ' kWh' : '';
     }
   }

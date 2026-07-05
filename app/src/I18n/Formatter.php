@@ -19,6 +19,20 @@ final class Formatter
         'PLN' => 'zł', 'SEK' => 'kr', 'DKK' => 'kr', 'NOK' => 'kr', 'CZK' => 'Kč', 'HUF' => 'Ft',
     ];
 
+    /**
+     * Formatters intl mémoïsés (construction coûteuse) : un `NumberFormatter`
+     * CURRENCY par devise, un DECIMAL par nombre de décimales, un
+     * `IntlDateFormatter` unique. Réutilisés d'un appel à l'autre.
+     *
+     * @var array<string, \NumberFormatter>
+     */
+    private array $currencyFmt = [];
+
+    /** @var array<int, \NumberFormatter> */
+    private array $decimalFmt = [];
+
+    private ?\IntlDateFormatter $dateFmt = null;
+
     public function __construct(private readonly string $locale)
     {
     }
@@ -26,7 +40,7 @@ final class Formatter
     public function money(float $amount, string $currency = 'EUR'): string
     {
         if (class_exists(\NumberFormatter::class)) {
-            $fmt = new \NumberFormatter($this->locale, \NumberFormatter::CURRENCY);
+            $fmt = $this->currencyFmt[$currency] ??= new \NumberFormatter($this->locale, \NumberFormatter::CURRENCY);
             $out = $fmt->formatCurrency($amount, $currency);
             if (is_string($out)) {
                 return $out;
@@ -39,9 +53,12 @@ final class Formatter
     public function number(float $value, int $decimals = 2): string
     {
         if (class_exists(\NumberFormatter::class)) {
-            $fmt = new \NumberFormatter($this->locale, \NumberFormatter::DECIMAL);
-            $fmt->setAttribute(\NumberFormatter::MIN_FRACTION_DIGITS, $decimals);
-            $fmt->setAttribute(\NumberFormatter::MAX_FRACTION_DIGITS, $decimals);
+            $fmt = $this->decimalFmt[$decimals] ??= (function () use ($decimals): \NumberFormatter {
+                $f = new \NumberFormatter($this->locale, \NumberFormatter::DECIMAL);
+                $f->setAttribute(\NumberFormatter::MIN_FRACTION_DIGITS, $decimals);
+                $f->setAttribute(\NumberFormatter::MAX_FRACTION_DIGITS, $decimals);
+                return $f;
+            })();
             $out = $fmt->format($value);
             if (is_string($out)) {
                 return $out;
@@ -54,7 +71,7 @@ final class Formatter
     public function date(DateTimeInterface $date): string
     {
         if (class_exists(\IntlDateFormatter::class)) {
-            $fmt = new \IntlDateFormatter($this->locale, \IntlDateFormatter::MEDIUM, \IntlDateFormatter::NONE);
+            $fmt = $this->dateFmt ??= new \IntlDateFormatter($this->locale, \IntlDateFormatter::MEDIUM, \IntlDateFormatter::NONE);
             $out = $fmt->format($date);
             if (is_string($out)) {
                 return $out;
