@@ -14,6 +14,8 @@ interface UserRepositoryInterface
 
     /**
      * Crée le compte (auto-inscription à la 1re connexion) et son profil par défaut.
+     * Le tout premier compte (l'owner de l'instance) reçoit le rôle « admin » ;
+     * les suivants sont créés avec le rôle « user ».
      */
     public function create(string $iss, string $sub, string $provider, string $displayName): User;
 

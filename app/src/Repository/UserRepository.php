@@ -43,15 +43,23 @@ final class UserRepository implements UserRepositoryInterface
     {
         $this->pdo->beginTransaction();
         try {
+            // Le premier compte créé est l'owner de l'instance : il reçoit le rôle
+            // « admin » (les suivants restent « user »). Le COUNT est dans la même
+            // transaction que l'INSERT → atomique et robuste aux trous d'id.
+            $countStmt = $this->pdo->query('SELECT COUNT(*) FROM users');
+            $isFirstAccount = $countStmt !== false && (int) $countStmt->fetchColumn() === 0;
+            $role = $isFirstAccount ? 'admin' : 'user';
+
             $stmt = $this->pdo->prepare(
-                'INSERT INTO users (oidc_iss, oidc_sub, provider, display_name)
-                 VALUES (:iss, :sub, :provider, :name)'
+                'INSERT INTO users (oidc_iss, oidc_sub, provider, display_name, role)
+                 VALUES (:iss, :sub, :provider, :name, :role)'
             );
             $stmt->execute([
                 'iss' => $iss,
                 'sub' => $sub,
                 'provider' => $provider,
                 'name' => $displayName,
+                'role' => $role,
             ]);
 
             $id = (int) $this->pdo->lastInsertId();

@@ -46,7 +46,9 @@ final class FakeUserRepository implements UserRepositoryInterface
         }
 
         $id = ++$this->autoId;
-        $user = new User($id, $iss, $sub, $provider, $displayName, 'user', 'active');
+        // Le premier compte (owner) est admin ; les suivants sont de simples users.
+        $role = $this->users === [] ? 'admin' : 'user';
+        $user = new User($id, $iss, $sub, $provider, $displayName, $role, 'active');
         $this->users[$id] = $user;
 
         if ($this->throwRaceOnCreate) {

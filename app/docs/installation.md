@@ -78,7 +78,8 @@ php app/scripts/migrate.php --dry-run                  # preview pending migrati
 
 ## 4. Create the owner account
 
-The **owner** is simply the **first** user account.
+The **owner** is simply the **first** user account. It is created with the `admin`
+role automatically (subsequent accounts get `user`), so no manual promotion is needed.
 
 - **OIDC mode**: open the site and **sign in once**. On first login your account is
   provisioned automatically (issuer + subject + display name).
@@ -93,17 +94,18 @@ SELECT id, provider, display_name, role, status FROM users ORDER BY id;
 
 ---
 
-## 5. Promote the owner to admin
+## 5. Admin access (owner is promoted automatically)
 
-The admin space (`admin.php`) requires an existing admin, so bootstrap the **first**
-admin directly in the database (there is no self-service escalation):
+The admin space (`admin.php`) requires an existing admin. Since the **first** account
+is created as `admin` (step 4), the owner can manage roles/status and the shared tariff
+catalog from the UI right away — there is no self-service escalation for other members.
+
+Fallback — if you upgraded from an older install where the owner is still `user`, or you
+need to bootstrap admin manually, promote the first account directly in the database:
 
 ```sql
 UPDATE users SET role = 'admin' WHERE id = 1;   -- the owner's id from step 4
 ```
-
-After this, that member can manage roles/status and the shared tariff catalog from
-the UI.
 
 ---
 

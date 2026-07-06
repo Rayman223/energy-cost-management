@@ -16,7 +16,7 @@ final class AccountProvisionerTest extends TestCase
         $user = (new AccountProvisioner($repo))->provision('https://iss', 'sub-1', 'google', 'Bob');
 
         self::assertSame('Bob', $user->displayName);
-        self::assertSame('user', $user->role);
+        self::assertSame('admin', $user->role); // 1er compte = owner → admin
         self::assertCount(1, $repo->users);
         self::assertSame([$user->id], $repo->loginTouches);
         self::assertSame([$user->id], $repo->termsAccepted); // consentement enregistré à l'inscription

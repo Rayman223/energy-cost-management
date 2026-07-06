@@ -68,7 +68,7 @@ final class UserRepositoryDbTest extends TestCase
         $user = $repo->create('https://iss.example', 'sub-1', 'example', 'Bob');
         self::assertGreaterThan(0, $user->id);
         self::assertSame('Bob', $user->displayName);
-        self::assertSame('user', $user->role);
+        self::assertSame('admin', $user->role); // 1er compte (owner) → admin
         self::assertTrue($user->isActive());
 
         $found = $repo->findByOidc('https://iss.example', 'sub-1');
@@ -108,14 +108,20 @@ final class UserRepositoryDbTest extends TestCase
         $ids = array_column($all, 'id');
         self::assertContains($a->id, $ids);
         self::assertContains($b->id, $ids);
-        self::assertSame('user', $all[0]['role']);
+        // Ordonné par created_at ASC : Alice (1re, owner) est admin ; Bob reste user.
+        self::assertSame('admin', $all[0]['role']);
+        self::assertSame('user', $all[1]['role']);
         self::assertSame('active', $all[0]['status']);
     }
 
     public function testSetRoleAndStatus(): void
     {
         $repo = new UserRepository($this->pdo());
+        // Le 1er compte est promu admin d'office ; on teste setRole sur un 2e
+        // compte (rôle « user »), sinon setRole('admin') serait un no-op (rowCount 0).
+        $repo->create('https://iss.example', 'sub-owner', 'example', 'Owner');
         $user = $repo->create('https://iss.example', 'sub-c', 'example', 'Carol');
+        self::assertSame('user', $user->role);
 
         self::assertTrue($repo->setRole($user->id, 'admin'));
         self::assertTrue($repo->findById($user->id)?->isAdmin());
