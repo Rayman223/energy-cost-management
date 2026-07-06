@@ -52,14 +52,52 @@ final class TariffLineCatalog
         ];
     }
 
+    /** @return array<string,array{label:string,unit:string}> */
+    public static function water(): array
+    {
+        return [
+            'water_supply'         => ['label' => 'Fourniture (distribution)',   'unit' => '€/m³'],
+            'sanitation_communal'  => ['label' => 'Assainissement communal',     'unit' => '€/m³'],
+            'sanitation_regional'  => ['label' => 'Assainissement régional (CVA)', 'unit' => '€/m³'],
+            'social_fund'          => ['label' => 'Fonds social de l\'eau',       'unit' => '€/m³'],
+            'meter_rental_annual'  => ['label' => 'Redevance compteur',          'unit' => '€/an'],
+        ];
+    }
+
     /**
-     * Définitions pour un type d'énergie ('gas' → gaz, sinon électricité).
+     * Définitions pour un type d'énergie ('gas' → gaz, 'water' → eau, sinon électricité).
      *
      * @return array<string,array{label:string,unit:string}>
      */
     public static function forType(string $energyType): array
     {
-        return $energyType === 'gas' ? self::gas() : self::electricity();
+        return match ($energyType) {
+            'gas'   => self::gas(),
+            'water' => self::water(),
+            default => self::electricity(),
+        };
+    }
+
+    /**
+     * Type de composante (kind) d'une clé du catalogue. Source unique alignée sur
+     * le backfill SQL (migration 2026-07-06) et le mapping des lignes plates de
+     * l'API. Toute clé inconnue retombe sur per_kwh (une taxe €/kWh).
+     */
+    public static function kindFor(string $energyType, string $key): ComponentKind
+    {
+        return match (true) {
+            $key === 'energy_simple', $key === 'energy'          => ComponentKind::EnergyFlat,
+            $energyType === 'electricity' && $key === 'energy_t1' => ComponentKind::EnergyT1,
+            $energyType === 'electricity' && $key === 'energy_t2' => ComponentKind::EnergyT2,
+            $key === 'subscription'                              => ComponentKind::FixedMonthly,
+            $energyType === 'electricity' && $key === 'distribution_t1' => ComponentKind::PerKwhT1,
+            $energyType === 'electricity' && $key === 'distribution_t2' => ComponentKind::PerKwhT2,
+            $key === 'injection_t1'                              => ComponentKind::InjectionT1,
+            $key === 'injection_t2'                              => ComponentKind::InjectionT2,
+            $key === 'distribution_fixed', str_ends_with($key, '_annual') => ComponentKind::FixedAnnual,
+            str_starts_with($key, 'sanitation_'), $key === 'water_supply', $key === 'social_fund' => ComponentKind::PerM3,
+            default                                              => ComponentKind::PerKwh,
+        };
     }
 
     /**

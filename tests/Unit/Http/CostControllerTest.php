@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace Tests\Unit\Http;
 
+use App\Domain\ComponentKind;
 use App\Domain\TariffGrid;
+use App\Domain\TariffLine;
 use App\Http\Controller\CostController;
 use App\Http\Request;
 use App\Http\ValidationException;
@@ -45,7 +47,9 @@ final class CostControllerTest extends TestCase
 
     private function grid(): TariffGrid
     {
-        return new TariffGrid(1, 'electricity', 'Test', new DateTimeImmutable('2026-01-01'), null, ['energy_t1' => 0.10]);
+        return new TariffGrid(1, 'electricity', 'Test', new DateTimeImmutable('2026-01-01'), null, [
+            'energy_t1' => new TariffLine('energy_t1', 0.10, ComponentKind::EnergyT1),
+        ]);
     }
 
     public function testMonthCostHappyPath(): void

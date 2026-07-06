@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Controller;
 
 use App\Domain\TariffGrid;
+use App\Domain\TariffLineCatalog;
 use App\Http\JsonResponse;
 use App\Http\Request;
 use App\Http\ValidationException;
@@ -15,6 +16,8 @@ use App\Repository\Contract\TariffRepositoryInterface;
  */
 final class TariffController
 {
+    private const ENERGY_TYPES = ['electricity', 'gas', 'water'];
+
     public function __construct(private readonly TariffRepositoryInterface $tariffRepo)
     {
     }
@@ -24,6 +27,7 @@ final class TariffController
         return JsonResponse::ok([
             'electricity' => array_map($this->mapGrid(...), $this->tariffRepo->findAll('electricity')),
             'gas'         => array_map($this->mapGrid(...), $this->tariffRepo->findAll('gas')),
+            'water'       => array_map($this->mapGrid(...), $this->tariffRepo->findAll('water')),
         ]);
     }
 
@@ -36,22 +40,56 @@ final class TariffController
         }
 
         $energyType = (string) $request->input('energy_type');
-        if (!in_array($energyType, ['electricity', 'gas'], true)) {
-            throw new ValidationException('energy_type must be electricity or gas');
+        if (!in_array($energyType, self::ENERGY_TYPES, true)) {
+            throw new ValidationException('energy_type must be electricity, gas or water');
         }
 
         $validFrom = Request::parseDate($request->input('valid_from'), 'valid_from');
         $validTo   = Request::optionalDate($request->input('valid_to'), 'valid_to');
+
+        $vatRaw  = $request->input('vat_rate');
+        $vatRate = is_numeric($vatRaw) ? (float) $vatRaw : 21.0;
+        if ($vatRate < 0.0 || $vatRate > 100.0) {
+            throw new ValidationException('vat_rate must be between 0 and 100');
+        }
 
         $id = $this->tariffRepo->saveGrid(
             energyType: $energyType,
             name: (string) $request->input('name'),
             validFrom: $validFrom,
             validTo: $validTo,
-            lines: (array) $request->input('lines'),
+            lines: $this->normalizeLines($energyType, (array) $request->input('lines')),
+            vatRate: $vatRate,
         );
 
         return JsonResponse::ok(['ok' => true, 'id' => $id]);
+    }
+
+    /**
+     * Convertit des lignes plates `clé => montant` (format historique de l'API)
+     * en lignes structurées, le kind étant déduit du catalogue (clé inconnue →
+     * per_kwh). Rétrocompat des intégrations existantes.
+     *
+     * @param  array<string, mixed> $rawLines
+     * @return list<array{key: string, amount: float, kind: string, label: ?string}>
+     */
+    private function normalizeLines(string $energyType, array $rawLines): array
+    {
+        $lines = [];
+        foreach ($rawLines as $key => $amount) {
+            if (!is_numeric($amount)) {
+                continue;
+            }
+            $key      = (string) $key;
+            $lines[] = [
+                'key'    => $key,
+                'amount' => (float) $amount,
+                'kind'   => TariffLineCatalog::kindFor($energyType, $key)->value,
+                'label'  => null,
+            ];
+        }
+
+        return $lines;
     }
 
     /** @return array<string,mixed> */
@@ -65,6 +103,7 @@ final class TariffController
             'lines'      => $g->toTariffArray(),
             'country'    => $g->country,
             'currency'   => $g->currency,
+            'vat_rate'   => $g->vatRate,
             'shared'     => $g->isShared(),
         ];
     }

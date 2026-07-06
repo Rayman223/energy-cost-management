@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace Tests\Unit\Service;
 
+use App\Domain\ComponentKind;
 use App\Domain\TariffGrid;
+use App\Domain\TariffLine;
 use App\Service\CostCalculationService;
 use App\Service\TariffCalculatorService;
 use DateTimeImmutable;
@@ -59,7 +61,11 @@ final class CostCalculationServiceTest extends TestCase
             name: 'Elec test',
             validFrom: new DateTimeImmutable('2026-01-01'),
             validTo: null,
-            lines: ['energy_t1' => 0.10, 'energy_t2' => 0.08, 'subscription' => 5.0],
+            lines: [
+                'energy_t1'    => new TariffLine('energy_t1', 0.10, ComponentKind::EnergyT1),
+                'energy_t2'    => new TariffLine('energy_t2', 0.08, ComponentKind::EnergyT2),
+                'subscription' => new TariffLine('subscription', 5.0, ComponentKind::FixedMonthly),
+            ],
         );
     }
 
@@ -71,7 +77,11 @@ final class CostCalculationServiceTest extends TestCase
             name: 'Gaz test',
             validFrom: new DateTimeImmutable('2026-01-01'),
             validTo: null,
-            lines: ['energy' => 0.05, 'subscription' => 3.0, 'distribution' => 0.02],
+            lines: [
+                'energy'       => new TariffLine('energy', 0.05, ComponentKind::EnergyFlat),
+                'subscription' => new TariffLine('subscription', 3.0, ComponentKind::FixedMonthly),
+                'distribution' => new TariffLine('distribution', 0.02, ComponentKind::PerKwh),
+            ],
             pcsCoefficient: $pcs,
         );
     }

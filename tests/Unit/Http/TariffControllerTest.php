@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace Tests\Unit\Http;
 
+use App\Domain\ComponentKind;
 use App\Domain\TariffGrid;
+use App\Domain\TariffLine;
 use App\Http\Controller\TariffController;
 use App\Http\Request;
 use App\Http\ValidationException;
@@ -51,7 +53,7 @@ final class TariffControllerTest extends TestCase
         $body['energy_type'] = 'nuclear';
 
         $this->expectException(ValidationException::class);
-        $this->expectExceptionMessage('energy_type must be electricity or gas');
+        $this->expectExceptionMessage('energy_type must be electricity, gas or water');
         $controller->save($this->post($body));
     }
 
@@ -79,14 +81,20 @@ final class TariffControllerTest extends TestCase
         self::assertNotNull($repo->savedGrid);
         self::assertSame('electricity', $repo->savedGrid['energy_type']);
         self::assertSame('Engie fév. 2026', $repo->savedGrid['name']);
-        self::assertSame(['energy_t1' => 0.10, 'energy_t2' => 0.08], $repo->savedGrid['lines']);
+        // Les lignes plates de l'API sont converties en lignes structurées (kind déduit).
+        self::assertSame([
+            ['key' => 'energy_t1', 'amount' => 0.10, 'kind' => 'energy_t1', 'label' => null],
+            ['key' => 'energy_t2', 'amount' => 0.08, 'kind' => 'energy_t2', 'label' => null],
+        ], $repo->savedGrid['lines']);
     }
 
     public function testIndexMapsGridsByEnergyType(): void
     {
         $repo = new FakeTariffRepository();
         $repo->allGrids = [
-            new TariffGrid(7, 'electricity', 'Grille A', new DateTimeImmutable('2026-01-01'), null, ['energy_t1' => 0.1]),
+            new TariffGrid(7, 'electricity', 'Grille A', new DateTimeImmutable('2026-01-01'), null, [
+                'energy_t1' => new TariffLine('energy_t1', 0.1, ComponentKind::EnergyT1),
+            ]),
         ];
 
         $res = (new TariffController($repo))->index(new Request('GET', ['action' => 'tariffs'], []));

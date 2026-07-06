@@ -9,6 +9,46 @@ function formatMoney(v) {
   return _moneyFmt.format(Number(v) || 0);
 }
 
+// ── Rendu générique du détail de coût (piloté par cost.lines / kinds) ───────
+// Le moteur de calcul renvoie une liste de lignes typées {key,kind,group,label,
+// quantity,unit,rate,amount}. On les regroupe par nature — indépendant du pays.
+const COST_GROUP_LABELS = (typeof window !== 'undefined' && window.__TARIFF_GROUP_LABELS__) || {
+  energy: 'Énergie', fixed: 'Abonnements & forfaits', taxes: 'Taxes & contributions', injection: 'Injection',
+};
+const COST_LINE_LABELS = (typeof window !== 'undefined' && window.__TARIFF_LINE_LABELS__) || {};
+const COST_GROUP_ORDER = ['energy', 'fixed', 'taxes', 'injection'];
+
+function costLineLabel(ln) {
+  return ln.label || COST_LINE_LABELS[ln.key] || ln.key;
+}
+function costLineDetail(ln) {
+  const rate = ln.rate;
+  if (rate == null || Number(rate) === 0) return '';
+  const q = Number(ln.quantity) || 0;
+  if (ln.kind === 'fixed_annual')  return `${q} j × ${(Number(rate) / 365).toFixed(5)} €/j <span style="opacity:.55">(${Number(rate).toFixed(2)} €/an)</span>`;
+  if (ln.kind === 'fixed_monthly') return `${q} mois × ${Number(rate).toFixed(2)} €/mois`;
+  return `${q.toFixed(2)} × ${Number(rate).toFixed(7)} ${ln.unit || ''}`;
+}
+// Génère les lignes groupées à partir de cost.lines, avec la fonction `row` locale.
+function costLinesHtml(c, row) {
+  let html = '';
+  COST_GROUP_ORDER.forEach((g) => {
+    const lines = (c.lines || []).filter((l) => l.group === g && (Number(l.amount) || Number(l.rate)));
+    if (!lines.length) return;
+    html += `<div class="cost-group-label ${g === 'injection' ? 'cost-group-label--credit' : ''}">${COST_GROUP_LABELS[g] || g}</div>`;
+    lines.forEach((l) => { html += row(costLineLabel(l), costLineDetail(l), l.amount, g === 'injection' ? 'credit' : ''); });
+  });
+  return html;
+}
+// Lignes Total / HTVA / TVA à partir du taux de la grille (cost.vat_rate).
+function costVatRows(c, row) {
+  const vr = (c.vat_rate != null) ? c.vat_rate : 21;
+  const factor = (1 + vr / 100).toFixed(2);
+  return row('Total TTC', '', c.total, 'total')
+    + row('dont HTVA', `÷ ${factor}`, c.htva, 'vat')
+    + row(`dont TVA ${vr}% incluse`, `${formatMoney(Math.abs(c.total))} − ${formatMoney(Math.abs(c.htva))}`, c.vat_included, 'vat vat-highlight');
+}
+
 // ── Electricity cost navigation ────────────────────────────────────────────
 (function () {
   const _APP_LOC = (typeof window !== 'undefined' && window.APP_LOCALE) ? window.APP_LOCALE : 'fr';
@@ -38,24 +78,11 @@ function formatMoney(v) {
     }
     const c = data.cost;
     const d = data.deltas || {};
-    const r = data.tariff_rates || {};
     const t1 = +(d.prelev_jour ?? 0);
     const t2 = +(d.prelev_nuit ?? 0);
     const e1 = +(d.injec_jour  ?? 0);
     const e2 = +(d.injec_nuit  ?? 0);
-    const totalKwh    = t1 + t2;
-    const wholeMonths = Math.max(1, Math.round(data.days / 30.4375));
 
-    function detail(qty, qtyUnit, rate, rateUnit) {
-      const qFmt = Number(qty).toFixed(2);
-      const rFmt = (rate != null && rate !== 0) ? Number(rate).toFixed(7) : null;
-      return rFmt ? `${qFmt} ${qtyUnit} × ${rFmt} €/${rateUnit}` : `${qFmt} ${qtyUnit}`;
-    }
-    function detailAnnual(days, annualRate) {
-      if (!annualRate) return `${days} j`;
-      const daily = annualRate / 365;
-      return `${days} j × ${daily.toFixed(5)} €/j <span style="opacity:.55">(${Number(annualRate).toFixed(2)} €/an)</span>`;
-    }
     function row(label, detailStr, amount, cls = '') {
       const amtHtml = amount === null || amount === undefined
         ? '<span style="color:var(--muted)">—</span>'
@@ -65,10 +92,6 @@ function formatMoney(v) {
         <span class="cl-detail">${detailStr}</span>
         <span class="cl-amount">${amtHtml}</span>
       </div>`;
-    }
-    function maybeRow(label, detailStr, amount, cls = '') {
-      if (!amount || amount === 0) return '';
-      return row(label, detailStr, amount, cls);
     }
     // Informational row displaying a kWh value (no € amount column)
     function solarKwhRow(label, kwhVal) {
@@ -85,27 +108,7 @@ function formatMoney(v) {
 
     el.innerHTML = `<div class="cost-wrap">
       <div class="cost-lines">
-        <div class="cost-group-label">Fournisseur</div>
-        ${maybeRow('Énergie T1 — jour',             detail(t1,       'kWh', r.energy_t1,           'kWh'), c.energy_t1)}
-        ${maybeRow('Énergie T2 — nuit',             detail(t2,       'kWh', r.energy_t2,           'kWh'), c.energy_t2)}
-        ${row('Abonnement fournisseur', `${wholeMonths} mois × ${r.subscription != null ? Number(r.subscription).toFixed(2) + ' €/mois' : '—'}`, c.subscription ?? 0)}
-
-        <div class="cost-group-label">Distribution (Sibelga)</div>
-        ${maybeRow('Distribution T1 — jour',  detail(t1,       'kWh', r.distribution_t1, 'kWh'), c.distribution_t1)}
-        ${maybeRow('Distribution T2 — nuit',  detail(t2,       'kWh', r.distribution_t2, 'kWh'), c.distribution_t2)}
-        ${row('Transport',                    detail(totalKwh, 'kWh', r.transport,        'kWh'), c.transport ?? 0)}
-        ${row('Gestion (fixe annuel)',         detailAnnual(data.days, r.management_annual), c.management_fee ?? 0)}
-
-        <div class="cost-group-label">Taxes &amp; contributions</div>
-        ${row('Taxe prosumer BRUGEL',           detailAnnual(data.days, r.prosumer_annual),                 c.prosumer_fee ?? 0)}
-        ${row("Droit d'accise spécial",         detail(totalKwh, 'kWh', r.excise_duty,           'kWh'), c.excise_duty ?? 0)}
-        ${row('Contribution énergie',           detail(totalKwh, 'kWh', r.energy_contribution,   'kWh'), c.energy_contribution ?? 0)}
-        ${row('Contribution verte &amp; cogén.',detail(totalKwh, 'kWh', r.green_contribution,    'kWh'), c.green_contribution ?? 0)}
-        ${row('Obligations de service public',  detailAnnual(data.days, r.public_service_annual),           c.public_service_fee ?? 0)}
-
-        <div class="cost-group-label cost-group-label--credit">Injections (revenus)</div>
-        ${row('Crédit injection T1', detail(e1, 'kWh', r.injection_t1, 'kWh'), c.injection_t1, 'credit')}
-        ${row('Crédit injection T2', detail(e2, 'kWh', r.injection_t2, 'kWh'), c.injection_t2, 'credit')}
+        ${costLinesHtml(c, row)}
 
         ${c.solar_produced != null ? `
         <div class="cost-group-label cost-group-label--solar">☀ Solaire (auto-consommation)</div>
@@ -122,9 +125,7 @@ function formatMoney(v) {
         ` : ''}
 
         <div class="cost-group-sep"></div>
-        ${row('Total TTC', '',                                                                              c.total,       'total')}
-        ${row('dont HTVA', '÷ 1.21',                                                                        c.htva,        'vat')}
-        ${row('dont TVA 21% incluse', `${formatMoney(Math.abs(c.total))} − ${formatMoney(Math.abs(c.htva))}`, c.vat_included,'vat vat-highlight')}
+        ${costVatRows(c, row)}
       </div>
       <div class="cost-total-card">
         <div>
@@ -165,7 +166,7 @@ function formatMoney(v) {
 
     const dc            = dyn.cost || {};
     const classicTotal  = classic ? classic.total : null;
-    const classicEnergy = classic ? ((classic.energy_t1 || 0) + (classic.energy_t2 || 0)) : null;
+    const classicEnergy = classic ? (classic.energy_total || 0) : null;
     const dynTotal      = dc.total;
     const diff          = (classicTotal != null && dynTotal != null) ? (dynTotal - classicTotal) : null;
     const diffPct       = (diff != null && classicTotal) ? (diff / Math.abs(classicTotal) * 100) : null;
@@ -369,16 +370,6 @@ function formatMoney(v) {
     if (v === null || v === undefined) return '<span style="color:var(--muted)">—</span>';
     return formatMoney(v);
   }
-  function detail(qty, qtyUnit, rate, rateUnit) {
-    const qFmt = Number(qty).toFixed(3);
-    const rFmt = (rate != null && rate !== 0) ? Number(rate).toFixed(7) : null;
-    return rFmt ? `${qFmt} ${qtyUnit} × ${rFmt} €/${rateUnit}` : `${qFmt} ${qtyUnit}`;
-  }
-  function detailAnnual(days, annualRate) {
-    if (!annualRate) return `${days} j`;
-    const daily = annualRate / 365;
-    return `${days} j × ${daily.toFixed(5)} €/j <span style="opacity:.55">(${Number(annualRate).toFixed(2)} €/an)</span>`;
-  }
   function row(label, detailStr, amount, cls = '') {
     return `<div class="cost-line ${cls}">
       <span class="cl-label">${label}</span>
@@ -386,11 +377,6 @@ function formatMoney(v) {
       <span class="cl-amount">${fmtE(amount)}</span>
     </div>`;
   }
-  function maybeRow(label, detailStr, amount, cls = '') {
-    if (!amount || amount === 0) return '';
-    return row(label, detailStr, amount, cls);
-  }
-
   function renderGasCostContent(data) {
     const el = document.getElementById('gas-cost-content');
     if (!el) return;
@@ -403,9 +389,7 @@ function formatMoney(v) {
     }
 
     const c           = data.cost;
-    const r           = data.tariff_rates ?? {};
     const kwh         = +(data.kwh ?? 0);
-    const wholeMonths = Math.max(1, Math.round(data.days / 30.4375));
     const from        = data.period_from ? data.period_from.slice(0, 10) : '—';
     const to          = data.period_to   ? data.period_to.slice(0, 10)   : '—';
 
@@ -414,26 +398,9 @@ function formatMoney(v) {
 
     el.innerHTML = `<div class="cost-wrap">
       <div class="cost-lines">
-        <div class="cost-group-label">Fournisseur</div>
-        ${maybeRow('Énergie fournisseur',    detail(kwh, 'kWh', r.energy,       'kWh'), c.energy)}
-        ${row(     'Abonnement fournisseur', `${wholeMonths} mois × ${r.subscription != null ? Number(r.subscription).toFixed(2) + ' €/mois' : '—'}`, c.subscription ?? 0)}
-
-        <div class="cost-group-label">Distribution &amp; transport (Sibelga)</div>
-        ${maybeRow('Distribution variable', detail(kwh,      'kWh', r.distribution,    'kWh'), c.distribution)}
-        ${maybeRow('Distribution fixe',     detailAnnual(data.days, r.distribution_fixed),           c.distribution_fixed)}
-        ${maybeRow('Transport',             detail(kwh,      'kWh', r.transport,        'kWh'), c.transport)}
-        ${maybeRow('Relevé de compteur',    detailAnnual(data.days, r.meter_reading_annual),      c.meter_reading)}
-
-        <div class="cost-group-label">Taxes &amp; contributions</div>
-        ${maybeRow('Contribution énergie',          detail(kwh, 'kWh', r.energy_contribution, 'kWh'), c.energy_contribution)}
-        ${maybeRow('Accise fédérale',               detail(kwh, 'kWh', r.federal_excise,       'kWh'), c.federal_excise)}
-        ${maybeRow('Redevance de raccordement',     detail(kwh, 'kWh', r.connection_fee_kwh,   'kWh'), c.connection_fee)}
-        ${maybeRow('Obligations de service public', detailAnnual(data.days, r.public_service_annual),   c.public_service)}
-
+        ${costLinesHtml(c, row)}
         <div class="cost-group-sep"></div>
-        ${row('Total TTC',           '',                                                                       c.total,       'total')}
-        ${row('dont HTVA',           '÷ 1.21',                                                                 c.htva,        'vat')}
-        ${row('dont TVA 21% incluse', `${formatMoney(Math.abs(c.total))} − ${formatMoney(Math.abs(c.htva))}`,   c.vat_included,'vat vat-highlight')}
+        ${costVatRows(c, row)}
       </div>
       <div class="cost-total-card">
         <div>
@@ -622,14 +589,47 @@ function formatMoney(v) {
     const label = isCurrent ? 'Estimation mois en cours' : `${MONTHS_FR[wNavMonth-1]} ${wNavYear}`;
     const projNote = data.is_projection ? ' <span style="opacity:.6">(projection fin de mois)</span>' : '';
 
-    el.innerHTML = `<div class="cost-total-card">
-      <div>
-        <div class="cost-total-label">${label}</div>
-        <div class="cost-total-amount">${Number(data.delta_m3).toFixed(3)} m³</div>
+    const c = data.cost;
+
+    // Sans tarif eau configuré → volume seul (rétrocompat).
+    if (!c) {
+      el.innerHTML = `<div class="cost-total-card">
+        <div>
+          <div class="cost-total-label">${label}</div>
+          <div class="cost-total-amount">${Number(data.delta_m3).toFixed(3)} m³</div>
+        </div>
+        <div class="cost-total-meta">
+          <span>${from} → ${to}${projNote}</span>
+          <span>${data.days} jour${data.days > 1 ? 's' : ''}</span>
+        </div>
+      </div>`;
+      return;
+    }
+
+    // Avec tarif eau → détail de coût générique (piloté par cost.lines).
+    const row = (lbl, det, amt, cls = '') => `<div class="cost-line ${cls}">
+        <span class="cl-label">${lbl}</span>
+        <span class="cl-detail">${det}</span>
+        <span class="cl-amount">${amt == null ? '<span style="color:var(--muted)">—</span>' : formatMoney(amt)}</span>
+      </div>`;
+
+    el.innerHTML = `<div class="cost-wrap">
+      <div class="cost-lines">
+        ${costLinesHtml(c, row)}
+        <div class="cost-group-sep"></div>
+        ${costVatRows(c, row)}
       </div>
-      <div class="cost-total-meta">
-        <span>${from} → ${to}${projNote}</span>
-        <span>${data.days} jour${data.days > 1 ? 's' : ''}</span>
+      <div class="cost-total-card">
+        <div>
+          <div class="cost-total-label">${label}</div>
+          <div class="cost-total-amount">${formatMoney(c.total)}</div>
+        </div>
+        <div class="cost-total-meta">
+          <span>Tarif : ${data.tariff_name ?? '—'}</span>
+          <span>${from} → ${to}${projNote}</span>
+          <span>${data.days} jour${data.days > 1 ? 's' : ''}</span>
+          <span>${Number(data.delta_m3).toFixed(3)} m³</span>
+        </div>
       </div>
     </div>`;
   }
@@ -699,6 +699,8 @@ function formatMoney(v) {
     costEl.classList.remove('ymc-loading');
     if (!data || !data.available) {
       costEl.innerHTML = '<span class="ymc-nd">—</span>';
+    } else if (data.cost) {
+      costEl.textContent = formatMoney(data.cost.total);
     } else {
       costEl.textContent = Number(data.delta_m3).toFixed(2) + ' m³';
     }

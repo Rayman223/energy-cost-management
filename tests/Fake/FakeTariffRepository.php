@@ -44,7 +44,7 @@ final class FakeTariffRepository implements TariffRepositoryInterface
         return $this->allGrids;
     }
 
-    /** @param array<string, mixed> $lines */
+    /** @param list<array{key: string, amount: float, kind: string, label: ?string}> $lines */
     public function saveGrid(
         string $energyType,
         string $name,
@@ -52,6 +52,10 @@ final class FakeTariffRepository implements TariffRepositoryInterface
         ?DateTimeImmutable $validTo,
         array $lines,
         ?float $pcsCoefficient = null,
+        ?string $country = null,
+        string $currency = 'EUR',
+        bool $shared = false,
+        float $vatRate = 21.0,
     ): int {
         $this->savedGrid = [
             'energy_type' => $energyType,
@@ -60,6 +64,10 @@ final class FakeTariffRepository implements TariffRepositoryInterface
             'valid_to'    => $validTo,
             'lines'       => $lines,
             'pcs'         => $pcsCoefficient,
+            'country'     => $country,
+            'currency'    => $currency,
+            'shared'      => $shared,
+            'vat_rate'    => $vatRate,
         ];
 
         return $this->nextId;

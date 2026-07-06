@@ -78,7 +78,51 @@
 
   .empty { padding:24px; color:var(--muted); font-size:.9rem; font-style:italic; }
 
+  /* ── Onglets énergie (liens) ─────────────────────────────────────────── */
+  .energy-tabs { display:flex; gap:6px; margin:28px 0 4px; flex-wrap:wrap; }
+  .energy-tab { display:inline-flex; align-items:center; gap:8px; padding:9px 20px; border-radius:8px;
+                font-size:.82rem; font-weight:700; letter-spacing:.04em; text-transform:uppercase;
+                text-decoration:none; border:1px solid var(--border2); color:var(--muted);
+                background:transparent; transition:all .15s; }
+  .energy-tab:hover { color:var(--text); }
+  .energy-tab.active { background:var(--amber); color:var(--on-amber); border-color:var(--amber); }
+  .energy-tab-icon { font-size:1rem; }
+
+  .grid-meta { font-family:var(--mono); font-size:.72rem; color:var(--muted); margin-left:4px; }
+
+  /* ── Panneau « Point de départ » ─────────────────────────────────────── */
+  .start-panel { background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:20px 24px; }
+  .start-hint { font-family:var(--mono); font-size:.8rem; color:var(--muted); margin-bottom:14px; }
+  .start-form { display:grid; grid-template-columns:1fr 1fr auto; gap:14px; align-items:end; }
+  .start-actions { justify-content:flex-end; }
+  .tpl-chips { display:flex; flex-wrap:wrap; gap:8px; margin-top:16px; }
+  .tpl-chip { display:inline-flex; align-items:center; gap:6px; padding:5px 6px 5px 12px; border-radius:20px;
+              background:var(--surface2); border:1px solid var(--border2); font-size:.78rem; color:var(--text);
+              font-family:var(--mono); }
+  .tpl-chip-x { background:transparent; border:none; color:var(--muted); cursor:pointer; font-size:1.1rem;
+                line-height:1; padding:0 4px; border-radius:50%; }
+  .tpl-chip-x:hover { color:var(--red); }
+
+  /* ── Lignes tarifaires groupées ──────────────────────────────────────── */
+  .lines-wrap { margin-top:20px; }
+  .line-group { margin-top:22px; }
+  .line-group-title { font-size:.76rem; font-weight:700; letter-spacing:.15em; text-transform:uppercase;
+                      color:var(--muted); margin-bottom:12px; padding-bottom:8px; border-bottom:1px solid var(--border); }
+  .line-group-body { grid-template-columns:1fr 1fr; }
+  .line-item.is-custom { gap:8px; }
+  .line-kind-select { margin-top:2px; }
+  .line-amount-row { display:flex; gap:8px; align-items:center; }
+  .line-amount-row .form-input { flex:1; }
+  .line-remove { padding:5px 11px; font-size:1rem; line-height:1; }
+  .add-field-row { margin-top:6px; }
+
+  /* ── Sauver comme template ───────────────────────────────────────────── */
+  .save-tpl-row { display:flex; align-items:center; gap:14px; margin-top:24px; flex-wrap:wrap;
+                  padding-top:16px; border-top:1px solid var(--border); }
+  .save-tpl-name { max-width:280px; }
+
   @media(max-width:680px) {
-    .form-grid { grid-template-columns:1fr; }
+    .form-grid, .line-group-body { grid-template-columns:1fr; }
     .grid-row { grid-template-columns:1fr auto; }
+    .start-form { grid-template-columns:1fr; }
   }

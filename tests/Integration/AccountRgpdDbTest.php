@@ -85,7 +85,9 @@ final class AccountRgpdDbTest extends TestCase
             ->execute(['r' => $registers['import_t1'], 'a' => '2026-06-01 10:00:00', 'v' => 100.0]);
 
         (new UtilityReadingRepository($pdo, $this->userId, 'gas'))->save(new DateTimeImmutable('2026-06-01 10:00:00'), 50.0);
-        (new TariffRepository($pdo, $this->userId, false))->saveGrid('gas', 'Perso', new DateTimeImmutable('2026-01-01'), null, ['energy' => 0.05], 10.55);
+        (new TariffRepository($pdo, $this->userId, false))->saveGrid('gas', 'Perso', new DateTimeImmutable('2026-01-01'), null, [
+            ['key' => 'energy', 'amount' => 0.05, 'kind' => 'energy_flat', 'label' => null],
+        ], 10.55);
         (new ApiTokenRepository($pdo))->create($this->userId, 'Agent');
         (new EnergyIdIntegrationRepository($pdo))->enable($this->userId, 'dev-u' . $this->userId);
         (new WebhookSyncStateRepository($pdo, $this->userId))->saveLastSentAt('gas-index', new DateTimeImmutable('2026-06-02 01:00:00'));

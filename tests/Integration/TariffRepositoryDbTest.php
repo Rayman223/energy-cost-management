@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Integration;
 
+use App\Domain\TariffLineCatalog;
 use App\Repository\TariffRepository;
 use App\Repository\UserRepository;
 use DateTimeImmutable;
@@ -69,14 +70,36 @@ final class TariffRepositoryDbTest extends TestCase
         }
     }
 
+    /**
+     * Convertit une grille plate `clé => montant` au format structuré attendu par
+     * saveGrid (kind déduit du catalogue).
+     *
+     * @param  array<string,float> $flat
+     * @return list<array{key: string, amount: float, kind: string, label: null}>
+     */
+    private function lines(array $flat, string $energy = 'electricity'): array
+    {
+        $out = [];
+        foreach ($flat as $key => $amount) {
+            $out[] = [
+                'key'    => $key,
+                'amount' => (float) $amount,
+                'kind'   => TariffLineCatalog::kindFor($energy, $key)->value,
+                'label'  => null,
+            ];
+        }
+
+        return $out;
+    }
+
     public function testPersonalOverrideBeatsSharedCatalog(): void
     {
         $admin = new TariffRepository($this->pdo(), $this->adminId, true);
         $user  = new TariffRepository($this->pdo(), $this->userId, false);
 
         // Catalogue partagé (admin) + surcharge perso du membre.
-        $admin->saveGrid('electricity', 'Catalogue BE', new DateTimeImmutable('2026-01-01'), null, ['energy_t1' => 0.10], null, 'BE', 'EUR', true);
-        $user->saveGrid('electricity', 'Ma grille', new DateTimeImmutable('2026-01-01'), null, ['energy_t1' => 0.12]);
+        $admin->saveGrid('electricity', 'Catalogue BE', new DateTimeImmutable('2026-01-01'), null, $this->lines(['energy_t1' => 0.10]), null, 'BE', 'EUR', true);
+        $user->saveGrid('electricity', 'Ma grille', new DateTimeImmutable('2026-01-01'), null, $this->lines(['energy_t1' => 0.12]));
 
         $active = $user->findActiveGrid('electricity', new DateTimeImmutable('2026-06-01'));
 
@@ -109,7 +132,7 @@ final class TariffRepositoryDbTest extends TestCase
     public function testPersonalGridsAreInvisibleToOthers(): void
     {
         $user = new TariffRepository($this->pdo(), $this->userId, false);
-        $gridId = $user->saveGrid('gas', 'Ma grille gaz', new DateTimeImmutable('2026-01-01'), null, ['energy' => 0.05], 10.55, null, 'PLN');
+        $gridId = $user->saveGrid('gas', 'Ma grille gaz', new DateTimeImmutable('2026-01-01'), null, $this->lines(['energy' => 0.05], 'gas'), 10.55, null, 'PLN');
 
         $admin = new TariffRepository($this->pdo(), $this->adminId, true);
 
@@ -130,6 +153,34 @@ final class TariffRepositoryDbTest extends TestCase
         self::assertNotNull($grid);
         self::assertSame('PLN', $grid->currency);
         self::assertSame('PL', $grid->country);
+    }
+
+    public function testVatRateAndLineMetadataRoundTrip(): void
+    {
+        $user = new TariffRepository($this->pdo(), $this->userId, false);
+        $id = $user->saveGrid(
+            'water',
+            'Eau DE',
+            new DateTimeImmutable('2026-01-01'),
+            null,
+            [
+                ['key' => 'water_supply', 'amount' => 2.10, 'kind' => 'per_m3', 'label' => null],
+                ['key' => 'custom_taxe', 'amount' => 0.50, 'kind' => 'fixed_annual', 'label' => 'Taxe locale'],
+            ],
+            null,
+            'DE',
+            'EUR',
+            false,
+            19.0,
+        );
+
+        $grid = $user->findById($id);
+        self::assertNotNull($grid);
+        self::assertSame(19.0, $grid->vatRate);
+        self::assertSame('per_m3', $grid->lines['water_supply']->kind->value);
+        self::assertNull($grid->lines['water_supply']->label);
+        self::assertSame('fixed_annual', $grid->lines['custom_taxe']->kind->value);
+        self::assertSame('Taxe locale', $grid->lines['custom_taxe']->label);
     }
 
     private function pdo(): PDO

@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace App\Repository;
 
+use App\Domain\ComponentKind;
 use App\Domain\TariffGrid;
+use App\Domain\TariffLine;
 use App\Repository\Contract\TariffRepositoryInterface;
 use DateTimeImmutable;
 use PDO;
@@ -17,7 +19,7 @@ use RuntimeException;
  */
 final class TariffRepository implements TariffRepositoryInterface
 {
-    private const COLUMNS = 'id, user_id, energy_type, country, currency, name, valid_from, valid_to, pcs_coefficient';
+    private const COLUMNS = 'id, user_id, energy_type, country, currency, vat_rate, name, valid_from, valid_to, pcs_coefficient';
 
     public function __construct(
         private readonly PDO $pdo,
@@ -91,7 +93,7 @@ final class TariffRepository implements TariffRepositoryInterface
         );
     }
 
-    /** @param array<string, mixed> $lines */
+    /** @param list<array{key: string, amount: float, kind: string, label: ?string}> $lines */
     public function saveGrid(
         string $energyType,
         string $name,
@@ -102,20 +104,22 @@ final class TariffRepository implements TariffRepositoryInterface
         ?string $country = null,
         string $currency = 'EUR',
         bool $shared = false,
+        float $vatRate = 21.0,
     ): int {
         $this->assertCanManageShared($shared);
 
         $this->pdo->beginTransaction();
         try {
             $stmt = $this->pdo->prepare(
-                'INSERT INTO tariff_grids (user_id, energy_type, country, currency, name, valid_from, valid_to, pcs_coefficient)
-                 VALUES (:user_id, :type, :country, :currency, :name, :from, :to, :pcs)'
+                'INSERT INTO tariff_grids (user_id, energy_type, country, currency, vat_rate, name, valid_from, valid_to, pcs_coefficient)
+                 VALUES (:user_id, :type, :country, :currency, :vat, :name, :from, :to, :pcs)'
             );
             $stmt->execute([
                 'user_id'  => $shared ? null : $this->userId,
                 'type'     => $energyType,
                 'country'  => $country,
                 'currency' => $currency,
+                'vat'      => $vatRate,
                 'name'     => $name,
                 'from'     => $validFrom->format('Y-m-d'),
                 'to'       => $validTo?->format('Y-m-d'),
@@ -123,13 +127,7 @@ final class TariffRepository implements TariffRepositoryInterface
             ]);
             $id = (int) $this->pdo->lastInsertId();
 
-            $lineStmt = $this->pdo->prepare(
-                'INSERT INTO tariff_grid_lines (tariff_grid_id, line_key, amount_per_kwh)
-                 VALUES (:grid_id, :key, :amount)'
-            );
-            foreach ($lines as $key => $amount) {
-                $lineStmt->execute(['grid_id' => $id, 'key' => $key, 'amount' => $amount]);
-            }
+            $this->insertLines($id, $lines);
 
             $this->pdo->commit();
         } catch (\Throwable $e) {
@@ -140,7 +138,7 @@ final class TariffRepository implements TariffRepositoryInterface
         return $id;
     }
 
-    /** @param array<string, mixed> $lines */
+    /** @param list<array{key: string, amount: float, kind: string, label: ?string}> $lines */
     public function updateGrid(
         int $id,
         string $energyType,
@@ -151,6 +149,7 @@ final class TariffRepository implements TariffRepositoryInterface
         ?float $pcsCoefficient = null,
         ?string $country = null,
         string $currency = 'EUR',
+        float $vatRate = 21.0,
     ): void {
         $this->assertCanModify($id);
 
@@ -161,6 +160,7 @@ final class TariffRepository implements TariffRepositoryInterface
                  SET energy_type = :type,
                      country = :country,
                      currency = :currency,
+                     vat_rate = :vat,
                      name = :name,
                      valid_from = :from,
                      valid_to = :to,
@@ -172,6 +172,7 @@ final class TariffRepository implements TariffRepositoryInterface
                 'type'     => $energyType,
                 'country'  => $country,
                 'currency' => $currency,
+                'vat'      => $vatRate,
                 'name'     => $name,
                 'from'     => $validFrom->format('Y-m-d'),
                 'to'       => $validTo?->format('Y-m-d'),
@@ -181,18 +182,36 @@ final class TariffRepository implements TariffRepositoryInterface
             $deleteStmt = $this->pdo->prepare('DELETE FROM tariff_grid_lines WHERE tariff_grid_id = :grid_id');
             $deleteStmt->execute(['grid_id' => $id]);
 
-            $lineStmt = $this->pdo->prepare(
-                'INSERT INTO tariff_grid_lines (tariff_grid_id, line_key, amount_per_kwh)
-                 VALUES (:grid_id, :key, :amount)'
-            );
-            foreach ($lines as $key => $amount) {
-                $lineStmt->execute(['grid_id' => $id, 'key' => $key, 'amount' => $amount]);
-            }
+            $this->insertLines($id, $lines);
 
             $this->pdo->commit();
         } catch (\Throwable $e) {
             $this->pdo->rollBack();
             throw $e;
+        }
+    }
+
+    /**
+     * Insère les lignes d'une grille en préservant leur ordre (sort_order).
+     *
+     * @param list<array{key: string, amount: float, kind: string, label: ?string}> $lines
+     */
+    private function insertLines(int $gridId, array $lines): void
+    {
+        $lineStmt = $this->pdo->prepare(
+            'INSERT INTO tariff_grid_lines (tariff_grid_id, line_key, component_kind, label, sort_order, amount_per_kwh)
+             VALUES (:grid_id, :key, :kind, :label, :sort, :amount)'
+        );
+        $sort = 0;
+        foreach ($lines as $line) {
+            $lineStmt->execute([
+                'grid_id' => $gridId,
+                'key'     => $line['key'],
+                'kind'    => $line['kind'],
+                'label'   => $line['label'] ?? null,
+                'sort'    => $sort++,
+                'amount'  => $line['amount'],
+            ]);
         }
     }
 
@@ -278,17 +297,19 @@ final class TariffRepository implements TariffRepositoryInterface
         }
     }
 
-    /** @return array<string,float> */
+    /** @return array<string,TariffLine> */
     private function fetchLines(int $gridId): array
     {
         $stmt = $this->pdo->prepare(
-            'SELECT line_key, amount_per_kwh FROM tariff_grid_lines WHERE tariff_grid_id = :id'
+            'SELECT line_key, amount_per_kwh, component_kind, label, sort_order
+             FROM tariff_grid_lines WHERE tariff_grid_id = :id
+             ORDER BY sort_order, id'
         );
         $stmt->execute(['id' => $gridId]);
 
         $lines = [];
         foreach ($stmt->fetchAll() as $row) {
-            $lines[$row['line_key']] = (float) $row['amount_per_kwh'];
+            $lines[$row['line_key']] = $this->hydrateLine($row);
         }
 
         return $lines;
@@ -298,8 +319,8 @@ final class TariffRepository implements TariffRepositoryInterface
      * Charge toutes les lignes pour une liste d'ids en une seule requête.
      * Utilisé par findAll() pour éviter le pattern N+1.
      *
-     * @param  int[]                           $ids
-     * @return array<int,array<string,float>>  Indexé par tariff_grid_id
+     * @param  int[]                                 $ids
+     * @return array<int,array<string,TariffLine>>   Indexé par tariff_grid_id
      */
     private function fetchLinesForIds(array $ids): array
     {
@@ -309,15 +330,16 @@ final class TariffRepository implements TariffRepositoryInterface
 
         $placeholders = implode(',', array_fill(0, count($ids), '?'));
         $stmt = $this->pdo->prepare(
-            "SELECT tariff_grid_id, line_key, amount_per_kwh
+            "SELECT tariff_grid_id, line_key, amount_per_kwh, component_kind, label, sort_order
              FROM tariff_grid_lines
-             WHERE tariff_grid_id IN ($placeholders)"
+             WHERE tariff_grid_id IN ($placeholders)
+             ORDER BY sort_order, id"
         );
         $stmt->execute(array_values($ids));
 
         $map = [];
         foreach ($stmt->fetchAll() as $row) {
-            $map[(int) $row['tariff_grid_id']][$row['line_key']] = (float) $row['amount_per_kwh'];
+            $map[(int) $row['tariff_grid_id']][$row['line_key']] = $this->hydrateLine($row);
         }
 
         return $map;
@@ -325,7 +347,21 @@ final class TariffRepository implements TariffRepositoryInterface
 
     /**
      * @param array<string, mixed> $row
-     * @param array<string,float>|null $preloadedLines  Lignes déjà chargées (évite un SELECT supplémentaire).
+     */
+    private function hydrateLine(array $row): TariffLine
+    {
+        return new TariffLine(
+            key: (string) $row['line_key'],
+            amount: (float) $row['amount_per_kwh'],
+            kind: ComponentKind::fromStringOrDefault((string) $row['component_kind']),
+            label: $row['label'] !== null && $row['label'] !== '' ? (string) $row['label'] : null,
+            sortOrder: (int) $row['sort_order'],
+        );
+    }
+
+    /**
+     * @param array<string, mixed> $row
+     * @param array<string,TariffLine>|null $preloadedLines  Lignes déjà chargées (évite un SELECT supplémentaire).
      */
     private function hydrate(array $row, ?array $preloadedLines = null): TariffGrid
     {
@@ -343,6 +379,7 @@ final class TariffRepository implements TariffRepositoryInterface
             userId: $row['user_id'] !== null ? (int) $row['user_id'] : null,
             country: $row['country'] !== null ? (string) $row['country'] : null,
             currency: (string) $row['currency'],
+            vatRate: isset($row['vat_rate']) ? (float) $row['vat_rate'] : 21.0,
         );
     }
 }

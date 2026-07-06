@@ -176,7 +176,7 @@ final class CostCalculationService
         $deltaM3 = max(0.0, (float) $pair['to']['counter_m3'] - (float) $pair['from']['counter_m3']);
         $kWh     = $this->calculator->m3ToKwh($deltaM3, $pcs);
 
-        $breakdown = $this->calculator->calculateGasCost($kWh, $days, $tariff->toTariffArray());
+        $breakdown = $this->calculator->calculateGasCost($kWh, $days, $tariff->toCalculationTariff());
 
         return [
             'available'       => true,
@@ -237,7 +237,7 @@ final class CostCalculationService
 
         $kWh = $this->calculator->m3ToKwh($interp->monthlyDelta, $pcs);
 
-        $breakdown = $this->calculator->calculateGasCost($kWh, $interp->days, $tariff->toTariffArray());
+        $breakdown = $this->calculator->calculateGasCost($kWh, $interp->days, $tariff->toCalculationTariff());
 
         return [
             'available'       => true,
@@ -260,9 +260,10 @@ final class CostCalculationService
     }
 
     /**
-     * Estimate water CONSUMPTION (volume m³) for a calendar month, using the same
-     * midnight interpolation as gas. L'eau n'a pas de tarif → on renvoie le volume
-     * uniquement (aucun coût).
+     * Estimate water cost/consumption for a calendar month, using the same
+     * midnight interpolation as gas. Si une grille tarifaire « eau » est active,
+     * on ajoute le coût (cost / tariff_name / currency) ; sinon on renvoie le
+     * volume seul (rétrocompat : l'eau n'avait pas de tarif auparavant).
      *
      * @return array<string, mixed>
      */
@@ -282,7 +283,7 @@ final class CostCalculationService
             return ['available' => false, 'reason' => $interp->reason];
         }
 
-        return [
+        $result = [
             'available'     => true,
             'period_from'   => $interp->monthStart,
             'period_to'     => $interp->monthEnd,
@@ -293,6 +294,24 @@ final class CostCalculationService
             'is_projection' => $interp->isProjection,
             'delta_m3'      => round($interp->monthlyDelta, 3),
         ];
+
+        $startDt = new DateTimeImmutable($interp->monthStart);
+        $endDt   = new DateTimeImmutable($interp->monthEnd);
+        $tariff  = $this->tariffRepo->findActiveGrid('water', $startDt)
+                ?? $this->tariffRepo->findActiveGrid('water', $endDt);
+
+        if ($tariff !== null) {
+            $result['tariff_name']  = $tariff->name;
+            $result['currency']     = $tariff->currency;
+            $result['tariff_rates'] = $tariff->toTariffArray();
+            $result['cost']         = $this->calculator->calculateWaterCost(
+                $interp->monthlyDelta,
+                $interp->days,
+                $tariff->toCalculationTariff(),
+            );
+        }
+
+        return $result;
     }
 
     // ── Helpers privés ─────────────────────────────────────────────────────────
@@ -347,7 +366,7 @@ final class CostCalculationService
             kwhExportT1: $deltas['injec_jour']  ?? 0.0,
             kwhExportT2: $deltas['injec_nuit']  ?? 0.0,
             days:        $days,
-            tariff:      $tariff->toTariffArray(),
+            tariff:      $tariff->toCalculationTariff(),
             kwhSolar:    (float) ($deltas['solar'] ?? 0.0),
         );
 
@@ -432,7 +451,7 @@ final class CostCalculationService
             kwhExportT1:      (float) ($deltas['injec_jour']  ?? 0.0),
             kwhExportT2:      (float) ($deltas['injec_nuit']  ?? 0.0),
             days:             $days,
-            tariff:           $tariffArr,
+            tariff:           $tariff->toCalculationTariff(),
             dynamicEnergyTtc: $energyTtc,
             kwhSolar:         (float) ($deltas['solar'] ?? 0.0),
         );
@@ -475,6 +494,11 @@ final class CostCalculationService
         $h     = (int) substr($hour, 11, 2);
         $isDay = $h >= 7 && $h < 23;
 
-        return (float) ($isDay ? ($tariff['energy_t1'] ?? 0.0) : ($tariff['energy_t2'] ?? 0.0));
+        // Repli monohoraire (energy_simple/energy_flat) pour les grilles sans T1/T2.
+        $flat = $tariff['energy_simple'] ?? $tariff['energy'] ?? 0.0;
+
+        return (float) ($isDay
+            ? ($tariff['energy_t1'] ?? $flat)
+            : ($tariff['energy_t2'] ?? $flat));
     }
 }

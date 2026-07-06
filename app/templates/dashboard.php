@@ -162,6 +162,24 @@ $fmt = function (mixed $v, int $dec = 3, string $unit = 'kWh'): string {
     window.__INIT_WATER_COST__ = <?= json_encode($waterCostData ?? ['available' => false, 'reason' => 'No data']) ?>;
     window.__INIT_WATER_YEAR__  = <?= (int) $waterInitYear ?>;
     window.__INIT_WATER_MONTH__ = <?= (int) $waterInitMonth ?>;
+<?php
+    // Libellés des composantes tarifaires (catalogue) + groupes, pour le rendu
+    // générique du détail de coût (dashboard.js lit cost.lines par clé/groupe).
+    $tariffLineLabels = [];
+    foreach (['electricity', 'gas', 'water'] as $catEnergy) {
+        foreach (\App\Domain\TariffLineCatalog::forType($catEnergy) as $catKey => $catDef) {
+            $tariffLineLabels[$catKey] = $catDef['label'];
+        }
+    }
+    $tariffGroupLabels = [
+        'energy'    => $this->t('tariffs.group_energy'),
+        'fixed'     => $this->t('tariffs.group_fixed'),
+        'taxes'     => $this->t('tariffs.group_taxes'),
+        'injection' => $this->t('tariffs.group_injection'),
+    ];
+?>
+    window.__TARIFF_LINE_LABELS__  = <?= json_encode($tariffLineLabels, JSON_UNESCAPED_UNICODE) ?>;
+    window.__TARIFF_GROUP_LABELS__ = <?= json_encode($tariffGroupLabels, JSON_UNESCAPED_UNICODE) ?>;
   </script>
 
   <!-- ── Chart ─────────────────────────────────────────────────────────── -->

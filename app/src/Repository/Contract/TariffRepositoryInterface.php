@@ -37,7 +37,7 @@ interface TariffRepositoryInterface
     /**
      * Crée une grille tarifaire et ses lignes. Renvoie l'identifiant créé.
      *
-     * @param array<string, mixed> $lines
+     * @param list<array{key: string, amount: float, kind: string, label: ?string}> $lines
      */
     public function saveGrid(
         string $energyType,
@@ -46,5 +46,9 @@ interface TariffRepositoryInterface
         ?DateTimeImmutable $validTo,
         array $lines,
         ?float $pcsCoefficient = null,
+        ?string $country = null,
+        string $currency = 'EUR',
+        bool $shared = false,
+        float $vatRate = 21.0,
     ): int;
 }

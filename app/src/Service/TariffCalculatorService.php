@@ -4,51 +4,44 @@ declare(strict_types=1);
 
 namespace App\Service;
 
+use App\Domain\ComponentKind;
+
 /**
- * Belgian electricity & gas cost calculator.
+ * Calculateur de coût énergétique générique (électricité, gaz, eau).
  *
- * Electricity tariff array keys (all amounts in €, TTC):
- *   energy_simple         float  €/kWh  supplier mono-hourly rate (alternative to t1/t2)
- *   energy_t1             float  €/kWh  supplier day rate
- *   energy_t2             float  €/kWh  supplier night rate
- *   subscription          float  €/mois abonnement fournisseur (fixed monthly)
- *   distribution_t1       float  €/kWh  Sibelga day network tariff
- *   distribution_t2       float  €/kWh  Sibelga night network tariff
- *   transport             float  €/kWh  transport tariff (Elia/Sibelga)
- *   management_annual     float  €/an   gestion réseau (fixed annual)
- *   prosumer_annual       float  €/an   taxe prosumer BRUGEL (fixed annual)
- *   excise_duty           float  €/kWh  droit d'accise spécial
- *   energy_contribution   float  €/kWh  contribution énergie
- *   green_contribution    float  €/kWh  contribution verte & cogénération
- *   public_service_annual float  €/an   obligations de service public (fixed annual)
- *   injection_t1          float  €/kWh  injection credit day
- *   injection_t2          float  €/kWh  injection credit night
+ * Chaque grille est une liste de lignes typées (component_kind) ; le moteur
+ * itère sur les lignes et applique la formule du kind. Cela rend le calcul
+ * indépendant des taxes d'un pays : ajouter une composante = ajouter une ligne.
  *
- * Gas tariff array keys (all amounts TTC, in €):
- *   energy                float  €/kWh
- *   subscription          float  €/mois
- *   energy_contribution   float  €/kWh
- *   federal_excise        float  €/kWh
- *   distribution          float  €/kWh   (variable, per kWh)
- *   distribution_fixed    float  €/an    (fixed annual, prorated by days)
- *   transport             float  €/kWh
- *   meter_reading_annual  float  €/an    (prorated by days)
- *   connection_fee_kwh    float  €/kWh   Redevance de raccordement
- *   public_service_annual float  €/an    Obligations de service public (prorated by days)
+ * Modèle TVA : les montants sont saisis TTC. La décomposition HT/TVA utilise le
+ * taux `vat_rate` de la grille (remplace l'ancienne constante 21 % en dur).
+ *
+ * Formules par kind (cf. App\Domain\ComponentKind) :
+ *   energy_flat / energy_t1 / energy_t2  €/kWh × conso (part énergie fournisseur)
+ *   per_kwh / per_kwh_t1 / per_kwh_t2     €/kWh × conso (réseau, taxes)
+ *   per_m3                                €/m³ × m³ (eau)
+ *   fixed_monthly                         €/mois × mois entiers
+ *   fixed_annual                          €/an proratisé sur la période
+ *   injection_t1 / injection_t2           −(€/kWh × injection) (crédits)
  */
 final class TariffCalculatorService
 {
-    private const TVA       = 0.21;
     private const DAYS_YEAR = 365.0;
 
+    /** Kinds contribuant à l'économie d'auto-consommation solaire (part variable jour). */
+    private const SOLAR_SAVINGS_KINDS = [
+        ComponentKind::EnergyT1,
+        ComponentKind::EnergyFlat,
+        ComponentKind::PerKwhT1,
+        ComponentKind::PerKwh,
+    ];
+
     /**
-     * Calculate the full electricity cost for a given period.
-     * Handles all tariff fields defined in tariffs.php.
+     * Calcule le coût électricité complet pour une période (tarif classique).
      *
-     * @param float $kwhSolar  Total PV production for the period (kWh).
-     *                         Used to compute auto-consumption and savings.
-     *                         Defaults to 0.0 when no solar data is available.
-     * @param array<string, mixed> $tariff
+     * @param float $kwhSolar Production PV totale de la période (kWh), pour l'info
+     *                        d'auto-consommation. 0.0 si pas de données solaires.
+     * @param array{vat_rate: float, lines: list<array{key: string, kind: string, amount: float, label: string|null}>} $tariff
      * @return array<string, mixed>
      */
     public function calculateElectricityCost(
@@ -60,48 +53,25 @@ final class TariffCalculatorService
         array $tariff,
         float $kwhSolar = 0.0,
     ): array {
-        // ── Fournisseur (part énergie classique T1/T2) ───────────────────────
-        $energyT1 = $kwhT1 * ($tariff['energy_t1'] ?? 0.0);
-        $energyT2 = $kwhT2 * ($tariff['energy_t2'] ?? 0.0);
+        $quantities = [
+            'kwh_t1'        => $kwhT1,
+            'kwh_t2'        => $kwhT2,
+            'kwh_export_t1' => $kwhExportT1,
+            'kwh_export_t2' => $kwhExportT2,
+        ];
 
-        $common = $this->electricityCommonComponents(
-            $kwhT1,
-            $kwhT2,
-            $kwhExportT1,
-            $kwhExportT2,
-            $days,
-            $tariff,
-            $kwhSolar,
-        );
+        $result = $this->computeLines($tariff, $quantities, $days);
+        $solar  = $this->solarInfo($tariff, $kwhT1, $kwhT2, $kwhExportT1, $kwhExportT2, $kwhSolar);
 
-        // All tariff amounts are already TTC (VAT-inclusive).
-        $totalTtc    = $energyT1 + $energyT2 + $common['non_energy_total'];
-        $htva        = $totalTtc / (1 + self::TVA);
-        $vatIncluded = $totalTtc - $htva;
-
-        return array_merge(
-            [
-                'energy_t1' => round($energyT1, 4),
-                'energy_t2' => round($energyT2, 4),
-            ],
-            $common['billed'],
-            [
-                'total'        => round($totalTtc, 2),
-                'htva'         => round($htva, 2),
-                'vat_included' => round($vatIncluded, 2),
-            ],
-            $common['info'],
-        );
+        return array_merge($result, $solar);
     }
 
     /**
-     * Variante « tarif dynamique » : la part énergie fournisseur est remplacée
-     * par un coût pré-calculé indexé au prix de marché horaire ($dynamicEnergyTtc,
-     * déjà TTC, marge incluse). Tous les autres postes (distribution, taxes,
-     * abonnement, injection, solaire) restent identiques au tarif classique.
+     * Variante « tarif dynamique » : la part énergie fournisseur est remplacée par
+     * un coût indexé au prix de marché horaire ($dynamicEnergyTtc, déjà TTC). Tous
+     * les autres postes restent identiques au tarif classique.
      *
-     * @param array<string, mixed> $tariff
-     * @param float $dynamicEnergyTtc Coût énergie dynamique total de la période, TTC.
+     * @param array{vat_rate: float, lines: list<array{key: string, kind: string, amount: float, label: string|null}>} $tariff
      * @return array<string, mixed>
      */
     public function calculateElectricityCostDynamic(
@@ -114,205 +84,219 @@ final class TariffCalculatorService
         float $dynamicEnergyTtc,
         float $kwhSolar = 0.0,
     ): array {
-        $common = $this->electricityCommonComponents(
-            $kwhT1,
-            $kwhT2,
-            $kwhExportT1,
-            $kwhExportT2,
-            $days,
-            $tariff,
-            $kwhSolar,
-        );
+        $quantities = [
+            'kwh_t1'        => $kwhT1,
+            'kwh_t2'        => $kwhT2,
+            'kwh_export_t1' => $kwhExportT1,
+            'kwh_export_t2' => $kwhExportT2,
+        ];
 
-        $totalTtc    = $dynamicEnergyTtc + $common['non_energy_total'];
-        $htva        = $totalTtc / (1 + self::TVA);
-        $vatIncluded = $totalTtc - $htva;
+        $result = $this->computeLines($tariff, $quantities, $days, $dynamicEnergyTtc);
+        $solar  = $this->solarInfo($tariff, $kwhT1, $kwhT2, $kwhExportT1, $kwhExportT2, $kwhSolar);
 
-        return array_merge(
-            [
-                'mode'           => 'dynamic',
-                'energy_dynamic' => round($dynamicEnergyTtc, 4),
-            ],
-            $common['billed'],
-            [
-                'total'        => round($totalTtc, 2),
-                'htva'         => round($htva, 2),
-                'vat_included' => round($vatIncluded, 2),
-            ],
-            $common['info'],
-        );
+        return array_merge(['mode' => 'dynamic'], $result, $solar);
     }
 
     /**
-     * Composants de coût électricité communs aux tarifs classique et dynamique :
-     * tout sauf la part énergie fournisseur. Centralise abonnement, distribution,
-     * taxes, crédits d'injection et l'auto-consommation solaire (informative).
+     * Calcule le coût gaz pour une période.
      *
-     * @param array<string, mixed> $tariff
-     * @return array{non_energy_total: float, billed: array<string, float>, info: array<string, float|null>}
+     * @param float $kwh consommation en kWh (après conversion m³ → kWh via PCS)
+     * @param array{vat_rate: float, lines: list<array{key: string, kind: string, amount: float, label: string|null}>} $tariff
+     * @return array<string, mixed>
      */
-    private function electricityCommonComponents(
+    public function calculateGasCost(float $kwh, int $days, array $tariff): array
+    {
+        $result = $this->computeLines($tariff, ['kwh_t1' => $kwh], $days);
+        $result['kwh'] = round($kwh, 3);
+
+        return $result;
+    }
+
+    /**
+     * Calcule le coût de l'eau pour une période (composantes en €/m³ + fixes).
+     *
+     * @param float $m3 volume consommé en m³
+     * @param array{vat_rate: float, lines: list<array{key: string, kind: string, amount: float, label: string|null}>} $tariff
+     * @return array<string, mixed>
+     */
+    public function calculateWaterCost(float $m3, int $days, array $tariff): array
+    {
+        $result = $this->computeLines($tariff, ['m3' => $m3], $days, null, 'water');
+        $result['m3'] = round($m3, 3);
+
+        return $result;
+    }
+
+    /**
+     * Moteur générique : applique la formule de chaque ligne selon son kind.
+     *
+     * @param array{vat_rate?: float, lines?: list<array{key: string, kind: string, amount: float, label: string|null}>} $tariff
+     * @param array{kwh_t1?: float, kwh_t2?: float, kwh_export_t1?: float, kwh_export_t2?: float, m3?: float} $quantities
+     * @param float|null $dynamicEnergyTtc  Coût énergie dynamique (mode dynamique) ; les kinds énergie fournisseur sont alors ignorés.
+     * @return array<string, mixed>
+     */
+    private function computeLines(
+        array $tariff,
+        array $quantities,
+        int $days,
+        ?float $dynamicEnergyTtc = null,
+        string $energyType = 'electricity',
+    ): array {
+        $kwhT1    = (float) ($quantities['kwh_t1'] ?? 0.0);
+        $kwhT2    = (float) ($quantities['kwh_t2'] ?? 0.0);
+        $exportT1 = (float) ($quantities['kwh_export_t1'] ?? 0.0);
+        $exportT2 = (float) ($quantities['kwh_export_t2'] ?? 0.0);
+        $m3       = (float) ($quantities['m3'] ?? 0.0);
+        $totalKwh = $kwhT1 + $kwhT2;
+
+        $wholeMonths = $this->wholeMonths($days);
+        $isDynamic   = $dynamicEnergyTtc !== null;
+
+        $lines       = [];
+        $total       = 0.0;
+        $energyTotal = 0.0;
+
+        // En mode dynamique, la part énergie fournisseur est une ligne synthétique.
+        if ($isDynamic) {
+            $lines[] = [
+                'key'      => 'energy_dynamic',
+                'kind'     => ComponentKind::EnergyFlat->value,
+                'group'    => 'energy',
+                'label'    => null,
+                'quantity' => round($totalKwh, 3),
+                'unit'     => '€/kWh',
+                'rate'     => $totalKwh > 0.0 ? round($dynamicEnergyTtc / $totalKwh, 6) : null,
+                'amount'   => round($dynamicEnergyTtc, 4),
+            ];
+            $total       += $dynamicEnergyTtc;
+            $energyTotal += $dynamicEnergyTtc;
+        }
+
+        foreach ($tariff['lines'] ?? [] as $line) {
+            $kind = ComponentKind::fromStringOrDefault((string) $line['kind']);
+            $rate = (float) $line['amount'];
+
+            if ($isDynamic && $kind->isSupplierEnergy()) {
+                continue; // remplacé par la ligne énergie dynamique
+            }
+
+            [$quantity, $amount] = $this->applyKind($kind, $rate, [
+                'kwh_t1'    => $kwhT1,
+                'kwh_t2'    => $kwhT2,
+                'total_kwh' => $totalKwh,
+                'export_t1' => $exportT1,
+                'export_t2' => $exportT2,
+                'm3'        => $m3,
+                'months'    => $wholeMonths,
+                'days'      => $days,
+            ]);
+
+            $lines[] = [
+                'key'      => (string) $line['key'],
+                'kind'     => $kind->value,
+                'group'    => $kind->group(),
+                'label'    => $line['label'] ?? null,
+                'quantity' => round($quantity, 4),
+                'unit'     => $kind->unit($energyType),
+                'rate'     => $rate,
+                'amount'   => round($amount, 4),
+            ];
+
+            $total += $amount;
+            if ($kind->isSupplierEnergy()) {
+                $energyTotal += $amount;
+            }
+        }
+
+        $vatRate     = (float) ($tariff['vat_rate'] ?? 21.0);
+        $htva        = $total / (1.0 + $vatRate / 100.0);
+        $vatIncluded = $total - $htva;
+
+        return [
+            'lines'        => $lines,
+            'total'        => round($total, 2),
+            'htva'         => round($htva, 2),
+            'vat_included' => round($vatIncluded, 2),
+            'vat_rate'     => $vatRate,
+            'energy_total' => round($energyTotal, 2),
+        ];
+    }
+
+    /**
+     * Quantité et montant (€) d'une ligne selon son kind.
+     *
+     * @param array{kwh_t1: float, kwh_t2: float, total_kwh: float, export_t1: float, export_t2: float, m3: float, months: int, days: int} $ctx
+     * @return array{0: float, 1: float}  [quantité, montant]
+     */
+    private function applyKind(ComponentKind $kind, float $rate, array $ctx): array
+    {
+        return match ($kind) {
+            ComponentKind::EnergyFlat, ComponentKind::PerKwh => [$ctx['total_kwh'], $ctx['total_kwh'] * $rate],
+            ComponentKind::EnergyT1, ComponentKind::PerKwhT1 => [$ctx['kwh_t1'], $ctx['kwh_t1'] * $rate],
+            ComponentKind::EnergyT2, ComponentKind::PerKwhT2 => [$ctx['kwh_t2'], $ctx['kwh_t2'] * $rate],
+            ComponentKind::PerM3        => [$ctx['m3'], $ctx['m3'] * $rate],
+            ComponentKind::FixedMonthly => [(float) $ctx['months'], $ctx['months'] * $rate],
+            ComponentKind::FixedAnnual  => [(float) $ctx['days'], $this->prorateAnnual($rate, $ctx['days'])],
+            ComponentKind::InjectionT1  => [$ctx['export_t1'], -($ctx['export_t1'] * $rate)],
+            ComponentKind::InjectionT2  => [$ctx['export_t2'], -($ctx['export_t2'] * $rate)],
+        };
+    }
+
+    /**
+     * Bloc informatif d'auto-consommation solaire (exclu du total facturé).
+     * La production PV a lieu en journée → tarifs variables T1 (jour).
+     *
+     * @param array{vat_rate?: float, lines?: list<array{key: string, kind: string, amount: float, label: string|null}>} $tariff
+     * @return array<string, float|null>
+     */
+    private function solarInfo(
+        array $tariff,
         float $kwhT1,
         float $kwhT2,
         float $kwhExportT1,
         float $kwhExportT2,
-        int   $days,
-        array $tariff,
         float $kwhSolar,
     ): array {
         $totalKwh    = $kwhT1 + $kwhT2;
         $totalExport = $kwhExportT1 + $kwhExportT2;
 
-        // Subscription is a fixed monthly fee: 2.99 €/mois stays 2.99 € whether the month
-        // has 28, 29, 30 or 31 days. We round to the nearest whole month.
-        $wholeMonths = $this->wholeMonths($days);
-
-        // ── Abonnement (fixe mensuel) ────────────────────────────────────────
-        $subscription = $wholeMonths * ($tariff['subscription'] ?? 0.0);
-
-        // ── Distribution (Sibelga) ───────────────────────────────────────────
-        $distributionT1 = $kwhT1    * ($tariff['distribution_t1'] ?? 0.0);
-        $distributionT2 = $kwhT2    * ($tariff['distribution_t2'] ?? 0.0);
-        $transport      = $totalKwh * ($tariff['transport']        ?? 0.0);
-        $managementFee  = $this->prorateAnnual($tariff['management_annual'] ?? 0.0, $days);
-
-        // ── Taxes & contributions ────────────────────────────────────────────
-        $prosumerFee        = $this->prorateAnnual($tariff['prosumer_annual'] ?? 0.0, $days);
-        $exciseDuty         = $totalKwh * ($tariff['excise_duty']            ?? 0.0);
-        $energyContribution = $totalKwh * ($tariff['energy_contribution']    ?? 0.0);
-        $greenContribution  = $totalKwh * ($tariff['green_contribution']     ?? 0.0);
-        $publicServiceFee   = $this->prorateAnnual($tariff['public_service_annual'] ?? 0.0, $days);
-
-        // ── Injection credits (negative = reduce the bill) ────────────────────
-        $injectionT1 = -($kwhExportT1 * ($tariff['injection_t1'] ?? 0.0));
-        $injectionT2 = -($kwhExportT2 * ($tariff['injection_t2'] ?? 0.0));
-
-        $nonEnergyTotal = $subscription
-            + $distributionT1
-            + $distributionT2
-            + $transport
-            + $managementFee
-            + $prosumerFee
-            + $exciseDuty
-            + $energyContribution
-            + $greenContribution
-            + $publicServiceFee
-            + $injectionT1
-            + $injectionT2;
-
-        // ── Solar self-consumption (informational, excluded from the billed total) ─
-        // Solar production occurs during daytime → T1 (day) variable rates apply.
-        // self_consumed = production − exported to grid (≥ 0).
-        $solarConsumed  = max(0.0, $kwhSolar - $totalExport);
-        $savingsRateTtc = ($tariff['energy_t1']           ?? 0.0)
-                        + ($tariff['distribution_t1']     ?? 0.0)
-                        + ($tariff['transport']           ?? 0.0)
-                        + ($tariff['excise_duty']         ?? 0.0)
-                        + ($tariff['energy_contribution'] ?? 0.0)
-                        + ($tariff['green_contribution']  ?? 0.0);
-        $solarSavings       = $solarConsumed * $savingsRateTtc;
-        $selfConsumptionPct = $kwhSolar > 0.0
-            ? round($solarConsumed / $kwhSolar * 100.0, 1)
-            : null;
+        $savingsRate  = $this->sumRatesForKinds($tariff, self::SOLAR_SAVINGS_KINDS);
+        $solarConsumed = max(0.0, $kwhSolar - $totalExport);
+        $solarSavings  = $solarConsumed * $savingsRate;
 
         return [
-            'non_energy_total' => (float) $nonEnergyTotal,
-            'billed' => [
-                'subscription'        => round((float) $subscription, 4),
-                'distribution_t1'     => round($distributionT1, 4),
-                'distribution_t2'     => round($distributionT2, 4),
-                'transport'           => round($transport, 4),
-                'management_fee'      => round($managementFee, 4),
-                'prosumer_fee'        => round($prosumerFee, 4),
-                'excise_duty'         => round($exciseDuty, 4),
-                'energy_contribution' => round($energyContribution, 7),
-                'green_contribution'  => round($greenContribution, 4),
-                'public_service_fee'  => round($publicServiceFee, 4),
-                'injection_t1'        => round($injectionT1, 4),
-                'injection_t2'        => round($injectionT2, 4),
-            ],
-            'info' => [
-                'import_kwh'           => round($totalKwh, 3),
-                'export_kwh'           => round($totalExport, 3),
-                'solar_produced'       => $kwhSolar > 0.0 ? round($kwhSolar, 3)       : null,
-                'solar_consumed'       => $kwhSolar > 0.0 ? round($solarConsumed, 3)  : null,
-                'self_consumption_pct' => $selfConsumptionPct,
-                'solar_savings_rate'   => $kwhSolar > 0.0 ? round((float) $savingsRateTtc, 6) : null,
-                'solar_savings'        => $kwhSolar > 0.0 ? round($solarSavings, 2)   : null,
-            ],
+            'import_kwh'           => round($totalKwh, 3),
+            'export_kwh'           => round($totalExport, 3),
+            'solar_produced'       => $kwhSolar > 0.0 ? round($kwhSolar, 3)      : null,
+            'solar_consumed'       => $kwhSolar > 0.0 ? round($solarConsumed, 3) : null,
+            'self_consumption_pct' => $kwhSolar > 0.0 ? round($solarConsumed / $kwhSolar * 100.0, 1) : null,
+            'solar_savings_rate'   => $kwhSolar > 0.0 ? round($savingsRate, 6)   : null,
+            'solar_savings'        => $kwhSolar > 0.0 ? round($solarSavings, 2)  : null,
         ];
     }
 
     /**
-     * Calculate gas cost for a given period.
+     * Somme des taux (€/kWh) des lignes appartenant à un ensemble de kinds.
      *
-     * All tariff rates are TTC (VAT-inclusive, Belgian standard).
-     * total_ttc = sum of all lines
-     * htva      = total_ttc / 1.21
-     * vat_in    = total_ttc - htva
-     *
-     * @param float $kwh  consumed kWh (after m³ → kWh conversion via PCS)
-     * @param int   $days number of days in the period
-     * @param array<string, mixed> $tariff
-     * @return array<string, mixed>
+     * @param array{vat_rate?: float, lines?: list<array{key: string, kind: string, amount: float, label: string|null}>} $tariff
+     * @param list<ComponentKind> $kinds
      */
-    public function calculateGasCost(float $kwh, int $days, array $tariff): array
+    private function sumRatesForKinds(array $tariff, array $kinds): float
     {
-        $wholeMonths = $this->wholeMonths($days);
+        $wanted = array_map(static fn (ComponentKind $k): string => $k->value, $kinds);
+        $sum    = 0.0;
+        foreach ($tariff['lines'] ?? [] as $line) {
+            if (in_array((string) $line['kind'], $wanted, true)) {
+                $sum += (float) $line['amount'];
+            }
+        }
 
-        // ── Fournisseur ──────────────────────────────────────────────────────
-        $energy       = $kwh         * ($tariff['energy']      ?? 0.0);
-        $subscription = $wholeMonths * ($tariff['subscription'] ?? 0.0);
-
-        // ── Distribution & transport (Sibelga) ───────────────────────────────
-        $distribution      = $kwh  * ($tariff['distribution']         ?? 0.0);
-        // distribution_fixed stored in €/an — prorate to the actual period
-        $distributionFixed = $this->prorateAnnual($tariff['distribution_fixed'] ?? 0.0, $days);
-        $transport         = $kwh  * ($tariff['transport']             ?? 0.0);
-        $meterReading      = $this->prorateAnnual($tariff['meter_reading_annual'] ?? 0.0, $days);
-
-        // ── Taxes & contributions ────────────────────────────────────────────
-        $energyContribution = $kwh * ($tariff['energy_contribution'] ?? 0.0);
-        $federalExcise      = $kwh * ($tariff['federal_excise']      ?? 0.0);
-        $connectionFee      = $kwh  * ($tariff['connection_fee_kwh']     ?? 0.0);
-        $publicService      = $this->prorateAnnual($tariff['public_service_annual'] ?? 0.0, $days);
-
-        // All amounts are already TTC (VAT-inclusive)
-        $totalTtc = $energy
-            + $subscription
-            + $distribution
-            + $distributionFixed
-            + $transport
-            + $meterReading
-            + $energyContribution
-            + $federalExcise
-            + $connectionFee
-            + $publicService;
-
-        $htva        = $totalTtc / (1.0 + self::TVA);
-        $vatIncluded = $totalTtc - $htva;
-
-        return [
-            'energy'              => round($energy, 4),
-            'subscription'        => round((float) $subscription, 4),
-            'distribution'        => round($distribution, 4),
-            'distribution_fixed'  => round($distributionFixed, 4),
-            'transport'           => round($transport, 4),
-            'meter_reading'       => round($meterReading, 4),
-            'energy_contribution' => round($energyContribution, 4),
-            'federal_excise'      => round($federalExcise, 4),
-            'connection_fee'      => round($connectionFee, 4),
-            'public_service'      => round($publicService, 4),
-            'total'               => round($totalTtc, 2),
-            'htva'                => round($htva, 2),
-            'vat_included'        => round($vatIncluded, 2),
-            'kwh'                 => round($kwh, 3),
-        ];
+        return $sum;
     }
 
     /**
-     * Convert gas m³ to kWh using PCS coefficient.
-     * Belgian average PCS ≈ 10.55 kWh/m³ (Sibelga reference value, configurable).
+     * Convertit des m³ de gaz en kWh via le coefficient PCS.
+     * PCS moyen belge ≈ 10.55 kWh/m³ (référence Sibelga, configurable).
      */
     public function m3ToKwh(float $m3, float $pcsCoefficient = 10.55): float
     {

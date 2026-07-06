@@ -1,24 +1,52 @@
 <?php
 
+use App\Domain\ComponentKind;
 use App\Domain\TariffGrid;
+use App\Domain\TariffLineCatalog;
 
 /**
- * Template de gestion des grilles tarifaires.
+ * Template de gestion des grilles tarifaires (parcours guidé, multi-énergies).
  *
- * @var string|null                                   $error
- * @var string|null                                   $success
- * @var TariffGrid[]                                  $elecGrids
- * @var TariffGrid[]                                  $gasGrids
- * @var TariffGrid|null                               $editGrid
- * @var TariffGrid|null                               $latestElec
- * @var TariffGrid|null                               $latestGas
- * @var array<string,array{label:string,unit:string}> $elecLines
- * @var array<string,array{label:string,unit:string}> $gasLines
- * @var string                                        $et       Type d'énergie actif du formulaire
- * @var array<string,float>                           $elLines  Valeurs pré-remplies électricité
- * @var array<string,float>                           $glLines  Valeurs pré-remplies gaz
- * @var string                                        $today
+ * @var string|null                                                          $error
+ * @var string|null                                                          $success
+ * @var string                                                               $energy      Énergie active (electricity|gas|water)
+ * @var list<string>                                                         $energyTypes
+ * @var TariffGrid[]                                                         $grids       Grilles de l'énergie active
+ * @var TariffGrid|null                                                      $editGrid
+ * @var list<array{key:string,kind:string,label:string,amount:string,custom:bool}> $formFields
+ * @var string|null                                                          $formCountry
+ * @var string                                                               $formCurrency
+ * @var float                                                                $formVat
+ * @var array<string,string>                                                 $countries   ISO2 => nom localisé, trié
+ * @var list<string>                                                         $currencies
+ * @var list<array{code:string,energy_type:string,country:?string,name_key:string,fields:list<array{key:string,kind:ComponentKind,label:string}>}> $builtinTemplates
+ * @var list<array{id:int,energy_type:string,country:?string,name:string,fields:list<array{key:string,kind:string,label:?string,sort:int}>}> $userTemplates
+ * @var list<string>                                                         $groupOrder
+ * @var array<string,string>                                                 $kindOptions
+ * @var string                                                               $today
+ * @var bool                                                                 $isAdmin
  */
+
+// Regroupement des lignes du formulaire par groupe d'affichage (dérivé du kind).
+$grouped = [];
+foreach ($formFields as $i => $f) {
+    $group = ComponentKind::fromStringOrDefault($f['kind'])->group();
+    $grouped[$group][] = ['i' => $i] + $f;
+}
+$nextIndex = count($formFields);
+
+// Devise éditée hors référentiel → on l'ajoute en option.
+$currencyOptions = $currencies;
+if (!in_array($formCurrency, $currencyOptions, true)) {
+    array_unshift($currencyOptions, $formCurrency);
+}
+
+$energyIcons  = ['electricity' => '⚡', 'gas' => '🔥', 'water' => '💧'];
+$energyLabels = [
+    'electricity' => $this->t('tariffs.energy_electricity'),
+    'gas'         => $this->t('tariffs.energy_gas'),
+    'water'       => $this->t('tariffs.energy_water'),
+];
 ?>
 <!DOCTYPE html>
 <html lang="<?= $this->e($this->locale()) ?>">
@@ -58,18 +86,29 @@ use App\Domain\TariffGrid;
 <div class="alert alert-err" style="margin-top:20px">✗ <?= $this->e($error) ?></div>
 <?php endif; ?>
 
-<!-- ── Existing tariffs ─────────────────────────────────────────────────── -->
+<!-- ── Onglets énergie (liens : état côté serveur) ───────────────────────── -->
+<div class="energy-tabs">
+  <?php foreach ($energyTypes as $et): ?>
+  <a href="?energy=<?= $this->e($et) ?>" class="energy-tab <?= $energy === $et ? 'active' : '' ?>">
+    <span class="energy-tab-icon"><?= $energyIcons[$et] ?></span>
+    <?= $this->e($energyLabels[$et]) ?>
+  </a>
+  <?php endforeach; ?>
+</div>
+
+<!-- ── Grilles existantes ────────────────────────────────────────────────── -->
 <div class="section-header">
-  <span class="section-title"><?= $this->te('tariffs.elec') ?></span>
+  <span class="section-title"><?= $this->te('tariffs.existing') ?></span>
   <span class="section-line"></span>
 </div>
 
 <div class="grids-wrap">
-<?php if (empty($elecGrids)): ?>
-  <div class="empty"><?= $this->te('tariffs.none_elec') ?></div>
-<?php else: foreach ($elecGrids as $g):
+<?php if (empty($grids)): ?>
+  <div class="empty"><?= $this->te('tariffs.none') ?></div>
+<?php else: foreach ($grids as $g):
   $active = $g->isActiveOn(new \DateTimeImmutable('today'));
   $rowId  = 'lines-' . $g->id;
+  $catalog = TariffLineCatalog::forType($g->energyType);
 ?>
   <div class="grid-row">
     <div>
@@ -77,59 +116,14 @@ use App\Domain\TariffGrid;
       <div class="grid-dates">
         <?= $g->validFrom->format('d/m/Y') ?> →
         <?= $g->validTo ? $g->validTo->format('d/m/Y') : '∞' ?>
-      </div>
-    </div>
-    <span class="grid-active <?= $active ? 'yes' : 'no' ?>"><?= $active ? $this->te('common.active') : $this->te('common.inactive') ?></span>
-    <?php if ($g->isShared()): ?><span class="grid-active yes" title="<?= $this->e($this->t('tariffs.shared_grid')) ?>"><?= $this->te('tariffs.shared') ?><?= $g->country ? ' · ' . $this->e($g->country) : '' ?></span><?php endif; ?>
-    <button class="btn btn-ghost btn-sm" data-toggle-lines="<?= $this->e($rowId) ?>"><?= $this->te('tariffs.detail') ?></button>
-    <div class="grid-actions">
-      <a href="?edit=<?= $g->id ?>#form" class="btn btn-ghost btn-sm"><?= $this->te('tariffs.edit') ?></a>
-      <form method="post" data-confirm="<?= $this->e($this->t('tariffs.delete_confirm')) ?>">
-        <input type="hidden" name="action"  value="delete">
-        <input type="hidden" name="grid_id" value="<?= $g->id ?>">
-        <?= \App\Security\Csrf::field() ?>
-        <button type="submit" class="btn btn-red btn-sm"><?= $this->te('tariffs.delete') ?></button>
-      </form>
-    </div>
-  </div>
-  <div class="lines-detail" id="<?= $rowId ?>">
-    <table class="lines-table">
-      <?php foreach ($g->lines as $key => $amount): ?>
-      <tr>
-        <td><?= $this->e($elecLines[$key]['label'] ?? $key) ?></td>
-        <td><?= number_format($amount, 7) ?> <?= $this->e($elecLines[$key]['unit'] ?? '') ?></td>
-      </tr>
-      <?php endforeach; ?>
-    </table>
-  </div>
-<?php endforeach; endif; ?>
-</div>
-
-<div class="section-header">
-  <span class="section-title"><?= $this->te('tariffs.gas') ?></span>
-  <span class="section-line"></span>
-</div>
-
-<div class="grids-wrap">
-<?php if (empty($gasGrids)): ?>
-  <div class="empty"><?= $this->te('tariffs.none_gas') ?></div>
-<?php else: foreach ($gasGrids as $g):
-  $active = $g->isActiveOn(new \DateTimeImmutable('today'));
-  $rowId  = 'lines-gas-' . $g->id;
-?>
-  <div class="grid-row">
-    <div>
-      <div class="grid-name"><?= $this->e($g->name) ?></div>
-      <div class="grid-dates">
-        <?= $g->validFrom->format('d/m/Y') ?> →
-        <?= $g->validTo ? $g->validTo->format('d/m/Y') : '∞' ?>
+        <span class="grid-meta">· <?= $this->e($g->currency) ?> · TVA <?= $this->e(rtrim(rtrim(number_format($g->vatRate, 2, '.', ''), '0'), '.')) ?>%<?= $g->country ? ' · ' . $this->e($g->country) : '' ?></span>
         <?php if ($g->pcsCoefficient ?? null): ?>
-          <span style="margin-left:8px;color:var(--blue)">PCS <?= number_format($g->pcsCoefficient, 4) ?> kWh/m³</span>
+          <span class="grid-meta" style="color:var(--blue)">· PCS <?= number_format($g->pcsCoefficient, 4) ?> kWh/m³</span>
         <?php endif; ?>
       </div>
     </div>
     <span class="grid-active <?= $active ? 'yes' : 'no' ?>"><?= $active ? $this->te('common.active') : $this->te('common.inactive') ?></span>
-    <?php if ($g->isShared()): ?><span class="grid-active yes" title="<?= $this->e($this->t('tariffs.shared_grid')) ?>"><?= $this->te('tariffs.shared') ?><?= $g->country ? ' · ' . $this->e($g->country) : '' ?></span><?php endif; ?>
+    <?php if ($g->isShared()): ?><span class="grid-active yes" title="<?= $this->e($this->t('tariffs.shared_grid')) ?>"><?= $this->te('tariffs.shared') ?></span><?php endif; ?>
     <button class="btn btn-ghost btn-sm" data-toggle-lines="<?= $this->e($rowId) ?>"><?= $this->te('tariffs.detail') ?></button>
     <div class="grid-actions">
       <a href="?edit=<?= $g->id ?>#form" class="btn btn-ghost btn-sm"><?= $this->te('tariffs.edit') ?></a>
@@ -143,10 +137,13 @@ use App\Domain\TariffGrid;
   </div>
   <div class="lines-detail" id="<?= $rowId ?>">
     <table class="lines-table">
-      <?php foreach ($g->lines as $key => $amount): ?>
+      <?php foreach ($g->lines as $key => $line):
+        $kind  = $line->kind;
+        $lbl   = $line->label ?? ($catalog[$key]['label'] ?? $key);
+      ?>
       <tr>
-        <td><?= $this->e($gasLines[$key]['label'] ?? $key) ?></td>
-        <td><?= number_format($amount, 7) ?> <?= $this->e($gasLines[$key]['unit'] ?? '') ?></td>
+        <td><?= $this->e($lbl) ?></td>
+        <td><?= number_format($line->amount, 7) ?> <?= $this->e($kind->unit($g->energyType)) ?></td>
       </tr>
       <?php endforeach; ?>
     </table>
@@ -154,25 +151,78 @@ use App\Domain\TariffGrid;
 <?php endforeach; endif; ?>
 </div>
 
-<!-- ── Form ─────────────────────────────────────────────────────────────── -->
+<!-- ── Point de départ (import de template) ──────────────────────────────── -->
+<?php if (!$editGrid): ?>
+<div class="section-header">
+  <span class="section-title"><?= $this->te('tariffs.start_title') ?></span>
+  <span class="section-line"></span>
+</div>
+<div class="start-panel">
+  <p class="start-hint"><?= $this->te('tariffs.start_hint') ?></p>
+  <form method="get" class="start-form">
+    <input type="hidden" name="energy" value="<?= $this->e($energy) ?>">
+    <div class="form-row">
+      <label class="form-label"><?= $this->te('tariffs.country') ?></label>
+      <select name="country" class="form-select" data-start-country>
+        <option value=""><?= $this->te('tariffs.country_none') ?></option>
+        <?php foreach ($countries as $iso => $cname): ?>
+        <option value="<?= $this->e($iso) ?>" <?= $formCountry === $iso ? 'selected' : '' ?>><?= $this->e($cname) ?></option>
+        <?php endforeach; ?>
+      </select>
+    </div>
+    <div class="form-row">
+      <label class="form-label"><?= $this->te('tariffs.template') ?></label>
+      <select name="template" class="form-select" data-start-template>
+        <optgroup label="<?= $this->e($this->t('tariffs.template_builtin')) ?>">
+          <?php foreach ($builtinTemplates as $tpl): ?>
+          <option value="builtin:<?= $this->e($tpl['code']) ?>" data-country="<?= $this->e((string) $tpl['country']) ?>"><?= $this->te($tpl['name_key']) ?></option>
+          <?php endforeach; ?>
+        </optgroup>
+        <?php if (!empty($userTemplates)): ?>
+        <optgroup label="<?= $this->e($this->t('tariffs.my_templates')) ?>">
+          <?php foreach ($userTemplates as $tpl): ?>
+          <option value="user:<?= $tpl['id'] ?>" data-country="<?= $this->e((string) $tpl['country']) ?>"><?= $this->e($tpl['name']) ?></option>
+          <?php endforeach; ?>
+        </optgroup>
+        <?php endif; ?>
+      </select>
+    </div>
+    <div class="form-row start-actions">
+      <button type="submit" class="btn btn-ghost"><?= $this->te('tariffs.import_template') ?></button>
+    </div>
+  </form>
+  <?php if (!empty($userTemplates)): ?>
+  <div class="tpl-chips">
+    <?php foreach ($userTemplates as $tpl): ?>
+    <span class="tpl-chip">
+      <?= $this->e($tpl['name']) ?>
+      <form method="post" data-confirm="<?= $this->e($this->t('tariffs.template_delete_confirm')) ?>" style="display:inline">
+        <input type="hidden" name="action" value="template_delete">
+        <input type="hidden" name="template_id" value="<?= $tpl['id'] ?>">
+        <?= \App\Security\Csrf::field() ?>
+        <button type="submit" class="tpl-chip-x" aria-label="<?= $this->e($this->t('tariffs.delete')) ?>">×</button>
+      </form>
+    </span>
+    <?php endforeach; ?>
+  </div>
+  <?php endif; ?>
+</div>
+<?php endif; ?>
+
+<!-- ── Formulaire de grille ──────────────────────────────────────────────── -->
 <div class="section-header" id="form">
   <span class="section-title"><?= $editGrid ? $this->te('tariffs.editing') : $this->te('tariffs.new') ?></span>
   <span class="section-line"></span>
   <?php if ($editGrid): ?>
-  <a href="tariffs.php" class="back"><?= $this->te('common.cancel') ?></a>
+  <a href="?energy=<?= $this->e($energy) ?>" class="back"><?= $this->te('common.cancel') ?></a>
   <?php endif; ?>
 </div>
 
 <div class="form-card">
-  <div class="form-tabs">
-    <button type="button" class="form-tab <?= $et === 'electricity' ? 'active' : '' ?>" data-tab="electricity"><?= $this->te('tariffs.energy_electricity') ?></button>
-    <button type="button" class="form-tab <?= $et === 'gas' ? 'active' : '' ?>" data-tab="gas"><?= $this->te('tariffs.energy_gas') ?></button>
-  </div>
-
   <form method="post">
     <input type="hidden" name="action" value="save">
     <input type="hidden" name="edit_id" value="<?= $this->e((string) ($editGrid?->id ?? '')) ?>">
-    <input type="hidden" name="energy_type" id="energy_type_field" value="<?= $this->e($et) ?>">
+    <input type="hidden" name="energy_type" value="<?= $this->e($energy) ?>">
     <?= \App\Security\Csrf::field() ?>
 
     <div class="form-grid">
@@ -181,11 +231,13 @@ use App\Domain\TariffGrid;
         <input type="text" name="name" class="form-input" required placeholder="ex. Engie bihoraire fév. 2026"
                value="<?= $this->e($editGrid?->name ?? '') ?>">
       </div>
-      <div class="form-row" id="pcs-row" style="<?= $et === 'gas' ? '' : 'display:none' ?>">
+      <?php if ($energy === 'gas'): ?>
+      <div class="form-row">
         <label class="form-label"><?= $this->te('tariffs.pcs') ?> <span class="unit"><?= $this->te('tariffs.pcs_unit') ?></span></label>
         <input type="number" name="pcs_coefficient" step="0.0001" class="form-input" placeholder="10.5500"
                value="<?= $this->e($editGrid?->pcsCoefficient !== null ? number_format($editGrid->pcsCoefficient, 4, '.', '') : '') ?>">
       </div>
+      <?php endif; ?>
       <div class="form-row">
         <label class="form-label"><?= $this->te('tariffs.valid_from') ?></label>
         <input type="date" name="valid_from" class="form-input" required
@@ -197,14 +249,29 @@ use App\Domain\TariffGrid;
                value="<?= $this->e($editGrid?->validTo?->format('Y-m-d') ?? '') ?>">
       </div>
       <div class="form-row">
-        <label class="form-label"><?= $this->te('tariffs.country') ?> <span class="unit">ISO-2, <?= $this->te('common.optional') ?></span></label>
-        <input type="text" name="country" class="form-input" maxlength="2" placeholder="BE"
-               value="<?= $this->e($editGrid?->country ?? '') ?>">
+        <label class="form-label"><?= $this->te('tariffs.country') ?></label>
+        <select name="country" class="form-select" data-country-select>
+          <option value=""><?= $this->te('tariffs.country_none') ?></option>
+          <?php foreach ($countries as $iso => $cname): ?>
+          <option value="<?= $this->e($iso) ?>"
+                  data-vat="<?= $this->e((string) (\App\Domain\EuropeanCountries::vatRate($iso) ?? '')) ?>"
+                  data-currency="<?= $this->e((string) (\App\Domain\EuropeanCountries::currencyOf($iso) ?? '')) ?>"
+                  <?= $formCountry === $iso ? 'selected' : '' ?>><?= $this->e($cname) ?></option>
+          <?php endforeach; ?>
+        </select>
       </div>
       <div class="form-row">
-        <label class="form-label"><?= $this->te('tariffs.currency') ?> <span class="unit">ISO 4217</span></label>
-        <input type="text" name="currency" class="form-input" maxlength="3" placeholder="EUR"
-               value="<?= $this->e($editGrid?->currency ?? 'EUR') ?>">
+        <label class="form-label"><?= $this->te('tariffs.currency') ?></label>
+        <select name="currency" class="form-select" data-currency-select>
+          <?php foreach ($currencyOptions as $cur): ?>
+          <option value="<?= $this->e($cur) ?>" <?= $formCurrency === $cur ? 'selected' : '' ?>><?= $this->e($cur) ?></option>
+          <?php endforeach; ?>
+        </select>
+      </div>
+      <div class="form-row">
+        <label class="form-label"><?= $this->te('tariffs.vat_rate') ?> <span class="unit">%</span></label>
+        <input type="number" name="vat_rate" step="0.01" min="0" max="100" class="form-input" data-vat-input
+               value="<?= $this->e(rtrim(rtrim(number_format($formVat, 2, '.', ''), '0'), '.')) ?>">
       </div>
       <?php if ($isAdmin && !$editGrid): ?>
       <div class="form-row">
@@ -216,44 +283,54 @@ use App\Domain\TariffGrid;
       <?php endif; ?>
     </div>
 
-    <!-- Electricity lines -->
-    <div id="elec-lines" style="<?= $et === 'electricity' ? '' : 'display:none' ?>">
-      <div class="form-grid" style="margin-top:18px">
-        <div class="lines-title"><?= $this->te('tariffs.lines_elec') ?></div>
-        <?php if (!$editGrid && $latestElec): ?>
-        <div class="prefill-hint">
-          <?= $this->te('tariffs.prefill', ['name' => $latestElec->name, 'date' => $latestElec->validFrom->format('d/m/Y')]) ?>
+    <!-- Lignes tarifaires groupées par nature -->
+    <div class="lines-wrap">
+      <?php foreach ($groupOrder as $group): ?>
+        <?php if (empty($grouped[$group]) && $group !== 'taxes') continue; ?>
+        <div class="line-group" data-group="<?= $this->e($group) ?>">
+          <div class="line-group-title"><?= $this->te('tariffs.group_' . $group) ?></div>
+          <div class="form-grid line-group-body">
+            <?php foreach (($grouped[$group] ?? []) as $f):
+              $i = $f['i'];
+            ?>
+            <div class="form-row line-item <?= $f['custom'] ? 'is-custom' : '' ?>">
+              <input type="hidden" name="lines[<?= $i ?>][key]" value="<?= $this->e($f['key']) ?>">
+              <?php if ($f['custom']): ?>
+              <label class="form-label">
+                <input type="text" name="lines[<?= $i ?>][label]" class="form-input line-label-input" placeholder="<?= $this->e($this->t('tariffs.field_label')) ?>" value="<?= $this->e($f['label']) ?>">
+              </label>
+              <select name="lines[<?= $i ?>][kind]" class="form-select line-kind-select">
+                <?php foreach ($kindOptions as $kv => $klabel): ?>
+                <option value="<?= $this->e($kv) ?>" <?= $f['kind'] === $kv ? 'selected' : '' ?>><?= $this->e($klabel) ?></option>
+                <?php endforeach; ?>
+              </select>
+              <?php else: ?>
+              <label class="form-label"><?= $this->e($f['label']) ?> <span class="unit"><?= $this->e(ComponentKind::fromStringOrDefault($f['kind'])->unit($energy)) ?></span></label>
+              <input type="hidden" name="lines[<?= $i ?>][kind]" value="<?= $this->e($f['kind']) ?>">
+              <?php endif; ?>
+              <div class="line-amount-row">
+                <input type="number" name="lines[<?= $i ?>][amount]" step="0.0000001" class="form-input" placeholder="0.0000000" value="<?= $this->e($f['amount']) ?>">
+                <?php if ($f['custom']): ?><button type="button" class="btn btn-ghost btn-sm line-remove" data-remove-line aria-label="<?= $this->e($this->t('tariffs.remove_field')) ?>">×</button><?php endif; ?>
+              </div>
+            </div>
+            <?php endforeach; ?>
+            <?php if ($group === 'taxes'): ?>
+            <div class="form-row full add-field-row">
+              <button type="button" class="btn btn-ghost btn-sm" data-add-line><?= $this->te('tariffs.add_field') ?></button>
+            </div>
+            <?php endif; ?>
+          </div>
         </div>
-        <?php endif; ?>
-        <?php foreach ($elecLines as $key => $def): ?>
-        <div class="form-row">
-          <label class="form-label"><?= $this->e($def['label']) ?> <span class="unit"><?= $def['unit'] ?></span></label>
-          <input type="number" name="line_<?= $key ?>" step="0.0000001" class="form-input"
-                 placeholder="0.0000000"
-                 value="<?= $this->e(isset($elLines[$key]) ? number_format($elLines[$key], 7, '.', '') : '') ?>">
-        </div>
-        <?php endforeach; ?>
-      </div>
+      <?php endforeach; ?>
     </div>
 
-    <!-- Gas lines -->
-    <div id="gas-lines" style="<?= $et === 'gas' ? '' : 'display:none' ?>">
-      <div class="form-grid" style="margin-top:18px">
-        <div class="lines-title"><?= $this->te('tariffs.lines_gas') ?></div>
-        <?php if (!$editGrid && $latestGas): ?>
-        <div class="prefill-hint">
-          <?= $this->te('tariffs.prefill', ['name' => $latestGas->name, 'date' => $latestGas->validFrom->format('d/m/Y')]) ?>
-        </div>
-        <?php endif; ?>
-        <?php foreach ($gasLines as $key => $def): ?>
-        <div class="form-row">
-          <label class="form-label"><?= $this->e($def['label']) ?> <span class="unit"><?= $def['unit'] ?></span></label>
-          <input type="number" name="line_<?= $key ?>" step="0.0000001" class="form-input"
-                 placeholder="0.0000000"
-                 value="<?= $this->e(isset($glLines[$key]) ? number_format($glLines[$key], 7, '.', '') : '') ?>">
-        </div>
-        <?php endforeach; ?>
-      </div>
+    <!-- Sauvegarde comme template -->
+    <div class="save-tpl-row">
+      <label class="form-label">
+        <input type="checkbox" name="save_as_template" value="1" data-save-tpl-toggle>
+        <?= $this->te('tariffs.save_as_template') ?>
+      </label>
+      <input type="text" name="template_name" class="form-input save-tpl-name" placeholder="<?= $this->e($this->t('tariffs.template_name')) ?>" style="display:none">
     </div>
 
     <div class="form-actions">
@@ -261,11 +338,30 @@ use App\Domain\TariffGrid;
         <?= $editGrid ? $this->te('tariffs.update') : $this->te('tariffs.save') ?>
       </button>
       <?php if ($editGrid): ?>
-      <a href="tariffs.php" class="btn btn-ghost"><?= $this->te('common.cancel') ?></a>
+      <a href="?energy=<?= $this->e($energy) ?>" class="btn btn-ghost"><?= $this->te('common.cancel') ?></a>
       <?php endif; ?>
     </div>
   </form>
 </div>
+
+<!-- Gabarit d'un champ personnalisé (cloné par tariffs.js, hors CSP inline). -->
+<template id="custom-line-row">
+  <div class="form-row line-item is-custom">
+    <input type="hidden" name="lines[__IDX__][key]" value="">
+    <label class="form-label">
+      <input type="text" name="lines[__IDX__][label]" class="form-input line-label-input" placeholder="<?= $this->e($this->t('tariffs.field_label')) ?>">
+    </label>
+    <select name="lines[__IDX__][kind]" class="form-select line-kind-select">
+      <?php foreach ($kindOptions as $kv => $klabel): ?>
+      <option value="<?= $this->e($kv) ?>"><?= $this->e($klabel) ?></option>
+      <?php endforeach; ?>
+    </select>
+    <div class="line-amount-row">
+      <input type="number" name="lines[__IDX__][amount]" step="0.0000001" class="form-input" placeholder="0.0000000">
+      <button type="button" class="btn btn-ghost btn-sm line-remove" data-remove-line aria-label="<?= $this->e($this->t('tariffs.remove_field')) ?>">×</button>
+    </div>
+  </div>
+</template>
 
 <div style="margin-top:40px;padding-top:16px;border-top:1px solid var(--border);
             font-family:var(--mono);font-size:.76rem;color:var(--muted);display:flex;
@@ -278,6 +374,6 @@ use App\Domain\TariffGrid;
 
 <script defer src="<?= \App\Support\Assets::url('assets/js/theme.js') ?>"></script>
 <script defer src="<?= \App\Support\Assets::url('assets/js/confirm.js') ?>"></script>
-<script defer src="<?= \App\Support\Assets::url('assets/js/tariffs.js') ?>"></script>
+<script defer src="<?= \App\Support\Assets::url('assets/js/tariffs.js') ?>" data-next-index="<?= $nextIndex ?>"></script>
 </body>
 </html>

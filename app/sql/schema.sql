@@ -19,6 +19,7 @@ CREATE TABLE IF NOT EXISTS tariff_grids (
     energy_type      ENUM('electricity', 'gas', 'water') NOT NULL,
     country          VARCHAR(2) NULL COMMENT 'ISO 3166-1 alpha-2 (NULL = générique)',
     currency         CHAR(3) NOT NULL DEFAULT 'EUR' COMMENT 'Devise ISO 4217 (pas de conversion automatique)',
+    vat_rate         DECIMAL(5,2) NOT NULL DEFAULT 21.00 COMMENT 'Taux de TVA de la grille en % (montants saisis TTC)',
     name             VARCHAR(120) NOT NULL,
     valid_from       DATE NOT NULL,
     valid_to         DATE NULL COMMENT 'NULL = actif indéfiniment',
@@ -32,11 +33,39 @@ CREATE TABLE IF NOT EXISTS tariff_grid_lines (
     id              BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     tariff_grid_id  BIGINT UNSIGNED NOT NULL,
     line_key        VARCHAR(100) NOT NULL COMMENT 'Cle tarifaire (energy_t1, distribution_fixed, prosumer_annual...)',
-    amount_per_kwh  DECIMAL(12,7) NOT NULL COMMENT 'Montant en EUR. Unite reelle selon la cle (EUR/kWh ou EUR/jour ou EUR/an)',
+    component_kind  VARCHAR(30) NOT NULL DEFAULT 'per_kwh' COMMENT 'Type de composante (moteur generique) : energy_flat, per_kwh, per_m3, fixed_monthly, fixed_annual, injection_t1...',
+    label           VARCHAR(150) NULL COMMENT 'Libelle custom (NULL = libelle du catalogue deduit de line_key)',
+    sort_order      SMALLINT NOT NULL DEFAULT 0,
+    amount_per_kwh  DECIMAL(12,7) NOT NULL COMMENT 'Montant en EUR. Unite reelle selon le kind (EUR/kWh, EUR/m3, EUR/mois ou EUR/an)',
     created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT fk_tariff_grid_lines_grid
         FOREIGN KEY (tariff_grid_id) REFERENCES tariff_grids (id)
         ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ── Templates de tarifs créés par l'utilisateur (structure réutilisable) ──
+-- Pas de FK vers users (comme tariff_grids.user_id) : evite les contraintes
+-- d'ordre de creation dans schema.sql ; le scoping par user_id est applicatif.
+CREATE TABLE IF NOT EXISTS tariff_templates (
+    id          BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    user_id     BIGINT UNSIGNED NOT NULL COMMENT 'Proprietaire (les templates fournis vivent en PHP, pas ici)',
+    energy_type ENUM('electricity', 'gas', 'water') NOT NULL,
+    country     VARCHAR(2) NULL COMMENT 'ISO 3166-1 alpha-2 (NULL = generique)',
+    name        VARCHAR(120) NOT NULL,
+    created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_tariff_templates_user (user_id),
+    INDEX idx_tariff_templates_type_country (energy_type, country)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS tariff_template_fields (
+    id             BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    template_id    BIGINT UNSIGNED NOT NULL,
+    line_key       VARCHAR(100) NOT NULL,
+    component_kind VARCHAR(30) NOT NULL,
+    label          VARCHAR(150) NULL,
+    sort_order     SMALLINT NOT NULL DEFAULT 0,
+    CONSTRAINT fk_ttf_template
+        FOREIGN KEY (template_id) REFERENCES tariff_templates (id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- ── Prix dynamiques day-ahead (marché spot, ex. ENTSO-E) ─────────────────

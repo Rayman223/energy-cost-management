@@ -1,11 +1,15 @@
 <?php
 declare(strict_types=1);
 
+use App\Domain\ComponentKind;
+use App\Domain\EuropeanCountries;
 use App\Domain\TariffLineCatalog;
+use App\Domain\TariffTemplateCatalog;
 use App\Http\SecurityHeaders;
 use App\I18n\Locale;
 use App\Infrastructure\Database;
 use App\Repository\TariffRepository;
+use App\Repository\TariffTemplateRepository;
 use App\Repository\UserRepository;
 use App\Security\AuthGuard;
 use App\Security\Csrf;
@@ -15,7 +19,6 @@ use App\Support\LocaleContext;
 $config = require __DIR__ . '/../bootstrap.php';
 
 SecurityHeaders::send();
-
 AuthGuard::protect($config);
 
 $db          = new Database($config['database']);
@@ -27,9 +30,24 @@ $isAdmin     = ($users->findById($userId)?->isAdmin()) ?? false;
 $profile     = $users->getProfile($userId);
 $view        = LocaleContext::viewFor($config, $users, $userId, $profile['locale'] ?? null, __DIR__ . '/../templates');
 
-$tariffRepo  = new TariffRepository($pdo, $userId, $isAdmin);
-$error       = null;
-$success     = null;
+$tariffRepo   = new TariffRepository($pdo, $userId, $isAdmin);
+$templateRepo = new TariffTemplateRepository($pdo, $userId);
+$error        = null;
+$success      = null;
+
+$energyTypes = ['electricity', 'gas', 'water'];
+
+/**
+ * Libellé d'affichage d'une ligne : libellé custom sinon libellé du catalogue.
+ */
+$fieldLabel = static function (string $energy, string $key, ?string $custom): string {
+    if ($custom !== null && $custom !== '') {
+        return $custom;
+    }
+    $catalog = TariffLineCatalog::forType($energy);
+
+    return $catalog[$key]['label'] ?? $key;
+};
 
 // ── Handle POST ────────────────────────────────────────────────────────────
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -47,19 +65,59 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $validFrom  = $_POST['valid_from'] ?? '';
             $validTo    = trim($_POST['valid_to'] ?? '') ?: null;
 
-            if (!in_array($energyType, ['electricity', 'gas'], true)) throw new \InvalidArgumentException($view->t('tariffs.invalid_energy'));
-            if ($name === '')     throw new \InvalidArgumentException($view->t('tariffs.name_required'));
+            if (!in_array($energyType, $energyTypes, true)) throw new \InvalidArgumentException($view->t('tariffs.invalid_energy'));
+            if ($name === '')      throw new \InvalidArgumentException($view->t('tariffs.name_required'));
             if ($validFrom === '') throw new \InvalidArgumentException($view->t('tariffs.from_required'));
 
-            $lineKeys = TariffLineCatalog::keysFor($energyType);
+            $catalogKeys = TariffLineCatalog::keysFor($energyType);
 
-            $lines = [];
-            foreach ($lineKeys as $key) {
-                $raw = $_POST['line_' . $key] ?? '';
-                if ($raw === '') continue;
+            // Lignes dynamiques : lines[N][key|kind|label|amount].
+            $lines    = [];
+            $usedKeys = [];
+            foreach ((array) ($_POST['lines'] ?? []) as $row) {
+                if (!is_array($row)) continue;
+                $raw = trim((string) ($row['amount'] ?? ''));
+                if ($raw === '') continue; // montant vide → ligne ignorée
+
                 $val = filter_var($raw, FILTER_VALIDATE_FLOAT);
-                if ($val === false) throw new \InvalidArgumentException($view->t('tariffs.invalid_value', ['key' => $key]));
-                $lines[$key] = $val;
+                if ($val === false) throw new \InvalidArgumentException($view->t('tariffs.invalid_value', ['key' => (string) ($row['key'] ?? '')]));
+
+                $kind = ComponentKind::tryFrom((string) ($row['kind'] ?? ''));
+                if ($kind === null) throw new \InvalidArgumentException($view->t('tariffs.invalid_kind'));
+
+                $label = trim((string) ($row['label'] ?? ''));
+                $key   = strtolower(trim((string) ($row['key'] ?? '')));
+                if ($key === '') {
+                    // clé auto depuis le libellé (champ custom sans clé)
+                    $slug = preg_replace('/[^a-z0-9]+/', '_', strtolower($label)) ?? '';
+                    $slug = trim($slug, '_');
+                    $key  = 'custom_' . ($slug !== '' ? $slug : substr(md5($label . $val), 0, 8));
+                }
+                if (preg_match('/^[a-z][a-z0-9_]{0,99}$/', $key) !== 1) {
+                    throw new \InvalidArgumentException($view->t('tariffs.invalid_value', ['key' => $key]));
+                }
+
+                $isCustom = !in_array($key, $catalogKeys, true);
+                if ($isCustom && $label === '') throw new \InvalidArgumentException($view->t('tariffs.label_required'));
+
+                // Déduplication : la persistance et fetchLines indexent par line_key ;
+                // deux champs custom au même libellé (donc même clé) perdraient une ligne.
+                if (isset($usedKeys[$key])) {
+                    $base = substr($key, 0, 96);
+                    $n    = 2;
+                    while (isset($usedKeys[$base . '_' . $n])) {
+                        $n++;
+                    }
+                    $key = $base . '_' . $n;
+                }
+                $usedKeys[$key] = true;
+
+                $lines[] = [
+                    'key'    => $key,
+                    'amount' => $val,
+                    'kind'   => $kind->value,
+                    'label'  => $isCustom ? $label : null,
+                ];
             }
 
             $pcs = null;
@@ -68,48 +126,64 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
 
             $country = strtoupper(trim((string) ($_POST['country'] ?? '')));
-            $country = preg_match('/^[A-Z]{2}$/', $country) === 1 ? $country : null;
+            $country = EuropeanCountries::isValid($country) ? $country : null;
 
             $currency = strtoupper(trim((string) ($_POST['currency'] ?? 'EUR')));
             if (preg_match('/^[A-Z]{3}$/', $currency) !== 1) {
                 throw new \InvalidArgumentException($view->t('account.invalid_currency'));
             }
 
+            $vatRate = filter_var($_POST['vat_rate'] ?? '', FILTER_VALIDATE_FLOAT);
+            if ($vatRate === false) {
+                $vatRate = ($country !== null ? EuropeanCountries::vatRate($country) : null) ?? 21.0;
+            }
+            if ($vatRate < 0.0 || $vatRate > 100.0) {
+                throw new \InvalidArgumentException($view->t('tariffs.invalid_vat'));
+            }
+
             $shared = $isAdmin && ($_POST['shared'] ?? '') === '1';
+
+            // Sauvegarde optionnelle comme template : on valide le nom AVANT de
+            // persister la grille, pour ne pas laisser une grille enregistrée alors
+            // que l'action signale une erreur.
+            $saveAsTemplate = ($_POST['save_as_template'] ?? '') === '1';
+            $tplName        = trim($_POST['template_name'] ?? '');
+            if ($saveAsTemplate && $tplName === '') {
+                throw new \InvalidArgumentException($view->t('tariffs.template_name_required'));
+            }
 
             if ($editId !== null) {
                 $tariffRepo->updateGrid(
-                    $editId,
-                    $energyType,
-                    $name,
+                    $editId, $energyType, $name,
                     new \DateTimeImmutable($validFrom),
                     $validTo ? new \DateTimeImmutable($validTo) : null,
-                    $lines,
-                    $pcs,
-                    $country,
-                    $currency,
+                    $lines, $pcs, $country, $currency, $vatRate,
                 );
-                $success = $view->t('tariffs.saved', ['name' => $name]);
             } else {
                 $tariffRepo->saveGrid(
-                    $energyType,
-                    $name,
+                    $energyType, $name,
                     new \DateTimeImmutable($validFrom),
                     $validTo ? new \DateTimeImmutable($validTo) : null,
-                    $lines,
-                    $pcs,
-                    $country,
-                    $currency,
-                    $shared,
+                    $lines, $pcs, $country, $currency, $shared, $vatRate,
                 );
-                $success = $view->t('tariffs.saved', ['name' => $name]);
+            }
+            $success = $view->t('tariffs.saved', ['name' => $name]);
+
+            // Structure seule (sans montants) enregistrée comme template réutilisable.
+            if ($saveAsTemplate) {
+                $fields = array_map(
+                    static fn (array $l): array => ['key' => $l['key'], 'kind' => $l['kind'], 'label' => $l['label']],
+                    $lines,
+                );
+                $templateRepo->save($energyType, $country, $tplName, $fields);
+                $success .= ' ' . $view->t('tariffs.template_saved');
             }
         }
 
         if ($action === 'close') {
             $id      = (int) ($_POST['grid_id'] ?? 0);
             $validTo = $_POST['valid_to_close'] ?? '';
-            if ($id <= 0)       throw new \InvalidArgumentException($view->t('tariffs.invalid_id'));
+            if ($id <= 0)        throw new \InvalidArgumentException($view->t('tariffs.invalid_id'));
             if ($validTo === '') throw new \InvalidArgumentException($view->t('tariffs.end_required'));
             $tariffRepo->closeGrid($id, new \DateTimeImmutable($validTo));
             $success = $view->t('tariffs.closed');
@@ -121,63 +195,161 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $tariffRepo->deleteGrid($id);
             $success = $view->t('tariffs.deleted');
         }
+
+        if ($action === 'template_delete') {
+            $id = (int) ($_POST['template_id'] ?? 0);
+            if ($id <= 0) throw new \InvalidArgumentException($view->t('tariffs.invalid_id'));
+            $templateRepo->delete($id);
+            $success = $view->t('tariffs.template_deleted');
+        }
     } catch (\Throwable $e) {
         $error = $e->getMessage();
     }
 }
 
-// ── Load grids ─────────────────────────────────────────────────────────────
-$elecGrids = $tariffRepo->findAll('electricity');
-$gasGrids  = $tariffRepo->findAll('gas');
-
-// Latest grids for pre-fill (sorted DESC by valid_from)
-$latestElec = !empty($elecGrids) ? $elecGrids[0] : null;
-$latestGas  = !empty($gasGrids)  ? $gasGrids[0]  : null;
-
-// Pre-fill form if editing
+// ── Active energy (onglet) ──────────────────────────────────────────────────
 $editGrid = null;
 if (isset($_GET['edit'])) {
     $editId = filter_var($_GET['edit'], FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
-
     if ($editId === false) {
         $error = $view->t('tariffs.invalid_id');
     } else {
         try {
             $editGrid = $tariffRepo->findById($editId);
-            if ($editGrid === null) {
-                $error = $view->t('tariffs.not_found');
-            }
+            if ($editGrid === null) $error = $view->t('tariffs.not_found');
         } catch (\Throwable $e) {
             $error = $e->getMessage();
         }
     }
 }
 
-// ── Line definitions (source unique : TariffLineCatalog) ─────────────────────
-$elecLines = TariffLineCatalog::electricity();
-$gasLines  = TariffLineCatalog::gas();
+$energy = $_GET['energy'] ?? 'electricity';
+if (!in_array($energy, $energyTypes, true)) $energy = 'electricity';
+if ($editGrid !== null) $energy = $editGrid->energyType; // l'édition force l'énergie de la grille
 
-// Lines to display: edit mode uses the grid's own lines; new mode pre-fills from latest
-$et      = $editGrid?->energyType ?? 'electricity';
-$elLines = ($editGrid && $editGrid->energyType === 'electricity') ? $editGrid->lines : ($latestElec?->lines ?? []);
-$glLines = ($editGrid && $editGrid->energyType === 'gas')         ? $editGrid->lines : ($latestGas?->lines  ?? []);
+// ── Grilles de l'énergie active ─────────────────────────────────────────────
+$grids  = $tariffRepo->findAll($energy);
+$latest = $grids[0] ?? null;
+
+// ── Templates disponibles (fournis + utilisateur) ───────────────────────────
+$builtinTemplates = TariffTemplateCatalog::forEnergy($energy);
+$userTemplates    = $templateRepo->findForEnergy($energy);
+
+// ── Résolution de la structure du formulaire ────────────────────────────────
+// Priorité : grille éditée > template importé > dernière grille > template défaut.
+/** @var list<array{key:string,kind:string,label:string,amount:string,custom:bool}> $formFields */
+$formFields = [];
+if ($editGrid !== null) {
+    $formCountry  = $editGrid->country;
+    $formCurrency = $editGrid->currency;
+    $formVat      = $editGrid->vatRate;
+} else {
+    $formCountry  = $profile['country']  ?? null;
+    $formCurrency = $profile['currency'] ?? 'EUR';
+    $formVat      = ($formCountry !== null ? EuropeanCountries::vatRate($formCountry) : null) ?? 21.0;
+}
+
+$buildFieldsFromSpecs = static function (array $specs, array $amounts, string $energy) use ($fieldLabel): array {
+    $catalogKeys = TariffLineCatalog::keysFor($energy);
+    $out = [];
+    foreach ($specs as $spec) {
+        $key    = $spec['key'];
+        $custom = !in_array($key, $catalogKeys, true);
+        $out[] = [
+            'key'    => $key,
+            'kind'   => $spec['kind'],
+            'label'  => $fieldLabel($energy, $key, $spec['label'] ?? null),
+            'amount' => isset($amounts[$key]) ? rtrim(rtrim(number_format($amounts[$key], 7, '.', ''), '0'), '.') : '',
+            'custom' => $custom,
+        ];
+    }
+
+    return $out;
+};
+
+if ($editGrid !== null) {
+    $specs = $amounts = [];
+    foreach ($editGrid->lines as $line) {
+        $specs[]            = ['key' => $line->key, 'kind' => $line->kind->value, 'label' => $line->label];
+        $amounts[$line->key] = $line->amount;
+    }
+    $formFields = $buildFieldsFromSpecs($specs, $amounts, $energy);
+} else {
+    // Import d'un template : ?template=builtin:<code> | user:<id>
+    $templateParam = (string) ($_GET['template'] ?? '');
+    $imported = null;
+    if (str_starts_with($templateParam, 'builtin:')) {
+        $tpl = TariffTemplateCatalog::find(substr($templateParam, 8));
+        if ($tpl !== null && $tpl['energy_type'] === $energy) {
+            $imported = array_map(
+                static fn (array $f): array => ['key' => $f['key'], 'kind' => $f['kind']->value, 'label' => null],
+                $tpl['fields'],
+            );
+            if ($tpl['country'] !== null) {
+                $formCountry  = $tpl['country'];
+                $formCurrency = EuropeanCountries::currencyOf($tpl['country']) ?? $formCurrency;
+                $formVat      = EuropeanCountries::vatRate($tpl['country']) ?? $formVat;
+            }
+        }
+    } elseif (str_starts_with($templateParam, 'user:')) {
+        $tpl = $templateRepo->findById((int) substr($templateParam, 5));
+        if ($tpl !== null && $tpl['energy_type'] === $energy) {
+            $imported = array_map(
+                static fn (array $f): array => ['key' => $f['key'], 'kind' => $f['kind'], 'label' => $f['label']],
+                $tpl['fields'],
+            );
+            if ($tpl['country'] !== null) $formCountry = $tpl['country'];
+        }
+    }
+
+    if ($imported !== null) {
+        $formFields = $buildFieldsFromSpecs($imported, [], $energy);
+    } elseif ($latest !== null) {
+        // Reprise de la dernière grille (structure + valeurs).
+        $specs = $amounts = [];
+        foreach ($latest->lines as $line) {
+            $specs[]            = ['key' => $line->key, 'kind' => $line->kind->value, 'label' => $line->label];
+            $amounts[$line->key] = $line->amount;
+        }
+        $formFields = $buildFieldsFromSpecs($specs, $amounts, $energy);
+    } else {
+        // Template par défaut selon le pays du profil.
+        $tpl = TariffTemplateCatalog::defaultFor($energy, $formCountry);
+        $specs = array_map(
+            static fn (array $f): array => ['key' => $f['key'], 'kind' => $f['kind']->value, 'label' => null],
+            $tpl['fields'],
+        );
+        $formFields = $buildFieldsFromSpecs($specs, [], $energy);
+    }
+}
+
+// Groupes d'affichage (ordre fixe) + libellés des kinds pour le sélecteur custom.
+$groupOrder = ['energy', 'fixed', 'taxes', 'injection'];
+$kindOptions = [];
+foreach (ComponentKind::cases() as $k) {
+    $kindOptions[$k->value] = $view->t('tariffs.kind.' . $k->value);
+}
 
 $today = date('Y-m-d');
 
 echo $view->render('tariffs', [
-    'error'      => $error,
-    'success'    => $success,
-    'elecGrids'  => $elecGrids,
-    'gasGrids'   => $gasGrids,
-    'editGrid'   => $editGrid,
-    'latestElec' => $latestElec,
-    'latestGas'  => $latestGas,
-    'elecLines'  => $elecLines,
-    'gasLines'   => $gasLines,
-    'et'         => $et,
-    'elLines'    => $elLines,
-    'glLines'    => $glLines,
-    'today'      => $today,
-    'isAdmin'    => $isAdmin,
-    'available'  => Locale::available($config),
+    'error'            => $error,
+    'success'          => $success,
+    'energy'           => $energy,
+    'energyTypes'      => $energyTypes,
+    'grids'            => $grids,
+    'editGrid'         => $editGrid,
+    'formFields'       => $formFields,
+    'formCountry'      => $formCountry,
+    'formCurrency'     => $formCurrency,
+    'formVat'          => $formVat,
+    'countries'        => EuropeanCountries::sortedForLocale($view->locale()),
+    'currencies'       => EuropeanCountries::currencies(),
+    'builtinTemplates' => $builtinTemplates,
+    'userTemplates'    => $userTemplates,
+    'groupOrder'       => $groupOrder,
+    'kindOptions'      => $kindOptions,
+    'today'            => $today,
+    'isAdmin'          => $isAdmin,
+    'available'        => Locale::available($config),
 ]);
