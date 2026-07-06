@@ -25,25 +25,18 @@ declare(strict_types=1);
  */
 
 use App\Infrastructure\Database;
-use App\Repository\ElectricityReadingRepository;
-use App\Repository\UtilityReadingRepository;
 use App\Security\UserContext;
-use App\Service\BulkImportService;
 use App\Service\Import\ImportMapping;
 use App\Service\Import\ImportReport;
+use App\Service\Import\ImportRunner;
 use App\Service\Import\RowSource;
+use App\Support\CliArguments;
 
 require_once __DIR__ . '/../autoload.php';
 
 /** Récupère la valeur d'un argument --clé=valeur (null si absent). */
 $arg = static function (string $name) use ($argv): ?string {
-    foreach ($argv as $a) {
-        if (str_starts_with((string) $a, "--{$name}=")) {
-            return substr((string) $a, strlen($name) + 3);
-        }
-    }
-
-    return null;
+    return CliArguments::value($argv, $name);
 };
 
 $dryRun = !in_array('--execute', $argv, true);
@@ -107,14 +100,11 @@ fwrite(STDOUT, sprintf(
 ));
 
 // ── Source de lignes (CSV en flux, JSON sinon) ───────────────────────────────
-$service = new BulkImportService();
-$isJson  = strtolower((string) pathinfo($file, PATHINFO_EXTENSION)) === 'json';
-
-$pdo->beginTransaction();
+$isJson = strtolower((string) pathinfo($file, PATHINFO_EXTENSION)) === 'json';
+$handle = null;
 try {
     if ($isJson) {
-        $raw  = (string) file_get_contents($file);
-        $rows = RowSource::fromJson($raw);
+        $rows = RowSource::fromJson((string) file_get_contents($file));
     } else {
         $handle = fopen($file, 'r');
         if ($handle === false) {
@@ -123,44 +113,41 @@ try {
         $rows = RowSource::fromCsv($handle);
     }
 
-    if ($mapping->isElectricity()) {
-        $report = $service->importElectricity($rows, $mapping, new ElectricityReadingRepository($pdo, $userId));
-    } else {
-        $report = $service->importUtility($rows, $mapping, new UtilityReadingRepository($pdo, $userId, $type));
-    }
-
-    if (isset($handle) && is_resource($handle)) {
-        fclose($handle);
-    }
-
-    if ($dryRun) {
-        $pdo->rollBack();
-    } else {
-        $pdo->commit();
-    }
+    // Orchestration transaction/dry-run/plafond partagée avec l'UI web.
+    $report = (new ImportRunner())->run($pdo, $mapping, $rows, $userId, $type, $dryRun);
 } catch (\Throwable $e) {
-    if ($pdo->inTransaction()) {
-        $pdo->rollBack();
-    }
     fwrite(STDERR, '[FATAL] ' . $e->getMessage() . PHP_EOL);
     exit(1);
+} finally {
+    if (is_resource($handle)) {
+        fclose($handle);
+    }
 }
 
 // ── Bilan ────────────────────────────────────────────────────────────────────
 printReport($report, $dryRun);
-exit($report->errors() > 0 ? 1 : 0);
+// Le process échoue (1) sur une défaillance réelle (base/infra) OU un import
+// tronqué (données perdues) — pas sur de simples lignes ignorées (validation),
+// comme les anciens import_gaz/eau (cf. #75).
+exit($report->writeErrors() > 0 || $report->truncated() ? 1 : 0);
 
 function printReport(ImportReport $report, bool $dryRun): void
 {
     fwrite(STDOUT, PHP_EOL . '[BILAN]' . PHP_EOL);
     fwrite(STDOUT, sprintf("  Importés : %d%s", $report->imported(), PHP_EOL));
     fwrite(STDOUT, sprintf("  Doublons : %d%s", $report->duplicates(), PHP_EOL));
-    fwrite(STDOUT, sprintf("  Erreurs  : %d%s", $report->errors(), PHP_EOL));
+    // « Ignorées » = lignes rejetées par la validation ; « Échecs » = écritures
+    // base/infra en erreur (ce qui fait réellement échouer le process).
+    fwrite(STDOUT, sprintf("  Ignorées : %d%s", $report->errors() - $report->writeErrors(), PHP_EOL));
+    fwrite(STDOUT, sprintf("  Échecs   : %d%s", $report->writeErrors(), PHP_EOL));
 
     foreach ($report->errorSamples() as $msg) {
         fwrite(STDOUT, '    - ' . $msg . PHP_EOL);
     }
 
+    if ($report->truncated()) {
+        fwrite(STDOUT, PHP_EOL . '[TRONQUÉ] Plafond de lignes atteint : seules les premières lignes ont été traitées.' . PHP_EOL);
+    }
     if ($dryRun) {
         fwrite(STDOUT, PHP_EOL . '[DRY-RUN] Aucune écriture. Relancez avec --execute pour importer.' . PHP_EOL);
     }

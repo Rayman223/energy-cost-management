@@ -10,6 +10,7 @@ declare(strict_types=1);
  */
 
 use App\Http\SecurityHeaders;
+use App\Http\UploadLimits;
 use App\I18n\Locale;
 use App\Infrastructure\Database;
 use App\Repository\UserRepository;
@@ -51,6 +52,11 @@ $importReport = null;
 // ── Traitement des actions (POST, protégées par CSRF) ────────────────────────
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     try {
+        // Upload > post_max_size : PHP vide $_POST/$_FILES → sans ce garde, le
+        // rejet CSRF masquerait la vraie cause (message trompeur). À tester AVANT.
+        if (UploadLimits::postExceededLimit($_SERVER, $_POST, $_FILES)) {
+            throw new \RuntimeException($view->t('import.file_too_large'));
+        }
         if (Csrf::validate($_POST['_csrf'] ?? null) === false) {
             throw new \RuntimeException($view->t('common.csrf_invalid'));
         }
@@ -76,27 +82,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 throw new \InvalidArgumentException($view->t('admin.invalid_user'));
             }
 
-            $type = strtolower(trim((string) ($_POST['energy_type'] ?? '')));
-            $overrides = [];
-            $tsCol = trim((string) ($_POST['ts_col'] ?? ''));
-            if ($tsCol !== '') {
-                $overrides['ts_col'] = $tsCol;
+            $importReport = (new ImportRunner())->runFromRequest($pdo, $targetId, $_POST, $_FILES);
+            // Import tronqué (plafond atteint, données perdues) : pas de bannière
+            // « terminé » trompeuse — l'avertissement du rapport tient lieu de signal.
+            if ($importReport->truncated() === false) {
+                $success = $view->t(($_POST['dry_run'] ?? '') === '1' ? 'import.done_dryrun' : 'import.done');
             }
-            $valueCol = trim((string) ($_POST['value_col'] ?? ''));
-            if ($valueCol !== '') {
-                $overrides['value_col'] = $valueCol;
-            }
-            $dryRun = ($_POST['dry_run'] ?? '') === '1';
-
-            $importReport = (new ImportRunner())->runUploaded(
-                $pdo,
-                $targetId,
-                $type,
-                $overrides,
-                is_array($_FILES['import_file'] ?? null) ? $_FILES['import_file'] : [],
-                $dryRun,
-            );
-            $success = $view->t($dryRun ? 'import.done_dryrun' : 'import.done');
         } else {
             $targetId = filter_var($_POST['user_id'] ?? null, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
             if ($targetId === false) {

@@ -8,6 +8,7 @@ use App\Repository\Contract\ElectricityIngestionInterface;
 use App\Repository\Contract\UtilityIngestionInterface;
 use App\Service\Import\ImportMapping;
 use App\Service\Import\ImportReport;
+use App\Service\Import\ReadingParser;
 use DateTimeImmutable;
 
 /**
@@ -28,10 +29,12 @@ final class BulkImportService
      * Importe des relevés électricité (modèle à registres).
      *
      * @param iterable<int, array<string, string>> $rows numéro de ligne => colonnes normalisées
+     * @param ImportReport|null $report Rapport à remplir (créé si null) — permet à
+     *        l'orchestrateur de pré-créer le rapport (cap/troncature partagés).
      */
-    public function importElectricity(iterable $rows, ImportMapping $mapping, ElectricityIngestionInterface $sink): ImportReport
+    public function importElectricity(iterable $rows, ImportMapping $mapping, ElectricityIngestionInterface $sink, ?ImportReport $report = null): ImportReport
     {
-        $report = new ImportReport();
+        $report ??= new ImportReport();
 
         foreach ($rows as $lineNo => $row) {
             $ts = self::parseTimestamp($row, $mapping->timestampColumn, $lineNo, $report);
@@ -45,7 +48,7 @@ final class BulkImportService
                 if (!array_key_exists($col, $row) || $row[$col] === '') {
                     continue;
                 }
-                $value = self::parseValue($row[$col]);
+                $value = ReadingParser::parseValue($row[$col]);
                 if ($value === null) {
                     $report->addError(sprintf('Ligne %d : valeur invalide pour « %s » (%s)', $lineNo, $col, $row[$col]));
                     $rowError = true;
@@ -66,9 +69,9 @@ final class BulkImportService
                 $inserted = $sink->insertIndexes($ts, $indexes);
             } catch (\Throwable) {
                 // Erreur au niveau base (valeur hors bornes, verrou…) : on la
-                // compte et on poursuit — une ligne fautive ne doit pas annuler
-                // tout l'import. Aucun détail interne exposé.
-                $report->addError(sprintf('Ligne %d : erreur d\'écriture en base.', $lineNo));
+                // compte comme échec réel et on poursuit — une ligne fautive ne
+                // doit pas annuler tout l'import. Aucun détail interne exposé.
+                $report->addWriteError(sprintf('Ligne %d : erreur d\'écriture en base.', $lineNo));
                 continue;
             }
             $report->addImported($inserted);
@@ -82,10 +85,12 @@ final class BulkImportService
      * Importe des relevés gaz/eau (index compteur m³).
      *
      * @param iterable<int, array<string, string>> $rows numéro de ligne => colonnes normalisées
+     * @param ImportReport|null $report Rapport à remplir (créé si null) — permet à
+     *        l'orchestrateur de pré-créer le rapport (cap/troncature partagés).
      */
-    public function importUtility(iterable $rows, ImportMapping $mapping, UtilityIngestionInterface $sink): ImportReport
+    public function importUtility(iterable $rows, ImportMapping $mapping, UtilityIngestionInterface $sink, ?ImportReport $report = null): ImportReport
     {
-        $report = new ImportReport();
+        $report ??= new ImportReport();
         $valueColumn = $mapping->valueColumn ?? 'counter_m3';
 
         foreach ($rows as $lineNo => $row) {
@@ -99,7 +104,7 @@ final class BulkImportService
                 $report->addError(sprintf('Ligne %d : colonne valeur « %s » absente ou vide.', $lineNo, $valueColumn));
                 continue;
             }
-            $value = self::parseValue($raw);
+            $value = ReadingParser::parseValue($raw);
             if ($value === null) {
                 $report->addError(sprintf('Ligne %d : valeur m³ invalide (%s).', $lineNo, $raw));
                 continue;
@@ -108,7 +113,7 @@ final class BulkImportService
             try {
                 $isNew = $sink->saveIgnore($ts, $value);
             } catch (\Throwable) {
-                $report->addError(sprintf('Ligne %d : erreur d\'écriture en base.', $lineNo));
+                $report->addWriteError(sprintf('Ligne %d : erreur d\'écriture en base.', $lineNo));
                 continue;
             }
             $isNew ? $report->addImported() : $report->addDuplicate();
@@ -116,14 +121,6 @@ final class BulkImportService
 
         return $report;
     }
-
-    /**
-     * Formats d'horodatage acceptés (stricts). On refuse tout ce que
-     * `new DateTimeImmutable()` accepterait de trop souple (« now », « +1 day »,
-     * « 2026 »…) : ces valeurs seraient datées à l'instant de l'import et
-     * casseraient l'idempotence (un réimport tomberait sur un nouvel horodatage).
-     */
-    private const TIMESTAMP_FORMATS = ['Y-m-d H:i:s', 'Y-m-d\TH:i:s', 'Y-m-d H:i', 'Y-m-d'];
 
     /**
      * @param array<string, string> $row
@@ -137,28 +134,11 @@ final class BulkImportService
             return null;
         }
 
-        foreach (self::TIMESTAMP_FORMATS as $format) {
-            // `!` réinitialise les champs non fournis (Y-m-d → minuit) ; l'aller-
-            // retour garantit une correspondance exacte (rejette « now », « 2026 »…).
-            $dt = DateTimeImmutable::createFromFormat('!' . $format, $raw);
-            if ($dt !== false && $dt->format($format) === $raw) {
-                return $dt;
-            }
+        $dt = ReadingParser::parseTimestampStrict($raw);
+        if ($dt === null) {
+            $report->addError(sprintf('Ligne %d : horodatage invalide (%s) — format attendu Y-m-d H:i:s.', $lineNo, $raw));
         }
 
-        $report->addError(sprintf('Ligne %d : horodatage invalide (%s) — format attendu Y-m-d H:i:s.', $lineNo, $raw));
-
-        return null;
-    }
-
-    /** Valide un index/valeur : float ≥ 0, ou null si invalide. */
-    private static function parseValue(string $raw): ?float
-    {
-        $value = filter_var($raw, FILTER_VALIDATE_FLOAT);
-        if ($value === false || $value < 0) {
-            return null;
-        }
-
-        return $value;
+        return $dt;
     }
 }

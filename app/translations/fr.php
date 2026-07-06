@@ -200,6 +200,8 @@ return [
     'import.errors' => 'Erreurs',
     'import.done' => 'Import terminé.',
     'import.done_dryrun' => 'Simulation terminée (aucune écriture).',
+    'import.file_too_large' => 'Fichier trop volumineux : réduisez sa taille ou utilisez l\'import en ligne de commande.',
+    'import.truncated' => 'Fichier tronqué : le plafond de lignes a été atteint, seules les premières lignes ont été importées.',
     'import.admin_title' => 'Importer pour un utilisateur',
     'import.admin_hint' => 'Import de données pour le compte d\'un membre (onboarding/migration). Réservé aux administrateurs.',
     'import.target_user' => 'Utilisateur cible',

@@ -9,6 +9,7 @@ use App\Http\Request;
 use App\Http\ValidationException;
 use App\Repository\Contract\ElectricityIngestionInterface;
 use App\Repository\Contract\UtilityIngestionInterface;
+use App\Service\Import\ReadingParser;
 use DateTimeImmutable;
 
 /**
@@ -87,8 +88,8 @@ final class IngestController
         foreach ($readings as $i => $reading) {
             $ts = self::parseTimestamp($reading, 'reading_at', $i);
 
-            $value = filter_var($reading['counter_m3'] ?? null, FILTER_VALIDATE_FLOAT);
-            if ($value === false || $value < 0) {
+            $value = ReadingParser::parseValue($reading['counter_m3'] ?? null);
+            if ($value === null) {
                 throw new ValidationException(sprintf('readings[%d].counter_m3 invalide (m³ >= 0 attendu)', $i));
             }
 
@@ -153,6 +154,9 @@ final class IngestController
             throw new ValidationException(sprintf('readings[%d].%s requis', $index, $field));
         }
 
+        // Divergence assumée avec l'import en masse (ReadingParser::parseTimestampStrict,
+        // strict) : l'API accepte des formats plus larges (ISO 8601 avec fuseau…)
+        // poussés par des agents variés. Le durcir ici casserait des intégrations.
         try {
             return new DateTimeImmutable($raw);
         } catch (\Exception) {
@@ -162,8 +166,8 @@ final class IngestController
 
     private static function parseIndexValue(mixed $raw, string $key, int $index): float
     {
-        $value = filter_var($raw, FILTER_VALIDATE_FLOAT);
-        if ($value === false || $value < 0) {
+        $value = ReadingParser::parseValue($raw);
+        if ($value === null) {
             throw new ValidationException(sprintf('readings[%d].%s invalide (index kWh >= 0 attendu)', $index, $key));
         }
 

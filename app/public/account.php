@@ -8,6 +8,7 @@ declare(strict_types=1);
  */
 
 use App\Http\SecurityHeaders;
+use App\Http\UploadLimits;
 use App\I18n\Locale;
 use App\Infrastructure\Database;
 use App\Repository\ApiTokenRepository;
@@ -58,6 +59,11 @@ if (($_GET['export'] ?? '') === '1') {
 // ── Traitement des actions (POST) ───────────────────────────────────────────
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     try {
+        // Upload > post_max_size : PHP vide $_POST/$_FILES → sans ce garde, le
+        // rejet CSRF masquerait la vraie cause (message trompeur). À tester AVANT.
+        if (UploadLimits::postExceededLimit($_SERVER, $_POST, $_FILES)) {
+            throw new \RuntimeException($view->t('import.file_too_large'));
+        }
         if (Csrf::validate($_POST['_csrf'] ?? null) === false) {
             throw new \RuntimeException($view->t('common.csrf_invalid'));
         }
@@ -111,27 +117,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } elseif ($action === 'import') {
             // Import self-service : la cible est TOUJOURS l'utilisateur courant
             // (aucun champ « utilisateur cible » ici — cf. page admin pour autrui).
-            $type = strtolower(trim((string) ($_POST['energy_type'] ?? '')));
-            $overrides = [];
-            $tsCol = trim((string) ($_POST['ts_col'] ?? ''));
-            if ($tsCol !== '') {
-                $overrides['ts_col'] = $tsCol;
+            $importReport = (new ImportRunner())->runFromRequest($pdo, $userId, $_POST, $_FILES);
+            // Import tronqué (plafond atteint, données perdues) : pas de bannière
+            // « terminé » trompeuse — l'avertissement du rapport tient lieu de signal.
+            if ($importReport->truncated() === false) {
+                $success = $view->t(($_POST['dry_run'] ?? '') === '1' ? 'import.done_dryrun' : 'import.done');
             }
-            $valueCol = trim((string) ($_POST['value_col'] ?? ''));
-            if ($valueCol !== '') {
-                $overrides['value_col'] = $valueCol;
-            }
-            $dryRun = ($_POST['dry_run'] ?? '') === '1';
-
-            $importReport = (new ImportRunner())->runUploaded(
-                $pdo,
-                $userId,
-                $type,
-                $overrides,
-                is_array($_FILES['import_file'] ?? null) ? $_FILES['import_file'] : [],
-                $dryRun,
-            );
-            $success = $view->t($dryRun ? 'import.done_dryrun' : 'import.done');
         } elseif ($action === 'delete_account') {
             // Mot-clé de confirmation localisé (SUPPRIMER/DELETE/LÖSCHEN/…),
             // comparé sans tenir compte de la casse ni des espaces.

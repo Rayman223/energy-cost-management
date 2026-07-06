@@ -61,6 +61,19 @@ final class View
     }
 
     /**
+     * Rend un partiel réutilisable depuis `app/templates/partials/<name>.php`
+     * (mutualise des fragments partagés entre templates). Même contexte que
+     * {@see self::render()} : le partiel accède à `$this->e()`/`$this->te()` et
+     * aux variables de `$data`.
+     *
+     * @param array<string,mixed> $data Variables exposées au partiel.
+     */
+    public function partial(string $name, array $data = []): string
+    {
+        return $this->render('partials/' . $name, $data);
+    }
+
+    /**
      * Échappement HTML centralisé (contexte texte/attribut).
      */
     public function e(string|int|float|null $value): string

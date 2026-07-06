@@ -17,6 +17,17 @@ final class ImportReport
     private int $duplicates = 0;
     private int $errors = 0;
 
+    /**
+     * Sous-ensemble de {@see $errors} imputable à une défaillance base/infra
+     * (écriture échouée), par opposition aux lignes simplement ignorées
+     * (validation). Sert à distinguer « lignes ignorées » d'un « échec réel »
+     * pour le code de sortie CLI.
+     */
+    private int $writeErrors = 0;
+
+    /** Vrai si l'import a été tronqué (plafond de lignes atteint). */
+    private bool $truncated = false;
+
     /** @var list<string> */
     private array $errorSamples = [];
 
@@ -38,6 +49,22 @@ final class ImportReport
         }
     }
 
+    /**
+     * Erreur d'écriture base/infra : comptée comme erreur **et** comme échec réel
+     * (contrairement à une ligne ignorée pour cause de validation).
+     */
+    public function addWriteError(string $message): void
+    {
+        $this->writeErrors++;
+        $this->addError($message);
+    }
+
+    /** Marque le rapport comme tronqué (plafond de lignes atteint). */
+    public function markTruncated(): void
+    {
+        $this->truncated = true;
+    }
+
     public function imported(): int
     {
         return $this->imported;
@@ -53,6 +80,17 @@ final class ImportReport
         return $this->errors;
     }
 
+    /** Nombre d'erreurs imputables à une défaillance base/infra (échec réel). */
+    public function writeErrors(): int
+    {
+        return $this->writeErrors;
+    }
+
+    public function truncated(): bool
+    {
+        return $this->truncated;
+    }
+
     /** @return list<string> */
     public function errorSamples(): array
     {
@@ -65,13 +103,15 @@ final class ImportReport
         return $this->imported + $this->duplicates + $this->errors;
     }
 
-    /** @return array{imported: int, duplicates: int, errors: int, total: int, error_samples: list<string>} */
+    /** @return array{imported: int, duplicates: int, errors: int, write_errors: int, truncated: bool, total: int, error_samples: list<string>} */
     public function toArray(): array
     {
         return [
             'imported'      => $this->imported,
             'duplicates'    => $this->duplicates,
             'errors'        => $this->errors,
+            'write_errors'  => $this->writeErrors,
+            'truncated'     => $this->truncated,
             'total'         => $this->total(),
             'error_samples' => $this->errorSamples,
         ];

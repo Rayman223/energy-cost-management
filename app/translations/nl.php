@@ -190,6 +190,8 @@ return [
     'import.errors' => 'Fouten',
     'import.done' => 'Import voltooid.',
     'import.done_dryrun' => 'Simulatie voltooid (niets weggeschreven).',
+    'import.file_too_large' => 'Bestand te groot: verklein het of gebruik de command-line-import.',
+    'import.truncated' => 'Bestand afgekapt: de regellimiet is bereikt, alleen de eerste regels zijn geïmporteerd.',
     'import.admin_title' => 'Importeren voor een gebruiker',
     'import.admin_hint' => 'Gegevens importeren namens een lid (onboarding/migratie). Alleen voor beheerders.',
     'import.target_user' => 'Doelgebruiker',

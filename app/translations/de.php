@@ -190,6 +190,8 @@ return [
     'import.errors' => 'Fehler',
     'import.done' => 'Import abgeschlossen.',
     'import.done_dryrun' => 'Simulation abgeschlossen (kein Schreiben).',
+    'import.file_too_large' => 'Datei zu groß: Größe verringern oder den Kommandozeilen-Import verwenden.',
+    'import.truncated' => 'Datei abgeschnitten: Zeilenobergrenze erreicht, nur die ersten Zeilen wurden importiert.',
     'import.admin_title' => 'Für einen Benutzer importieren',
     'import.admin_hint' => 'Daten im Namen eines Mitglieds importieren (Onboarding/Migration). Nur für Administratoren.',
     'import.target_user' => 'Zielbenutzer',

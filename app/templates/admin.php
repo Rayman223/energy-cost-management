@@ -137,18 +137,7 @@ $csrf = \App\Security\Csrf::field();
     <h2><?= $this->te('import.admin_title') ?></h2>
     <p class="hint"><?= $this->te('import.admin_hint') ?></p>
 
-    <?php if ($importReport !== null): ?>
-      <div class="banner ok" style="margin-bottom:12px">
-        <?= $this->te('import.imported') ?> : <strong><?= $this->e((string) $importReport->imported()) ?></strong> ·
-        <?= $this->te('import.duplicates') ?> : <strong><?= $this->e((string) $importReport->duplicates()) ?></strong> ·
-        <?= $this->te('import.errors') ?> : <strong><?= $this->e((string) $importReport->errors()) ?></strong>
-      </div>
-      <?php if ($importReport->errorSamples() !== []): ?>
-        <ul class="muted" style="font-size:.82rem;margin:0 0 12px">
-          <?php foreach ($importReport->errorSamples() as $msg): ?><li><?= $this->e($msg) ?></li><?php endforeach; ?>
-        </ul>
-      <?php endif; ?>
-    <?php endif; ?>
+    <?= $this->partial('_import_report', ['importReport' => $importReport]) ?>
 
     <form method="post" action="admin.php" enctype="multipart/form-data">
       <?= $csrf ?>

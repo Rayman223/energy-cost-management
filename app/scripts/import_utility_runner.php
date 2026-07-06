@@ -9,10 +9,9 @@ declare(strict_types=1);
  */
 
 use App\Infrastructure\Database;
-use App\Repository\UtilityReadingRepository;
 use App\Security\UserContext;
-use App\Service\BulkImportService;
 use App\Service\Import\ImportMapping;
+use App\Service\Import\ImportRunner;
 use App\Service\Import\RowSource;
 
 if (!function_exists('runUtilityImport')) {
@@ -47,7 +46,6 @@ if (!function_exists('runUtilityImport')) {
         }
 
         $mapping = ImportMapping::preset($type, ['value_col' => $valueColumn]);
-        $service = new BulkImportService();
 
         fwrite(STDOUT, sprintf(
             "[IMPORT] type=%s user=#%d fichier=%s mode=%s%s",
@@ -58,35 +56,45 @@ if (!function_exists('runUtilityImport')) {
             PHP_EOL
         ));
 
-        $pdo->beginTransaction();
         try {
-            $report = $service->importUtility(
-                RowSource::fromCsv($handle),
+            // Orchestration transaction/dry-run/plafond partagée avec l'UI web.
+            $report = (new ImportRunner())->run(
+                $pdo,
                 $mapping,
-                new UtilityReadingRepository($pdo, $userId, $type),
+                RowSource::fromCsv($handle),
+                $userId,
+                $type,
+                $dryRun,
             );
-            fclose($handle);
-            $dryRun ? $pdo->rollBack() : $pdo->commit();
         } catch (\Throwable $e) {
-            if ($pdo->inTransaction()) {
-                $pdo->rollBack();
-            }
             fwrite(STDERR, '[FATAL] ' . $e->getMessage() . PHP_EOL);
 
             return 1;
+        } finally {
+            if (is_resource($handle)) {
+                fclose($handle);
+            }
         }
 
         fwrite(STDOUT, PHP_EOL . '[BILAN]' . PHP_EOL);
         fwrite(STDOUT, sprintf("  Importés : %d%s", $report->imported(), PHP_EOL));
         fwrite(STDOUT, sprintf("  Doublons : %d%s", $report->duplicates(), PHP_EOL));
-        fwrite(STDOUT, sprintf("  Erreurs  : %d%s", $report->errors(), PHP_EOL));
+        // « Ignorées » = lignes rejetées par la validation ; « Échecs » = écritures
+        // base/infra en erreur (ce qui fait réellement échouer le process).
+        fwrite(STDOUT, sprintf("  Ignorées : %d%s", $report->errors() - $report->writeErrors(), PHP_EOL));
+        fwrite(STDOUT, sprintf("  Échecs   : %d%s", $report->writeErrors(), PHP_EOL));
         foreach ($report->errorSamples() as $msg) {
             fwrite(STDOUT, '    - ' . $msg . PHP_EOL);
+        }
+        if ($report->truncated()) {
+            fwrite(STDOUT, PHP_EOL . '[TRONQUÉ] Plafond de lignes atteint : seules les premières lignes ont été traitées.' . PHP_EOL);
         }
         if ($dryRun) {
             fwrite(STDOUT, PHP_EOL . '[DRY-RUN] Aucune écriture. Relancez avec --execute pour importer.' . PHP_EOL);
         }
 
-        return $report->errors() > 0 ? 1 : 0;
+        // Échec (1) sur défaillance réelle (base/infra) OU import tronqué (données
+        // perdues) ; les lignes ignorées (validation) restent en 0 (cf. #75).
+        return $report->writeErrors() > 0 || $report->truncated() ? 1 : 0;
     }
 }

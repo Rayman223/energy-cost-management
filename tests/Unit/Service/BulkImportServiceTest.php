@@ -139,6 +139,26 @@ final class BulkImportServiceTest extends TestCase
 
         self::assertSame(2, $report->imported());
         self::assertSame(1, $report->errors());
+        // L'erreur base est comptée comme échec réel (writeError), pas une simple
+        // ligne ignorée → sert au code de sortie CLI (#75).
+        self::assertSame(1, $report->writeErrors());
         self::assertStringNotContainsString('SQLSTATE', implode(' ', $report->errorSamples()));
+    }
+
+    public function testValidationErrorsAreNotCountedAsWriteErrors(): void
+    {
+        // Lignes ignorées pour cause de validation (horodatage/valeur) : comptées
+        // dans errors() mais PAS dans writeErrors() → le process CLI sort en 0.
+        $rows = [
+            2 => ['timestamp' => 'bad-date',            'counter_m3' => '10'],
+            3 => ['timestamp' => '2026-01-01 08:00:00', 'counter_m3' => '-5'],
+            4 => ['timestamp' => '2026-01-02 08:00:00', 'counter_m3' => '12'], // OK
+        ];
+
+        $report = $this->service->importUtility($rows, ImportMapping::preset('gas'), new FakeUtilityIngestion());
+
+        self::assertSame(1, $report->imported());
+        self::assertSame(2, $report->errors());
+        self::assertSame(0, $report->writeErrors());
     }
 }

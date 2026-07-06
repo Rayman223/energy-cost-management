@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Security;
 
 use App\Repository\UserRepository;
+use App\Support\CliArguments;
 use PDO;
 use RuntimeException;
 
@@ -77,13 +78,9 @@ final class UserContext
     public static function parseCliUserArg(): ?int
     {
         global $argv;
-        foreach ($argv as $arg) {
-            if (str_starts_with((string) $arg, '--user=')) {
-                return (int) substr((string) $arg, 7);
-            }
-        }
+        $raw = CliArguments::value($argv, 'user');
 
-        return null;
+        return $raw === null ? null : (int) $raw;
     }
 
     private static function firstUserId(PDO $pdo): ?int

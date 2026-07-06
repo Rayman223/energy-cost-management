@@ -22,7 +22,10 @@ Un réimport du même fichier ne crée donc **aucun doublon** ; le rapport disti
 
 - **CSV** : 1ʳᵉ ligne = en-tête (normalisé en minuscules). Lu **en flux**
   (gros fichiers sans surcharge mémoire).
-- **JSON** : `{"readings":[ {…}, … ]}` ou un tableau d'objets en tête.
+- **JSON** : `{"readings":[ {…}, … ]}` ou un tableau d'objets en tête. ⚠️ Le JSON
+  est **entièrement chargé en mémoire** (fichier + tableau décodé) — il n'est pas
+  streamé comme le CSV. Il reste borné par les plafonds (taille ~8 Mo à l'upload,
+  ~200 000 lignes) ; pour de gros volumes, préférer le **CSV** ou la **CLI**.
 
 Le **mapping** est basé sur des **presets** par type d'énergie, avec surcharges :
 | Type | Colonne horodatage (défaut) | Colonnes valeur (défaut) |
@@ -59,6 +62,18 @@ Dry-run par défaut ; `--execute` pour écrire ; `--user=<id>` pour la cible
 (défaut : 1er compte). Le dry-run exécute l'import dans une transaction annulée
 → compteurs fidèles sans écriture.
 
+**Plafond de lignes (stop-and-report)** : au-delà du plafond (~200 000 lignes,
+CLI comme web), l'import s'arrête et conserve les lignes déjà traitées — le bilan
+est marqué **tronqué** (plutôt que d'annuler tout l'import).
+
+**Code de sortie CLI** : `0` si l'import est complet et sans défaillance ; `1` en
+cas de **défaillance base/infra** (compteur « Échecs ») **ou** d'import **tronqué**
+(données perdues). Les lignes simplement **ignorées** (horodatage/valeur invalide,
+compteur « Ignorées ») **ne font pas** échouer le process — un cron ne lève donc
+pas de fausse alerte pour quelques lignes malformées, mais reste alerté d'une
+troncature ou d'une erreur d'écriture. Sur défaillance, la CLI affiche la cause
+réelle (contrairement au web, qui assainit le message).
+
 ### 4. API batch (programmatique, P4 #55)
 Pour l'ingestion automatisée volumineuse : `POST ?action=ingest_electricity|
 ingest_gas|ingest_water`, ≤ 1000 lectures/requête, jeton Bearer. Voir
@@ -76,9 +91,13 @@ asynchrone/job reste un axe de suivi.
 
 - `App\Service\BulkImportService` — cœur (streaming, validation par ligne,
   collecte des erreurs, upsert idempotent). Testable via les fakes d'ingestion.
-- `App\Service\Import\RowSource` — lecteurs CSV (flux) / JSON.
+- `App\Service\Import\RowSource` — lecteurs CSV (flux) / JSON (en mémoire).
+- `App\Service\Import\ReadingParser` — prédicats purs de validation (valeur ≥ 0,
+  horodatage strict) partagés avec l'API d'ingestion.
 - `App\Service\Import\ImportMapping` — presets + surcharges (registres tirés de
   `MeterTopology::ELECTRICITY_REGISTERS`).
 - `App\Service\Import\ImportReport` — bilan (compteurs + échantillon d'erreurs).
 - `App\Service\Import\ImportTarget` — règle d'autorisation self/admin.
-- `App\Service\Import\ImportRunner` — orchestration d'un fichier téléversé (UI).
+- `App\Service\Import\ImportRunner` — orchestration transactionnelle partagée
+  (UI web via `runFromRequest`/`runUploaded`, CLI via `run`) : transaction,
+  dry-run, plafond stop-and-report.
