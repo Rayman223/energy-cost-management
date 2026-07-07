@@ -2,8 +2,7 @@
 
 A PHP application to track and estimate energy costs (electricity, gas, water).
 Originally a **single-home Belgian** tracker (Sibelga grid), it has grown into a
-**multi-tenant, public, European community platform** (epic
-[#47](https://github.com/Rayman223/Manage-energy-costs/issues/47), phases P0–P8):
+**multi-tenant, public, European community platform**:
 members sign in with OpenID Connect, push their own meter readings (manually or
 via an API), and get full tariff-based cost estimates across Europe.
 
@@ -35,9 +34,7 @@ dev tooling and the OIDC library only.
 ## Features
 
 - **OpenID Connect authentication** (generic, PKCE/state/nonce) — no password and
-  no e-mail stored; identity is `issuer` + `subject` + display name. The legacy
-  **HTTP Basic Auth** single-tenant mode stays active while OIDC is disabled
-  (`oidc.enabled = false`), so upgrades are non-breaking.
+  no e-mail stored; identity is `issuer` + `subject` + display name.
 - **Multi-tenant data isolation** — every reading is scoped to a user. Electricity
   uses a **register model** (`meters` / `meter_registers` / `meter_readings`,
   EU-ready); gas and water share `utility_readings`.
@@ -47,13 +44,12 @@ dev tooling and the OIDC library only.
 - **Ingestion API** — per-user **Bearer tokens** (hashed, scoped to `ingest`,
   rate-limited, revocable) for automated push; unit and batch, idempotent.
 - **Bulk import** (CSV/JSON) — idempotent, with a per-row report; self-service for
-  your own data and an admin capability to import on behalf of another user.
+  your own data.
 - **Full internationalization** — `fr / en / nl / de` (extensible), language
-  switcher, localized dates/numbers/currencies.
+  switcher, localized dates/numbers/currencies. (Help needed for translations)
 - **Self-service & GDPR** — account page, EnergyID **opt-in** (BE/NL), JSON export
   and cascading account deletion.
-- **Administration** (`admin.php`, admins only) — manage members (role, status; a
-  block takes effect on the next request) and the shared tariff catalog.
+- **Administration** (`admin.php`, admins only) — manage members (role, status) and the shared tariff catalog.
 - **Dashboard** — live consumption, monthly deltas, cost estimates, 30/60/90-day
   history, dynamic vs. regulated price comparison.
 - **EnergyID sync** (optional, BE/NL) — daily push of readings via the V2
@@ -107,11 +103,11 @@ Quick local setup:
 git clone https://github.com/Rayman223/Manage-energy-costs.git
 cd Manage-energy-costs
 
-cp app/config/config.example.php app/config/config.php   # then edit credentials
+cp app/config/config.example.php app/config/config.php    # then edit credentials
 composer install --no-dev                                 # OIDC runtime lib
 
 mysql -u <user> -p <database> < app/sql/schema.sql        # create tables
-php app/scripts/migrate.php                                # apply versioned migrations
+php app/scripts/migrate.php                               # apply versioned migrations
 ```
 
 For a full production install on **Unraid (SWAG)** — including creating the owner
