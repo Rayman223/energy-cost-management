@@ -1,6 +1,6 @@
 {
     "name": "rayman223/manage-energy-costs",
-    "description": "Suivi et estimation des coûts énergétiques (électricité & gaz) — Belgique / Sibelga.",
+    "description": "Tracking and estimation of energy costs (electricity, gas and water).",
     "type": "project",
     "license": "proprietary",
     "require": {
@@ -12,7 +12,7 @@
         "phpunit/phpunit": "^10.5"
     },
     "suggest": {
-        "ext-intl": "Formatage localisé (dates, nombres, devises) conforme à chaque locale ; sinon repli neutre."
+        "ext-intl": "Localized formatting (dates, numbers, currencies) compliant with each locale; otherwise neutral fallback."
     },
     "autoload-dev": {
         "psr-4": {
