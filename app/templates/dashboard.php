@@ -378,8 +378,7 @@ $fmt = function (mixed $v, int $dec = 3, string $unit = 'kWh'): string {
   <div style="margin-top:48px;padding-top:20px;border-top:1px solid var(--border);
               font-family:var(--mono);font-size:.76rem;color:var(--muted);display:flex;
               justify-content:space-between;flex-wrap:wrap;gap:8px">
-    <span>Manage Energy v2 — Brussels</span>
-    <span>PHP <?= PHP_VERSION ?> · <?= date('d/m/Y H:i:s') ?></span>
+    <span>Manage Energy v3 — Brussels</span>
   </div>
 
 </div><!-- /wrap -->

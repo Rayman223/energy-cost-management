@@ -1,5 +1,5 @@
 -- ============================================================
--- schema.sql — Manage Energy v2
+-- schema.sql — Manage Energy v3
 -- Schéma complet. À importer sur une DB vierge.
 -- mysql -u <user> -p <database> < app/sql/schema.sql
 -- ============================================================
