@@ -55,7 +55,7 @@ $fmt = function (mixed $v, int $dec = 3, string $unit = 'kWh'): string {
       <div class="logo-icon">⚡</div>
       <div>
         <div class="logo-text">Manage Energy</div>
-        <div class="logo-sub">Brussels · Dries installation</div>
+        <div class="logo-sub">Dashboard</div>
       </div>
     </div>
     <div class="header-right">
