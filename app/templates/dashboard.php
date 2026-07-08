@@ -340,41 +340,6 @@ $fmt = function (mixed $v, int $dec = 3, string $unit = 'kWh'): string {
     <span class="section-line"></span>
   </div>
 
-  <div class="cards cards-2">
-    <div class="card">
-      <div class="card-label">Derniers envois EnergyID</div>
-      <table class="sync-table">
-        <tr><td>Import T1</td><td><?= $this->e($syncStatus['prelevement_jour'] ?? '—') ?></td></tr>
-        <tr><td>Import T2</td><td><?= $this->e($syncStatus['prelevement_nuit'] ?? '—') ?></td></tr>
-        <tr><td>Export T1</td><td><?= $this->e($syncStatus['injection_jour'] ?? '—') ?></td></tr>
-        <tr><td>Export T2</td><td><?= $this->e($syncStatus['injection_nuit'] ?? '—') ?></td></tr>
-        <tr><td>Production PV</td><td><?= $this->e($syncStatus['production_solaire'] ?? '—') ?></td></tr>
-        <tr><td>Gaz</td><td><?= $this->e($syncStatus['gaz_index'] ?? '—') ?></td></tr>
-        <tr><td>Eau</td><td><?= $this->e($syncStatus['water_index'] ?? '—') ?></td></tr>
-      </table>
-    </div>
-    <div class="card">
-      <div class="card-label">Outils</div>
-      <div class="tools-strip">
-        <a href="tariffs.php" class="tool-link">
-          € Gérer les tarifs
-        </a>
-        <a href="../tools/migrate_db.php" class="tool-link" target="_blank">
-          ⇄ Migration DB
-        </a>
-        <a href="../tools/conversion_solaire.php?DRY_RUN=1" class="tool-link" target="_blank">
-          ☀ Migration Solaire (dry-run)
-        </a>
-        <a href="api.php?action=sync_status" class="tool-link" target="_blank">
-          ⟳ API sync status
-        </a>
-        <a href="api.php?action=tariffs" class="tool-link" target="_blank">
-          € Tarifs JSON
-        </a>
-      </div>
-    </div>
-  </div>
-
   <div style="margin-top:48px;padding-top:20px;border-top:1px solid var(--border);
               font-family:var(--mono);font-size:.76rem;color:var(--muted);display:flex;
               justify-content:space-between;flex-wrap:wrap;gap:8px">
