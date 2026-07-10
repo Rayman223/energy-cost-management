@@ -35,7 +35,7 @@ $csrf = \App\Security\Csrf::field();
       <div class="logo-sub"><?= $this->e($user?->displayName ?? '') ?><?= $user?->isAdmin() ? ' · ' . $this->te('account.admin') : '' ?></div>
     </div>
     <div>
-      <span class="langs"><?php foreach ($available as $loc): ?><a href="?lang=<?= $this->e($loc) ?>"<?= $loc === $this->locale() ? ' class="lang-active"' : '' ?>><?= $this->e(strtoupper($loc)) ?></a><?php endforeach; ?></span>
+      <span class="langs"><?php foreach ($available as $loc): ?><a href="?lang=<?= $this->e($loc) ?>"<?= $loc === $this->locale() ? ' class="lang-active"' : '' ?>><?= $this->e(\App\I18n\Locale::displayName($loc)) ?></a><?php endforeach; ?></span>
       &nbsp; <a href="index.php"><?= $this->te('nav.back_dashboard') ?></a>
     </div>
   </header>
@@ -72,7 +72,23 @@ $csrf = \App\Security\Csrf::field();
             <?php endforeach; ?>
           </select>
         </div>
-        <div><label><?= $this->te('account.locale') ?></label><input type="text" name="locale" maxlength="5" value="<?= $this->e($profile['locale']) ?>" placeholder="fr"></div>
+        <div>
+          <label><?= $this->te('account.locale') ?></label>
+          <?php
+          // Garantit que la locale courante reste sélectionnable même si elle
+          // n'est plus dans la liste disponible, sinon le <select> retomberait
+          // silencieusement sur la 1re option au prochain enregistrement.
+          $localeOptions = $available;
+          if (!in_array($profile['locale'], $localeOptions, true)) {
+              $localeOptions[] = $profile['locale'];
+          }
+          ?>
+          <select name="locale">
+            <?php foreach ($localeOptions as $loc): ?>
+              <option value="<?= $this->e($loc) ?>"<?= $loc === $profile['locale'] ? ' selected' : '' ?>><?= $this->e(\App\I18n\Locale::displayName($loc)) ?></option>
+            <?php endforeach; ?>
+          </select>
+        </div>
       </div>
       <label><?= $this->te('account.bidding_zone') ?></label>
       <input type="text" name="bidding_zone" value="<?= $this->e($profile['bidding_zone'] ?? '') ?>" placeholder="10YBE----------2">

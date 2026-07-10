@@ -15,6 +15,14 @@ namespace App\I18n;
  */
 final class Locale
 {
+    /** Noms d'affichage (endonymes) des locales gérées. */
+    private const ENDONYMS = [
+        'fr' => 'Français',
+        'en' => 'English',
+        'nl' => 'Nederlands',
+        'de' => 'Deutsch',
+    ];
+
     /**
      * @param array<string, mixed> $config
      */
@@ -48,6 +56,18 @@ final class Locale
     public static function available(array $config): array
     {
         return self::settings($config)[0];
+    }
+
+    /**
+     * Nom d'affichage (endonyme) d'une locale, pour les sélecteurs de langue.
+     *
+     * Les endonymes sont indépendants de la langue de l'UI (on affiche chaque
+     * langue dans son propre nom) et sont donc volontairement non traduits.
+     * Repli sur le code en majuscules pour toute locale non répertoriée.
+     */
+    public static function displayName(string $locale): string
+    {
+        return self::ENDONYMS[$locale] ?? strtoupper($locale);
     }
 
     /**
