@@ -9,7 +9,7 @@
         "jumbojett/openid-connect-php": "^1.0"
     },
     "require-dev": {
-        "phpunit/phpunit": "^10.5"
+        "phpunit/phpunit": "^13.2"
     },
     "suggest": {
         "ext-intl": "Localized formatting (dates, numbers, currencies) compliant with each locale; otherwise neutral fallback."
