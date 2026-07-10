@@ -66,6 +66,7 @@ $fmt = function (mixed $v, int $dec = 3, string $unit = 'kWh'): string {
         <span class="sync-dot <?= $syncClass === 'error' ? 'error' : ($syncClass === 'stale' ? 'stale' : '') ?>"></span>
         <?= $dbError ? 'DB offline' : 'Sync' ?>
       </div>
+      <a href="meter-readings.php" class="theme-toggle" title="<?= $this->te('nav.meter_readings') ?>">📝</a>
       <?php if (!empty($isAdmin)): ?><a href="admin.php" class="theme-toggle" title="<?= $this->te('admin.title') ?>">🛡</a><?php endif; ?>
       <a href="tariffs.php" class="theme-toggle" title="Tarifs">€</a>
       <a href="account.php" class="theme-toggle" title="Mon compte">👤</a>
@@ -203,7 +204,7 @@ $fmt = function (mixed $v, int $dec = 3, string $unit = 'kWh'): string {
     <span class="section-line"></span>
   </div>
 
-  <div class="gas-grid">
+  <div class="gas-grid gas-grid-history-only">
     <div class="gas-history">
       <table>
         <thead><tr><th>Date &amp; heure</th><th>Index (m³)</th><th>Delta</th></tr></thead>
@@ -212,32 +213,6 @@ $fmt = function (mixed $v, int $dec = 3, string $unit = 'kWh'): string {
           <tr><td colspan="3" class="td-empty">Chargement…</td></tr>
         </tbody>
       </table>
-    </div>
-
-    <div class="gas-form">
-      <div class="panel-title">
-        Nouvel index gaz
-      </div>
-      <?php if ($gasLatest): ?>
-      <div class="last-reading">
-        Dernier index : <strong><?= $this->num((float) $gasLatest['counter_m3'], 3) ?> m³</strong>
-        le <?= $this->e(substr($gasLatest['reading_at'], 0, 10)) ?>
-      </div>
-      <?php endif; ?>
-      <div class="form-row">
-        <label class="form-label" for="gas-date">Date du relevé</label>
-        <input id="gas-date" type="date" class="form-input" value="<?= date('Y-m-d') ?>">
-      </div>
-      <div class="form-row">
-        <label class="form-label" for="gas-time">Heure du relevé</label>
-        <input id="gas-time" type="time" class="form-input" value="<?= date('H:i') ?>">
-      </div>
-      <div class="form-row">
-        <label class="form-label" for="gas-value">Index compteur (m³)</label>
-        <input id="gas-value" type="number" step="0.001" class="form-input" placeholder="ex. 8523.456" min="0">
-      </div>
-      <button class="btn btn-amber" id="gas-btn">Enregistrer</button>
-      <div class="form-feedback" id="gas-feedback"></div>
     </div>
   </div>
 
@@ -272,7 +247,7 @@ $fmt = function (mixed $v, int $dec = 3, string $unit = 'kWh'): string {
     <span class="section-line"></span>
   </div>
 
-  <div class="gas-grid">
+  <div class="gas-grid gas-grid-history-only">
     <div class="gas-history">
       <table>
         <thead><tr><th>Date &amp; heure</th><th>Index (m³)</th><th>Delta</th></tr></thead>
@@ -281,32 +256,6 @@ $fmt = function (mixed $v, int $dec = 3, string $unit = 'kWh'): string {
           <tr><td colspan="3" class="td-empty">Chargement…</td></tr>
         </tbody>
       </table>
-    </div>
-
-    <div class="gas-form">
-      <div class="panel-title">
-        Nouvel index eau
-      </div>
-      <?php if ($waterLatest): ?>
-      <div class="last-reading">
-        Dernier index : <strong><?= $this->num((float) $waterLatest['counter_m3'], 3) ?> m³</strong>
-        le <?= $this->e(substr($waterLatest['reading_at'], 0, 10)) ?>
-      </div>
-      <?php endif; ?>
-      <div class="form-row">
-        <label class="form-label" for="water-date">Date du relevé</label>
-        <input id="water-date" type="date" class="form-input" value="<?= date('Y-m-d') ?>">
-      </div>
-      <div class="form-row">
-        <label class="form-label" for="water-time">Heure du relevé</label>
-        <input id="water-time" type="time" class="form-input" value="<?= date('H:i') ?>">
-      </div>
-      <div class="form-row">
-        <label class="form-label" for="water-value">Index compteur (m³)</label>
-        <input id="water-value" type="number" step="0.001" class="form-input" placeholder="ex. 1234.567" min="0">
-      </div>
-      <button class="btn btn-amber" id="water-btn">Enregistrer</button>
-      <div class="form-feedback" id="water-feedback"></div>
     </div>
   </div>
 

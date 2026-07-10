@@ -7,6 +7,7 @@ namespace App\Http\Controller;
 use App\Http\JsonResponse;
 use App\Http\Request;
 use App\Http\ValidationException;
+use App\Repository\Contract\ElectricityIngestionInterface;
 use App\Repository\Contract\MeterReadingRepositoryInterface;
 use DateTimeImmutable;
 
@@ -19,6 +20,7 @@ final class MeterEntryController
     public function __construct(
         private readonly MeterReadingRepositoryInterface $gasRepo,
         private readonly MeterReadingRepositoryInterface $waterRepo,
+        private readonly ElectricityIngestionInterface $electricityRepo,
     ) {
     }
 
@@ -30,6 +32,42 @@ final class MeterEntryController
     public function water(Request $request): JsonResponse
     {
         return $this->saveReading($request, $this->waterRepo);
+    }
+
+    public function electricity(Request $request): JsonResponse
+    {
+        $readingAt = $request->input('reading_at');
+        $ts = $readingAt
+            ? Request::parseDate($readingAt, 'reading_at')
+            : new DateTimeImmutable('now');
+
+        $indexes = [];
+        foreach (ElectricityIngestionInterface::REGISTERS as $key) {
+            $raw = $request->input($key);
+            if ($raw === null || $raw === '') {
+                continue;
+            }
+
+            $value = filter_var($raw, FILTER_VALIDATE_FLOAT);
+            if ($value === false || $value < 0) {
+                throw new ValidationException('Invalid ' . $key . ' value');
+            }
+
+            $indexes[$key] = (float) $value;
+        }
+
+        if ($indexes === []) {
+            throw new ValidationException('At least one electricity index is required');
+        }
+
+        $inserted = $this->electricityRepo->insertIndexes($ts, $indexes);
+
+        return JsonResponse::ok([
+            'ok'       => true,
+            'saved_at' => $ts->format('c'),
+            'received' => count($indexes),
+            'inserted' => $inserted,
+        ]);
     }
 
     private function saveReading(Request $request, MeterReadingRepositoryInterface $repo): JsonResponse

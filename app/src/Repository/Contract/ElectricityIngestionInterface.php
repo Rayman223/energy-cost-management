@@ -15,6 +15,13 @@ use DateTimeImmutable;
 interface ElectricityIngestionInterface
 {
     /**
+     * Clés des registres électricité/solaire acceptées par insertIndexes().
+     * Source de vérité unique partagée par les contrôleurs d'ingestion et de
+     * saisie manuelle.
+     */
+    public const REGISTERS = ['import_t1', 'import_t2', 'export_t1', 'export_t2', 'production'];
+
+    /**
      * Insère un jeu d'index au même horodatage (INSERT IGNORE : idempotent).
      *
      * @param array<string, float> $indexByRegister register_key => index cumulé

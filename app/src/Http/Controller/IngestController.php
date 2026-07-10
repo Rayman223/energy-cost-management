@@ -22,8 +22,8 @@ final class IngestController
     /** Taille maximale d'un batch (borne les requêtes). */
     private const MAX_BATCH = 1000;
 
-    /** Registres électricité acceptés. */
-    private const REGISTERS = ['import_t1', 'import_t2', 'export_t1', 'export_t2', 'production'];
+    /** Registres électricité acceptés (source unique sur le contrat). */
+    private const REGISTERS = ElectricityIngestionInterface::REGISTERS;
 
     public function __construct(
         private readonly ElectricityIngestionInterface $electricity,

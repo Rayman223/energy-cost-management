@@ -8,13 +8,17 @@ use App\Http\Controller\MeterEntryController;
 use App\Http\Request;
 use App\Http\ValidationException;
 use PHPUnit\Framework\TestCase;
+use Tests\Fake\FakeElectricityIngestion;
 use Tests\Fake\FakeMeterReadingRepository;
 
 final class MeterEntryControllerTest extends TestCase
 {
-    private function controller(FakeMeterReadingRepository $gas, FakeMeterReadingRepository $water): MeterEntryController
-    {
-        return new MeterEntryController($gas, $water);
+    private function controller(
+        FakeMeterReadingRepository $gas,
+        FakeMeterReadingRepository $water,
+        ?FakeElectricityIngestion $elec = null,
+    ): MeterEntryController {
+        return new MeterEntryController($gas, $water, $elec ?? new FakeElectricityIngestion());
     }
 
     /** @param array<string, mixed> $body */
@@ -86,5 +90,59 @@ final class MeterEntryControllerTest extends TestCase
         self::assertNotNull($water->saved);
         self::assertNull($gas->saved);
         self::assertSame(77.0, $water->saved['counter_m3']);
+    }
+
+    /** @param array<string, mixed> $body */
+    private function elecPost(array $body): Request
+    {
+        return new Request('POST', ['action' => 'electricity_entry'], $body);
+    }
+
+    public function testSavesElectricityIndexesWhenValid(): void
+    {
+        $elec = new FakeElectricityIngestion();
+        $res = $this->controller(new FakeMeterReadingRepository(), new FakeMeterReadingRepository(), $elec)
+            ->electricity($this->elecPost([
+                'reading_at' => '2026-06-25 10:00:00',
+                'import_t1'  => 1234.5,
+                'export_t2'  => 42.0,
+            ]));
+
+        self::assertSame(200, $res->status);
+        self::assertIsArray($res->data);
+        self::assertTrue($res->data['ok']);
+        self::assertSame(2, $res->data['received']);
+        self::assertSame(2, $res->data['inserted']);
+
+        self::assertCount(1, $elec->calls);
+        self::assertSame('2026-06-25 10:00:00', $elec->calls[0]['timestamp']);
+        self::assertSame(['import_t1' => 1234.5, 'export_t2' => 42.0], $elec->calls[0]['indexes']);
+    }
+
+    public function testRejectsNegativeElectricityIndex(): void
+    {
+        $controller = $this->controller(new FakeMeterReadingRepository(), new FakeMeterReadingRepository());
+
+        $this->expectException(ValidationException::class);
+        $this->expectExceptionMessage('Invalid export_t1 value');
+        $controller->electricity($this->elecPost(['reading_at' => '2026-06-25 10:00:00', 'export_t1' => -1]));
+    }
+
+    public function testRejectsElectricityWithoutAnyIndex(): void
+    {
+        $controller = $this->controller(new FakeMeterReadingRepository(), new FakeMeterReadingRepository());
+
+        $this->expectException(ValidationException::class);
+        $this->expectExceptionMessage('At least one electricity index is required');
+        $controller->electricity($this->elecPost(['reading_at' => '2026-06-25 10:00:00']));
+    }
+
+    public function testRejectsElectricityInvalidReadingDate(): void
+    {
+        $controller = $this->controller(new FakeMeterReadingRepository(), new FakeMeterReadingRepository());
+
+        $this->expectException(ValidationException::class);
+        $this->expectExceptionMessage('Invalid reading_at date format');
+        $controller->electricity($this->elecPost(['reading_at' => 'not-a-date', 'import_t1' => 100]));
     }
 }

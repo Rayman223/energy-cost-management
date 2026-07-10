@@ -114,7 +114,7 @@ try {
 $readings = new ReadingsController($elecRepo, $gasRepo, $waterRepo, $syncState);
 $cost     = new CostController($costSvc);
 $tariffs  = new TariffController($tariffRepo);
-$entries  = new MeterEntryController($gasRepo, $waterRepo);
+$entries  = new MeterEntryController($gasRepo, $waterRepo, $elecRepo);
 $ingest   = new IngestController($elecRepo, $gasRepo, $waterRepo);
 
 $router = new Router();
@@ -135,6 +135,7 @@ if ($viaToken === false) {
     $router->add('GET', 'chart_data',     $readings->chartData(...));
     $router->add('GET', 'gas_history',    $readings->gasHistory(...));
     $router->add('GET', 'water_history',  $readings->waterHistory(...));
+    $router->add('GET', 'electricity_history', $readings->electricityHistory(...));
     $router->add('GET', 'sync_status',    $readings->syncStatus(...));
     $router->add('GET', 'month_cost',     $cost->monthCost(...));
     $router->add('GET', 'cost_estimate',  $cost->costEstimate(...));
@@ -144,8 +145,9 @@ if ($viaToken === false) {
     $router->add('GET', 'tariffs',        $tariffs->index(...));
 
     // POST (saisie manuelle + tarifs)
-    $router->add('POST', 'gas_entry',   $entries->gas(...));
-    $router->add('POST', 'water_entry', $entries->water(...));
+    $router->add('POST', 'electricity_entry', $entries->electricity(...));
+    $router->add('POST', 'gas_entry',         $entries->gas(...));
+    $router->add('POST', 'water_entry',       $entries->water(...));
     $router->add('POST', 'save_tariff', $tariffs->save(...));
 
     // La gestion des jetons API se fait sur la page « Mon compte » (account.php).

@@ -121,6 +121,70 @@ final class ElectricityReadingRepository implements LegacyDailyRepositoryInterfa
     }
 
     // -------------------------------------------------------------------------
+    // Saisie manuelle : historique des relevés
+    // -------------------------------------------------------------------------
+
+    /**
+     * Historique des relevés électricité sur les $days derniers jours : chaque
+     * horodatage distinct avec ses index par registre (null si le registre n'a
+     * pas de valeur à cet instant). DESC (plus récent d'abord).
+     *
+     * Borné par fenêtre temporelle (et non par nombre de lignes) car le cron
+     * horaire alimente ce registre : 50 lignes ne couvriraient que ~2 jours et
+     * masqueraient les saisies manuelles. Fenêtre alignée sur
+     * getDailyDeltasForChart() ; une saisie (même antidatée) sur les $days
+     * derniers jours reste donc visible.
+     *
+     * @return list<array{reading_at: string, import_t1: float|null, import_t2: float|null, export_t1: float|null, export_t2: float|null, production: float|null}>
+     */
+    public function getHistory(int $days = 30): array
+    {
+        $days = max(1, $days);
+
+        $idToKey = [];
+        foreach (ElectricityIngestionInterface::REGISTERS as $key) {
+            $rid = $this->registerId($key);
+            if ($rid !== null) {
+                $idToKey[$rid] = $key;
+            }
+        }
+        if ($idToKey === []) {
+            return [];
+        }
+
+        $ids = array_keys($idToKey);
+        $placeholders = implode(', ', array_fill(0, count($ids), '?'));
+
+        $stmt = $this->pdo->prepare(
+            "SELECT reading_at, register_id, index_value
+             FROM meter_readings
+             WHERE register_id IN ($placeholders)
+               AND reading_at >= DATE_SUB(CURDATE(), INTERVAL ? DAY)
+             ORDER BY reading_at DESC"
+        );
+        $stmt->execute([...$ids, $days]);
+
+        $rows = [];
+        foreach ($stmt->fetchAll() as $row) {
+            $at = (string) $row['reading_at'];
+            $rows[$at] ??= [
+                'reading_at' => $at,
+                'import_t1'  => null,
+                'import_t2'  => null,
+                'export_t1'  => null,
+                'export_t2'  => null,
+                'production' => null,
+            ];
+            $key = $idToKey[(int) $row['register_id']] ?? null;
+            if ($key !== null) {
+                $rows[$at][$key] = (float) $row['index_value'];
+            }
+        }
+
+        return array_values($rows);
+    }
+
+    // -------------------------------------------------------------------------
     // Dashboard : deltas mensuels (interpolation à minuit)
     // -------------------------------------------------------------------------
 

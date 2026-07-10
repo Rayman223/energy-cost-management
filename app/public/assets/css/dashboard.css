@@ -215,6 +215,7 @@
   tbody td { padding: 10px 16px; font-family: var(--mono); color: var(--text); font-size: .9rem; }
   .td-delta { color: var(--blue); }
   .td-empty { padding: 24px 16px; color: var(--muted); font-style: italic; font-size: .88rem; }
+  .gas-history-wide { overflow-x: auto; }
 
   .gas-form { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 22px 24px; }
   .form-row { margin-bottom: 16px; }
@@ -324,6 +325,8 @@
   @media (max-width: 480px) {
     .cards-5, .cards-4, .cards-3, .cards-2 { grid-template-columns: 1fr; }
   }
+
+  .gas-grid-history-only { grid-template-columns: 1fr; }
 
   /* ── Résidus d'attributs style inline migrés en classes (#98) ────────────── */
   .langs { font-size: .72rem; letter-spacing: .03em; }

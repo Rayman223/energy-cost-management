@@ -50,6 +50,11 @@ final class ReadingsController
         return JsonResponse::ok($this->waterRepo->getAllReadings());
     }
 
+    public function electricityHistory(Request $request): JsonResponse
+    {
+        return JsonResponse::ok($this->electricityRepo->getHistory());
+    }
+
     public function syncStatus(Request $request): JsonResponse
     {
         return JsonResponse::ok([
