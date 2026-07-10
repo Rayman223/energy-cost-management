@@ -49,11 +49,11 @@ $energyLabels = [
 ];
 ?>
 <!DOCTYPE html>
-<html lang="<?= $this->e($this->locale()) ?>">
+<html lang="<?= $this->e($this->locale()) ?>" data-confirm-title="<?= $this->e($this->t('common.confirm_title')) ?>" data-confirm-ok="<?= $this->e($this->t('common.confirm')) ?>" data-confirm-cancel="<?= $this->e($this->t('common.cancel')) ?>">
 <head>
 <?= $this->partial('_head', [
     'title' => $this->t('tariffs.title') . ' — ' . $this->t('app.title'),
-    'css'   => ['assets/css/tariffs.css'],
+    'css'   => ['assets/css/confirm.css', 'assets/css/tariffs.css'],
 ]) ?>
 </head>
 <body>
@@ -121,7 +121,7 @@ $energyLabels = [
     <button class="btn btn-ghost btn-sm" data-toggle-lines="<?= $this->e($rowId) ?>"><?= $this->te('tariffs.detail') ?></button>
     <div class="grid-actions">
       <a href="?edit=<?= $g->id ?>#form" class="btn btn-ghost btn-sm"><?= $this->te('tariffs.edit') ?></a>
-      <form method="post" data-confirm="<?= $this->e($this->t('tariffs.delete_confirm')) ?>">
+      <form method="post" data-confirm="<?= $this->e($this->t('tariffs.delete_confirm')) ?>" data-confirm-ok="<?= $this->e($this->t('tariffs.delete')) ?>" data-confirm-danger>
         <input type="hidden" name="action"  value="delete">
         <input type="hidden" name="grid_id" value="<?= $g->id ?>">
         <?= \App\Security\Csrf::field() ?>
@@ -215,7 +215,7 @@ $energyLabels = [
       <?php if (($tpl['visibility'] ?? 'private') === 'public'): ?><span class="tpl-tag"><?= $this->te('tariffs.template_public') ?></span><?php endif; ?>
       <?= $usageBadge('user:' . $tpl['id']) ?>
       <?php if (!empty($tpl['is_owner'])): ?>
-      <form method="post" class="form-inline" data-confirm="<?= $this->e($this->t('tariffs.template_delete_confirm')) ?>">
+      <form method="post" class="form-inline" data-confirm="<?= $this->e($this->t('tariffs.template_delete_confirm')) ?>" data-confirm-ok="<?= $this->e($this->t('tariffs.delete')) ?>" data-confirm-danger>
         <input type="hidden" name="action" value="template_delete">
         <input type="hidden" name="template_id" value="<?= $tpl['id'] ?>">
         <?= \App\Security\Csrf::field() ?>

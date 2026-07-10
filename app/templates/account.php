@@ -20,11 +20,11 @@ use App\Domain\User;
 $csrf = \App\Security\Csrf::field();
 ?>
 <!DOCTYPE html>
-<html lang="<?= $this->e($this->locale()) ?>">
+<html lang="<?= $this->e($this->locale()) ?>" data-confirm-title="<?= $this->e($this->t('common.confirm_title')) ?>" data-confirm-ok="<?= $this->e($this->t('common.confirm')) ?>" data-confirm-cancel="<?= $this->e($this->t('common.cancel')) ?>">
 <head>
 <?= $this->partial('_head', [
     'title' => $this->t('account.title') . ' — ' . $this->t('app.title'),
-    'css'   => ['assets/css/backoffice.css', 'assets/css/account.css'],
+    'css'   => ['assets/css/confirm.css', 'assets/css/backoffice.css', 'assets/css/account.css'],
 ]) ?>
 </head>
 <body>
@@ -112,7 +112,7 @@ $csrf = \App\Security\Csrf::field();
           <td class="muted"><?= $this->e($t['last_used_at'] ?? '—') ?></td>
           <td><?= $t['revoked_at'] !== null ? '<span class="muted">' . $this->te('account.token_revoked') . '</span>' : $this->te('account.token_active') ?></td>
           <td><?php if ($t['revoked_at'] === null): ?>
-            <form method="post" class="inline" data-confirm="<?= $this->e($this->t('account.token_revoke_confirm')) ?>">
+            <form method="post" class="inline" data-confirm="<?= $this->e($this->t('account.token_revoke_confirm')) ?>" data-confirm-ok="<?= $this->e($this->t('account.token_revoke')) ?>" data-confirm-danger>
               <?= $csrf ?>
               <input type="hidden" name="action" value="token_revoke">
               <input type="hidden" name="token_id" value="<?= $t['id'] ?>">
@@ -197,7 +197,7 @@ $csrf = \App\Security\Csrf::field();
     <p class="hint"><?= $this->te('account.rgpd_hint') ?>
        (<a href="terms.php"><?= $this->te('legal.terms') ?></a> · <a href="privacy.php"><?= $this->te('legal.privacy') ?></a>)</p>
     <p><a href="account.php?export=1"><?= $this->te('account.export') ?></a></p>
-    <form method="post" data-confirm="<?= $this->e($this->t('account.delete_js_confirm')) ?>">
+    <form method="post" data-confirm="<?= $this->e($this->t('account.delete_js_confirm')) ?>" data-confirm-ok="<?= $this->e($this->t('account.delete')) ?>" data-confirm-danger>
       <?= $csrf ?>
       <input type="hidden" name="action" value="delete_account">
       <label><?= $this->te('account.delete_confirm_label', ['keyword' => $this->t('account.delete_keyword')]) ?></label>

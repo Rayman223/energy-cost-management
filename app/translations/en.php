@@ -12,6 +12,8 @@ return [
     'nav.back_dashboard'   => '← Dashboard',
     'common.language'      => 'Language',
     'common.save'          => 'Save',
+    'common.confirm'       => 'Confirm',
+    'common.confirm_title' => 'Confirmation',
     'common.cancel'        => 'Cancel',
     'common.optional'      => 'optional',
     'common.active'        => 'Active',

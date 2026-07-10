@@ -12,6 +12,8 @@ return [
     'nav.back_dashboard'   => '← Dashboard',
     'common.language'      => 'Taal',
     'common.save'          => 'Opslaan',
+    'common.confirm'       => 'Bevestigen',
+    'common.confirm_title' => 'Bevestiging',
     'common.cancel'        => 'Annuleren',
     'common.optional'      => 'optioneel',
     'common.active'        => 'Actief',

@@ -17,6 +17,8 @@ return [
     'nav.back_dashboard'   => '← Tableau de bord',
     'common.language'      => 'Langue',
     'common.save'          => 'Enregistrer',
+    'common.confirm'       => 'Confirmer',
+    'common.confirm_title' => 'Confirmation',
     'common.cancel'        => 'Annuler',
     'common.optional'      => 'optionnel',
     'common.active'        => 'Actif',

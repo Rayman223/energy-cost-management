@@ -69,7 +69,7 @@ function showError(string $msg, bool $isCli): void {
 // ── HTML shell ────────────────────────────────────────────────────────────
 if (!$isCli): ?>
 <!DOCTYPE html>
-<html lang="fr">
+<html lang="fr" data-confirm-title="Confirmation" data-confirm-ok="Confirmer" data-confirm-cancel="Annuler">
 <head>
 <meta charset="UTF-8">
 <title>Migration DB</title>
@@ -98,6 +98,7 @@ if (!$isCli): ?>
   .btn-live { background:#2fd58e; color:#0b0d10; }
   .btn-dry  { background:#1e293b; color:#c8d0dc; border:1px solid #334155; }
 </style>
+<link rel="stylesheet" href="../public/assets/css/confirm.css">
 </head>
 <body>
 <a href="../public/index.php" class="back">← Retour au dashboard</a>
@@ -107,8 +108,8 @@ $modeLabel = $isDryRun ? 'DRY-RUN (simulation)' : '⚠ MODE RÉEL — insertions
 $modeClass = $isDryRun ? 'dry' : 'live';
 echo "<span class='badge $modeClass'>$modeLabel</span><br><br>";
 echo "<a href='?mode=dry'  class='btn btn-dry'>Dry-run</a>";
-echo "<a href='?mode=live' class='btn btn-live' onclick=\"return confirm('Insérer les données manquantes dans "
-    . htmlspecialchars($config['database']['name']) . " ?')\">Exécuter (live)</a>";
+echo "<a href='?mode=live' class='btn btn-live' data-confirm='Insérer les données manquantes dans "
+    . htmlspecialchars($config['database']['name'], ENT_QUOTES) . " ?' data-confirm-ok='Exécuter (live)' data-confirm-danger>Exécuter (live)</a>";
 echo '<br><br>';
 flush();
 endif;
@@ -118,7 +119,7 @@ try {
     $dst = (new Database($config['database']))->pdo();
 } catch (\Throwable $e) {
     showError('Connexion DB destination : ' . $e->getMessage(), $isCli);
-    if (!$isCli) echo '</body></html>';
+    if (!$isCli) echo '<script src="../public/assets/js/confirm.js" defer></script></body></html>';
     exit(1);
 }
 
@@ -330,7 +331,7 @@ if (!$isCli) {
            . "<div class='value err'>" . number_format($totalErrors) . "</div></div>";
     }
     echo "</div>";
-    echo '</body></html>';
+    echo '<script src="../public/assets/js/confirm.js" defer></script></body></html>';
 } else {
     $lbl = $isDryRun ? '[DRY-RUN] Seraient insérées' : '[OK] Insérées';
     line("$lbl : $totalInserted | Skippées : $totalSkipped"

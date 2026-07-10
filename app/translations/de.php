@@ -12,6 +12,8 @@ return [
     'nav.back_dashboard'   => '← Übersicht',
     'common.language'      => 'Sprache',
     'common.save'          => 'Speichern',
+    'common.confirm'       => 'Bestätigen',
+    'common.confirm_title' => 'Bestätigung',
     'common.cancel'        => 'Abbrechen',
     'common.optional'      => 'optional',
     'common.active'        => 'Aktiv',
