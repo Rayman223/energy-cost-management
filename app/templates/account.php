@@ -15,6 +15,7 @@ use App\Domain\User;
  * @var string       $deviceId
  * @var list<string> $available
  * @var \App\Service\Import\ImportReport|null $importReport
+ * @var list<array{id:string,label:string}> $timezoneOptions
  */
 $csrf = \App\Security\Csrf::field();
 ?>
@@ -95,7 +96,15 @@ $csrf = \App\Security\Csrf::field();
         <div><label><?= $this->te('account.currency') ?></label><input type="text" name="currency" maxlength="3" value="<?= $this->e($profile['currency']) ?>" placeholder="EUR"></div>
       </div>
       <div class="row">
-        <div><label><?= $this->te('account.timezone') ?></label><input type="text" name="timezone" value="<?= $this->e($profile['timezone']) ?>" placeholder="Europe/Brussels"></div>
+        <div>
+          <label><?= $this->te('account.timezone') ?></label>
+          <select name="timezone">
+            <?php foreach ($timezoneOptions as $timezoneOption): ?>
+              <?php $tzId = $timezoneOption['id']; ?>
+              <option value="<?= $this->e($tzId) ?>"<?= $tzId === $profile['timezone'] ? ' selected' : '' ?>><?= $this->e($timezoneOption['label']) ?></option>
+            <?php endforeach; ?>
+          </select>
+        </div>
         <div><label><?= $this->te('account.locale') ?></label><input type="text" name="locale" maxlength="5" value="<?= $this->e($profile['locale']) ?>" placeholder="fr"></div>
       </div>
       <label><?= $this->te('account.bidding_zone') ?></label>

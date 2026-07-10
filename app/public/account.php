@@ -7,6 +7,7 @@ declare(strict_types=1);
  * (opt-in BE/NL), et RGPD (export + suppression). Session uniquement.
  */
 
+use App\Domain\Timezones;
 use App\Http\SecurityHeaders;
 use App\Http\UploadLimits;
 use App\I18n\Locale;
@@ -150,6 +151,11 @@ $profile  = $users->getProfile($userId) ?? [
 $tokens   = $tokensRepo->listForUser($userId);
 $energyId = $energyIdRepo->get($userId);
 
+// Garantit que le fuseau courant du profil reste sélectionnable même s'il n'est
+// plus listé par la timezone database installée (sinon le <select> retomberait
+// silencieusement sur la 1re option au prochain enregistrement).
+$timezoneOptions = Timezones::options($profile['timezone']);
+
 echo $view->render('account', [
     'error'      => $error,
     'success'    => $success,
@@ -161,4 +167,5 @@ echo $view->render('account', [
     'deviceId'   => $deviceId,
     'available'  => Locale::available($config),
     'importReport' => $importReport,
+    'timezoneOptions' => $timezoneOptions,
 ]);
