@@ -21,7 +21,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/../autoload.php';
 require __DIR__ . '/import_utility_runner.php';
 
-$dryRun  = !in_array('--execute', $argv, true);
+$dryRun  = !in_array('--execute', $argv ?? [], true);
 $csvPath = __DIR__ . '/../docs/meter_readings_export_water.csv';
 
 exit(runUtilityImport('water', 'eau', $csvPath, $dryRun));

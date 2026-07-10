@@ -15,7 +15,7 @@ use App\Infrastructure\MigrationRunner;
 
 $config = require __DIR__ . '/../bootstrap.php';
 
-$dryRun = in_array('--dry-run', $argv, true);
+$dryRun = in_array('--dry-run', $argv ?? [], true);
 
 $database = new Database($config['database']);
 $runner = new MigrationRunner($database->pdo(), __DIR__ . '/../sql/migrations');

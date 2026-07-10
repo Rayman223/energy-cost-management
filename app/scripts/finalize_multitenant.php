@@ -24,7 +24,7 @@ use App\Repository\UserRepository;
 use App\Security\UserContext;
 
 $config  = require __DIR__ . '/../bootstrap.php';
-$execute = in_array('--execute', $argv, true);
+$execute = in_array('--execute', $argv ?? [], true);
 
 $database = new Database($config['database']);
 $pdo = $database->pdo();

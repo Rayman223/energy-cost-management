@@ -67,7 +67,7 @@ suivi · `⬜` non applicable en l'état.
   manquants).
 
 ## CI / qualité
-- ✅ Lint PHP `8.1/8.2/8.3`, PHPStan **niveau 6**, PHPUnit (unit + intégration
+- ✅ Lint PHP `8.5`, PHPStan **niveau 6**, PHPUnit (unit + intégration
   BDD MariaDB).
 - ✅ **Contrôle de syntaxe JS** (`node --check`) — comble l'absence de lint JS
   (un `\!==` parasite avait échappé à la CI en P6).

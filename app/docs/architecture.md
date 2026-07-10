@@ -49,7 +49,7 @@ graphique, tables gaz/eau).
 - **Pipeline d'assets** : `App\Support\Assets::url()` ajoute un cache-busting
   `?v=<mtime>` sans build tooling.
 - **Qualité** : PHPStan **niveau 6**, suite PHPUnit, CI lint + PHPStan + tests sur
-  PHP 8.1/8.2/8.3.
+  PHP 8.5.
 
 ## Optimisation (Phase 5)
 

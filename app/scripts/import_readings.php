@@ -34,12 +34,14 @@ use App\Support\CliArguments;
 
 require_once __DIR__ . '/../autoload.php';
 
+$cliArgs = $argv ?? [];
+
 /** Récupère la valeur d'un argument --clé=valeur (null si absent). */
-$arg = static function (string $name) use ($argv): ?string {
-    return CliArguments::value($argv, $name);
+$arg = static function (string $name) use ($cliArgs): ?string {
+    return CliArguments::value($cliArgs, $name);
 };
 
-$dryRun = !in_array('--execute', $argv, true);
+$dryRun = !in_array('--execute', $cliArgs, true);
 $type   = strtolower(trim((string) ($arg('type') ?? '')));
 $file   = $arg('file');
 

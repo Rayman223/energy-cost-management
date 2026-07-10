@@ -77,7 +77,8 @@ final class UserContext
     /** Extrait la valeur de --user=<id> des arguments CLI (null si absente). */
     public static function parseCliUserArg(): ?int
     {
-        global $argv;
+        /** @var array<int, string> $argv */
+        $argv = $_SERVER['argv'] ?? [];
         $raw = CliArguments::value($argv, 'user');
 
         return $raw === null ? null : (int) $raw;

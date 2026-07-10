@@ -20,7 +20,7 @@ use App\Repository\UserRepository;
 $config = require __DIR__ . '/../bootstrap.php';
 
 $ownerArg = null;
-foreach ($argv as $arg) {
+foreach ($argv ?? [] as $arg) {
     if (str_starts_with($arg, '--user=')) {
         $ownerArg = (int) substr($arg, 7);
     }

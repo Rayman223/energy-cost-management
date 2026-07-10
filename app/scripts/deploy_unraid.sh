@@ -88,7 +88,7 @@ git clean -fd
 
 # ── Étape 2 : Dépendances ────────────────────────────────────────────────────
 log "=== Étape 2/4 — composer install (--no-dev) ==="
-# Seule dépendance runtime actuelle : php >=8.1. Étape conservée pour rester
+# Seule dépendance runtime actuelle : php >=8.5. Étape conservée pour rester
 # cohérent et préparer d'éventuelles dépendances futures.
 docker exec -w "$CONTAINER_APP_DIR" "$CONTAINER" \
     composer install --no-dev --optimize-autoloader --no-interaction --no-progress

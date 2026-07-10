@@ -13,7 +13,7 @@ single-home project, and seed the first Belgian tariff templates.
 
 ## Prerequisites
 
-- Unraid with the **SWAG** container (PHP 8.1+, `pdo_mysql`, `curl`; `intl`
+- Unraid with the **SWAG** container (PHP 8.5+, `pdo_mysql`, `curl`; `intl`
   recommended) and a **MariaDB** (10.11+) container.
 - A database and user for the app (e.g. `energy` / `energy_user`).
 - For OIDC (recommended): an OpenID Connect client at your provider (Google, or a

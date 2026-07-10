@@ -88,7 +88,7 @@ Full design notes: [`app/docs/architecture.md`](app/docs/architecture.md).
 
 | Component | Minimum |
 |-----------|---------|
-| PHP       | 8.1 (CI runs 8.1 / 8.2 / 8.3) |
+| PHP       | 8.5 |
 | MySQL / MariaDB | 8.0 / 10.11 |
 | Extensions | `pdo_mysql`, `curl` (required); `intl` (optional — localized formatting, falls back gracefully) |
 | Composer  | runtime dep: the OIDC client (`jumbojett/openid-connect-php`); dev: PHPUnit |
@@ -254,7 +254,7 @@ find app -name '*.php' -print0 | xargs -0 -n1 php -l # syntax lint
 ```
 
 CI ([.github/workflows/ci.yml](.github/workflows/ci.yml)) runs on every push/PR:
-PHP lint (8.1/8.2/8.3), **PHPStan level 6**, **PHPUnit** (unit + integration
+PHP lint (8.5), **PHPStan level 6**, **PHPUnit** (unit + integration
 against MariaDB), and a **JS syntax check** (`node --check`).
 
 ---
