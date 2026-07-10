@@ -88,9 +88,8 @@
     var nameInput = document.querySelector('.save-tpl-name');
     var visibilityBox = document.querySelector('.save-tpl-visibility');
     saveTplToggle.addEventListener('change', function () {
-      var shown = saveTplToggle.checked ? '' : 'none';
-      if (nameInput) nameInput.style.display = shown;
-      if (visibilityBox) visibilityBox.style.display = saveTplToggle.checked ? '' : 'none';
+      if (nameInput) nameInput.classList.toggle('is-hidden', !saveTplToggle.checked);
+      if (visibilityBox) visibilityBox.classList.toggle('is-hidden', !saveTplToggle.checked);
     });
   }
 })();

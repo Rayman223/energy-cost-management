@@ -1,0 +1,16 @@
+/* « Mon compte » — règles spécifiques, complètent backoffice.css (#98). */
+.wrap { max-width: 860px; margin: 0 auto; padding: 24px 18px 64px; }
+label { display: block; font-size: .82rem; color: var(--muted); margin: 10px 0 4px; }
+input[type=text], select { width: 100%; box-sizing: border-box; padding: 8px 10px; border-radius: 8px;
+  border: 1px solid var(--border); background: var(--bg); color: var(--text); font-family: 'Space Mono', monospace; }
+.row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+button { cursor: pointer; padding: 9px 16px; border-radius: 8px; border: 1px solid var(--border);
+  background: var(--blue); color: #fff; font-weight: 600; margin-top: 14px; }
+button.ghost { background: transparent; color: var(--text); }
+button.danger { background: var(--red, #d43); }
+table { width: 100%; border-collapse: collapse; font-size: .84rem; }
+th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--border); }
+.token-secret { word-break: break-all; padding: 12px; border: 1px dashed var(--blue); border-radius: 8px; }
+.inline { display: inline; }
+.btn-compact { margin: 0; padding: 4px 10px; }
+.mt-12 { margin-top: 12px; }

@@ -324,3 +324,42 @@
   @media (max-width: 480px) {
     .cards-5, .cards-4, .cards-3, .cards-2 { grid-template-columns: 1fr; }
   }
+
+  /* ── Résidus d'attributs style inline migrés en classes (#98) ────────────── */
+  .langs { font-size: .72rem; letter-spacing: .03em; }
+  .langs a { text-decoration: none; margin: 0 3px; }
+  .deltas-range { font-family: var(--mono); font-size: .76rem; color: var(--muted); }
+  .dot--amber     { background: var(--amber); }
+  .dot--amber-dim { background: var(--amber); opacity: .6; }
+  .dot--blue      { background: var(--blue); }
+  .dot--blue-dim  { background: var(--blue); opacity: .6; }
+  .dot--green     { background: var(--green); }
+  .btn-row { display: flex; gap: 6px; }
+  .btn-xs  { padding: 5px 12px; font-size: .7rem; }
+  .panel-title {
+    font-size: .78rem; font-weight: 700; letter-spacing: .12em;
+    text-transform: uppercase; color: var(--muted); margin-bottom: 18px;
+  }
+  .last-reading {
+    font-family: var(--mono); font-size: .95rem; color: var(--muted);
+    margin-bottom: 14px; padding: 8px 12px; background: var(--bg);
+    border-radius: 5px; border: 1px solid var(--border);
+  }
+  .last-reading strong { color: var(--text); }
+  .async-note { font-family: var(--mono); font-size: .85rem; color: var(--muted); padding: 24px 0; }
+  .async-note--error { color: var(--red); }
+
+  /* ── Styles générés au runtime par dashboard.js, migrés en classes (#98) ─── */
+  .t-muted { color: var(--muted); }
+  .t-green { color: var(--green); }
+  .t-dim   { opacity: .6; }
+  .mt-8  { margin-top: 8px; }
+  .mt-10 { margin-top: 10px; }
+  .mt-18 { margin-top: 18px; }
+  .no-tariff strong { display: block; color: var(--text); margin-bottom: 6px; }
+  .daily-scroll { max-height: 220px; overflow: auto; border: 1px solid var(--border); border-radius: 6px; margin-top: 6px; }
+  .daily-table { width: 100%; border-collapse: collapse; font-family: var(--mono); font-size: .78rem; }
+  .daily-table thead tr { color: var(--muted); }
+  .daily-table th { text-align: left; padding: 6px 10px; }
+  .daily-table td { padding: 5px 10px; font-size: .78rem; }
+  .daily-table th:nth-child(n+2), .daily-table td:nth-child(n+2) { text-align: right; }

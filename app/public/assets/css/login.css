@@ -9,3 +9,4 @@
     button { margin-top: 16px; width: 100%; border: none; border-radius: 8px; background: var(--amber); color: var(--on-amber); padding: 11px; cursor: pointer; font-weight: 700; font-size: .95rem; }
     button:hover { opacity: .92; }
     .error { margin-top: 10px; color: var(--red); font-size: .9rem; }
+    .login-langs { text-align: center; margin-top: 14px; font-size: .8rem; }

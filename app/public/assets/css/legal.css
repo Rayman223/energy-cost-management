@@ -1,0 +1,6 @@
+/* Pages légales (CGU / confidentialité) — extrait du <style> inline de legal.php (#98). */
+body { font-family: 'Syne', system-ui, sans-serif; background: var(--bg); color: var(--text); margin: 0; }
+.wrap { max-width: 760px; margin: 0 auto; padding: 32px 20px 64px; line-height: 1.6; }
+h1 { font-size: 1.5rem; } h2 { font-size: 1.1rem; margin-top: 28px; }
+a { color: var(--blue); } .muted { color: var(--muted); font-size: .85rem; }
+.legal-nav { margin-top: 32px; }

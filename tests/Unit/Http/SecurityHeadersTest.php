@@ -9,23 +9,16 @@ use PHPUnit\Framework\TestCase;
 
 final class SecurityHeadersTest extends TestCase
 {
-    public function testNonceIsStableWithinRequest(): void
+    public function testPolicyIsEnforcedWithoutInlineAllowances(): void
     {
-        $first  = SecurityHeaders::nonce();
-        $second = SecurityHeaders::nonce();
+        $csp = SecurityHeaders::contentSecurityPolicy();
 
-        self::assertNotSame('', $first);
-        self::assertSame($first, $second, 'Le nonce doit être mémoïsé pour la requête.');
-    }
-
-    public function testPolicyIsEnforcedAndCarriesNonce(): void
-    {
-        $nonce = SecurityHeaders::nonce();
-        $csp   = SecurityHeaders::contentSecurityPolicy($nonce);
-
-        // CSP enforced (jamais Report-Only) et scripts inline couverts par le nonce.
+        // CSP enforced (jamais Report-Only) et stricte : aucune source inline.
         self::assertStringNotContainsString('Report-Only', $csp);
-        self::assertStringContainsString("script-src 'self' https://cdn.jsdelivr.net 'nonce-" . $nonce . "'", $csp);
+        self::assertStringContainsString("script-src 'self' https://cdn.jsdelivr.net;", $csp);
+        self::assertStringContainsString("style-src 'self' https://fonts.googleapis.com;", $csp);
+        self::assertStringNotContainsString("'nonce-", $csp);
+        self::assertStringNotContainsString("'unsafe-inline'", $csp);
         self::assertStringContainsString("frame-ancestors 'none'", $csp);
         self::assertStringContainsString("default-src 'self'", $csp);
     }

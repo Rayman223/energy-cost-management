@@ -15,47 +15,10 @@ $csrf = \App\Security\Csrf::field();
 <!DOCTYPE html>
 <html lang="<?= $this->e($this->locale()) ?>">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title><?= $this->te('admin.title') ?> — <?= $this->te('app.title') ?></title>
-<script nonce="<?= $this->e(\App\Http\SecurityHeaders::nonce()) ?>">(function(){try{var t=localStorage.getItem('theme');if(!t)t=window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';document.documentElement.setAttribute('data-theme',t);}catch(e){document.documentElement.setAttribute('data-theme','light');}})();</script>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="<?= \App\Support\Assets::url('assets/css/tokens.css') ?>">
-<style>
-  body { font-family: 'Syne', system-ui, sans-serif; background: var(--bg); color: var(--text); margin: 0; }
-  .wrap { max-width: 960px; margin: 0 auto; padding: 24px 18px 64px; }
-  header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px; gap: 12px; flex-wrap: wrap; }
-  .logo-text { font-weight: 800; font-size: 1.2rem; }
-  .logo-sub { color: var(--muted); font-size: .78rem; }
-  a { color: var(--blue); }
-  .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 20px; margin-bottom: 20px; }
-  .card h2 { margin: 0 0 4px; font-size: 1.05rem; }
-  .card p.hint { color: var(--muted); font-size: .82rem; margin: 0 0 14px; }
-  .banner { padding: 10px 14px; border-radius: 8px; margin-bottom: 18px; font-size: .9rem; }
-  .banner.ok { background: rgba(40,180,90,.15); color: var(--green, #2b8); }
-  .banner.err { background: rgba(210,60,60,.15); color: var(--red, #d43); }
-  .table-scroll { overflow-x: auto; }
-  table { width: 100%; border-collapse: collapse; font-size: .84rem; min-width: 640px; }
-  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border); vertical-align: middle; }
-  th { color: var(--muted); font-weight: 600; }
-  code { font-family: 'Space Mono', monospace; background: var(--bg); padding: 2px 6px; border-radius: 5px; }
-  .pill { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: .74rem; font-weight: 700; }
-  .pill.admin { background: rgba(80,120,255,.18); color: var(--blue); }
-  .pill.blocked { background: rgba(210,60,60,.15); color: var(--red, #d43); }
-  .pill.active { background: rgba(40,180,90,.15); color: var(--green, #2b8); }
-  .muted { color: var(--muted); }
-  button { cursor: pointer; padding: 6px 12px; border-radius: 8px; border: 1px solid var(--border);
-    background: transparent; color: var(--text); font-weight: 600; font-size: .78rem; }
-  button.danger { border-color: var(--red, #d43); color: var(--red, #d43); }
-  form.inline { display: inline; margin: 0; }
-  .self { color: var(--muted); font-style: italic; font-size: .78rem; }
-  .langs a { margin-left: 8px; font-size: .8rem; }
-  label { display: block; font-size: .82rem; color: var(--muted); margin: 4px 0; }
-  select, input[type=file], input[type=text] { width: 100%; box-sizing: border-box; padding: 8px 10px;
-    border-radius: 8px; border: 1px solid var(--border); background: var(--bg); color: var(--text); }
-  form button[type=submit] { margin-top: 12px; background: var(--blue); color: #fff; }
-</style>
+<?= $this->partial('_head', [
+    'title' => $this->t('admin.title') . ' — ' . $this->t('app.title'),
+    'css'   => ['assets/css/backoffice.css', 'assets/css/admin.css'],
+]) ?>
 </head>
 <body>
 <div class="wrap">
@@ -65,7 +28,7 @@ $csrf = \App\Security\Csrf::field();
       <div class="logo-sub"><?= $this->te('admin.subtitle') ?></div>
     </div>
     <div>
-      <span class="langs"><?php foreach ($available as $loc): ?><a href="?lang=<?= $this->e($loc) ?>"<?= $loc === $this->locale() ? ' style="font-weight:700"' : '' ?>><?= $this->e(strtoupper($loc)) ?></a><?php endforeach; ?></span>
+      <span class="langs"><?php foreach ($available as $loc): ?><a href="?lang=<?= $this->e($loc) ?>"<?= $loc === $this->locale() ? ' class="lang-active"' : '' ?>><?= $this->e(strtoupper($loc)) ?></a><?php endforeach; ?></span>
       &nbsp; <a href="tariffs.php"><?= $this->te('nav.tariffs') ?></a>
       &nbsp; <a href="index.php"><?= $this->te('nav.back_dashboard') ?></a>
     </div>
@@ -150,15 +113,15 @@ $csrf = \App\Security\Csrf::field();
           </option>
         <?php endforeach; ?>
       </select>
-      <label for="a_energy_type" style="margin-top:10px"><?= $this->te('import.energy_type') ?></label>
+      <label for="a_energy_type" class="mt-10"><?= $this->te('import.energy_type') ?></label>
       <select id="a_energy_type" name="energy_type">
         <option value="electricity"><?= $this->te('import.type_electricity') ?></option>
         <option value="gas"><?= $this->te('import.type_gas') ?></option>
         <option value="water"><?= $this->te('import.type_water') ?></option>
       </select>
-      <label for="a_import_file" style="margin-top:10px"><?= $this->te('import.file') ?></label>
+      <label for="a_import_file" class="mt-10"><?= $this->te('import.file') ?></label>
       <input id="a_import_file" type="file" name="import_file" accept=".csv,.json" required>
-      <label style="margin-top:10px"><input type="checkbox" name="dry_run" value="1" checked> <?= $this->te('import.dry_run') ?></label>
+      <label class="mt-10"><input type="checkbox" name="dry_run" value="1" checked> <?= $this->te('import.dry_run') ?></label>
       <button type="submit"><?= $this->te('import.submit') ?></button>
     </form>
   </div>

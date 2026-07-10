@@ -1,0 +1,6 @@
+/* Page d'erreur (403/404/…) — extrait du <style> inline de error.php (#98). */
+body { font-family: system-ui, sans-serif; background: var(--bg); color: var(--text); margin: 0;
+  display: flex; min-height: 100vh; align-items: center; justify-content: center; text-align: center; }
+.box { padding: 32px; }
+.code { font-size: 3rem; font-weight: 800; color: var(--muted); }
+a { color: var(--blue); }

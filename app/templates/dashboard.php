@@ -32,19 +32,13 @@ $fmt = function (mixed $v, int $dec = 3, string $unit = 'kWh'): string {
 <!DOCTYPE html>
 <html lang="<?= $this->e($this->locale()) ?>">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Manage Energy — Brussels</title>
-<!-- Anti-FOUC : pose le thème (clair/sombre) avant le 1er rendu (localStorage > système). -->
-<script nonce="<?= $this->e(\App\Http\SecurityHeaders::nonce()) ?>">(function(){try{var t=localStorage.getItem('theme');if(!t)t=window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';document.documentElement.setAttribute('data-theme',t);}catch(e){document.documentElement.setAttribute('data-theme','light');}})();</script>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
+<?= $this->partial('_head', [
+    'title'       => 'Manage Energy — Brussels',
+    'css'         => ['assets/css/dashboard.css'],
+    'preconnects' => ['https://cdn.jsdelivr.net'],
+]) ?>
 <!-- defer : ne bloque pas le parsing du HTML ; s'exécute avant dashboard.js (aussi defer, ordre du document préservé). -->
 <script defer src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
-<link rel="stylesheet" href="<?= \App\Support\Assets::url('assets/css/tokens.css') ?>">
-<link rel="stylesheet" href="<?= \App\Support\Assets::url('assets/css/dashboard.css') ?>">
 </head>
 <body>
 <div class="wrap">
@@ -72,10 +66,10 @@ $fmt = function (mixed $v, int $dec = 3, string $unit = 'kWh'): string {
         <span class="sync-dot <?= $syncClass === 'error' ? 'error' : ($syncClass === 'stale' ? 'stale' : '') ?>"></span>
         <?= $dbError ? 'DB offline' : 'Sync' ?>
       </div>
-      <?php if (!empty($isAdmin)): ?><a href="admin.php" class="theme-toggle" title="<?= $this->te('admin.title') ?>" style="text-decoration:none">🛡</a><?php endif; ?>
-      <a href="tariffs.php" class="theme-toggle" title="Tarifs" style="text-decoration:none">€</a>
-      <a href="account.php" class="theme-toggle" title="Mon compte" style="text-decoration:none">👤</a>
-      <span class="langs" style="font-size:.72rem;letter-spacing:.03em"><?php foreach ($available as $loc): ?><a href="?lang=<?= $this->e($loc) ?>" style="text-decoration:none;margin:0 3px<?= $loc === $this->locale() ? ';font-weight:700' : '' ?>"><?= $this->e(strtoupper($loc)) ?></a><?php endforeach; ?></span>
+      <?php if (!empty($isAdmin)): ?><a href="admin.php" class="theme-toggle" title="<?= $this->te('admin.title') ?>">🛡</a><?php endif; ?>
+      <a href="tariffs.php" class="theme-toggle" title="Tarifs">€</a>
+      <a href="account.php" class="theme-toggle" title="Mon compte">👤</a>
+      <span class="langs"><?php foreach ($available as $loc): ?><a href="?lang=<?= $this->e($loc) ?>"<?= $loc === $this->locale() ? ' class="lang-active"' : '' ?>><?= $this->e(strtoupper($loc)) ?></a><?php endforeach; ?></span>
       <button type="button" class="theme-toggle" id="theme-toggle" aria-label="Changer de thème">🌙</button>
     </div>
   </header>
@@ -97,7 +91,7 @@ $fmt = function (mixed $v, int $dec = 3, string $unit = 'kWh'): string {
     <span class="section-title"><?= $this->te('dash.month') ?></span>
     <span class="section-line"></span>
     <?php if ($deltas): ?>
-    <span style="font-family:var(--mono);font-size:.76rem;color:var(--muted)">
+    <span class="deltas-range">
       <?= $this->e(substr($deltas['from'] ?? '', 0, 10)) ?>
       → <?= $this->e(substr($deltas['to'] ?? '', 0, 10)) ?>
     </span>
@@ -106,23 +100,23 @@ $fmt = function (mixed $v, int $dec = 3, string $unit = 'kWh'): string {
 
   <div class="cards cards-5">
     <div class="card amber">
-      <div class="card-label"><span class="dot" style="background:var(--amber)"></span>Δ Import T1</div>
+      <div class="card-label"><span class="dot dot--amber"></span>Δ Import T1</div>
       <div class="card-value"><?= $fmt($deltas['prelev_jour'] ?? null) ?></div>
     </div>
     <div class="card amber">
-      <div class="card-label"><span class="dot" style="background:var(--amber);opacity:.6"></span>Δ Import T2</div>
+      <div class="card-label"><span class="dot dot--amber-dim"></span>Δ Import T2</div>
       <div class="card-value"><?= $fmt($deltas['prelev_nuit'] ?? null) ?></div>
     </div>
     <div class="card blue">
-      <div class="card-label"><span class="dot" style="background:var(--blue)"></span>Δ Export T1</div>
+      <div class="card-label"><span class="dot dot--blue"></span>Δ Export T1</div>
       <div class="card-value"><?= $fmt($deltas['injec_jour'] ?? null) ?></div>
     </div>
     <div class="card blue">
-      <div class="card-label"><span class="dot" style="background:var(--blue);opacity:.6"></span>Δ Export T2</div>
+      <div class="card-label"><span class="dot dot--blue-dim"></span>Δ Export T2</div>
       <div class="card-value"><?= $fmt($deltas['injec_nuit'] ?? null) ?></div>
     </div>
     <div class="card green">
-      <div class="card-label"><span class="dot" style="background:var(--green)"></span>Δ Production PV</div>
+      <div class="card-label"><span class="dot dot--green"></span>Δ Production PV</div>
       <div class="card-value"><?= $fmt($deltas['solar'] ?? null) ?></div>
     </div>
   </div>
@@ -143,26 +137,16 @@ $fmt = function (mixed $v, int $dec = 3, string $unit = 'kWh'): string {
   </div>
 
   <!-- Year overview (hidden by default) -->
-  <div id="year-overview-wrap" style="display:none">
+  <div id="year-overview-wrap" class="is-hidden">
     <div class="year-overview" id="year-overview-grid"></div>
   </div>
 
   <!-- Dynamic cost content -->
   <div id="cost-content">
-    <div style="font-family:var(--mono);font-size:.85rem;color:var(--muted);padding:24px 0">Chargement…</div>
+    <div class="async-note">Chargement…</div>
   </div>
 
-  <script nonce="<?= $this->e(\App\Http\SecurityHeaders::nonce()) ?>">
-    window.__INIT_COST__ = <?= json_encode($cost ?? ['available' => false, 'reason' => 'No data']) ?>;
-    window.__INIT_YEAR__  = <?= (int) $initYear ?>;
-    window.__INIT_MONTH__ = <?= (int) $initMonth ?>;
-    window.__INIT_GAS_COST__ = <?= json_encode($gasCostData ?? ['available' => false, 'reason' => 'No data']) ?>;
-    window.__INIT_GAS_YEAR__  = <?= (int) $gasInitYear ?>;
-    window.__INIT_GAS_MONTH__ = <?= (int) $gasInitMonth ?>;
-    window.__INIT_WATER_COST__ = <?= json_encode($waterCostData ?? ['available' => false, 'reason' => 'No data']) ?>;
-    window.__INIT_WATER_YEAR__  = <?= (int) $waterInitYear ?>;
-    window.__INIT_WATER_MONTH__ = <?= (int) $waterInitMonth ?>;
-<?php
+  <?php
     // Libellés des composantes tarifaires (catalogue) + groupes, pour le rendu
     // générique du détail de coût (dashboard.js lit cost.lines par clé/groupe).
     $tariffLineLabels = [];
@@ -177,19 +161,36 @@ $fmt = function (mixed $v, int $dec = 3, string $unit = 'kWh'): string {
         'taxes'     => $this->t('tariffs.group_taxes'),
         'injection' => $this->t('tariffs.group_injection'),
     ];
-?>
-    window.__TARIFF_LINE_LABELS__  = <?= json_encode($tariffLineLabels, JSON_UNESCAPED_UNICODE) ?>;
-    window.__TARIFF_GROUP_LABELS__ = <?= json_encode($tariffGroupLabels, JSON_UNESCAPED_UNICODE) ?>;
-  </script>
+
+    // État serveur initial transmis à dashboard.js via un data block JSON. Un
+    // <script type="application/json"> n'est jamais exécuté → hors script-src,
+    // donc compatible avec la CSP durcie (sans nonce). #98
+    $dashboardData = [
+        'locale'            => $this->locale(),
+        'currency'          => $currency ?? 'EUR',
+        'initCost'          => $cost ?? ['available' => false, 'reason' => 'No data'],
+        'initYear'          => (int) $initYear,
+        'initMonth'         => (int) $initMonth,
+        'initGasCost'       => $gasCostData ?? ['available' => false, 'reason' => 'No data'],
+        'initGasYear'       => (int) $gasInitYear,
+        'initGasMonth'      => (int) $gasInitMonth,
+        'initWaterCost'     => $waterCostData ?? ['available' => false, 'reason' => 'No data'],
+        'initWaterYear'     => (int) $waterInitYear,
+        'initWaterMonth'    => (int) $waterInitMonth,
+        'tariffLineLabels'  => $tariffLineLabels,
+        'tariffGroupLabels' => $tariffGroupLabels,
+    ];
+  ?>
+  <script type="application/json" id="dashboard-data"><?= json_encode($dashboardData, JSON_HEX_TAG | JSON_UNESCAPED_UNICODE) ?></script>
 
   <!-- ── Chart ─────────────────────────────────────────────────────────── -->
   <div class="section-header">
     <span class="section-title">Historique 30 jours</span>
     <span class="section-line"></span>
-    <div style="display:flex;gap:6px">
-      <button class="btn btn-ghost" id="btn-30" data-chart-days="30" style="padding:5px 12px;font-size:.7rem">30j</button>
-      <button class="btn btn-ghost" id="btn-60" data-chart-days="60" style="padding:5px 12px;font-size:.7rem">60j</button>
-      <button class="btn btn-ghost" id="btn-90" data-chart-days="90" style="padding:5px 12px;font-size:.7rem">90j</button>
+    <div class="btn-row">
+      <button class="btn btn-ghost btn-xs" id="btn-30" data-chart-days="30">30j</button>
+      <button class="btn btn-ghost btn-xs" id="btn-60" data-chart-days="60">60j</button>
+      <button class="btn btn-ghost btn-xs" id="btn-90" data-chart-days="90">90j</button>
     </div>
   </div>
   <div class="chart-card">
@@ -214,12 +215,12 @@ $fmt = function (mixed $v, int $dec = 3, string $unit = 'kWh'): string {
     </div>
 
     <div class="gas-form">
-      <div style="font-size:.78rem;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin-bottom:18px">
+      <div class="panel-title">
         Nouvel index gaz
       </div>
       <?php if ($gasLatest): ?>
-      <div style="font-family:var(--mono);font-size:.95rem;color:var(--muted);margin-bottom:14px;padding:8px 12px;background:var(--bg);border-radius:5px;border:1px solid var(--border)">
-        Dernier index : <strong style="color:var(--text)"><?= $this->num((float) $gasLatest['counter_m3'], 3) ?> m³</strong>
+      <div class="last-reading">
+        Dernier index : <strong><?= $this->num((float) $gasLatest['counter_m3'], 3) ?> m³</strong>
         le <?= $this->e(substr($gasLatest['reading_at'], 0, 10)) ?>
       </div>
       <?php endif; ?>
@@ -256,13 +257,13 @@ $fmt = function (mixed $v, int $dec = 3, string $unit = 'kWh'): string {
   </div>
 
   <!-- Year overview gaz (hidden by default) -->
-  <div id="gas-year-overview-wrap" style="display:none">
+  <div id="gas-year-overview-wrap" class="is-hidden">
     <div class="year-overview" id="gas-year-overview-grid"></div>
   </div>
 
   <!-- Dynamic gas cost content -->
   <div id="gas-cost-content">
-    <div style="font-family:var(--mono);font-size:.85rem;color:var(--muted);padding:24px 0">Chargement…</div>
+    <div class="async-note">Chargement…</div>
   </div>
 
   <!-- ── Eau ──────────────────────────────────────────────────────────── -->
@@ -283,12 +284,12 @@ $fmt = function (mixed $v, int $dec = 3, string $unit = 'kWh'): string {
     </div>
 
     <div class="gas-form">
-      <div style="font-size:.78rem;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin-bottom:18px">
+      <div class="panel-title">
         Nouvel index eau
       </div>
       <?php if ($waterLatest): ?>
-      <div style="font-family:var(--mono);font-size:.95rem;color:var(--muted);margin-bottom:14px;padding:8px 12px;background:var(--bg);border-radius:5px;border:1px solid var(--border)">
-        Dernier index : <strong style="color:var(--text)"><?= $this->num((float) $waterLatest['counter_m3'], 3) ?> m³</strong>
+      <div class="last-reading">
+        Dernier index : <strong><?= $this->num((float) $waterLatest['counter_m3'], 3) ?> m³</strong>
         le <?= $this->e(substr($waterLatest['reading_at'], 0, 10)) ?>
       </div>
       <?php endif; ?>
@@ -325,13 +326,13 @@ $fmt = function (mixed $v, int $dec = 3, string $unit = 'kWh'): string {
   </div>
 
   <!-- Year overview eau (hidden by default) -->
-  <div id="water-year-overview-wrap" style="display:none">
+  <div id="water-year-overview-wrap" class="is-hidden">
     <div class="year-overview" id="water-year-overview-grid"></div>
   </div>
 
   <!-- Water consumption content (volume m³, pas de coût) -->
   <div id="water-cost-content">
-    <div style="font-family:var(--mono);font-size:.85rem;color:var(--muted);padding:24px 0">Chargement…</div>
+    <div class="async-note">Chargement…</div>
   </div>
 
   <!-- ── Webhook Sync Status ────────────────────────────────────────────── -->
@@ -340,16 +341,12 @@ $fmt = function (mixed $v, int $dec = 3, string $unit = 'kWh'): string {
     <span class="section-line"></span>
   </div>
 
-  <div style="margin-top:48px;padding-top:20px;border-top:1px solid var(--border);
-              font-family:var(--mono);font-size:.76rem;color:var(--muted);display:flex;
-              justify-content:space-between;flex-wrap:wrap;gap:8px">
+  <div class="page-footer">
     <span>Manage Energy v3 — Brussels</span>
   </div>
 
 </div><!-- /wrap -->
 
-<script defer src="<?= \App\Support\Assets::url('assets/js/theme.js') ?>"></script>
-<script nonce="<?= $this->e(\App\Http\SecurityHeaders::nonce()) ?>">window.APP_LOCALE=<?= json_encode($this->locale()) ?>;window.APP_CURRENCY=<?= json_encode($currency ?? 'EUR') ?>;</script>
 <script defer src="<?= \App\Support\Assets::url('assets/js/dashboard.js') ?>"></script>
 </body>
 </html>

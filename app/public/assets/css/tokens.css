@@ -72,3 +72,16 @@ body { transition: background-color .25s ease, color .25s ease; }
 }
 .theme-toggle:hover { color: var(--text); border-color: var(--amber); }
 .theme-toggle:focus-visible { outline: 2px solid var(--amber); outline-offset: 2px; }
+a.theme-toggle { text-decoration: none; }
+
+/* ── Utilitaires partagés (résidus d'attributs style inline migrés, #98) ───── */
+.is-hidden { display: none; }
+.lang-active { font-weight: 700; }
+
+/* Pied de page commun (dashboard + tarifs). */
+.page-footer {
+  margin-top: 48px; padding-top: 20px; border-top: 1px solid var(--border);
+  font-family: var(--mono); font-size: .76rem; color: var(--muted);
+  display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px;
+}
+.page-footer a { color: var(--blue); text-decoration: none; }

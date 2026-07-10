@@ -22,43 +22,10 @@ $csrf = \App\Security\Csrf::field();
 <!DOCTYPE html>
 <html lang="<?= $this->e($this->locale()) ?>">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title><?= $this->te('account.title') ?> — <?= $this->te('app.title') ?></title>
-<script nonce="<?= $this->e(\App\Http\SecurityHeaders::nonce()) ?>">(function(){try{var t=localStorage.getItem('theme');if(!t)t=window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';document.documentElement.setAttribute('data-theme',t);}catch(e){document.documentElement.setAttribute('data-theme','light');}})();</script>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="<?= \App\Support\Assets::url('assets/css/tokens.css') ?>">
-<style>
-  body { font-family: 'Syne', system-ui, sans-serif; background: var(--bg); color: var(--text); margin: 0; }
-  .wrap { max-width: 860px; margin: 0 auto; padding: 24px 18px 64px; }
-  header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px; }
-  .logo-text { font-weight: 800; font-size: 1.2rem; }
-  .logo-sub { color: var(--muted); font-size: .78rem; }
-  a { color: var(--blue); }
-  .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 20px; margin-bottom: 20px; }
-  .card h2 { margin: 0 0 4px; font-size: 1.05rem; }
-  .card p.hint { color: var(--muted); font-size: .82rem; margin: 0 0 14px; }
-  label { display: block; font-size: .82rem; color: var(--muted); margin: 10px 0 4px; }
-  input[type=text], select { width: 100%; box-sizing: border-box; padding: 8px 10px; border-radius: 8px;
-    border: 1px solid var(--border); background: var(--bg); color: var(--text); font-family: 'Space Mono', monospace; }
-  .row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-  button { cursor: pointer; padding: 9px 16px; border-radius: 8px; border: 1px solid var(--border);
-    background: var(--blue); color: #fff; font-weight: 600; margin-top: 14px; }
-  button.ghost { background: transparent; color: var(--text); }
-  button.danger { background: var(--red, #d43); }
-  .banner { padding: 10px 14px; border-radius: 8px; margin-bottom: 18px; font-size: .9rem; }
-  .banner.ok { background: rgba(40,180,90,.15); color: var(--green, #2b8); }
-  .banner.err { background: rgba(210,60,60,.15); color: var(--red, #d43); }
-  table { width: 100%; border-collapse: collapse; font-size: .84rem; }
-  th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--border); }
-  code { font-family: 'Space Mono', monospace; background: var(--bg); padding: 2px 6px; border-radius: 5px; }
-  .token-secret { word-break: break-all; padding: 12px; border: 1px dashed var(--blue); border-radius: 8px; }
-  .muted { color: var(--muted); }
-  .inline { display: inline; }
-  .langs a { margin-left: 8px; font-size: .8rem; }
-</style>
+<?= $this->partial('_head', [
+    'title' => $this->t('account.title') . ' — ' . $this->t('app.title'),
+    'css'   => ['assets/css/backoffice.css', 'assets/css/account.css'],
+]) ?>
 </head>
 <body>
 <div class="wrap">
@@ -68,7 +35,7 @@ $csrf = \App\Security\Csrf::field();
       <div class="logo-sub"><?= $this->e($user?->displayName ?? '') ?><?= $user?->isAdmin() ? ' · ' . $this->te('account.admin') : '' ?></div>
     </div>
     <div>
-      <span class="langs"><?php foreach ($available as $loc): ?><a href="?lang=<?= $this->e($loc) ?>"<?= $loc === $this->locale() ? ' style="font-weight:700"' : '' ?>><?= $this->e(strtoupper($loc)) ?></a><?php endforeach; ?></span>
+      <span class="langs"><?php foreach ($available as $loc): ?><a href="?lang=<?= $this->e($loc) ?>"<?= $loc === $this->locale() ? ' class="lang-active"' : '' ?>><?= $this->e(strtoupper($loc)) ?></a><?php endforeach; ?></span>
       &nbsp; <a href="index.php"><?= $this->te('nav.back_dashboard') ?></a>
     </div>
   </header>
@@ -133,7 +100,7 @@ $csrf = \App\Security\Csrf::field();
               <?= $csrf ?>
               <input type="hidden" name="action" value="token_revoke">
               <input type="hidden" name="token_id" value="<?= $t['id'] ?>">
-              <button type="submit" class="ghost" style="margin:0;padding:4px 10px"><?= $this->te('account.token_revoke') ?></button>
+              <button type="submit" class="ghost btn-compact"><?= $this->te('account.token_revoke') ?></button>
             </form>
           <?php endif; ?></td>
         </tr>
@@ -203,7 +170,7 @@ $csrf = \App\Security\Csrf::field();
           <input id="value_col" type="text" name="value_col" placeholder="counter_m3">
         </div>
       </div>
-      <label style="margin-top:12px"><input type="checkbox" name="dry_run" value="1" checked> <?= $this->te('import.dry_run') ?></label>
+      <label class="mt-12"><input type="checkbox" name="dry_run" value="1" checked> <?= $this->te('import.dry_run') ?></label>
       <button type="submit"><?= $this->te('import.submit') ?></button>
     </form>
   </div>

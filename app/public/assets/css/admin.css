@@ -1,0 +1,21 @@
+/* Administration — règles spécifiques, complètent backoffice.css (#98). */
+.wrap { max-width: 960px; margin: 0 auto; padding: 24px 18px 64px; }
+header { gap: 12px; flex-wrap: wrap; }
+.table-scroll { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: .84rem; min-width: 640px; }
+th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+th { color: var(--muted); font-weight: 600; }
+.pill { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: .74rem; font-weight: 700; }
+.pill.admin { background: rgba(80,120,255,.18); color: var(--blue); }
+.pill.blocked { background: rgba(210,60,60,.15); color: var(--red, #d43); }
+.pill.active { background: rgba(40,180,90,.15); color: var(--green, #2b8); }
+button { cursor: pointer; padding: 6px 12px; border-radius: 8px; border: 1px solid var(--border);
+  background: transparent; color: var(--text); font-weight: 600; font-size: .78rem; }
+button.danger { border-color: var(--red, #d43); color: var(--red, #d43); }
+form.inline { display: inline; margin: 0; }
+.self { color: var(--muted); font-style: italic; font-size: .78rem; }
+label { display: block; font-size: .82rem; color: var(--muted); margin: 4px 0; }
+select, input[type=file], input[type=text] { width: 100%; box-sizing: border-box; padding: 8px 10px;
+  border-radius: 8px; border: 1px solid var(--border); background: var(--bg); color: var(--text); }
+form button[type=submit] { margin-top: 12px; background: var(--blue); color: #fff; }
+.mt-10 { margin-top: 10px; }

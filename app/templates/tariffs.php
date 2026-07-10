@@ -51,16 +51,10 @@ $energyLabels = [
 <!DOCTYPE html>
 <html lang="<?= $this->e($this->locale()) ?>">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title><?= $this->te('tariffs.title') ?> — <?= $this->te('app.title') ?></title>
-<!-- Anti-FOUC : pose le thème (clair/sombre) avant le 1er rendu (localStorage > système). -->
-<script nonce="<?= $this->e(\App\Http\SecurityHeaders::nonce()) ?>">(function(){try{var t=localStorage.getItem('theme');if(!t)t=window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';document.documentElement.setAttribute('data-theme',t);}catch(e){document.documentElement.setAttribute('data-theme','light');}})();</script>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="<?= \App\Support\Assets::url('assets/css/tokens.css') ?>">
-<link rel="stylesheet" href="<?= \App\Support\Assets::url('assets/css/tariffs.css') ?>">
+<?= $this->partial('_head', [
+    'title' => $this->t('tariffs.title') . ' — ' . $this->t('app.title'),
+    'css'   => ['assets/css/tariffs.css'],
+]) ?>
 </head>
 <body>
 <div class="wrap">
@@ -80,10 +74,10 @@ $energyLabels = [
 </header>
 
 <?php if ($success): ?>
-<div class="alert alert-ok" style="margin-top:20px">✓ <?= $this->e($success) ?></div>
+<div class="alert alert-ok alert--push">✓ <?= $this->e($success) ?></div>
 <?php endif; ?>
 <?php if ($error): ?>
-<div class="alert alert-err" style="margin-top:20px">✗ <?= $this->e($error) ?></div>
+<div class="alert alert-err alert--push">✗ <?= $this->e($error) ?></div>
 <?php endif; ?>
 
 <!-- ── Onglets énergie (liens : état côté serveur) ───────────────────────── -->
@@ -118,7 +112,7 @@ $energyLabels = [
         <?= $g->validTo ? $g->validTo->format('d/m/Y') : '∞' ?>
         <span class="grid-meta">· <?= $this->e($g->currency) ?> · TVA <?= $this->e(rtrim(rtrim(number_format($g->vatRate, 2, '.', ''), '0'), '.')) ?>%<?= $g->country ? ' · ' . $this->e($g->country) : '' ?></span>
         <?php if ($g->pcsCoefficient ?? null): ?>
-          <span class="grid-meta" style="color:var(--blue)">· PCS <?= number_format($g->pcsCoefficient, 4) ?> kWh/m³</span>
+          <span class="grid-meta grid-meta--blue">· PCS <?= number_format($g->pcsCoefficient, 4) ?> kWh/m³</span>
         <?php endif; ?>
       </div>
     </div>
@@ -221,7 +215,7 @@ $energyLabels = [
       <?php if (($tpl['visibility'] ?? 'private') === 'public'): ?><span class="tpl-tag"><?= $this->te('tariffs.template_public') ?></span><?php endif; ?>
       <?= $usageBadge('user:' . $tpl['id']) ?>
       <?php if (!empty($tpl['is_owner'])): ?>
-      <form method="post" data-confirm="<?= $this->e($this->t('tariffs.template_delete_confirm')) ?>" style="display:inline">
+      <form method="post" class="form-inline" data-confirm="<?= $this->e($this->t('tariffs.template_delete_confirm')) ?>">
         <input type="hidden" name="action" value="template_delete">
         <input type="hidden" name="template_id" value="<?= $tpl['id'] ?>">
         <?= \App\Security\Csrf::field() ?>
@@ -356,8 +350,8 @@ $energyLabels = [
         <input type="checkbox" name="save_as_template" value="1" data-save-tpl-toggle>
         <?= $this->te('tariffs.save_as_template') ?>
       </label>
-      <input type="text" name="template_name" class="form-input save-tpl-name" placeholder="<?= $this->e($this->t('tariffs.template_name')) ?>" style="display:none">
-      <span class="save-tpl-visibility" style="display:none">
+      <input type="text" name="template_name" class="form-input save-tpl-name is-hidden" placeholder="<?= $this->e($this->t('tariffs.template_name')) ?>">
+      <span class="save-tpl-visibility is-hidden">
         <label class="form-label"><input type="radio" name="template_visibility" value="private" checked> <?= $this->te('tariffs.template_private') ?></label>
         <label class="form-label"><input type="radio" name="template_visibility" value="public"> <?= $this->te('tariffs.template_public') ?></label>
       </span>
@@ -393,16 +387,13 @@ $energyLabels = [
   </div>
 </template>
 
-<div style="margin-top:40px;padding-top:16px;border-top:1px solid var(--border);
-            font-family:var(--mono);font-size:.76rem;color:var(--muted);display:flex;
-            justify-content:space-between;flex-wrap:wrap;gap:8px;">
+<div class="page-footer">
   <span>Manage Energy — <?= $this->te('tariffs.title') ?></span>
-  <a href="../tools/migrate_db.php" style="color:var(--blue);text-decoration:none"><?= $this->te('tariffs.migrate_db') ?></a>
+  <a href="../tools/migrate_db.php"><?= $this->te('tariffs.migrate_db') ?></a>
 </div>
 
 </div>
 
-<script defer src="<?= \App\Support\Assets::url('assets/js/theme.js') ?>"></script>
 <script defer src="<?= \App\Support\Assets::url('assets/js/confirm.js') ?>"></script>
 <script defer src="<?= \App\Support\Assets::url('assets/js/tariffs.js') ?>" data-next-index="<?= $nextIndex ?>"></script>
 </body>
