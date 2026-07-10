@@ -102,6 +102,10 @@
   .tpl-chip-x { background:transparent; border:none; color:var(--muted); cursor:pointer; font-size:1.1rem;
                 line-height:1; padding:0 4px; border-radius:50%; }
   .tpl-chip-x:hover { color:var(--red); }
+  .tpl-count { display:inline-flex; align-items:center; min-width:18px; height:18px; padding:0 6px; border-radius:10px;
+               background:var(--accent, #2b6); color:#fff; font-size:.7rem; font-weight:700; justify-content:center; }
+  .tpl-tag { padding:1px 7px; border-radius:10px; background:var(--surface); border:1px solid var(--border2);
+             color:var(--muted); font-size:.66rem; text-transform:uppercase; letter-spacing:.06em; }
 
   /* ── Lignes tarifaires groupées ──────────────────────────────────────── */
   .lines-wrap { margin-top:20px; }

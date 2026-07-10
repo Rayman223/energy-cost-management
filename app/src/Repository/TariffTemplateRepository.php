@@ -9,7 +9,11 @@ use RuntimeException;
 
 /**
  * Templates de tarifs créés par l'utilisateur (structure de champs réutilisable,
- * sans montants). Scopés au propriétaire : jamais de fuite cross-tenant.
+ * sans montants).
+ *
+ * Visibilité : un template 'private' n'est visible que de son propriétaire ; un
+ * template 'public' est visible/importable par tous les comptes. La lecture
+ * expose `is_owner` pour distinguer (seul le propriétaire peut supprimer).
  *
  * Les templates « fournis » (belges/génériques) ne passent PAS par ce dépôt :
  * ils vivent en PHP (TariffTemplateCatalog).
@@ -23,18 +27,19 @@ final class TariffTemplateRepository
     }
 
     /**
-     * Templates de l'utilisateur pour un type d'énergie, champs chargés en une
-     * seule requête (évite le N+1).
+     * Templates disponibles pour un type d'énergie : ceux du propriétaire (privés
+     * + publics) et les templates PUBLICS des autres comptes. Champs chargés en
+     * une seule requête (évite le N+1).
      *
-     * @return list<array{id:int, energy_type:string, country:?string, name:string, fields:list<array{key:string, kind:string, label:?string, sort:int}>}>
+     * @return list<array{id:int, energy_type:string, country:?string, name:string, visibility:string, is_owner:bool, fields:list<array{key:string, kind:string, label:?string, sort:int}>}>
      */
     public function findForEnergy(string $energyType): array
     {
         $stmt = $this->pdo->prepare(
-            'SELECT id, energy_type, country, name
+            "SELECT id, energy_type, country, name, visibility, user_id
              FROM tariff_templates
-             WHERE user_id = :uid AND energy_type = :type
-             ORDER BY name ASC'
+             WHERE energy_type = :type AND (user_id = :uid OR visibility = 'public')
+             ORDER BY name ASC"
         );
         $stmt->execute(['uid' => $this->userId, 'type' => $energyType]);
         $rows = $stmt->fetchAll();
@@ -52,6 +57,8 @@ final class TariffTemplateRepository
                 'energy_type' => (string) $r['energy_type'],
                 'country'     => $r['country'] !== null ? (string) $r['country'] : null,
                 'name'        => (string) $r['name'],
+                'visibility'  => (string) $r['visibility'],
+                'is_owner'    => (int) $r['user_id'] === $this->userId,
                 'fields'      => $fieldsMap[(int) $r['id']] ?? [],
             ],
             $rows,
@@ -59,14 +66,17 @@ final class TariffTemplateRepository
     }
 
     /**
-     * @return array{id:int, energy_type:string, country:?string, name:string, fields:list<array{key:string, kind:string, label:?string, sort:int}>}|null
+     * Un template par id : accessible s'il appartient à l'utilisateur OU s'il est
+     * public. Un template privé d'un autre compte reste invisible (renvoie null).
+     *
+     * @return array{id:int, energy_type:string, country:?string, name:string, visibility:string, is_owner:bool, fields:list<array{key:string, kind:string, label:?string, sort:int}>}|null
      */
     public function findById(int $id): ?array
     {
         $stmt = $this->pdo->prepare(
-            'SELECT id, energy_type, country, name
+            "SELECT id, energy_type, country, name, visibility, user_id
              FROM tariff_templates
-             WHERE id = :id AND user_id = :uid'
+             WHERE id = :id AND (user_id = :uid OR visibility = 'public')"
         );
         $stmt->execute(['id' => $id, 'uid' => $this->userId]);
         $row = $stmt->fetch();
@@ -82,6 +92,8 @@ final class TariffTemplateRepository
             'energy_type' => (string) $row['energy_type'],
             'country'     => $row['country'] !== null ? (string) $row['country'] : null,
             'name'        => (string) $row['name'],
+            'visibility'  => (string) $row['visibility'],
+            'is_owner'    => (int) $row['user_id'] === $this->userId,
             'fields'      => $fieldsMap[(int) $row['id']] ?? [],
         ];
     }
@@ -90,20 +102,24 @@ final class TariffTemplateRepository
      * Crée un template et ses champs. Renvoie l'identifiant créé.
      *
      * @param list<array{key:string, kind:string, label:?string}> $fields
+     * @param 'private'|'public'                                   $visibility
      */
-    public function save(string $energyType, ?string $country, string $name, array $fields): int
+    public function save(string $energyType, ?string $country, string $name, array $fields, string $visibility = 'private'): int
     {
+        $visibility = $visibility === 'public' ? 'public' : 'private';
+
         $this->pdo->beginTransaction();
         try {
             $stmt = $this->pdo->prepare(
-                'INSERT INTO tariff_templates (user_id, energy_type, country, name)
-                 VALUES (:uid, :type, :country, :name)'
+                'INSERT INTO tariff_templates (user_id, energy_type, country, name, visibility)
+                 VALUES (:uid, :type, :country, :name, :visibility)'
             );
             $stmt->execute([
-                'uid'     => $this->userId,
-                'type'    => $energyType,
-                'country' => $country,
-                'name'    => $name,
+                'uid'        => $this->userId,
+                'type'       => $energyType,
+                'country'    => $country,
+                'name'       => $name,
+                'visibility' => $visibility,
             ]);
             $id = (int) $this->pdo->lastInsertId();
 
@@ -131,15 +147,34 @@ final class TariffTemplateRepository
         return $id;
     }
 
+    /**
+     * Supprime un template du propriétaire (jamais celui d'un autre compte, même
+     * public) et purge son compteur d'utilisation (template_ref sans FK).
+     */
     public function delete(int $id): void
     {
-        $stmt = $this->pdo->prepare(
-            'DELETE FROM tariff_templates WHERE id = :id AND user_id = :uid'
-        );
-        $stmt->execute(['id' => $id, 'uid' => $this->userId]);
+        $this->pdo->beginTransaction();
+        try {
+            $stmt = $this->pdo->prepare(
+                'DELETE FROM tariff_templates WHERE id = :id AND user_id = :uid'
+            );
+            $stmt->execute(['id' => $id, 'uid' => $this->userId]);
 
-        if ($stmt->rowCount() === 0) {
-            throw new RuntimeException('Template introuvable.'); // pas de fuite cross-tenant
+            if ($stmt->rowCount() === 0) {
+                throw new RuntimeException('Template introuvable.'); // pas de fuite cross-tenant
+            }
+
+            // template_ref est une chaîne (pas de FK) → purge explicite des usages.
+            $this->pdo->prepare(
+                'DELETE FROM tariff_template_usages WHERE template_ref = :ref'
+            )->execute(['ref' => 'user:' . $id]);
+
+            $this->pdo->commit();
+        } catch (\Throwable $e) {
+            if ($this->pdo->inTransaction()) {
+                $this->pdo->rollBack();
+            }
+            throw $e;
         }
     }
 

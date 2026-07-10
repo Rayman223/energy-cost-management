@@ -10,6 +10,7 @@ use App\I18n\Locale;
 use App\Infrastructure\Database;
 use App\Repository\TariffRepository;
 use App\Repository\TariffTemplateRepository;
+use App\Repository\TariffTemplateUsageRepository;
 use App\Repository\UserRepository;
 use App\Security\AuthGuard;
 use App\Security\Csrf;
@@ -32,10 +33,29 @@ $view        = LocaleContext::viewFor($config, $users, $userId, $profile['locale
 
 $tariffRepo   = new TariffRepository($pdo, $userId, $isAdmin);
 $templateRepo = new TariffTemplateRepository($pdo, $userId);
+$usageRepo    = new TariffTemplateUsageRepository($pdo);
 $error        = null;
 $success      = null;
 
 $energyTypes = ['electricity', 'gas', 'water'];
+
+/**
+ * Référence de template valide/visible pour l'utilisateur courant, sinon null.
+ * Empêche d'enregistrer une utilisation pour un template inexistant ou un
+ * template privé d'un autre compte (findById renvoie null).
+ */
+$resolveTemplateRef = static function (string $ref) use ($templateRepo): ?string {
+    if (str_starts_with($ref, 'builtin:')) {
+        return TariffTemplateCatalog::find(substr($ref, 8)) !== null ? $ref : null;
+    }
+    if (str_starts_with($ref, 'user:')) {
+        $id = (int) substr($ref, 5);
+
+        return $id > 0 && $templateRepo->findById($id) !== null ? 'user:' . $id : null;
+    }
+
+    return null;
+};
 
 /**
  * Libellé d'affichage d'une ligne : libellé custom sinon libellé du catalogue.
@@ -148,6 +168,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             // que l'action signale une erreur.
             $saveAsTemplate = ($_POST['save_as_template'] ?? '') === '1';
             $tplName        = trim($_POST['template_name'] ?? '');
+            $tplVisibility  = ($_POST['template_visibility'] ?? '') === 'public' ? 'public' : 'private';
             if ($saveAsTemplate && $tplName === '') {
                 throw new \InvalidArgumentException($view->t('tariffs.template_name_required'));
             }
@@ -166,6 +187,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $validTo ? new \DateTimeImmutable($validTo) : null,
                     $lines, $pcs, $country, $currency, $shared, $vatRate,
                 );
+
+                // Compteur de popularité : une nouvelle grille issue d'un template
+                // compte une utilisation (idempotent, un user = une unité).
+                $sourceRef = $resolveTemplateRef(trim((string) ($_POST['source_template'] ?? '')));
+                if ($sourceRef !== null) {
+                    $usageRepo->record($sourceRef, $userId);
+                }
             }
             $success = $view->t('tariffs.saved', ['name' => $name]);
 
@@ -175,7 +203,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     static fn (array $l): array => ['key' => $l['key'], 'kind' => $l['kind'], 'label' => $l['label']],
                     $lines,
                 );
-                $templateRepo->save($energyType, $country, $tplName, $fields);
+                $templateRepo->save($energyType, $country, $tplName, $fields, $tplVisibility);
                 $success .= ' ' . $view->t('tariffs.template_saved');
             }
         }
@@ -234,6 +262,15 @@ $latest = $grids[0] ?? null;
 // ── Templates disponibles (fournis + utilisateur) ───────────────────────────
 $builtinTemplates = TariffTemplateCatalog::forEnergy($energy);
 $userTemplates    = $templateRepo->findForEnergy($energy);
+$usageCounts      = $usageRepo->countsByRef();
+
+// Ref du template importé (préréglé dans le formulaire, tracé au save). Sur un
+// POST de création en échec (ex. validation), on conserve la ref postée : sans
+// ça, le champ caché repartirait vide au ré-envoi et l'utilisation ne serait
+// jamais comptée. La ref est de toute façon revalidée (resolveTemplateRef) au save.
+$sourceTemplate = ($editGrid === null && $_SERVER['REQUEST_METHOD'] === 'POST')
+    ? trim((string) ($_POST['source_template'] ?? ''))
+    : '';
 
 // ── Résolution de la structure du formulaire ────────────────────────────────
 // Priorité : grille éditée > template importé > dernière grille > template défaut.
@@ -303,6 +340,7 @@ if ($editGrid !== null) {
     }
 
     if ($imported !== null) {
+        $sourceTemplate = $templateParam; // ref validée par les branches ci-dessus
         $formFields = $buildFieldsFromSpecs($imported, [], $energy);
     } elseif ($latest !== null) {
         // Reprise de la dernière grille (structure + valeurs).
@@ -347,6 +385,8 @@ echo $view->render('tariffs', [
     'currencies'       => EuropeanCountries::currencies(),
     'builtinTemplates' => $builtinTemplates,
     'userTemplates'    => $userTemplates,
+    'usageCounts'      => $usageCounts,
+    'sourceTemplate'   => $sourceTemplate,
     'groupOrder'       => $groupOrder,
     'kindOptions'      => $kindOptions,
     'today'            => $today,

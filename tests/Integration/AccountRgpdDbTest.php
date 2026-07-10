@@ -8,6 +8,8 @@ use App\Infrastructure\MeterTopology;
 use App\Repository\ApiTokenRepository;
 use App\Repository\EnergyIdIntegrationRepository;
 use App\Repository\TariffRepository;
+use App\Repository\TariffTemplateRepository;
+use App\Repository\TariffTemplateUsageRepository;
 use App\Repository\UserRepository;
 use App\Repository\UtilityReadingRepository;
 use App\Repository\WebhookSyncStateRepository;
@@ -69,7 +71,8 @@ final class AccountRgpdDbTest extends TestCase
         foreach ([
             'meter_readings', 'meter_registers', 'meters', 'utility_readings',
             'tariff_grid_lines', 'tariff_grids', 'api_tokens', 'energyid_integrations',
-            'webhook_sync_state', 'user_profiles', 'users',
+            'webhook_sync_state', 'tariff_template_usages', 'tariff_template_fields',
+            'tariff_templates', 'user_profiles', 'users',
         ] as $table) {
             $this->pdo()->exec('DELETE FROM ' . $table);
         }
@@ -142,6 +145,39 @@ final class AccountRgpdDbTest extends TestCase
         // Les relevés de compteur (cascade via meters) ont disparu aussi.
         self::assertSame(0, (int) $this->pdo()->query('SELECT COUNT(*) FROM meter_readings')->fetchColumn());
         self::assertSame(0, (int) $this->pdo()->query('SELECT COUNT(*) FROM meter_registers')->fetchColumn());
+    }
+
+    public function testEraseKeepsPublicTemplatesButRemovesPrivateAndUsages(): void
+    {
+        $owner = new TariffTemplateRepository($this->pdo(), $this->userId);
+        $field = [['key' => 'energy', 'kind' => 'energy_flat', 'label' => null]];
+        $publicId  = $owner->save('gas', 'BE', 'Public', $field, 'public');
+        $privateId = $owner->save('gas', 'BE', 'Privé', $field, 'private');
+
+        $peerId = (new UserRepository($this->pdo()))->create('https://iss.test', 'peer', 'test', 'Peer')->id;
+        $usage  = new TariffTemplateUsageRepository($this->pdo());
+        $usage->record('user:' . $publicId, $this->userId); // usage du propriétaire
+        $usage->record('user:' . $publicId, $peerId);        // usage d'un autre compte
+        $usage->record('user:' . $privateId, $this->userId);
+
+        (new AccountEraser($this->pdo()))->erase($this->userId);
+
+        $ownerOf = function (int $id): array {
+            $stmt = $this->pdo()->prepare('SELECT user_id FROM tariff_templates WHERE id = :id');
+            $stmt->execute(['id' => $id]);
+
+            return $stmt->fetchAll();
+        };
+        $public = $ownerOf($publicId);
+        self::assertCount(1, $public, 'Template public supprimé à tort');
+        self::assertNull($public[0]['user_id'], 'Template public non anonymisé (user_id devrait être NULL)');
+        self::assertSame([], $ownerOf($privateId), 'Template privé non supprimé');
+
+        // Usages du compte supprimé partis (cascade FK) ; l'usage du pair sur le
+        // template public conservé subsiste. Le privé supprimé n'a plus d'usage.
+        $counts = $usage->countsByRef();
+        self::assertSame(1, $counts['user:' . $publicId] ?? 0);
+        self::assertArrayNotHasKey('user:' . $privateId, $counts);
     }
 
     private function pdo(): PDO

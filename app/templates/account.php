@@ -211,6 +211,7 @@ $csrf = \App\Security\Csrf::field();
       <label><?= $this->te('account.delete_confirm_label', ['keyword' => $this->t('account.delete_keyword')]) ?></label>
       <input type="text" name="confirm" placeholder="<?= $this->e($this->t('account.delete_keyword')) ?>">
       <button type="submit" class="danger"><?= $this->te('account.delete') ?></button>
+      <p class="hint"><?= $this->te('account.delete_public_templates_kept') ?></p>
     </form>
   </div>
 </div>

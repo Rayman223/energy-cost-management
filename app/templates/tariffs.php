@@ -178,9 +178,18 @@ $energyLabels = [
           <option value="builtin:<?= $this->e($tpl['code']) ?>" data-country="<?= $this->e((string) $tpl['country']) ?>"><?= $this->te($tpl['name_key']) ?></option>
           <?php endforeach; ?>
         </optgroup>
-        <?php if (!empty($userTemplates)): ?>
+        <?php $ownTemplates = array_filter($userTemplates, static fn (array $t): bool => !empty($t['is_owner'])); ?>
+        <?php $publicTemplates = array_filter($userTemplates, static fn (array $t): bool => empty($t['is_owner'])); ?>
+        <?php if (!empty($ownTemplates)): ?>
         <optgroup label="<?= $this->e($this->t('tariffs.my_templates')) ?>">
-          <?php foreach ($userTemplates as $tpl): ?>
+          <?php foreach ($ownTemplates as $tpl): ?>
+          <option value="user:<?= $tpl['id'] ?>" data-country="<?= $this->e((string) $tpl['country']) ?>"><?= $this->e($tpl['name']) ?></option>
+          <?php endforeach; ?>
+        </optgroup>
+        <?php endif; ?>
+        <?php if (!empty($publicTemplates)): ?>
+        <optgroup label="<?= $this->e($this->t('tariffs.public_templates')) ?>">
+          <?php foreach ($publicTemplates as $tpl): ?>
           <option value="user:<?= $tpl['id'] ?>" data-country="<?= $this->e((string) $tpl['country']) ?>"><?= $this->e($tpl['name']) ?></option>
           <?php endforeach; ?>
         </optgroup>
@@ -191,21 +200,37 @@ $energyLabels = [
       <button type="submit" class="btn btn-ghost"><?= $this->te('tariffs.import_template') ?></button>
     </div>
   </form>
-  <?php if (!empty($userTemplates)): ?>
   <div class="tpl-chips">
+    <?php
+    /** Badge « nb d'utilisateurs distincts » pour un template. */
+    $usageBadge = function (string $ref) use ($usageCounts): string {
+        $n = $usageCounts[$ref] ?? 0;
+        return '<span class="tpl-count" title="' . $this->e($this->t('tariffs.template_uses', ['count' => (string) $n]))
+            . '">' . $this->e((string) $n) . '</span>';
+    };
+    ?>
+    <?php foreach ($builtinTemplates as $tpl): ?>
+    <span class="tpl-chip">
+      <?= $this->te($tpl['name_key']) ?>
+      <?= $usageBadge('builtin:' . $tpl['code']) ?>
+    </span>
+    <?php endforeach; ?>
     <?php foreach ($userTemplates as $tpl): ?>
     <span class="tpl-chip">
       <?= $this->e($tpl['name']) ?>
+      <?php if (($tpl['visibility'] ?? 'private') === 'public'): ?><span class="tpl-tag"><?= $this->te('tariffs.template_public') ?></span><?php endif; ?>
+      <?= $usageBadge('user:' . $tpl['id']) ?>
+      <?php if (!empty($tpl['is_owner'])): ?>
       <form method="post" data-confirm="<?= $this->e($this->t('tariffs.template_delete_confirm')) ?>" style="display:inline">
         <input type="hidden" name="action" value="template_delete">
         <input type="hidden" name="template_id" value="<?= $tpl['id'] ?>">
         <?= \App\Security\Csrf::field() ?>
         <button type="submit" class="tpl-chip-x" aria-label="<?= $this->e($this->t('tariffs.delete')) ?>">×</button>
       </form>
+      <?php endif; ?>
     </span>
     <?php endforeach; ?>
   </div>
-  <?php endif; ?>
 </div>
 <?php endif; ?>
 
@@ -223,6 +248,7 @@ $energyLabels = [
     <input type="hidden" name="action" value="save">
     <input type="hidden" name="edit_id" value="<?= $this->e((string) ($editGrid?->id ?? '')) ?>">
     <input type="hidden" name="energy_type" value="<?= $this->e($energy) ?>">
+    <input type="hidden" name="source_template" value="<?= $this->e($sourceTemplate) ?>">
     <?= \App\Security\Csrf::field() ?>
 
     <div class="form-grid">
@@ -331,6 +357,10 @@ $energyLabels = [
         <?= $this->te('tariffs.save_as_template') ?>
       </label>
       <input type="text" name="template_name" class="form-input save-tpl-name" placeholder="<?= $this->e($this->t('tariffs.template_name')) ?>" style="display:none">
+      <span class="save-tpl-visibility" style="display:none">
+        <label class="form-label"><input type="radio" name="template_visibility" value="private" checked> <?= $this->te('tariffs.template_private') ?></label>
+        <label class="form-label"><input type="radio" name="template_visibility" value="public"> <?= $this->te('tariffs.template_public') ?></label>
+      </span>
     </div>
 
     <div class="form-actions">

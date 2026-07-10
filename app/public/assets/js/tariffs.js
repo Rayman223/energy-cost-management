@@ -82,12 +82,15 @@
     filterTemplates();
   }
 
-  // ── « Sauver comme template » : révèle le champ nom ───────────────────────
+  // ── « Sauver comme template » : révèle le champ nom + la visibilité ───────
   var saveTplToggle = document.querySelector('[data-save-tpl-toggle]');
   if (saveTplToggle) {
     var nameInput = document.querySelector('.save-tpl-name');
+    var visibilityBox = document.querySelector('.save-tpl-visibility');
     saveTplToggle.addEventListener('change', function () {
-      if (nameInput) nameInput.style.display = saveTplToggle.checked ? '' : 'none';
+      var shown = saveTplToggle.checked ? '' : 'none';
+      if (nameInput) nameInput.style.display = shown;
+      if (visibilityBox) visibilityBox.style.display = saveTplToggle.checked ? '' : 'none';
     });
   }
 })();

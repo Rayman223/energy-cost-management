@@ -48,13 +48,16 @@ CREATE TABLE IF NOT EXISTS tariff_grid_lines (
 -- d'ordre de creation dans schema.sql ; le scoping par user_id est applicatif.
 CREATE TABLE IF NOT EXISTS tariff_templates (
     id          BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-    user_id     BIGINT UNSIGNED NOT NULL COMMENT 'Proprietaire (les templates fournis vivent en PHP, pas ici)',
+    user_id     BIGINT UNSIGNED NULL COMMENT 'Proprietaire (NULL = anonymise : compte supprime, template public conserve)',
     energy_type ENUM('electricity', 'gas', 'water') NOT NULL,
     country     VARCHAR(2) NULL COMMENT 'ISO 3166-1 alpha-2 (NULL = generique)',
     name        VARCHAR(120) NOT NULL,
+    visibility  ENUM('private', 'public') NOT NULL DEFAULT 'private'
+        COMMENT 'public = visible/importable par les autres comptes ; private = proprietaire seul',
     created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     INDEX idx_tariff_templates_user (user_id),
-    INDEX idx_tariff_templates_type_country (energy_type, country)
+    INDEX idx_tariff_templates_type_country (energy_type, country),
+    INDEX idx_tariff_templates_visibility (visibility, energy_type)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS tariff_template_fields (
@@ -187,6 +190,21 @@ CREATE TABLE IF NOT EXISTS api_tokens (
     UNIQUE KEY uq_api_tokens_hash (token_hash),
     INDEX idx_api_tokens_user (user_id),
     CONSTRAINT fk_api_tokens_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ── Utilisation des templates de tarifs (compteur de popularité) ─────────
+-- Une ligne par (template, utilisateur) : COUNT(*) groupé = nb d'utilisateurs
+-- distincts. template_ref est polymorphe ('builtin:<code>' | 'user:<id>') pour
+-- couvrir les templates fournis (PHP) et perso (base) dans une seule table.
+-- FK sur user_id → users : la clôture d'un compte purge ses usages (RGPD) ; les
+-- usages d'AUTRES comptes sur un template public survivent.
+CREATE TABLE IF NOT EXISTS tariff_template_usages (
+    template_ref  VARCHAR(80) NOT NULL COMMENT 'builtin:<code> | user:<id>',
+    user_id       BIGINT UNSIGNED NOT NULL COMMENT 'Utilisateur ayant utilisé le template',
+    first_used_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (template_ref, user_id),
+    INDEX idx_tariff_template_usages_user (user_id),
+    CONSTRAINT fk_ttu_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- ── Suivi des migrations versionnées ─────────────────────────────────────
