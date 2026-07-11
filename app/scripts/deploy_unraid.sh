@@ -23,6 +23,12 @@
 # déploiement (clean sans -x). Ne jamais committer de secret : config.php reste
 # la source de vérité unique, lue par ce script sans rien coder en dur.
 #
+# Dépôt privé : le script installe lui-même la deploy key SSH (Étape 0) avant tout
+# git — il copie la clé depuis /boot en RAM avec chmod 600 (rootfs Unraid en RAM +
+# /boot FAT32 ne conservant pas les permissions), puis exporte GIT_SSH_COMMAND.
+# Emplacements surchargeables : SSH_KEY_SRC, SSH_KNOWN_HOSTS_SRC. Repasser REPO_URL
+# en https://… désactive ce bloc (repo public).
+#
 # Usage (SSH ou plugin Unraid « User Scripts ») :
 #   ./deploy_unraid.sh              # déploie le dernier commit de main
 #   ./deploy_unraid.sh beta-0.3     # déploie le tag git beta-0.3
@@ -39,7 +45,11 @@ set -euo pipefail
 #   APP_NAME=energyv4 ./deploy_unraid.sh
 APP_NAME="${APP_NAME:-energyv3}"
 
-REPO_URL="${REPO_URL:-https://github.com/Rayman223/Manage-energy-costs.git}"
+# Dépôt privé → accès SSH via deploy key. Repasser en https://… pour un repo public.
+REPO_URL="${REPO_URL:-git@github.com:Rayman223/Manage-energy-costs.git}"
+# Emplacements persistants de la deploy key sur /boot (survivent aux reboots).
+SSH_KEY_SRC="${SSH_KEY_SRC:-/boot/config/ssh/github_deploy_ed25519}"
+SSH_KNOWN_HOSTS_SRC="${SSH_KNOWN_HOSTS_SRC:-/boot/config/ssh/github_known_hosts}"
 APP_DIR="${APP_DIR:-/mnt/user/appdata/swag/www/$APP_NAME}"    # code côté hôte Unraid
 CONTAINER="${CONTAINER:-swag}"                                # container PHP (SWAG)
 CONTAINER_APP_DIR="${CONTAINER_APP_DIR:-/config/www/$APP_NAME}" # même code, vu du container
@@ -50,6 +60,29 @@ TAG="${1:-}"                                                  # vide → dernier
 log() {
     printf '[%s] %s\n' "$(date '+%F %T')" "$*"
 }
+
+# ── Étape 0 : SSH (deploy key pour dépôt privé) ──────────────────────────────
+# Autonome : installe la clé en RAM (rootfs Unraid en RAM + /boot FAT32 sans
+# chmod). Ne dépend d'aucun autre User Script. Ignoré si REPO_URL est en HTTPS.
+if [[ "$REPO_URL" == git@* || "$REPO_URL" == ssh://* ]]; then
+    log "=== Étape 0 — Configuration SSH (deploy key) ==="
+    [ -f "$SSH_KEY_SRC" ] || { log "ERREUR : clé SSH introuvable : $SSH_KEY_SRC"; exit 1; }
+
+    SSH_RUN_DIR="$(mktemp -d)"
+    trap 'rm -rf "$SSH_RUN_DIR"' EXIT
+    install -m 600 "$SSH_KEY_SRC" "$SSH_RUN_DIR/id"        # chmod 600 direct
+
+    KNOWN_HOSTS="$SSH_RUN_DIR/known_hosts"
+    if [ -f "$SSH_KNOWN_HOSTS_SRC" ]; then
+        install -m 644 "$SSH_KNOWN_HOSTS_SRC" "$KNOWN_HOSTS"
+    else
+        log "known_hosts absent → ssh-keyscan github.com (TOFU)"
+        ssh-keyscan -t ed25519 github.com > "$KNOWN_HOSTS" 2>/dev/null
+    fi
+
+    export GIT_SSH_COMMAND="ssh -i $SSH_RUN_DIR/id -o IdentitiesOnly=yes \
+-o UserKnownHostsFile=$KNOWN_HOSTS -o StrictHostKeyChecking=yes"
+fi
 
 # ── Étape 1 : Git ────────────────────────────────────────────────────────────
 log "=== Étape 1/4 — Git (cible : ${TAG:-main}) ==="
@@ -88,8 +121,13 @@ git clean -fd
 
 # ── Étape 2 : Dépendances ────────────────────────────────────────────────────
 log "=== Étape 2/4 — composer install (--no-dev) ==="
-# Seule dépendance runtime actuelle : php >=8.5. Étape conservée pour rester
-# cohérent et préparer d'éventuelles dépendances futures.
+# Le code est cloné par l'hôte Unraid (UID nobody/users) mais composer tourne en
+# root dans le container → git y voit une « dubious ownership ». On déclare le
+# dossier comme sûr (idempotent : ajout seulement s'il n'est pas déjà présent).
+docker exec "$CONTAINER" sh -c \
+    "git config --global --get-all safe.directory | grep -qx '$CONTAINER_APP_DIR' \
+     || git config --global --add safe.directory '$CONTAINER_APP_DIR'"
+
 docker exec -w "$CONTAINER_APP_DIR" "$CONTAINER" \
     composer install --no-dev --optimize-autoloader --no-interaction --no-progress
 

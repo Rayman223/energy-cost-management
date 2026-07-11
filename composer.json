@@ -4,7 +4,7 @@
     "type": "project",
     "license": "proprietary",
     "require": {
-        "php": ">=8.5",
+        "php": ">=8.4",
         "ext-mbstring": "*",
         "jumbojett/openid-connect-php": "^1.0"
     },
