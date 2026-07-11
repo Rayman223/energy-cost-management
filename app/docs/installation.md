@@ -13,7 +13,7 @@ single-home project, and seed the first Belgian tariff templates.
 
 ## Prerequisites
 
-- Unraid with the **SWAG** container (PHP 8.5+, `pdo_mysql`, `curl`; `intl`
+- Unraid with the **SWAG** container (PHP 8.4+, `pdo_mysql`, `curl`; `intl`
   recommended) and a **MariaDB** (10.11+) container.
 - A database and user for the app (e.g. `energy` / `energy_user`).
 - For OIDC (recommended): an OpenID Connect client at your provider (Google, or a
@@ -35,10 +35,78 @@ which derives both `APP_DIR` and `CONTAINER_APP_DIR`; override `CONTAINER` /
 APP_NAME=energyv3 ./app/scripts/deploy_unraid.sh   # pin the deploy directory
 ```
 
-The script is idempotent and: `git fetch` + `reset --hard` to the target →
-`composer install --no-dev` → applies `app/sql/schema.sql` → runs
-`app/scripts/migrate.php` → checks the OIDC config. `git clean` runs **without
-`-x`**, so `app/config/config.php` and `/vendor/` are preserved.
+The script is idempotent and: installs the SSH deploy key when the repo is
+private (see below) → `git fetch` + `reset --hard` to the target →
+`composer install --no-dev` → applies `app/sql/schema.sql` (via the `mariadb`
+client, falling back to `mysql`) → runs `app/scripts/migrate.php` → checks the
+OIDC config. `git clean` runs **without `-x`**, so `app/config/config.php` and
+`/vendor/` are preserved.
+
+### Private repository access (SSH deploy key)
+
+If the repo is **private**, the deploy needs SSH auth. The script uses a
+per-repo **deploy key** and sets it up itself (step 0) whenever `REPO_URL` is an
+SSH URL (`git@github.com:…`); with an `https://…` URL the block is skipped
+(public repo). Two Unraid quirks make persistence tricky, both handled by the
+script:
+
+- the root filesystem lives **in RAM** → `/root/.ssh` is wiped on reboot;
+- `/boot` (USB **or** SSD) stays **FAT32** → it does **not** keep Unix
+  permissions, and SSH refuses a key that isn't `chmod 600`.
+
+So the key is stored on `/boot` (persistent) and **copied into RAM with the
+right permissions on every run**. One-time setup:
+
+```bash
+# 1. Generate a dedicated key (no passphrase → non-interactive).
+ssh-keygen -t ed25519 -f /tmp/github_deploy_ed25519 -N ""
+
+# 2. Persist it on the boot device (survives reboots).
+mkdir -p /boot/config/ssh
+cp /tmp/github_deploy_ed25519 /boot/config/ssh/github_deploy_ed25519
+
+# 3. Pin GitHub's host key (avoids MITM + the interactive prompt).
+echo 'github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl' \
+    > /boot/config/ssh/github_known_hosts
+
+# 4. Add the PUBLIC key as a Deploy key on GitHub:
+#    repo → Settings → Deploy keys → Add deploy key (leave write access OFF).
+cat /tmp/github_deploy_ed25519.pub
+```
+
+Override `SSH_KEY_SRC` / `SSH_KNOWN_HOSTS_SRC` if you store them elsewhere.
+
+### Running via Unraid User Scripts (bootstrap)
+
+The **User Scripts** plugin executes its **own pasted copy** of a script, not the
+git checkout — so pasting the full `deploy_unraid.sh` means re-pasting it on every
+change. Instead, paste this tiny **bootstrap** once; it pulls the latest code and
+delegates to the versioned script (always current):
+
+```bash
+#!/bin/bash
+# User Script — pulls the latest repo, then delegates to the versioned deploy.
+set -euo pipefail
+APP_DIR="/mnt/user/appdata/swag/www/energyv3"
+REPO_URL="git@github.com:Rayman223/Manage-energy-costs.git"
+
+SSH_RUN_DIR="$(mktemp -d)"; trap 'rm -rf "$SSH_RUN_DIR"' EXIT
+install -m 600 /boot/config/ssh/github_deploy_ed25519 "$SSH_RUN_DIR/id"
+export GIT_SSH_COMMAND="ssh -i $SSH_RUN_DIR/id -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new"
+
+mkdir -p "$APP_DIR"; cd "$APP_DIR"
+[ -d .git ] || git init -q
+git remote get-url origin >/dev/null 2>&1 || git remote add origin "$REPO_URL"
+git remote set-url origin "$REPO_URL"
+git fetch -q --depth 1 origin "${1:-main}"
+git reset -q --hard FETCH_HEAD
+
+exec bash "$APP_DIR/app/scripts/deploy_unraid.sh" "$@"   # "$@" forwards an optional tag
+```
+
+Schedule it *At First Array Start Only* (or run it manually). The bootstrap's
+`git fetch` and the versioned script's step 1 overlap harmlessly (shallow,
+idempotent).
 
 ### Web server & URL rewriting
 
@@ -111,7 +179,7 @@ Optionally set `dynamic_prices` (ENTSO-E token), `energyid`, `i18n`, and `api`.
 The deploy script already does this; to run it manually:
 
 ```bash
-mysql -u energy_user -p energy < app/sql/schema.sql   # CREATE TABLE IF NOT EXISTS …
+mariadb -u energy_user -p energy < app/sql/schema.sql # CREATE TABLE IF NOT EXISTS … (or `mysql`)
 php app/scripts/migrate.php                            # versioned migrations (tracked in schema_migrations)
 php app/scripts/migrate.php --dry-run                  # preview pending migrations
 ```
