@@ -13,11 +13,20 @@ use DateTimeImmutable;
  */
 final class FakeDynamicPriceRepository implements DynamicPriceRepositoryInterface
 {
-    /** @param array<string, float> $pricesByHour Map 'Y-m-d H:00:00' => €/kWh HTVA. */
+    /**
+     * @param array<string, float> $pricesByHour       Moyenne horaire (repli) : map 'Y-m-d H:00:00' => €/kWh HTVA.
+     * @param array<string, float> $hourlyPricesByHour  Prix horaire natif (PT60M) ; vide = pas de série native.
+     */
     public function __construct(
         public array $pricesByHour = [],
         public ?DateTimeImmutable $latest = null,
+        public array $hourlyPricesByHour = [],
     ) {
+    }
+
+    public function getHourlyPrices(DateTimeImmutable $from, DateTimeImmutable $to): array
+    {
+        return $this->hourlyPricesByHour;
     }
 
     public function getAveragePriceByHour(DateTimeImmutable $from, DateTimeImmutable $to): array

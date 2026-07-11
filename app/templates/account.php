@@ -9,7 +9,7 @@ use App\Domain\User;
  * @var string|null $success
  * @var string|null $freshToken
  * @var User|null   $user
- * @var array{country:?string,timezone:string,currency:string,bidding_zone:?string,locale:string} $profile
+ * @var array{country:?string,timezone:string,currency:string,bidding_zone:?string,pricing_mode:string,locale:string} $profile
  * @var list<array{id:int,name:string,prefix:string,scopes:string,last_used_at:?string,created_at:string,revoked_at:?string}> $tokens
  * @var array{enabled:bool,device_id:string,claimed_at:?string}|null $energyId
  * @var string       $deviceId
@@ -92,6 +92,14 @@ $csrf = \App\Security\Csrf::field();
       </div>
       <label><?= $this->te('account.bidding_zone') ?></label>
       <input type="text" name="bidding_zone" value="<?= $this->e($profile['bidding_zone'] ?? '') ?>" placeholder="10YBE----------2">
+      <?php $pricingMode = $profile['pricing_mode'] ?? 'fixed'; ?>
+      <label><?= $this->te('account.pricing_mode') ?></label>
+      <select name="pricing_mode">
+        <option value="fixed"<?= $pricingMode === 'fixed' ? ' selected' : '' ?>><?= $this->te('account.pricing_mode_fixed') ?></option>
+        <option value="dynamic_hourly"<?= $pricingMode === 'dynamic_hourly' ? ' selected' : '' ?>><?= $this->te('account.pricing_mode_dynamic_hourly') ?></option>
+        <option value="dynamic_quarter"<?= $pricingMode === 'dynamic_quarter' ? ' selected' : '' ?>><?= $this->te('account.pricing_mode_dynamic_quarter') ?></option>
+      </select>
+      <p class="hint"><?= $this->te('account.pricing_mode_hint') ?></p>
       <button type="submit"><?= $this->te('account.save_profile') ?></button>
     </form>
   </div>

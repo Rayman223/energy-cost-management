@@ -28,6 +28,10 @@ final class CostCalculationService
     /**
      * @param array<string, mixed> $dynamicConfig Bloc de config `dynamic_prices`
      *        (enabled, supplier_markup_per_kwh, vat_rate…). Vide = tarif dynamique désactivé.
+     * @param string $pricingMode Mode de tarification choisi par l'utilisateur
+     *        ('fixed' | 'dynamic_hourly' | 'dynamic_quarter'). Sélectionne la
+     *        résolution des prix dynamiques ; le calcul au quart d'heure est
+     *        différé → 'dynamic_quarter' retombe sur l'horaire pour l'instant.
      */
     public function __construct(
         private readonly LegacyDailyRepositoryInterface $legacyRepo,
@@ -38,6 +42,7 @@ final class CostCalculationService
         private readonly ?DynamicPriceRepositoryInterface $dynamicPriceRepo = null,
         private readonly array $dynamicConfig = [],
         private readonly ?MeterReadingRepositoryInterface $waterRepo = null,
+        private readonly string $pricingMode = 'fixed',
     ) {
     }
 
@@ -407,7 +412,18 @@ final class CostCalculationService
             return ['available' => false, 'reason' => 'Pas de relevés horaires sur la période.'];
         }
 
-        $prices = $this->dynamicPriceRepo->getAveragePriceByHour($from, $to->modify('+1 hour'));
+        // Prix horaire NATIF (PT60M) d'abord — ENTSO-E publie un prix horaire propre,
+        // distinct de la moyenne des points 15 min. Repli sur la moyenne horaire si
+        // aucune série horaire native n'est disponible pour la période.
+        // NB : le mode 'dynamic_quarter' (15 min) retombe sur l'horaire pour l'instant
+        // (calcul au quart d'heure différé) → résolution effective 'hourly'.
+        $to1        = $to->modify('+1 hour');
+        $prices     = $this->dynamicPriceRepo->getHourlyPrices($from, $to1);
+        $priceSource = 'native_hourly';
+        if ($prices === []) {
+            $prices      = $this->dynamicPriceRepo->getAveragePriceByHour($from, $to1);
+            $priceSource = 'avg_hourly';
+        }
         if ($prices === []) {
             return ['available' => false, 'reason' => 'Aucun prix dynamique pour cette période (lancez cron_dynamic_prices).'];
         }
@@ -470,6 +486,9 @@ final class CostCalculationService
             'period_from'    => $deltas['from'],
             'period_to'      => $deltas['to'],
             'days'           => $days,
+            'pricing_mode'   => $this->pricingMode,
+            'resolution'     => 'hourly',
+            'price_source'   => $priceSource,
             'tariff_name'    => $tariff->name,
             'currency'        => $tariff->currency,
             'tariff_rates'   => $tariffArr,

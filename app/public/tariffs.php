@@ -387,6 +387,12 @@ foreach (ComponentKind::cases() as $k) {
 
 $today = date('Y-m-d');
 
+// Tarif dynamique (profil) : les lignes d'énergie fournisseur de la grille sont
+// alors ignorées au calcul (prix ENTSO-E) → on les grise dans le formulaire.
+// Ne concerne que l'électricité.
+$isDynamic = $energy === 'electricity'
+    && ($profile['pricing_mode'] ?? 'fixed') !== 'fixed';
+
 echo $view->render('tariffs', [
     'error'            => $error,
     'success'          => $success,
@@ -410,5 +416,6 @@ echo $view->render('tariffs', [
     'kindOptions'         => $kindOptions,
     'today'            => $today,
     'isAdmin'          => $isAdmin,
+    'isDynamic'        => $isDynamic,
     'available'        => Locale::available($config),
 ]);

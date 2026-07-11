@@ -93,7 +93,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             $zone = trim((string) ($_POST['bidding_zone'] ?? '')) ?: null;
 
-            $users->updateProfile($userId, $country, $timezone, $currency, $zone, $chosenLocale);
+            // updateProfile valide et normalise pricing_mode (liste blanche unique côté repository).
+            $pricingMode = (string) ($_POST['pricing_mode'] ?? 'fixed');
+
+            $users->updateProfile($userId, $country, $timezone, $currency, $zone, $chosenLocale, $pricingMode);
             $success = $view->t('account.profile_saved');
         } elseif ($action === 'token_create') {
             $name = trim((string) ($_POST['token_name'] ?? ''));
@@ -146,7 +149,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 // ── Données pour l'affichage ────────────────────────────────────────────────
 $user     = $users->findById($userId);
 $profile  = $users->getProfile($userId) ?? [
-    'country' => null, 'timezone' => 'Europe/Brussels', 'currency' => 'EUR', 'bidding_zone' => null, 'locale' => 'fr',
+    'country' => null, 'timezone' => 'Europe/Brussels', 'currency' => 'EUR', 'bidding_zone' => null, 'pricing_mode' => 'fixed', 'locale' => 'fr',
 ];
 $tokens   = $tokensRepo->listForUser($userId);
 $energyId = $energyIdRepo->get($userId);

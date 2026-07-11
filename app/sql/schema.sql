@@ -86,7 +86,7 @@ CREATE TABLE IF NOT EXISTS dynamic_prices (
     price_eur_kwh  DECIMAL(12,7) NOT NULL COMMENT 'Prix spot day-ahead €/kWh (HTVA, hors marge)',
     source         VARCHAR(50) NOT NULL DEFAULT 'entsoe',
     fetched_at     DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE KEY uq_dynamic_prices (energy_type, bidding_zone, period_start),
+    UNIQUE KEY uq_dynamic_prices (energy_type, bidding_zone, resolution_min, period_start),
     INDEX idx_dynamic_prices_period (period_start)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
@@ -120,6 +120,7 @@ CREATE TABLE IF NOT EXISTS user_profiles (
     timezone     VARCHAR(64) NOT NULL DEFAULT 'Europe/Brussels',
     currency     CHAR(3)     NOT NULL DEFAULT 'EUR' COMMENT 'Devise ISO 4217',
     bidding_zone VARCHAR(32) NULL COMMENT 'Zone de marché ENTSO-E',
+    pricing_mode ENUM('fixed', 'dynamic_hourly', 'dynamic_quarter') NOT NULL DEFAULT 'fixed' COMMENT 'Type de tarification électricité (fixe / dynamique 1h / dynamique 15min)',
     locale       VARCHAR(8)  NOT NULL DEFAULT 'fr',
     CONSTRAINT fk_user_profiles_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

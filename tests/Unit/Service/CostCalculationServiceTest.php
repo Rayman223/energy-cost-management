@@ -204,6 +204,45 @@ final class CostCalculationServiceTest extends TestCase
         self::assertCount(1, $r['daily']);
     }
 
+    public function testMonthElectricityDynamicUsesNativeHourlyOverAverage(): void
+    {
+        $legacy = new FakeLegacyDailyRepository(
+            monthlyDeltasForMonth: $this->electricityDeltas(),
+            hourlyImportDeltas: [['hour' => '2026-06-10 10:00:00', 'import_kwh' => 10.0]],
+        );
+        // Prix horaire natif (0.30) ≠ moyenne des 15 min (0.20) : le natif prime.
+        $dynamic = new FakeDynamicPriceRepository(
+            pricesByHour: ['2026-06-10 10:00:00' => 0.20],
+            hourlyPricesByHour: ['2026-06-10 10:00:00' => 0.30],
+        );
+
+        $svc = $this->makeDynamicService($legacy, new FakeTariffRepository(grid: $this->electricityGrid()), $dynamic);
+        $r   = $svc->estimateMonthElectricityDynamic(2026, 6);
+
+        self::assertTrue($r['available']);
+        self::assertSame('native_hourly', $r['price_source']);
+        self::assertSame('hourly', $r['resolution']);
+        // 10 × (0.30 × 1.21) = 3.63 (natif), et non 10 × (0.20 × 1.21) = 2.42 (moyenne).
+        self::assertEqualsWithDelta(3.63, $r['energy_dynamic'], 0.0001);
+    }
+
+    public function testMonthElectricityDynamicFallsBackToAverageWhenNoNativeHourly(): void
+    {
+        $legacy = new FakeLegacyDailyRepository(
+            monthlyDeltasForMonth: $this->electricityDeltas(),
+            hourlyImportDeltas: [['hour' => '2026-06-10 10:00:00', 'import_kwh' => 10.0]],
+        );
+        // Aucune série horaire native → repli sur la moyenne des 15 min (0.20).
+        $dynamic = new FakeDynamicPriceRepository(pricesByHour: ['2026-06-10 10:00:00' => 0.20]);
+
+        $svc = $this->makeDynamicService($legacy, new FakeTariffRepository(grid: $this->electricityGrid()), $dynamic);
+        $r   = $svc->estimateMonthElectricityDynamic(2026, 6);
+
+        self::assertTrue($r['available']);
+        self::assertSame('avg_hourly', $r['price_source']);
+        self::assertEqualsWithDelta(2.42, $r['energy_dynamic'], 0.0001);
+    }
+
     public function testMonthElectricityDynamicUnavailableWithoutPrices(): void
     {
         $legacy = new FakeLegacyDailyRepository(

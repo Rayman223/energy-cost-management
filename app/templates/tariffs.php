@@ -27,6 +27,7 @@ use App\Domain\TariffLineCatalog;
  * @var array<string,string>                                                 $kindOptions
  * @var string                                                               $today
  * @var bool                                                                 $isAdmin
+ * @var bool                                                                 $isDynamic  Tarif dynamique actif → lignes d'énergie fournisseur ignorées
  */
 
 // Regroupement des lignes du formulaire par catégorie choisie (défaut : dérivée du kind).
@@ -315,8 +316,12 @@ $energyLabels = [
           <div class="form-grid line-group-body">
             <?php foreach (($grouped[$group] ?? []) as $f):
               $i = $f['i'];
+              // Tarif dynamique : les lignes d'énergie fournisseur (energy_simple/t1/t2)
+              // sont ignorées au calcul (prix ENTSO-E) → grisées + note, mais conservées
+              // (valeurs toujours postées) pour rebasculer en fixe sans re-saisie.
+              $ignoredInDynamic = $isDynamic && ComponentKind::fromStringOrDefault($f['kind'])->isSupplierEnergy();
             ?>
-            <div class="form-row line-item <?= $f['custom'] ? 'is-custom' : '' ?>">
+            <div class="form-row line-item <?= $f['custom'] ? 'is-custom' : '' ?><?= $ignoredInDynamic ? ' is-dynamic-ignored' : '' ?>">
               <input type="hidden" name="lines[<?= $i ?>][key]" value="<?= $this->e($f['key']) ?>">
               <?php if ($f['custom']): ?>
               <label class="form-label">
@@ -340,6 +345,7 @@ $energyLabels = [
                 <input type="number" name="lines[<?= $i ?>][amount]" step="0.0000001" class="form-input" placeholder="0.0000000" value="<?= $this->e($f['amount']) ?>">
                 <?php if ($f['custom']): ?><button type="button" class="btn btn-ghost btn-sm line-remove" data-remove-line aria-label="<?= $this->e($this->t('tariffs.remove_field')) ?>">×</button><?php endif; ?>
               </div>
+              <?php if ($ignoredInDynamic): ?><p class="dynamic-ignored-hint"><?= $this->te('tariffs.energy_ignored_dynamic') ?></p><?php endif; ?>
             </div>
             <?php endforeach; ?>
             <div class="form-row full add-field-row">

@@ -108,6 +108,13 @@ final class UserRepository implements UserRepositoryInterface
     /**
      * Met à jour le profil de l'utilisateur (crée la ligne si absente).
      */
+    /**
+     * Modes de tarification électricité valides (colonne user_profiles.pricing_mode).
+     *
+     * @var list<string>
+     */
+    public const PRICING_MODES = ['fixed', 'dynamic_hourly', 'dynamic_quarter'];
+
     public function updateProfile(
         int $userId,
         ?string $country,
@@ -115,22 +122,28 @@ final class UserRepository implements UserRepositoryInterface
         string $currency,
         ?string $biddingZone,
         string $locale,
+        string $pricingMode = 'fixed',
     ): void {
+        if (!in_array($pricingMode, self::PRICING_MODES, true)) {
+            $pricingMode = 'fixed';
+        }
+
         $stmt = $this->pdo->prepare(
-            'INSERT INTO user_profiles (user_id, country, timezone, currency, bidding_zone, locale)
-             VALUES (:uid, :country, :tz, :currency, :zone, :locale)
+            'INSERT INTO user_profiles (user_id, country, timezone, currency, bidding_zone, pricing_mode, locale)
+             VALUES (:uid, :country, :tz, :currency, :zone, :pricing_mode, :locale)
              ON DUPLICATE KEY UPDATE
                 country = VALUES(country), timezone = VALUES(timezone),
                 currency = VALUES(currency), bidding_zone = VALUES(bidding_zone),
-                locale = VALUES(locale)'
+                pricing_mode = VALUES(pricing_mode), locale = VALUES(locale)'
         );
         $stmt->execute([
-            'uid'      => $userId,
-            'country'  => $country,
-            'tz'       => $timezone,
-            'currency' => $currency,
-            'zone'     => $biddingZone,
-            'locale'   => $locale,
+            'uid'          => $userId,
+            'country'      => $country,
+            'tz'           => $timezone,
+            'currency'     => $currency,
+            'zone'         => $biddingZone,
+            'pricing_mode' => $pricingMode,
+            'locale'       => $locale,
         ]);
     }
 
@@ -207,7 +220,7 @@ final class UserRepository implements UserRepositoryInterface
     public function getProfile(int $userId): ?array
     {
         $stmt = $this->pdo->prepare(
-            'SELECT country, timezone, currency, bidding_zone, locale
+            'SELECT country, timezone, currency, bidding_zone, pricing_mode, locale
              FROM user_profiles WHERE user_id = :id LIMIT 1'
         );
         $stmt->execute(['id' => $userId]);
@@ -217,11 +230,17 @@ final class UserRepository implements UserRepositoryInterface
             return null;
         }
 
+        $pricingMode = (string) ($row['pricing_mode'] ?? 'fixed');
+        if (!in_array($pricingMode, self::PRICING_MODES, true)) {
+            $pricingMode = 'fixed';
+        }
+
         return [
             'country' => $row['country'] !== null ? (string) $row['country'] : null,
             'timezone' => (string) $row['timezone'],
             'currency' => (string) $row['currency'],
             'bidding_zone' => $row['bidding_zone'] !== null ? (string) $row['bidding_zone'] : null,
+            'pricing_mode' => $pricingMode,
             'locale' => (string) $row['locale'],
         ];
     }

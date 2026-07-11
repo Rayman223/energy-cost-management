@@ -15,6 +15,19 @@ use DateTimeImmutable;
 interface DynamicPriceRepositoryInterface
 {
     /**
+     * Prix horaire NATIF €/kWh (HTVA) sur [$from, $to[ : uniquement les points de
+     * résolution 60 min (PT60M) fournis par le marché, sans agrégation.
+     *
+     * ENTSO-E publie un prix horaire propre, distinct de la moyenne des points
+     * 15 min ; ce prix doit être utilisé tel quel pour le tarif dynamique horaire.
+     * Renvoie une map vide s'il n'existe pas de série horaire native (l'appelant
+     * peut alors se rabattre sur {@see getAveragePriceByHour()}).
+     *
+     * @return array<string, float> Map 'Y-m-d H:00:00' => prix €/kWh HTVA.
+     */
+    public function getHourlyPrices(DateTimeImmutable $from, DateTimeImmutable $to): array;
+
+    /**
      * Prix moyen €/kWh (HTVA) par heure sur [$from, $to[.
      * Agrège les intervalles de 15 min en une moyenne horaire.
      *

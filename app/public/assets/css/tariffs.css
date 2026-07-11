@@ -121,6 +121,9 @@
   .line-category-select { margin-top:2px; }
   .line-amount-row { display:flex; gap:8px; align-items:center; }
   .line-amount-row .form-input { flex:1; }
+  /* Tarif dynamique : ligne d'énergie fournisseur ignorée au calcul (prix ENTSO-E). */
+  .line-item.is-dynamic-ignored { opacity:.55; }
+  .dynamic-ignored-hint { margin:4px 0 0; font-size:.75rem; color:var(--muted); font-style:italic; }
   .line-remove { padding:5px 11px; font-size:1rem; line-height:1; }
   .add-field-row { margin-top:6px; }
 

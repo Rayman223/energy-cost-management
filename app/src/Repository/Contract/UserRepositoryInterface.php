@@ -26,7 +26,7 @@ interface UserRepositoryInterface
     public function touchLastLogin(int $userId): void;
 
     /**
-     * @return array{country: ?string, timezone: string, currency: string, bidding_zone: ?string, locale: string}|null
+     * @return array{country: ?string, timezone: string, currency: string, bidding_zone: ?string, pricing_mode: string, locale: string}|null
      */
     public function getProfile(int $userId): ?array;
 }

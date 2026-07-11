@@ -27,8 +27,16 @@ final class DynamicPriceRepository implements DynamicPriceRepositoryInterface
 
     /**
      * Insère / met à jour une série de prix pour la zone du repository. La clé
-     * unique (energy_type, bidding_zone, period_start) garantit l'idempotence :
-     * ré-exécuter le cron écrase proprement les valeurs.
+     * unique (energy_type, bidding_zone, resolution_min, period_start) garantit
+     * l'idempotence — et permet de conserver côte à côte le prix horaire natif
+     * (60 min) et les points 15 min : ré-exécuter le cron écrase proprement.
+     *
+     * Pour chaque horodatage écrit, les éventuelles lignes d'une AUTRE résolution
+     * au même horodatage sont supprimées : la source ne publie qu'une résolution
+     * par période, donc un basculement de résolution (rollout MTU 15 min) ne doit
+     * pas laisser traîner d'anciennes lignes 60 min que getHourlyPrices servirait
+     * comme prix « natif » périmé, ni créer un mélange de résolutions qui priverait
+     * certaines heures du repli moyenne.
      *
      * @param array<int, array{period_start: DateTimeImmutable, resolution_min: int, price_eur_kwh: float}> $prices
      * @return int Nombre de lignes traitées.
@@ -52,13 +60,29 @@ final class DynamicPriceRepository implements DynamicPriceRepositoryInterface
                 fetched_at     = CURRENT_TIMESTAMP
         SQL;
 
-        $stmt = $this->pdo->prepare($sql);
+        $deleteOtherResolution = <<<'SQL'
+            DELETE FROM dynamic_prices
+            WHERE energy_type = 'electricity'
+              AND bidding_zone = :zone
+              AND period_start = :period_start
+              AND resolution_min <> :resolution_min
+        SQL;
+
+        $stmt       = $this->pdo->prepare($sql);
+        $deleteStmt = $this->pdo->prepare($deleteOtherResolution);
         $this->pdo->beginTransaction();
 
         try {
             foreach ($prices as $price) {
                 $start = $price['period_start'];
                 $end   = $start->modify(sprintf('+%d minutes', $price['resolution_min']));
+
+                // Purge d'abord toute ligne d'une autre résolution au même horodatage.
+                $deleteStmt->execute([
+                    'zone'           => $this->biddingZone,
+                    'period_start'   => $start->format('Y-m-d H:i:s'),
+                    'resolution_min' => $price['resolution_min'],
+                ]);
 
                 $stmt->execute([
                     'zone'           => $this->biddingZone,
@@ -76,6 +100,43 @@ final class DynamicPriceRepository implements DynamicPriceRepositoryInterface
         }
 
         return count($prices);
+    }
+
+    /**
+     * Prix horaire NATIF €/kWh (HTVA) sur [$from, $to[ : uniquement les points
+     * resolution_min = 60 (PT60M), sans agrégation. Map vide si aucune série
+     * horaire native pour la zone/période (l'appelant se rabat alors sur la
+     * moyenne des 15 min via getAveragePriceByHour()).
+     *
+     * @return array<string, float> Map 'Y-m-d H:00:00' => prix €/kWh HTVA.
+     */
+    public function getHourlyPrices(DateTimeImmutable $from, DateTimeImmutable $to): array
+    {
+        $stmt = $this->pdo->prepare(
+            "SELECT DATE_FORMAT(period_start, '%Y-%m-%d %H:00:00') AS hour,
+                    price_eur_kwh AS price
+             FROM dynamic_prices
+             WHERE energy_type = 'electricity'
+               AND bidding_zone = :zone
+               AND resolution_min = 60
+               AND period_start >= :from
+               AND period_start <  :to
+             ORDER BY period_start"
+        );
+        $stmt->execute([
+            'zone' => $this->biddingZone,
+            'from' => $from->format('Y-m-d H:i:s'),
+            'to'   => $to->format('Y-m-d H:i:s'),
+        ]);
+
+        $map = [];
+        /** @var array<int, array{hour: string, price: string}> $rows */
+        $rows = $stmt->fetchAll();
+        foreach ($rows as $row) {
+            $map[$row['hour']] = (float) $row['price'];
+        }
+
+        return $map;
     }
 
     /**

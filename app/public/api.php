@@ -97,6 +97,7 @@ try {
     $syncState  = new WebhookSyncStateRepository($pdo, $userId);
     $tariffRepo = new TariffRepository($pdo, $userId, $isAdmin);
     $dynPriceRepo = new DynamicPriceRepository($pdo, $zone);
+    $pricingMode  = (string) ($profile['pricing_mode'] ?? 'fixed');
     $costSvc    = new CostCalculationService(
         legacyRepo: $elecRepo,
         tariffRepo: $tariffRepo,
@@ -105,6 +106,7 @@ try {
         dynamicPriceRepo: $dynPriceRepo,
         dynamicConfig: $config['dynamic_prices'] ?? [],
         waterRepo: $waterRepo,
+        pricingMode: $pricingMode,
     );
 } catch (\Throwable $e) {
     JsonResponse::error('Bootstrap failed: ' . $e->getMessage(), 503)->send();
