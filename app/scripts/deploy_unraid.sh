@@ -121,12 +121,14 @@ git clean -fd
 
 # ── Étape 2 : Dépendances ────────────────────────────────────────────────────
 log "=== Étape 2/4 — composer install (--no-dev) ==="
-# Le code est cloné par l'hôte Unraid (UID nobody/users) mais composer tourne en
-# root dans le container → git y voit une « dubious ownership ». On déclare le
-# dossier comme sûr (idempotent : ajout seulement s'il n'est pas déjà présent).
+# Le code est cloné par l'hôte Unraid (UID nobody/users) mais git tourne sous un
+# autre utilisateur dans le container → « dubious ownership ». On déclare le
+# dossier sûr en config SYSTÈME (/etc/gitconfig) : honorée par git quel que soit
+# l'utilisateur/HOME du process git de composer — la config --global de root ne
+# l'était pas. Idempotent (ajout seulement si absent) ; non-bloquant (|| true).
 docker exec "$CONTAINER" sh -c \
-    "git config --global --get-all safe.directory | grep -qx '$CONTAINER_APP_DIR' \
-     || git config --global --add safe.directory '$CONTAINER_APP_DIR'"
+    "git config --system --get-all safe.directory 2>/dev/null | grep -qxF '$CONTAINER_APP_DIR' \
+     || git config --system --add safe.directory '$CONTAINER_APP_DIR'" || true
 
 docker exec -w "$CONTAINER_APP_DIR" "$CONTAINER" \
     composer install --no-dev --optimize-autoloader --no-interaction --no-progress
@@ -142,7 +144,14 @@ DB_USER="${DB_CFG[1]}"
 DB_PASS="${DB_CFG[2]}"
 
 log "Schéma sur la base '$DB_NAME' (container $DB_CONTAINER)"
-docker exec -i "$DB_CONTAINER" mysql -u"$DB_USER" -p"$DB_PASS" "$DB_NAME" \
+# Préfère le client `mariadb` (le nom `mysql` est déprécié sur MariaDB récent),
+# avec repli sur `mysql` pour les images plus anciennes.
+if docker exec "$DB_CONTAINER" sh -c 'command -v mariadb >/dev/null 2>&1'; then
+    DB_CLIENT=mariadb
+else
+    DB_CLIENT=mysql
+fi
+docker exec -i "$DB_CONTAINER" "$DB_CLIENT" -u"$DB_USER" -p"$DB_PASS" "$DB_NAME" \
     < "$APP_DIR/app/sql/schema.sql"
 
 # ── Étape 4 : Migrations versionnées ─────────────────────────────────────────
