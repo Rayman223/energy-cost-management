@@ -12,7 +12,7 @@ declare(strict_types=1);
  *
  * Configuration (app/config/config.php) :
  *   'agent' => [
- *       'api_url'   => 'https://energie.example.eu/api.php',
+ *       'api_url'   => 'https://energie.example.eu/api',
  *       'api_token' => 'mec_…',   // créé via l'action api_token_create
  *   ],
  * Réutilise `meters` (URLs locales + chemins JSON) pour la lecture.

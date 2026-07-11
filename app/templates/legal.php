@@ -19,7 +19,7 @@ $title = $page === 'privacy' ? $this->t('legal.privacy') : $this->t('legal.terms
 </head>
 <body>
 <div class="wrap">
-  <p><a href="index.php"><?= $this->te('nav.back') ?></a>
+  <p><a href="<?= $this->url() ?>"><?= $this->te('nav.back') ?></a>
      &nbsp;·&nbsp;
      <?php foreach ($available as $loc): ?><a href="?lang=<?= $this->e($loc) ?>"<?= $loc === $this->locale() ? ' class="lang-active"' : '' ?>><?= $this->e(strtoupper($loc)) ?></a> <?php endforeach; ?>
   </p>
@@ -31,19 +31,19 @@ $title = $page === 'privacy' ? $this->t('legal.privacy') : $this->t('legal.terms
     <p>Identité : identifiant OpenID Connect (issuer + subject) et nom d'affichage. <strong>Aucun mot de passe
        ni e-mail n'est stocké.</strong> Données d'usage : relevés de compteurs (électricité, gaz, eau), profil,
        grilles tarifaires, jetons API (hachés), et l'état de synchronisation EnergyID si vous l'activez.</p>
-    <p>Accès, portabilité et effacement depuis <a href="account.php"><?= $this->te('legal.my_account') ?></a>
+    <p>Accès, portabilité et effacement depuis <a href="<?= $this->url('account') ?>"><?= $this->te('legal.my_account') ?></a>
        (export JSON / suppression définitive). Sous-traitants : votre fournisseur OpenID Connect, EnergyID (option,
        BE/NL), prix de marché ENTSO-E.</p>
   <?php else: ?>
     <p>Le service permet le suivi communautaire des coûts énergétiques, fourni « en l'état », sans garantie
        d'exactitude des estimations. La connexion se fait via un fournisseur OpenID Connect ; vous êtes responsable
        de la confidentialité de vos jetons API. Vous restez propriétaire de vos données et pouvez les exporter ou
-       les supprimer à tout moment depuis <a href="account.php"><?= $this->te('legal.my_account') ?></a>.</p>
+       les supprimer à tout moment depuis <a href="<?= $this->url('account') ?>"><?= $this->te('legal.my_account') ?></a>.</p>
   <?php endif; ?>
 
   <p class="legal-nav">
-    <a href="account.php"><?= $this->te('legal.my_account') ?></a> ·
-    <a href="<?= $page === 'privacy' ? 'terms.php' : 'privacy.php' ?>"><?= $page === 'privacy' ? $this->te('legal.terms') : $this->te('legal.privacy') ?></a>
+    <a href="<?= $this->url('account') ?>"><?= $this->te('legal.my_account') ?></a> ·
+    <a href="<?= $this->url($page === 'privacy' ? 'terms' : 'privacy') ?>"><?= $page === 'privacy' ? $this->te('legal.terms') : $this->te('legal.privacy') ?></a>
   </p>
 </div>
 </body>

@@ -1,4 +1,4 @@
-# Contrat de l'API interne (`app/public/api.php`)
+# Contrat de l'API interne (`app/routes/api.php`, route `/api`)
 
 > **Référence figée — Phase 0 de l'épopée [#25](https://github.com/Rayman223/Manage-energy-costs/issues/25).**
 > Ce document décrit le comportement **actuel** de `api.php` (branche `main`)

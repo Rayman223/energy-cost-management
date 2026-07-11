@@ -21,7 +21,7 @@
 <div class="box">
   <div class="code"><?= $this->e((string) $code) ?></div>
   <p><?= $this->e($message) ?></p>
-  <p><a href="index.php"><?= $this->te('nav.back_dashboard') ?></a></p>
+  <p><a href="<?= $this->url() ?>"><?= $this->te('nav.back_dashboard') ?></a></p>
 </div>
 </body>
 </html>

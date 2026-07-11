@@ -28,8 +28,8 @@ $csrf = \App\Security\Csrf::field();
     </div>
     <div>
       <span class="langs"><?php foreach ($available as $loc): ?><a href="?lang=<?= $this->e($loc) ?>"<?= $loc === $this->locale() ? ' class="lang-active"' : '' ?>><?= $this->e(strtoupper($loc)) ?></a><?php endforeach; ?></span>
-      &nbsp; <a href="tariffs.php"><?= $this->te('nav.tariffs') ?></a>
-      &nbsp; <a href="index.php"><?= $this->te('nav.back_dashboard') ?></a>
+      &nbsp; <a href="<?= $this->url('tariffs') ?>"><?= $this->te('nav.tariffs') ?></a>
+      &nbsp; <a href="<?= $this->url() ?>"><?= $this->te('nav.back_dashboard') ?></a>
     </div>
   </header>
 
@@ -72,14 +72,14 @@ $csrf = \App\Security\Csrf::field();
                 <?php if ($isSelf): ?>
                   <span class="self"><?= $this->te('admin.you') ?></span>
                 <?php else: ?>
-                  <form class="inline" method="post" action="admin.php">
+                  <form class="inline" method="post" action="<?= $this->url('admin') ?>">
                     <?= $csrf ?>
                     <input type="hidden" name="action" value="set_role">
                     <input type="hidden" name="user_id" value="<?= $this->e((string) $u['id']) ?>">
                     <input type="hidden" name="role" value="<?= $u['role'] === 'admin' ? 'user' : 'admin' ?>">
                     <button type="submit"><?= $u['role'] === 'admin' ? $this->te('admin.demote') : $this->te('admin.promote') ?></button>
                   </form>
-                  <form class="inline" method="post" action="admin.php">
+                  <form class="inline" method="post" action="<?= $this->url('admin') ?>">
                     <?= $csrf ?>
                     <input type="hidden" name="action" value="set_status">
                     <input type="hidden" name="user_id" value="<?= $this->e((string) $u['id']) ?>">
@@ -98,7 +98,7 @@ $csrf = \App\Security\Csrf::field();
   <div class="card">
     <h2><?= $this->te('admin.catalog') ?></h2>
     <p class="hint"><?= $this->te('admin.catalog_hint') ?></p>
-    <p><a href="tariffs.php">→ <?= $this->te('nav.tariffs') ?></a></p>
+    <p><a href="<?= $this->url('tariffs') ?>">→ <?= $this->te('nav.tariffs') ?></a></p>
   </div>
 </div>
 </body>

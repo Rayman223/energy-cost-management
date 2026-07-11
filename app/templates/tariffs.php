@@ -71,7 +71,7 @@ $energyLabels = [
     </div>
   </div>
   <div class="header-right">
-    <a href="index.php" class="back"><?= $this->te('nav.back_dashboard') ?></a>
+    <a href="<?= $this->url() ?>" class="back"><?= $this->te('nav.back_dashboard') ?></a>
     <button type="button" class="theme-toggle" id="theme-toggle" aria-label="<?= $this->e($this->t('common.theme')) ?>">🌙</button>
   </div>
 </header>

@@ -140,8 +140,27 @@ final class WebAccessGuard
 
     private static function isLoginPageRequest(): bool
     {
-        $script = (string) ($_SERVER['SCRIPT_NAME'] ?? '');
-        return str_ends_with($script, '/login.php') || $script === 'login.php';
+        // Depuis le front controller (#106), SCRIPT_NAME vaut toujours « /index.php » :
+        // la détection se fait sur le chemin de requête, pas sur le script.
+        $path = self::requestPath();
+        return $path === '/login' || $path === '/auth/login';
+    }
+
+    /** Chemin de route courant : REQUEST_URI sans query ni préfixe de déploiement. */
+    private static function requestPath(): string
+    {
+        $uri  = isset($_SERVER['REQUEST_URI']) ? (string) $_SERVER['REQUEST_URI'] : '/';
+        $path = parse_url($uri, PHP_URL_PATH);
+        $path = is_string($path) ? $path : '/';
+
+        // Retrait du préfixe de déploiement uniquement sur une frontière de
+        // segment (« /energy » ne doit pas être retiré de « /energyx/... »).
+        $base = self::applicationBasePath();
+        if ($base !== '' && ($path === $base || str_starts_with($path, $base . '/'))) {
+            $path = substr($path, strlen($base));
+        }
+
+        return '/' . trim($path, '/');
     }
 
     private static function prefersHtml(): bool
@@ -167,7 +186,7 @@ final class WebAccessGuard
     private static function buildLoginPath(): string
     {
         $base = self::applicationBasePath();
-        return $base . '/login.php';
+        return $base . '/login';
     }
 
     private static function applicationBasePath(): string

@@ -4,7 +4,6 @@
  *
  * @var string       $error
  * @var string       $next
- * @var string       $basePath
  * @var list<string> $available
  */
 ?>
@@ -17,7 +16,7 @@
 ]) ?>
 </head>
 <body>
-  <form class="box" method="post" action="<?= $this->e($basePath . '/login.php') ?>">
+  <form class="box" method="post" action="<?= $this->e($this->url('login')) ?>">
     <h1><?= $this->te('auth.heading') ?></h1>
 
     <input type="hidden" name="next" value="<?= $this->e($next) ?>">

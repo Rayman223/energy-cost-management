@@ -34,7 +34,7 @@ function renderReadings(tbodyId, rows, emptyLabel) {
 
 async function loadHistory(action, tbodyId, emptyLabel, render = renderReadings) {
   try {
-    const res = await fetch(`api.php?action=${action}`);
+    const res = await fetch(`api?action=${action}`);
     render(tbodyId, await res.json(), emptyLabel);
   } catch (e) { /* keep placeholder */ }
 }
@@ -73,7 +73,7 @@ async function submitUtility(prefix, action) {
   const oldText = btn.textContent;
   btn.textContent = tr('sending', 'Sending…');
   try {
-    const res = await fetch(`api.php?action=${action}`, {
+    const res = await fetch(`api?action=${action}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ counter_m3: value, reading_at: at }),
@@ -120,7 +120,7 @@ async function submitElectricity() {
   const oldText = btn.textContent;
   btn.textContent = tr('sending', 'Sending…');
   try {
-    const res = await fetch('api.php?action=electricity_entry', {
+    const res = await fetch('api?action=electricity_entry', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),

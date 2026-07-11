@@ -13,7 +13,7 @@ use App\Infrastructure\Database;
  * - OIDC désactivé : comportement historique (allowlist IP + Basic Auth) via
  *   {@see WebAccessGuard::protect()} — strictement non-cassant.
  * - OIDC activé : allowlist IP conservée, puis exige une session authentifiée ;
- *   sinon redirection vers /auth/login.php (HTML) ou 401 JSON.
+ *   sinon redirection vers /auth/login (HTML) ou 401 JSON.
  *
  * @phpstan-param array<string, mixed> $config
  */
@@ -97,7 +97,7 @@ final class AuthGuard
         }
 
         $next = isset($_SERVER['REQUEST_URI']) ? (string) $_SERVER['REQUEST_URI'] : '/';
-        $target = WebAccessGuard::basePath() . '/auth/login.php?next=' . urlencode($next);
+        $target = WebAccessGuard::basePath() . '/auth/login?next=' . urlencode($next);
 
         header('Location: ' . $target, true, 302);
         exit;

@@ -78,7 +78,7 @@ return [
         'issuer'        => 'https://accounts.google.com',
         'client_id'     => 'change_me',
         'client_secret' => 'change_me',
-        // Laisser vide pour dériver automatiquement l'URL de /auth/login.php.
+        // Laisser vide pour dériver automatiquement l'URL de la route /auth/login.
         'redirect_uri'  => '',
         // Pas d'e-mail demandé : openid (obligatoire) + profile (nom d'affichage).
         'scopes'        => ['openid', 'profile'],
@@ -99,7 +99,7 @@ return [
     // compteurs locaux vers le serveur communautaire. Membre uniquement —
     // inutile sur le serveur central.
     'agent' => [
-        'api_url'   => '',           // ex. https://energie.example.eu/api.php
+        'api_url'   => '',           // ex. https://energie.example.eu/api (l'ancien /api.php reste redirigé)
         'api_token' => 'change_me',  // créé via l'action api_token_create
         'timeout'   => 15,
     ],

@@ -11,9 +11,12 @@ vanilla**, sans framework, avec **Composer uniquement pour les outils de dev**.
 Requête HTTP
    │
    ▼
-public/*.php (entrée mince : bootstrap → données → rendu/dispatch)
-   ├─ Pages  → View (templates/) + échappement centralisé View::e()
-   └─ api.php → Http\Router → Http\Controller\* → Http\JsonResponse
+public/index.php (front controller : URL propre → require routes/<page>.php)
+   │
+   ▼
+routes/*.php (entrée mince : bootstrap → données → rendu/dispatch)
+   ├─ Pages     → View (templates/) + échappement centralisé View::e()
+   └─ routes/api.php → Http\Router → Http\Controller\* → Http\JsonResponse
    │
    ▼
 Service (logique métier : calcul tarifaire, interpolation, sync…)
@@ -31,7 +34,13 @@ graphique, tables gaz/eau).
 
 ## Décisions clés
 
-- **Entrées minces.** `public/*.php` ne contient que câblage + préparation de
+- **Front controller & URLs propres** (#106). `public/index.php` est le point
+  d'entrée unique : il traduit une URL sans extension (`/account`, `/tariffs`,
+  `/api?action=…`) vers le script de page correspondant dans `app/routes/`
+  (serveur en `try_files … /index.php`). Les liens sont générés par
+  `App\Support\Url::to()` / `View::url()` (pendant de `Assets::url()`, gère les
+  installs en sous-répertoire) ; les anciennes URLs `*.php` sont redirigées en 301.
+- **Entrées minces.** `routes/*.php` ne contient que câblage + préparation de
   données ; aucun HTML ni logique métier. Le HTML vit dans `app/templates/`, le
   CSS/JS dans `app/public/assets/`.
 - **Moteur de vues maison** (`App\View\View`) : templates PHP + **échappement

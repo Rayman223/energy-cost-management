@@ -66,10 +66,10 @@ $fmt = function (mixed $v, int $dec = 3, string $unit = 'kWh'): string {
         <span class="sync-dot <?= $syncClass === 'error' ? 'error' : ($syncClass === 'stale' ? 'stale' : '') ?>"></span>
         <?= $dbError ? 'DB offline' : 'Sync' ?>
       </div>
-      <a href="meter-readings.php" class="theme-toggle" title="<?= $this->te('nav.meter_readings') ?>">📝</a>
-      <?php if (!empty($isAdmin)): ?><a href="admin.php" class="theme-toggle" title="<?= $this->te('admin.title') ?>">🛡</a><?php endif; ?>
-      <a href="tariffs.php" class="theme-toggle" title="Tarifs">€</a>
-      <a href="account.php" class="theme-toggle" title="Mon compte">👤</a>
+      <a href="<?= $this->url('meter-readings') ?>" class="theme-toggle" title="<?= $this->te('nav.meter_readings') ?>">📝</a>
+      <?php if (!empty($isAdmin)): ?><a href="<?= $this->url('admin') ?>" class="theme-toggle" title="<?= $this->te('admin.title') ?>">🛡</a><?php endif; ?>
+      <a href="<?= $this->url('tariffs') ?>" class="theme-toggle" title="Tarifs">€</a>
+      <a href="<?= $this->url('account') ?>" class="theme-toggle" title="Mon compte">👤</a>
       <span class="langs"><?php foreach ($available as $loc): ?><a href="?lang=<?= $this->e($loc) ?>"<?= $loc === $this->locale() ? ' class="lang-active"' : '' ?>><?= $this->e(strtoupper($loc)) ?></a><?php endforeach; ?></span>
       <button type="button" class="theme-toggle" id="theme-toggle" aria-label="Changer de thème">🌙</button>
     </div>

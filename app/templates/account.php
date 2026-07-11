@@ -36,7 +36,7 @@ $csrf = \App\Security\Csrf::field();
     </div>
     <div>
       <span class="langs"><?php foreach ($available as $loc): ?><a href="?lang=<?= $this->e($loc) ?>"<?= $loc === $this->locale() ? ' class="lang-active"' : '' ?>><?= $this->e(\App\I18n\Locale::displayName($loc)) ?></a><?php endforeach; ?></span>
-      &nbsp; <a href="index.php"><?= $this->te('nav.back_dashboard') ?></a>
+      &nbsp; <a href="<?= $this->url() ?>"><?= $this->te('nav.back_dashboard') ?></a>
     </div>
   </header>
 
@@ -203,8 +203,8 @@ $csrf = \App\Security\Csrf::field();
   <div class="card">
     <h2><?= $this->te('account.rgpd') ?></h2>
     <p class="hint"><?= $this->te('account.rgpd_hint') ?>
-       (<a href="terms.php"><?= $this->te('legal.terms') ?></a> · <a href="privacy.php"><?= $this->te('legal.privacy') ?></a>)</p>
-    <p><a href="account.php?export=1"><?= $this->te('account.export') ?></a></p>
+       (<a href="<?= $this->url('terms') ?>"><?= $this->te('legal.terms') ?></a> · <a href="<?= $this->url('privacy') ?>"><?= $this->te('legal.privacy') ?></a>)</p>
+    <p><a href="<?= $this->url('account') ?>?export=1"><?= $this->te('account.export') ?></a></p>
     <form method="post" data-confirm="<?= $this->e($this->t('account.delete_js_confirm')) ?>" data-confirm-ok="<?= $this->e($this->t('account.delete')) ?>" data-confirm-danger>
       <?= $csrf ?>
       <input type="hidden" name="action" value="delete_account">

@@ -57,6 +57,5 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 echo $view->render('login', [
     'error'     => $error,
     'next'      => $next,
-    'basePath'  => $basePath,
     'available' => Locale::available($config),
 ]);

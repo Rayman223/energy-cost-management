@@ -8,7 +8,7 @@
 ### Flux de données
 1. **Ingestion horaire** (`cron_hourly.php`, `:00`) — lit les APIs compteurs locaux → insert `Data_Dries` + `Data_Solaire`.
 2. **Envoi quotidien** (`cron_daily_webhook.php`, `01:15`) — provisioning EnergyID V2 `/hello` + push première valeur de chaque journée.
-3. **Dashboard** (`public/index.php`) — affichage temps réel des index, deltas mensuels, estimation coûts, historique 30/60/90j, encodage gaz.
+3. **Dashboard** (route `/`, `app/routes/dashboard.php`) — affichage temps réel des index, deltas mensuels, estimation coûts, historique 30/60/90j, encodage gaz.
 
 ### Tarifaire électricité (Belgique)
 Calcul complet dans `TariffCalculatorService`. Composantes stockées dans `tariff_grid_lines` :
@@ -78,9 +78,12 @@ app/
 │   ├── energyid-v2-model.md
 │   └── suivi.md             ← ce fichier
 ├── public/
-│   ├── index.php            ← dashboard
-│   ├── tariffs.php          ← gestion des tarifs
-│   └── api.php              ← API JSON (GET + POST)
+│   ├── index.php            ← front controller (route les URLs propres)
+│   └── assets/              ← CSS / JS / images
+├── routes/                  ← scripts de page requis par le front controller
+│   ├── dashboard.php        ← dashboard (route /)
+│   ├── tariffs.php          ← gestion des tarifs (route /tariffs)
+│   └── api.php              ← API JSON (route /api, GET + POST)
 ├── scripts/
 │   ├── cron_hourly.php      ← ingestion horaire
 │   └── cron_daily_webhook.php ← envoi EnergyID

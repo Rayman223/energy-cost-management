@@ -18,7 +18,7 @@ single-home project, and seed the first Belgian tariff templates.
 - A database and user for the app (e.g. `energy` / `energy_user`).
 - For OIDC (recommended): an OpenID Connect client at your provider (Google, or a
   self-hosted IdP) — client id/secret and the redirect URI
-  `https://<your-host>/auth/login.php`.
+  `https://<your-host>/auth/login`.
 
 ---
 
@@ -40,6 +40,48 @@ The script is idempotent and: `git fetch` + `reset --hard` to the target →
 `app/scripts/migrate.php` → checks the OIDC config. `git clean` runs **without
 `-x`**, so `app/config/config.php` and `/vendor/` are preserved.
 
+### Web server & URL rewriting
+
+Since #106 the app runs behind a **single front controller** ([`app/public/index.php`](../public/index.php))
+serving clean, extensionless URLs (`/account`, `/tariffs`, `/api?action=…`). The
+document root must be **`app/public/`**, and any non-file request must fall back to
+`index.php`. With SWAG/Nginx, point the `location /` block at the front controller:
+
+```nginx
+root /config/www/energyv3/app/public;   # document root = app/public
+index index.php;
+
+location / {
+    try_files $uri $uri/ /index.php$is_args$args;
+}
+
+# Only index.php exists in the web root; every other …/xxx.php request must
+# reach the front controller so it can 308-redirect to the clean URL. Without
+# the `try_files … /index.php` fallback below, a request to a legacy path such
+# as /api.php would hit PHP-FPM with a missing SCRIPT_FILENAME → 404, and the
+# backward-compat redirect (incl. the ingestion API) would never fire.
+location ~ \.php$ {
+    try_files $uri /index.php$is_args$args;
+    include fastcgi_params;
+    fastcgi_pass unix:/var/run/php-fpm.sock;   # SWAG's PHP-FPM socket
+    fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
+}
+```
+
+Old `…/xxx.php` URLs are **308-redirected** (method + body preserved, so machine
+clients still posting to `/api.php` keep working) to their clean form by the
+front controller.
+
+### Local development
+
+The front controller doubles as a `php -S` router (it serves existing files as-is):
+
+```bash
+php -S localhost:8000 -t app/public app/public/index.php
+```
+
+Then open <http://localhost:8000/>.
+
 ---
 
 ## 2. Configure `config.php`
@@ -55,7 +97,7 @@ Set at least `database`, then choose the authentication mode:
 
 - **Community mode (recommended)** — set `oidc.enabled = true` and fill
   `issuer` / `client_id` / `client_secret`; leave `redirect_uri` empty to derive it
-  from `/auth/login.php`. Multi-user accounts, no password/e-mail stored.
+  from the `/auth/login` route. Multi-user accounts, no password/e-mail stored.
 - **Legacy single-tenant mode** — keep `oidc.enabled = false`; the historic HTTP
   Basic Auth (`web_security.basic_auth`) protects everything and a single implicit
   owner account is used.
@@ -143,7 +185,7 @@ duplicates. See [`import.md`](import.md) for CSV/JSON formats and column mapping
 The community catalog is made of **shared** tariff grids (`user_id NULL`) that every
 member can select. Seed the Belgian ones as an **admin**:
 
-1. Sign in as the admin (step 5) and open **`/tariffs.php`**.
+1. Sign in as the admin (step 5) and open **`/tariffs`**.
 2. Create a grid, tick **“shared catalog”**, and set **country = `BE`**, currency
    `EUR`.
 3. Fill the line values for the Belgian structure (keys from
@@ -168,8 +210,8 @@ country, repeat with its country code and the relevant line keys.
 - `SELECT role FROM users WHERE id = 1;` → `admin`.
 - The dashboard shows migrated/imported history; a re-run of the import/backfill
   reports **duplicates**, not new rows (idempotent).
-- `/tariffs.php` lists the shared BE grids; cost estimates appear on the dashboard.
-- `/admin.php` is reachable by the admin and returns 403 to non-admins.
+- `/tariffs` lists the shared BE grids; cost estimates appear on the dashboard.
+- `/admin` is reachable by the admin and returns 403 to non-admins.
 
 ---
 

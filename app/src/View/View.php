@@ -6,6 +6,7 @@ namespace App\View;
 
 use App\I18n\Formatter;
 use App\I18n\Translator;
+use App\Support\Url;
 
 /**
  * Moteur de rendu minimal pour templates PHP (sans build tooling).
@@ -120,5 +121,14 @@ final class View
     public function locale(): string
     {
         return $this->formatter?->locale() ?? 'fr';
+    }
+
+    /**
+     * URL interne (sans extension `.php`) préfixée par la racine de l'application.
+     * Ex. `$this->url('account')` → « /account ». Voir {@see \App\Support\Url}.
+     */
+    public function url(string $path = ''): string
+    {
+        return Url::to($path);
     }
 }

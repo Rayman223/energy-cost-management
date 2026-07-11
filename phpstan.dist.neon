@@ -8,4 +8,5 @@ parameters:
         - app/scripts
         - app/tools
         - app/public
+        - app/routes
         - app/bootstrap.php

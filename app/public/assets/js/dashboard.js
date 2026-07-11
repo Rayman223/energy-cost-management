@@ -256,7 +256,7 @@ function costVatRows(c, row) {
       return;
     }
     try {
-      const res  = await fetch(`api.php?action=month_cost&year=${year}&month=${month}`);
+      const res  = await fetch(`api?action=month_cost&year=${year}&month=${month}`);
       const data = await res.json();
       renderCostContent(data);
     } catch (e) {
@@ -297,7 +297,7 @@ function costVatRows(c, row) {
             try {
               const d = year === curY && m === curM && window.__INIT_COST__
                 ? window.__INIT_COST__
-                : await (await fetch(`api.php?action=month_cost&year=${year}&month=${m}`)).json();
+                : await (await fetch(`api?action=month_cost&year=${year}&month=${m}`)).json();
               yearCache[key] = d;
               updateYearCard(card, d);
             } catch { card.querySelector('.ymc-cost').innerHTML = '<span class="ymc-nd">err</span>'; }
@@ -458,7 +458,7 @@ function costVatRows(c, row) {
       return;
     }
     try {
-      const res  = await fetch(`api.php?action=gas_month_cost&year=${year}&month=${month}`);
+      const res  = await fetch(`api?action=gas_month_cost&year=${year}&month=${month}`);
       const data = await res.json();
       renderGasCostContent(data);
     } catch (e) {
@@ -499,7 +499,7 @@ function costVatRows(c, row) {
             try {
               const d = (year === window.__INIT_GAS_YEAR__ && m === window.__INIT_GAS_MONTH__ && window.__INIT_GAS_COST__)
                 ? window.__INIT_GAS_COST__
-                : await (await fetch(`api.php?action=gas_month_cost&year=${year}&month=${m}`)).json();
+                : await (await fetch(`api?action=gas_month_cost&year=${year}&month=${m}`)).json();
               gasYearCache[key] = d;
               updateGasYearCard(card, d);
             } catch {
@@ -583,7 +583,7 @@ function costVatRows(c, row) {
   // Refresh after a new gas reading is saved
   document.addEventListener('gas-entry-saved', async function () {
     try {
-      const data = await (await fetch(`api.php?action=gas_month_cost&year=${gasNavYear}&month=${gasNavMonth}`)).json();
+      const data = await (await fetch(`api?action=gas_month_cost&year=${gasNavYear}&month=${gasNavMonth}`)).json();
       delete gasYearCache[`${gasNavYear}-${gasNavMonth}`];
       renderGasCostContent(data);
     } catch { /* silent */ }
@@ -674,7 +674,7 @@ function costVatRows(c, row) {
       return;
     }
     try {
-      const res  = await fetch(`api.php?action=water_month_cost&year=${year}&month=${month}`);
+      const res  = await fetch(`api?action=water_month_cost&year=${year}&month=${month}`);
       renderWaterContent(await res.json());
     } catch (e) {
       el.innerHTML = '<div class="async-note async-note--error">Erreur de chargement.</div>';
@@ -714,7 +714,7 @@ function costVatRows(c, row) {
             try {
               const d = (year === window.__INIT_WATER_YEAR__ && m === window.__INIT_WATER_MONTH__ && window.__INIT_WATER_COST__)
                 ? window.__INIT_WATER_COST__
-                : await (await fetch(`api.php?action=water_month_cost&year=${year}&month=${m}`)).json();
+                : await (await fetch(`api?action=water_month_cost&year=${year}&month=${m}`)).json();
               waterYearCache[key] = d;
               updateWaterYearCard(card, d);
             } catch {
@@ -793,7 +793,7 @@ function costVatRows(c, row) {
   // Refresh after a new water reading is saved
   document.addEventListener('water-entry-saved', async function () {
     try {
-      const data = await (await fetch(`api.php?action=water_month_cost&year=${wNavYear}&month=${wNavMonth}`)).json();
+      const data = await (await fetch(`api?action=water_month_cost&year=${wNavYear}&month=${wNavMonth}`)).json();
       delete waterYearCache[`${wNavYear}-${wNavMonth}`];
       renderWaterContent(data);
     } catch { /* silent */ }
@@ -827,7 +827,7 @@ async function loadChart(days = 30) {
   if (btn) btn.style.color = 'var(--amber)';
 
   try {
-    const res  = await fetch(`api.php?action=chart_data&days=${days}`);
+    const res  = await fetch(`api?action=chart_data&days=${days}`);
     const data = await res.json();
     renderChart(data);
   } catch (e) {
@@ -899,7 +899,7 @@ document.getElementById('gas-btn')?.addEventListener('click', submitGas);
 document.getElementById('water-btn')?.addEventListener('click', submitWater);
 
 // ── Meter reading tables (gas / water) ───────────────────────────────────────
-// Rendu désormais piloté par l'API (api.php?action=gas_history|water_history) au
+// Rendu désormais piloté par l'API (api?action=gas_history|water_history) au
 // chargement et après chaque saisie : un seul chemin de rendu, plus de duplication
 // avec le serveur, et la page ne dépend plus de la BDD pour ces tables.
 function fmtM3(v) {
@@ -927,14 +927,14 @@ function renderReadings(tbodyId, rows, emptyLabel) {
 
 async function loadGasHistory() {
   try {
-    const res = await fetch('api.php?action=gas_history');
+    const res = await fetch('api?action=gas_history');
     renderReadings('gas-tbody', await res.json(), 'Aucune entrée gaz enregistrée.');
   } catch (e) { /* la table reste vide en cas d'erreur réseau */ }
 }
 
 async function loadWaterHistory() {
   try {
-    const res = await fetch('api.php?action=water_history');
+    const res = await fetch('api?action=water_history');
     renderReadings('water-tbody', await res.json(), 'Aucune entrée eau enregistrée.');
   } catch (e) { /* idem */ }
 }
@@ -960,7 +960,7 @@ async function submitGas() {
   btn.textContent = 'Envoi…';
 
   try {
-    const res  = await fetch('api.php?action=gas_entry', {
+    const res  = await fetch('api?action=gas_entry', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ counter_m3: value, reading_at: `${date} ${time}:00` }),
@@ -1009,7 +1009,7 @@ async function submitWater() {
   btn.textContent = 'Envoi…';
 
   try {
-    const res  = await fetch('api.php?action=water_entry', {
+    const res  = await fetch('api?action=water_entry', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ counter_m3: value, reading_at: `${date} ${time}:00` }),

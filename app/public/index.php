@@ -2,136 +2,101 @@
 
 declare(strict_types=1);
 
-use App\Infrastructure\Database;
-use App\Repository\DynamicPriceRepository;
-use App\Repository\ElectricityReadingRepository;
-use App\Repository\TariffRepository;
-use App\Repository\UserRepository;
-use App\Repository\UtilityReadingRepository;
-use App\Repository\WebhookSyncStateRepository;
-use App\Security\UserContext;
-use App\Service\CostCalculationService;
-use App\Service\TariffCalculatorService;
-use App\Http\SecurityHeaders;
-use App\I18n\Locale;
-use App\Security\AuthGuard;
-use App\Support\LocaleContext;
-use App\View\ViewFactory;
+/**
+ * Front controller — point d'entrée unique de l'application web.
+ *
+ * Depuis l'issue #106, l'app expose des URLs propres sans extension `.php`
+ * (`/account`, `/tariffs`, `/api?action=…`). Le serveur route toute requête
+ * non-fichier vers ce script (`try_files $uri $uri/ /index.php` côté Nginx/SWAG,
+ * ou `php -S … app/public/index.php` en dev), qui dispatche vers le script de page
+ * correspondant dans `app/routes/`.
+ *
+ * Volontairement sans dépendance au namespace `App\` : le routage doit fonctionner
+ * même si le bootstrap applicatif échoue. Chaque page requise s'auto-amorce.
+ */
 
-// Bootstrap — dégradation gracieuse si la base est indisponible.
-$config       = [];
-$view         = null;
-$isAdmin      = false;
-$currency     = 'EUR';
-$dbError      = null;
-$deltas       = null;
-$cost         = null;
-$gasCostData  = null;
-$syncStatus   = null;
-$gasLatest    = null;
-$waterLatest  = null;
-$waterCostData = null;
-$gasInitYear  = (int) date('Y');
-$gasInitMonth = (int) date('n');
-$waterInitYear  = (int) date('Y');
-$waterInitMonth = (int) date('n');
-
-require_once __DIR__ . '/../autoload.php';
-
-SecurityHeaders::send();
-
-try {
-    $config     = require __DIR__ . '/../bootstrap.php';
-
-    AuthGuard::protect($config);
-
-    $db         = new Database($config['database']);
-    $pdo        = $db->pdo();
-
-    // Tenant courant : session OIDC, ou tenant unique en mode Basic Auth.
-    $userId     = UserContext::currentWebUserId($pdo, $config);
-
-    $users      = new UserRepository($pdo);
-    $isAdmin    = ($users->findById($userId)?->isAdmin()) ?? false;
-    $profile    = $users->getProfile($userId);
-    $currency   = (string) ($profile['currency'] ?? 'EUR');
-
-    // Locale (profil, surchargée par ?lang persisté) → View configurée.
-    $view = LocaleContext::viewFor($config, $users, $userId, $profile['locale'] ?? null, __DIR__ . '/../templates');
-
-    // Zone de marché ENTSO-E de l'utilisateur (profil), sinon celle de la config.
-    $zone = $profile['bidding_zone'] ?? null;
-    $zone = ($zone !== null && $zone !== '')
-        ? $zone
-        : (string) ($config['dynamic_prices']['bidding_zone'] ?? DynamicPriceRepository::DEFAULT_ZONE);
-
-    $elecRepo   = new ElectricityReadingRepository($pdo, $userId);
-    $gasRepo    = new UtilityReadingRepository($pdo, $userId, 'gas');
-    $waterRepo  = new UtilityReadingRepository($pdo, $userId, 'water');
-    $syncState  = new WebhookSyncStateRepository($pdo, $userId);
-    $tariffRepo = new TariffRepository($pdo, $userId, $isAdmin);
-    $dynPriceRepo = new DynamicPriceRepository($pdo, $zone);
-    $pricingMode  = (string) ($profile['pricing_mode'] ?? 'fixed');
-    $costSvc    = new CostCalculationService(
-        legacyRepo: $elecRepo,
-        tariffRepo: $tariffRepo,
-        gasRepo: $gasRepo,
-        calculator: new TariffCalculatorService(),
-        dynamicPriceRepo: $dynPriceRepo,
-        dynamicConfig: $config['dynamic_prices'] ?? [],
-        waterRepo: $waterRepo,
-        pricingMode: $pricingMode,
-    );
-
-    $deltas      = $elecRepo->getMonthlyDeltas();
-    $cost        = $costSvc->estimateCurrentMonthElectricity();
-    $cost['dynamic'] = $costSvc->estimateCurrentMonthElectricityDynamic();
-    $gasCostData = $costSvc->estimateLastGasPeriod();
-    if (!empty($gasCostData['period_from'])) {
-        $gasPeriodFrom = new DateTimeImmutable($gasCostData['period_from']);
-        $gasInitYear   = (int) $gasPeriodFrom->format('Y');
-        $gasInitMonth  = (int) $gasPeriodFrom->format('n');
+// ── Serveur intégré PHP (`php -S`) : servir les fichiers existants tels quels ──
+// (assets CSS/JS/images) sans passer par le routeur.
+if (PHP_SAPI === 'cli-server') {
+    $requested = parse_url((string) ($_SERVER['REQUEST_URI'] ?? '/'), PHP_URL_PATH);
+    // On ne délègue au serveur intégré que les fichiers statiques existants
+    // (assets) ; les `.php` restent routés (parité avec Nginx/FPM en prod).
+    if (
+        is_string($requested)
+        && $requested !== '/'
+        && !str_ends_with($requested, '.php')
+        && is_file(__DIR__ . $requested)
+    ) {
+        return false;
     }
-    $gasLatest   = $gasRepo->getLatest();
-    $waterLatest = $waterRepo->getLatest();
-    if ($waterLatest !== null && !empty($waterLatest['reading_at'])) {
-        $waterPeriod    = new DateTimeImmutable((string) $waterLatest['reading_at']);
-        $waterInitYear  = (int) $waterPeriod->format('Y');
-        $waterInitMonth = (int) $waterPeriod->format('n');
-    }
-    $waterCostData = $costSvc->estimateMonthWater($waterInitYear, $waterInitMonth);
-
-    $syncStatus = [
-        'prelevement_jour'   => $syncState->getLastSentAt('prelevement-jour')?->format('d/m H:i'),
-        'prelevement_nuit'   => $syncState->getLastSentAt('prelevement-nuit')?->format('d/m H:i'),
-        'injection_jour'     => $syncState->getLastSentAt('injection-jour')?->format('d/m H:i'),
-        'injection_nuit'     => $syncState->getLastSentAt('injection-nuit')?->format('d/m H:i'),
-        'production_solaire' => $syncState->getLastSentAt('production-solaire')?->format('d/m H:i'),
-        'gaz_index'          => $syncState->getLastSentAt('gas-index')?->format('d/m H:i'),
-        'water_index'        => $syncState->getLastSentAt('water-index')?->format('d/m H:i'),
-    ];
-} catch (\Throwable $e) {
-    $dbError = $e->getMessage();
 }
 
-$view ??= ViewFactory::create(__DIR__ . '/../templates', Locale::resolve($config, null), (string) ($config['i18n']['default_locale'] ?? 'fr'));
+// ── Préfixe de déploiement (sous-répertoire éventuel) ─────────────────────────
+$scriptName = str_replace('\\', '/', (string) ($_SERVER['SCRIPT_NAME'] ?? ''));
+$basePath   = str_ends_with($scriptName, '/index.php')
+    ? substr($scriptName, 0, -\strlen('/index.php'))
+    : '';
+$basePath = rtrim($basePath, '/');
 
-echo $view->render('dashboard', [
-    'dbError'      => $dbError,
-    'deltas'       => $deltas,
-    'cost'         => $cost,
-    'gasCostData'  => $gasCostData,
-    'gasLatest'    => $gasLatest,
-    'waterLatest'  => $waterLatest,
-    'waterCostData' => $waterCostData,
-    'syncStatus'   => $syncStatus,
-    'initYear'     => (int) date('Y'),
-    'initMonth'    => (int) date('n'),
-    'gasInitYear'  => $gasInitYear,
-    'gasInitMonth' => $gasInitMonth,
-    'waterInitYear'  => $waterInitYear,
-    'waterInitMonth' => $waterInitMonth,
-    'available'    => Locale::available($config),
-    'isAdmin'      => $isAdmin,
-    'currency'     => $currency,
-]);
+// ── Chemin de route = REQUEST_URI, sans query ni préfixe de déploiement ───────
+$path = parse_url((string) ($_SERVER['REQUEST_URI'] ?? '/'), PHP_URL_PATH);
+$path = is_string($path) ? rawurldecode($path) : '/';
+// Retrait du préfixe de déploiement sur une frontière de segment seulement.
+if ($basePath !== '' && ($path === $basePath || str_starts_with($path, $basePath . '/'))) {
+    $path = substr($path, \strlen($basePath));
+}
+$path = '/' . trim($path, '/'); // « /account/ » → « /account » ; « / » → « / »
+if ($path === '/') {
+    $path = '';                 // racine → tableau de bord
+}
+
+/** @var array<string, string> $routes route propre → script dans app/routes/ */
+$routes = [
+    ''                => 'dashboard.php',
+    '/account'        => 'account.php',
+    '/admin'          => 'admin.php',
+    '/tariffs'        => 'tariffs.php',
+    '/meter-readings' => 'meter-readings.php',
+    '/api'            => 'api.php',
+    '/login'          => 'login.php',
+    '/privacy'        => 'privacy.php',
+    '/terms'          => 'terms.php',
+    '/auth/login'     => 'auth/login.php',
+    '/auth/logout'    => 'auth/logout.php',
+];
+
+// En-têtes de sécurité « sûrs » pour les réponses gérées directement par le
+// routeur (redirection 308, 404) — les pages routées posent leur CSP complète
+// via App\Http\SecurityHeaders. Inline pour préserver l'indépendance à `App\`.
+$sendSafeHeaders = static function (): void {
+    if (headers_sent()) {
+        return;
+    }
+    header('X-Content-Type-Options: nosniff');
+    header('X-Frame-Options: DENY');
+    header('Referrer-Policy: strict-origin-when-cross-origin');
+};
+
+// ── Compat : anciennes URLs « /xxx.php » → redirection vers « /xxx ». ──────────
+// 308 (et non 301) pour **préserver la méthode et le corps** : les clients machine
+// de l'API d'ingestion peuvent encore poster sur « /api.php » le temps de migrer
+// leur `api_url` vers « /api ».
+if (str_ends_with($path, '.php')) {
+    $clean = $path === '/index.php' ? '' : substr($path, 0, -4);
+    if (isset($routes[$clean])) {
+        $sendSafeHeaders();
+        header('Location: ' . $basePath . ($clean === '' ? '/' : $clean), true, 308);
+        exit;
+    }
+}
+
+$script = $routes[$path] ?? null;
+if ($script === null) {
+    $sendSafeHeaders();
+    http_response_code(404);
+    header('Content-Type: text/plain; charset=utf-8');
+    echo 'Not Found';
+    exit;
+}
+
+require __DIR__ . '/../routes/' . $script;

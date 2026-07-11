@@ -57,8 +57,9 @@ $_SESSION['auth_next'] = $next;
 if (($oidcConfig['redirect_uri'] ?? '') === '') {
     $scheme = Session::isHttps() ? 'https' : 'http';
     $host = (string) ($_SERVER['HTTP_HOST'] ?? 'localhost');
-    $script = (string) ($_SERVER['SCRIPT_NAME'] ?? '/auth/login.php');
-    $oidcConfig['redirect_uri'] = $scheme . '://' . $host . $script;
+    // Callback = la route « /auth/login » (le front controller #106 fait pointer
+    // SCRIPT_NAME sur /index.php, inexploitable ici).
+    $oidcConfig['redirect_uri'] = $scheme . '://' . $host . WebAccessGuard::appRootPath() . '/auth/login';
 }
 
 try {
