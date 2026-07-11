@@ -105,21 +105,6 @@ final class BulkImportDbTest extends TestCase
         self::assertSame(4, $again->duplicates());
     }
 
-    public function testAdminImportTargetsAnotherUsersScope(): void
-    {
-        $users  = new UserRepository($this->pdo());
-        $admin  = $users->create('https://iss.example', 'admin-sub', 'example', 'Admin')->id;
-        $member = $users->create('https://iss.example', 'member-sub', 'example', 'Member')->id;
-
-        // L'admin importe DANS le scope du membre.
-        $sink = new UtilityReadingRepository($this->pdo(), $member, 'water');
-        $rows = [2 => ['timestamp' => '2026-03-01 08:00:00', 'counter_m3' => '7.0']];
-        $this->service->importUtility($rows, ImportMapping::preset('water'), $sink);
-
-        self::assertSame(1, $this->countRows('utility_readings', $member));
-        self::assertSame(0, $this->countRows('utility_readings', $admin));
-    }
-
     private function countRows(string $table, int $userId): int
     {
         $stmt = $this->pdo()->prepare("SELECT COUNT(*) FROM {$table} WHERE user_id = :uid");

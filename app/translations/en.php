@@ -271,7 +271,4 @@ return [
     'import.done_dryrun' => 'Dry run complete (no writes).',
     'import.file_too_large' => 'File too large: reduce its size or use the command-line import.',
     'import.truncated' => 'File truncated: the row limit was reached, only the first rows were imported.',
-    'import.admin_title' => 'Import for a user',
-    'import.admin_hint' => 'Import data on behalf of a member (onboarding/migration). Administrators only.',
-    'import.target_user' => 'Target user',
 ];

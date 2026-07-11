@@ -43,12 +43,7 @@ l'électricité (`--map=col:registre,…`, CLI).
 Carte « Importer mes données » : fichier + type + surcharges optionnelles + case
 **Simulation** (dry-run). La cible est **toujours** l'utilisateur connecté.
 
-### 2. Admin « pour le compte d'un autre » — page « Administration »
-Réservée aux administrateurs. Ajoute un sélecteur d'**utilisateur cible**. La
-règle est centralisée dans `App\Service\Import\ImportTarget` : importer pour
-autrui exige le rôle admin ; un non-admin ne peut cibler que lui-même.
-
-### 3. CLI
+### 2. CLI
 ```bash
 # Générique
 php app/scripts/import_readings.php --type=electricity --file=elec.csv --user=2 --execute
@@ -74,7 +69,7 @@ pas de fausse alerte pour quelques lignes malformées, mais reste alerté d'une
 troncature ou d'une erreur d'écriture. Sur défaillance, la CLI affiche la cause
 réelle (contrairement au web, qui assainit le message).
 
-### 4. API batch (programmatique, P4 #55)
+### 3. API batch (programmatique, P4 #55)
 Pour l'ingestion automatisée volumineuse : `POST ?action=ingest_electricity|
 ingest_gas|ingest_water`, ≤ 1000 lectures/requête, jeton Bearer. Voir
 [plan/api-ingestion.md](plan/api-ingestion.md).
@@ -97,7 +92,6 @@ asynchrone/job reste un axe de suivi.
 - `App\Service\Import\ImportMapping` — presets + surcharges (registres tirés de
   `MeterTopology::ELECTRICITY_REGISTERS`).
 - `App\Service\Import\ImportReport` — bilan (compteurs + échantillon d'erreurs).
-- `App\Service\Import\ImportTarget` — règle d'autorisation self/admin.
 - `App\Service\Import\ImportRunner` — orchestration transactionnelle partagée
   (UI web via `runFromRequest`/`runUploaded`, CLI via `run`) : transaction,
   dry-run, plafond stop-and-report.

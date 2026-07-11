@@ -117,7 +117,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $success = $view->t('account.energyid_disabled_msg');
         } elseif ($action === 'import') {
             // Import self-service : la cible est TOUJOURS l'utilisateur courant
-            // (aucun champ « utilisateur cible » ici — cf. page admin pour autrui).
+            // (aucun champ « utilisateur cible » — l'import ne concerne que soi).
             $importReport = (new ImportRunner())->runFromRequest($pdo, $userId, $_POST, $_FILES);
             // Import tronqué (plafond atteint, données perdues) : pas de bannière
             // « terminé » trompeuse — l'avertissement du rapport tient lieu de signal.

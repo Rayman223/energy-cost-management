@@ -8,7 +8,6 @@
  * @var list<array{id:int,provider:string,display_name:string,role:string,status:string,created_at:string,last_login_at:?string}> $users
  * @var int          $currentId
  * @var list<string> $available
- * @var \App\Service\Import\ImportReport|null $importReport
  */
 $csrf = \App\Security\Csrf::field();
 ?>
@@ -94,36 +93,6 @@ $csrf = \App\Security\Csrf::field();
         </tbody>
       </table>
     </div>
-  </div>
-
-  <div class="card">
-    <h2><?= $this->te('import.admin_title') ?></h2>
-    <p class="hint"><?= $this->te('import.admin_hint') ?></p>
-
-    <?= $this->partial('_import_report', ['importReport' => $importReport]) ?>
-
-    <form method="post" action="admin.php" enctype="multipart/form-data">
-      <?= $csrf ?>
-      <input type="hidden" name="action" value="import">
-      <label for="target_user_id"><?= $this->te('import.target_user') ?></label>
-      <select id="target_user_id" name="target_user_id">
-        <?php foreach ($users as $u): ?>
-          <option value="<?= $this->e((string) $u['id']) ?>"<?= $u['id'] === $currentId ? ' selected' : '' ?>>
-            #<?= $this->e((string) $u['id']) ?> — <?= $this->e($u['display_name'] !== '' ? $u['display_name'] : '—') ?><?= $u['id'] === $currentId ? ' ' . $this->te('admin.you') : '' ?>
-          </option>
-        <?php endforeach; ?>
-      </select>
-      <label for="a_energy_type" class="mt-10"><?= $this->te('import.energy_type') ?></label>
-      <select id="a_energy_type" name="energy_type">
-        <option value="electricity"><?= $this->te('import.type_electricity') ?></option>
-        <option value="gas"><?= $this->te('import.type_gas') ?></option>
-        <option value="water"><?= $this->te('import.type_water') ?></option>
-      </select>
-      <label for="a_import_file" class="mt-10"><?= $this->te('import.file') ?></label>
-      <input id="a_import_file" type="file" name="import_file" accept=".csv,.json" required>
-      <label class="mt-10"><input type="checkbox" name="dry_run" value="1" checked> <?= $this->te('import.dry_run') ?></label>
-      <button type="submit"><?= $this->te('import.submit') ?></button>
-    </form>
   </div>
 
   <div class="card">
