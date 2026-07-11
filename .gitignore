@@ -4,3 +4,19 @@ app/config/config.php
 /vendor/
 /.phpunit.cache/
 /.phpunit.result.cache
+
+# Environnement local & outillage éditeur (personnel, hors dépôt)
+/.bash_profile
+/.bashrc
+/.profile
+/.zprofile
+/.zshrc
+/.gitconfig
+/.gitmodules
+/.ripgreprc
+/.idea
+/.vscode
+
+# Harness Claude Code (config locale, non déployée)
+/.claude/
+/.mcp.json
