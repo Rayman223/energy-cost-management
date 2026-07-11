@@ -13,22 +13,28 @@
     });
   });
 
-  // ── Ajout d'un champ personnalisé ─────────────────────────────────────────
+  // ── Ajout d'un champ personnalisé (un bouton par catégorie) ───────────────
   var tpl = document.getElementById('custom-line-row');
-  var addBtn = document.querySelector('[data-add-line]');
-  if (tpl && addBtn) {
-    var taxesBody = addBtn.closest('.line-group-body');
-    var addRow = addBtn.closest('.add-field-row');
-    addBtn.addEventListener('click', function () {
-      var html = tpl.innerHTML.replace(/__IDX__/g, String(nextIndex++));
-      var frag = document.createElement('div');
-      frag.innerHTML = html.trim();
-      var node = frag.firstElementChild;
-      if (node && taxesBody && addRow) {
-        taxesBody.insertBefore(node, addRow);
-        var labelInput = node.querySelector('.line-label-input');
-        if (labelInput) labelInput.focus();
-      }
+  if (tpl) {
+    document.querySelectorAll('[data-add-line]').forEach(function (addBtn) {
+      var body = addBtn.closest('.line-group-body');
+      var addRow = addBtn.closest('.add-field-row');
+      var group = addBtn.closest('.line-group');
+      // Le nouveau champ est préaffecté à la catégorie de son bloc.
+      var category = group ? (group.dataset.group || '') : '';
+      addBtn.addEventListener('click', function () {
+        var html = tpl.innerHTML.replace(/__IDX__/g, String(nextIndex++));
+        var frag = document.createElement('div');
+        frag.innerHTML = html.trim();
+        var node = frag.firstElementChild;
+        if (node && body && addRow) {
+          var catSelect = node.querySelector('.line-category-select');
+          if (catSelect && category) catSelect.value = category;
+          body.insertBefore(node, addRow);
+          var labelInput = node.querySelector('.line-label-input');
+          if (labelInput) labelInput.focus();
+        }
+      });
     });
   }
 

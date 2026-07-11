@@ -183,6 +183,33 @@ final class TariffRepositoryDbTest extends TestCase
         self::assertSame('Taxe locale', $grid->lines['custom_taxe']->label);
     }
 
+    public function testLineCategoryRoundTripAndFallback(): void
+    {
+        $user = new TariffRepository($this->pdo(), $this->userId, false);
+        $id = $user->saveGrid(
+            'electricity',
+            'Grille catégorisée',
+            new DateTimeImmutable('2026-01-01'),
+            null,
+            [
+                // Distribution rangée manuellement hors des taxes.
+                ['key' => 'distribution_t1', 'amount' => 0.05, 'kind' => 'per_kwh_t1', 'label' => null, 'category' => 'distribution'],
+                // Aucune catégorie fournie → NULL stocké → dérivée du kind au read.
+                ['key' => 'excise_duty', 'amount' => 0.02, 'kind' => 'per_kwh', 'label' => null],
+            ],
+        );
+
+        $grid = $user->findById($id);
+        self::assertNotNull($grid);
+
+        // Catégorie explicite conservée.
+        self::assertSame('distribution', $grid->lines['distribution_t1']->category()->value);
+
+        // Ligne sans catégorie : le VO garde NULL mais expose le défaut dérivé du kind.
+        self::assertNull($grid->lines['excise_duty']->category);
+        self::assertSame('taxes', $grid->lines['excise_duty']->category()->value);
+    }
+
     private function pdo(): PDO
     {
         if ($this->pdo === null) {

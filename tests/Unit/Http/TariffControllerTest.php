@@ -83,8 +83,8 @@ final class TariffControllerTest extends TestCase
         self::assertSame('Engie fév. 2026', $repo->savedGrid['name']);
         // Les lignes plates de l'API sont converties en lignes structurées (kind déduit).
         self::assertSame([
-            ['key' => 'energy_t1', 'amount' => 0.10, 'kind' => 'energy_t1', 'label' => null],
-            ['key' => 'energy_t2', 'amount' => 0.08, 'kind' => 'energy_t2', 'label' => null],
+            ['key' => 'energy_t1', 'amount' => 0.10, 'kind' => 'energy_t1', 'label' => null, 'category' => null],
+            ['key' => 'energy_t2', 'amount' => 0.08, 'kind' => 'energy_t2', 'label' => null, 'category' => null],
         ], $repo->savedGrid['lines']);
     }
 

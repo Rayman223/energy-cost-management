@@ -157,10 +157,11 @@ $fmt = function (mixed $v, int $dec = 3, string $unit = 'kWh'): string {
         }
     }
     $tariffGroupLabels = [
-        'energy'    => $this->t('tariffs.group_energy'),
-        'fixed'     => $this->t('tariffs.group_fixed'),
-        'taxes'     => $this->t('tariffs.group_taxes'),
-        'injection' => $this->t('tariffs.group_injection'),
+        'energy'       => $this->t('tariffs.group_energy'),
+        'distribution' => $this->t('tariffs.group_distribution'),
+        'fixed'        => $this->t('tariffs.group_fixed'),
+        'taxes'        => $this->t('tariffs.group_taxes'),
+        'injection'    => $this->t('tariffs.group_injection'),
     ];
 
     // État serveur initial transmis à dashboard.js via un data block JSON. Un

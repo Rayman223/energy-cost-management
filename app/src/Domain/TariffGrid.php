@@ -64,17 +64,18 @@ final class TariffGrid
      * Représentation destinée au moteur de calcul générique : taux de TVA + liste
      * ordonnée des lignes typées.
      *
-     * @return array{vat_rate: float, lines: list<array{key: string, kind: string, amount: float, label: string|null}>}
+     * @return array{vat_rate: float, lines: list<array{key: string, kind: string, amount: float, label: string|null, category: string}>}
      */
     public function toCalculationTariff(): array
     {
         $lines = [];
         foreach ($this->lines as $line) {
             $lines[] = [
-                'key'    => $line->key,
-                'kind'   => $line->kind->value,
-                'amount' => $line->amount,
-                'label'  => $line->label,
+                'key'      => $line->key,
+                'kind'     => $line->kind->value,
+                'amount'   => $line->amount,
+                'label'    => $line->label,
+                'category' => $line->category()->value,
             ];
         }
 

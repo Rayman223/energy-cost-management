@@ -100,6 +100,20 @@ final class TariffTemplateDbTest extends TestCase
         }
     }
 
+    public function testCategoryIsPersistedAndFallsBackWhenAbsent(): void
+    {
+        $owner = new TariffTemplateRepository($this->pdo(), $this->ownerId);
+        $id = $owner->save('gas', 'BE', 'Avec catégorie', [
+            ['key' => 'distribution', 'kind' => 'per_kwh', 'label' => null, 'category' => 'distribution'],
+            ['key' => 'energy', 'kind' => 'energy_flat', 'label' => null], // pas de catégorie → NULL stocké
+        ]);
+
+        $tpl = $owner->findById($id);
+        self::assertNotNull($tpl);
+        self::assertSame('distribution', $tpl['fields'][0]['category']);
+        self::assertNull($tpl['fields'][1]['category']);
+    }
+
     public function testUsageCountsDistinctUsersAndIsIdempotent(): void
     {
         $usage = new TariffTemplateUsageRepository($this->pdo());

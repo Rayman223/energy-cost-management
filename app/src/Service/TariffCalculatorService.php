@@ -130,7 +130,7 @@ final class TariffCalculatorService
     /**
      * Moteur générique : applique la formule de chaque ligne selon son kind.
      *
-     * @param array{vat_rate?: float, lines?: list<array{key: string, kind: string, amount: float, label: string|null}>} $tariff
+     * @param array{vat_rate?: float, lines?: list<array{key: string, kind: string, amount: float, label: string|null, category?: string|null}>} $tariff
      * @param array{kwh_t1?: float, kwh_t2?: float, kwh_export_t1?: float, kwh_export_t2?: float, m3?: float} $quantities
      * @param float|null $dynamicEnergyTtc  Coût énergie dynamique (mode dynamique) ; les kinds énergie fournisseur sont alors ignorés.
      * @return array<string, mixed>
@@ -194,7 +194,9 @@ final class TariffCalculatorService
             $lines[] = [
                 'key'      => (string) $line['key'],
                 'kind'     => $kind->value,
-                'group'    => $kind->group(),
+                'group'    => isset($line['category']) && $line['category'] !== ''
+                    ? (string) $line['category']
+                    : $kind->group(),
                 'label'    => $line['label'] ?? null,
                 'quantity' => round($quantity, 4),
                 'unit'     => $kind->unit($energyType),
@@ -246,7 +248,7 @@ final class TariffCalculatorService
      * Bloc informatif d'auto-consommation solaire (exclu du total facturé).
      * La production PV a lieu en journée → tarifs variables T1 (jour).
      *
-     * @param array{vat_rate?: float, lines?: list<array{key: string, kind: string, amount: float, label: string|null}>} $tariff
+     * @param array{vat_rate?: float, lines?: list<array{key: string, kind: string, amount: float, label: string|null, category?: string|null}>} $tariff
      * @return array<string, float|null>
      */
     private function solarInfo(
@@ -278,7 +280,7 @@ final class TariffCalculatorService
     /**
      * Somme des taux (€/kWh) des lignes appartenant à un ensemble de kinds.
      *
-     * @param array{vat_rate?: float, lines?: list<array{key: string, kind: string, amount: float, label: string|null}>} $tariff
+     * @param array{vat_rate?: float, lines?: list<array{key: string, kind: string, amount: float, label: string|null, category?: string|null}>} $tariff
      * @param list<ComponentKind> $kinds
      */
     private function sumRatesForKinds(array $tariff, array $kinds): float

@@ -37,10 +37,17 @@ function formatMoney(v) {
 // Le moteur de calcul renvoie une liste de lignes typées {key,kind,group,label,
 // quantity,unit,rate,amount}. On les regroupe par nature — indépendant du pays.
 const COST_GROUP_LABELS = (typeof window !== 'undefined' && window.__TARIFF_GROUP_LABELS__) || {
-  energy: 'Énergie', fixed: 'Abonnements & forfaits', taxes: 'Taxes & contributions', injection: 'Injection',
+  energy: 'Énergie', distribution: 'Distribution & acheminement', fixed: 'Abonnements & forfaits',
+  taxes: 'Taxes & contributions', injection: 'Injection',
 };
 const COST_LINE_LABELS = (typeof window !== 'undefined' && window.__TARIFF_LINE_LABELS__) || {};
-const COST_GROUP_ORDER = ['energy', 'fixed', 'taxes', 'injection'];
+const COST_GROUP_ORDER = ['energy', 'distribution', 'fixed', 'taxes', 'injection'];
+// Un crédit se reconnaît à son kind (injection), indépendamment de la catégorie
+// d'affichage désormais choisie librement par l'utilisateur.
+const CREDIT_KINDS = ['injection_t1', 'injection_t2'];
+function isCreditLine(ln) {
+  return CREDIT_KINDS.indexOf(ln.kind) !== -1;
+}
 
 function costLineLabel(ln) {
   return ln.label || COST_LINE_LABELS[ln.key] || ln.key;
@@ -59,8 +66,9 @@ function costLinesHtml(c, row) {
   COST_GROUP_ORDER.forEach((g) => {
     const lines = (c.lines || []).filter((l) => l.group === g && (Number(l.amount) || Number(l.rate)));
     if (!lines.length) return;
-    html += `<div class="cost-group-label ${g === 'injection' ? 'cost-group-label--credit' : ''}">${COST_GROUP_LABELS[g] || g}</div>`;
-    lines.forEach((l) => { html += row(costLineLabel(l), costLineDetail(l), l.amount, g === 'injection' ? 'credit' : ''); });
+    const allCredit = lines.every(isCreditLine);
+    html += `<div class="cost-group-label ${allCredit ? 'cost-group-label--credit' : ''}">${COST_GROUP_LABELS[g] || g}</div>`;
+    lines.forEach((l) => { html += row(costLineLabel(l), costLineDetail(l), l.amount, isCreditLine(l) ? 'credit' : ''); });
   });
   return html;
 }

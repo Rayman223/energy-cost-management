@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 use App\Domain\ComponentKind;
 use App\Domain\EuropeanCountries;
+use App\Domain\TariffCategory;
 use App\Domain\TariffLineCatalog;
 use App\Domain\TariffTemplateCatalog;
 use App\Http\SecurityHeaders;
@@ -132,11 +133,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
                 $usedKeys[$key] = true;
 
+                // Catégorie d'affichage choisie ; valeur inconnue/vide → défaut dérivé du kind.
+                $category = TariffCategory::tryFrom(strtolower(trim((string) ($row['category'] ?? ''))))
+                    ?? TariffCategory::defaultForKind($kind);
+
                 $lines[] = [
-                    'key'    => $key,
-                    'amount' => $val,
-                    'kind'   => $kind->value,
-                    'label'  => $isCustom ? $label : null,
+                    'key'      => $key,
+                    'amount'   => $val,
+                    'kind'     => $kind->value,
+                    'label'    => $isCustom ? $label : null,
+                    'category' => $category->value,
                 ];
             }
 
@@ -200,7 +206,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             // Structure seule (sans montants) enregistrée comme template réutilisable.
             if ($saveAsTemplate) {
                 $fields = array_map(
-                    static fn (array $l): array => ['key' => $l['key'], 'kind' => $l['kind'], 'label' => $l['label']],
+                    static fn (array $l): array => ['key' => $l['key'], 'kind' => $l['kind'], 'label' => $l['label'], 'category' => $l['category']],
                     $lines,
                 );
                 $templateRepo->save($energyType, $country, $tplName, $fields, $tplVisibility);
@@ -292,12 +298,16 @@ $buildFieldsFromSpecs = static function (array $specs, array $amounts, string $e
     foreach ($specs as $spec) {
         $key    = $spec['key'];
         $custom = !in_array($key, $catalogKeys, true);
+        $kind   = ComponentKind::fromStringOrDefault((string) $spec['kind']);
+        // Catégorie stockée si valide, sinon défaut dérivé du kind (legacy / template fourni).
+        $category = TariffCategory::tryFrom((string) ($spec['category'] ?? '')) ?? TariffCategory::defaultForKind($kind);
         $out[] = [
-            'key'    => $key,
-            'kind'   => $spec['kind'],
-            'label'  => $fieldLabel($energy, $key, $spec['label'] ?? null),
-            'amount' => isset($amounts[$key]) ? rtrim(rtrim(number_format($amounts[$key], 7, '.', ''), '0'), '.') : '',
-            'custom' => $custom,
+            'key'      => $key,
+            'kind'     => $spec['kind'],
+            'label'    => $fieldLabel($energy, $key, $spec['label'] ?? null),
+            'amount'   => isset($amounts[$key]) ? rtrim(rtrim(number_format($amounts[$key], 7, '.', ''), '0'), '.') : '',
+            'custom'   => $custom,
+            'category' => $category->value,
         ];
     }
 
@@ -307,7 +317,7 @@ $buildFieldsFromSpecs = static function (array $specs, array $amounts, string $e
 if ($editGrid !== null) {
     $specs = $amounts = [];
     foreach ($editGrid->lines as $line) {
-        $specs[]            = ['key' => $line->key, 'kind' => $line->kind->value, 'label' => $line->label];
+        $specs[]            = ['key' => $line->key, 'kind' => $line->kind->value, 'label' => $line->label, 'category' => $line->category()->value];
         $amounts[$line->key] = $line->amount;
     }
     $formFields = $buildFieldsFromSpecs($specs, $amounts, $energy);
@@ -332,7 +342,7 @@ if ($editGrid !== null) {
         $tpl = $templateRepo->findById((int) substr($templateParam, 5));
         if ($tpl !== null && $tpl['energy_type'] === $energy) {
             $imported = array_map(
-                static fn (array $f): array => ['key' => $f['key'], 'kind' => $f['kind'], 'label' => $f['label']],
+                static fn (array $f): array => ['key' => $f['key'], 'kind' => $f['kind'], 'label' => $f['label'], 'category' => $f['category'] ?? null],
                 $tpl['fields'],
             );
             if ($tpl['country'] !== null) $formCountry = $tpl['country'];
@@ -346,7 +356,7 @@ if ($editGrid !== null) {
         // Reprise de la dernière grille (structure + valeurs).
         $specs = $amounts = [];
         foreach ($latest->lines as $line) {
-            $specs[]            = ['key' => $line->key, 'kind' => $line->kind->value, 'label' => $line->label];
+            $specs[]            = ['key' => $line->key, 'kind' => $line->kind->value, 'label' => $line->label, 'category' => $line->category()->value];
             $amounts[$line->key] = $line->amount;
         }
         $formFields = $buildFieldsFromSpecs($specs, $amounts, $energy);
@@ -361,8 +371,15 @@ if ($editGrid !== null) {
     }
 }
 
-// Groupes d'affichage (ordre fixe) + libellés des kinds pour le sélecteur custom.
-$groupOrder = ['energy', 'fixed', 'taxes', 'injection'];
+// Catégories d'affichage (ordre fixe, jeu fermé) + libellés des kinds pour le sélecteur custom.
+// $relevantCategories : celles affichées même vides pour l'énergie active (l'injection
+// ne concerne que l'électricité) ; les autres n'apparaissent que si elles portent des lignes.
+$groupOrder = TariffCategory::values();
+$relevantCategories = TariffCategory::relevantFor($energy);
+$categoryOptions = [];
+foreach (TariffCategory::cases() as $c) {
+    $categoryOptions[$c->value] = $view->t('tariffs.group_' . $c->value);
+}
 $kindOptions = [];
 foreach (ComponentKind::cases() as $k) {
     $kindOptions[$k->value] = $view->t('tariffs.kind.' . $k->value);
@@ -387,8 +404,10 @@ echo $view->render('tariffs', [
     'userTemplates'    => $userTemplates,
     'usageCounts'      => $usageCounts,
     'sourceTemplate'   => $sourceTemplate,
-    'groupOrder'       => $groupOrder,
-    'kindOptions'      => $kindOptions,
+    'groupOrder'          => $groupOrder,
+    'relevantCategories'  => $relevantCategories,
+    'categoryOptions'     => $categoryOptions,
+    'kindOptions'         => $kindOptions,
     'today'            => $today,
     'isAdmin'          => $isAdmin,
     'available'        => Locale::available($config),

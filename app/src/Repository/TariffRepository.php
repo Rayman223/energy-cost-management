@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Repository;
 
 use App\Domain\ComponentKind;
+use App\Domain\TariffCategory;
 use App\Domain\TariffGrid;
 use App\Domain\TariffLine;
 use App\Repository\Contract\TariffRepositoryInterface;
@@ -93,7 +94,7 @@ final class TariffRepository implements TariffRepositoryInterface
         );
     }
 
-    /** @param list<array{key: string, amount: float, kind: string, label: ?string}> $lines */
+    /** @param list<array{key: string, amount: float, kind: string, label: ?string, category?: ?string}> $lines */
     public function saveGrid(
         string $energyType,
         string $name,
@@ -138,7 +139,7 @@ final class TariffRepository implements TariffRepositoryInterface
         return $id;
     }
 
-    /** @param list<array{key: string, amount: float, kind: string, label: ?string}> $lines */
+    /** @param list<array{key: string, amount: float, kind: string, label: ?string, category?: ?string}> $lines */
     public function updateGrid(
         int $id,
         string $energyType,
@@ -194,23 +195,24 @@ final class TariffRepository implements TariffRepositoryInterface
     /**
      * Insère les lignes d'une grille en préservant leur ordre (sort_order).
      *
-     * @param list<array{key: string, amount: float, kind: string, label: ?string}> $lines
+     * @param list<array{key: string, amount: float, kind: string, label: ?string, category?: ?string}> $lines
      */
     private function insertLines(int $gridId, array $lines): void
     {
         $lineStmt = $this->pdo->prepare(
-            'INSERT INTO tariff_grid_lines (tariff_grid_id, line_key, component_kind, label, sort_order, amount_per_kwh)
-             VALUES (:grid_id, :key, :kind, :label, :sort, :amount)'
+            'INSERT INTO tariff_grid_lines (tariff_grid_id, line_key, component_kind, category, label, sort_order, amount_per_kwh)
+             VALUES (:grid_id, :key, :kind, :category, :label, :sort, :amount)'
         );
         $sort = 0;
         foreach ($lines as $line) {
             $lineStmt->execute([
-                'grid_id' => $gridId,
-                'key'     => $line['key'],
-                'kind'    => $line['kind'],
-                'label'   => $line['label'] ?? null,
-                'sort'    => $sort++,
-                'amount'  => $line['amount'],
+                'grid_id'  => $gridId,
+                'key'      => $line['key'],
+                'kind'     => $line['kind'],
+                'category' => $line['category'] ?? null,
+                'label'    => $line['label'] ?? null,
+                'sort'     => $sort++,
+                'amount'   => $line['amount'],
             ]);
         }
     }
@@ -301,7 +303,7 @@ final class TariffRepository implements TariffRepositoryInterface
     private function fetchLines(int $gridId): array
     {
         $stmt = $this->pdo->prepare(
-            'SELECT line_key, amount_per_kwh, component_kind, label, sort_order
+            'SELECT line_key, amount_per_kwh, component_kind, category, label, sort_order
              FROM tariff_grid_lines WHERE tariff_grid_id = :id
              ORDER BY sort_order, id'
         );
@@ -330,7 +332,7 @@ final class TariffRepository implements TariffRepositoryInterface
 
         $placeholders = implode(',', array_fill(0, count($ids), '?'));
         $stmt = $this->pdo->prepare(
-            "SELECT tariff_grid_id, line_key, amount_per_kwh, component_kind, label, sort_order
+            "SELECT tariff_grid_id, line_key, amount_per_kwh, component_kind, category, label, sort_order
              FROM tariff_grid_lines
              WHERE tariff_grid_id IN ($placeholders)
              ORDER BY sort_order, id"
@@ -350,12 +352,17 @@ final class TariffRepository implements TariffRepositoryInterface
      */
     private function hydrateLine(array $row): TariffLine
     {
+        $category = isset($row['category']) && $row['category'] !== ''
+            ? TariffCategory::tryFrom((string) $row['category'])
+            : null;
+
         return new TariffLine(
             key: (string) $row['line_key'],
             amount: (float) $row['amount_per_kwh'],
             kind: ComponentKind::fromStringOrDefault((string) $row['component_kind']),
             label: $row['label'] !== null && $row['label'] !== '' ? (string) $row['label'] : null,
             sortOrder: (int) $row['sort_order'],
+            category: $category,
         );
     }
 

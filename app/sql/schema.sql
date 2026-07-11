@@ -34,6 +34,7 @@ CREATE TABLE IF NOT EXISTS tariff_grid_lines (
     tariff_grid_id  BIGINT UNSIGNED NOT NULL,
     line_key        VARCHAR(100) NOT NULL COMMENT 'Cle tarifaire (energy_t1, distribution_fixed, prosumer_annual...)',
     component_kind  VARCHAR(30) NOT NULL DEFAULT 'per_kwh' COMMENT 'Type de composante (moteur generique) : energy_flat, per_kwh, per_m3, fixed_monthly, fixed_annual, injection_t1...',
+    category        VARCHAR(30) NULL COMMENT 'Categorie d affichage choisie (NULL = derivee du component_kind)',
     label           VARCHAR(150) NULL COMMENT 'Libelle custom (NULL = libelle du catalogue deduit de line_key)',
     sort_order      SMALLINT NOT NULL DEFAULT 0,
     amount_per_kwh  DECIMAL(12,7) NOT NULL COMMENT 'Montant en EUR. Unite reelle selon le kind (EUR/kWh, EUR/m3, EUR/mois ou EUR/an)',
@@ -65,6 +66,7 @@ CREATE TABLE IF NOT EXISTS tariff_template_fields (
     template_id    BIGINT UNSIGNED NOT NULL,
     line_key       VARCHAR(100) NOT NULL,
     component_kind VARCHAR(30) NOT NULL,
+    category       VARCHAR(30) NULL COMMENT 'Categorie d affichage choisie (NULL = derivee du component_kind)',
     label          VARCHAR(150) NULL,
     sort_order     SMALLINT NOT NULL DEFAULT 0,
     CONSTRAINT fk_ttf_template

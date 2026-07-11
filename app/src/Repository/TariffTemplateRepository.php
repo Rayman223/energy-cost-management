@@ -31,7 +31,7 @@ final class TariffTemplateRepository
      * + publics) et les templates PUBLICS des autres comptes. Champs chargés en
      * une seule requête (évite le N+1).
      *
-     * @return list<array{id:int, energy_type:string, country:?string, name:string, visibility:string, is_owner:bool, fields:list<array{key:string, kind:string, label:?string, sort:int}>}>
+     * @return list<array{id:int, energy_type:string, country:?string, name:string, visibility:string, is_owner:bool, fields:list<array{key:string, kind:string, label:?string, sort:int, category:?string}>}>
      */
     public function findForEnergy(string $energyType): array
     {
@@ -69,7 +69,7 @@ final class TariffTemplateRepository
      * Un template par id : accessible s'il appartient à l'utilisateur OU s'il est
      * public. Un template privé d'un autre compte reste invisible (renvoie null).
      *
-     * @return array{id:int, energy_type:string, country:?string, name:string, visibility:string, is_owner:bool, fields:list<array{key:string, kind:string, label:?string, sort:int}>}|null
+     * @return array{id:int, energy_type:string, country:?string, name:string, visibility:string, is_owner:bool, fields:list<array{key:string, kind:string, label:?string, sort:int, category:?string}>}|null
      */
     public function findById(int $id): ?array
     {
@@ -101,8 +101,8 @@ final class TariffTemplateRepository
     /**
      * Crée un template et ses champs. Renvoie l'identifiant créé.
      *
-     * @param list<array{key:string, kind:string, label:?string}> $fields
-     * @param 'private'|'public'                                   $visibility
+     * @param list<array{key:string, kind:string, label:?string, category?:?string}> $fields
+     * @param 'private'|'public'                                                      $visibility
      */
     public function save(string $energyType, ?string $country, string $name, array $fields, string $visibility = 'private'): int
     {
@@ -124,17 +124,18 @@ final class TariffTemplateRepository
             $id = (int) $this->pdo->lastInsertId();
 
             $fieldStmt = $this->pdo->prepare(
-                'INSERT INTO tariff_template_fields (template_id, line_key, component_kind, label, sort_order)
-                 VALUES (:tid, :key, :kind, :label, :sort)'
+                'INSERT INTO tariff_template_fields (template_id, line_key, component_kind, category, label, sort_order)
+                 VALUES (:tid, :key, :kind, :category, :label, :sort)'
             );
             $sort = 0;
             foreach ($fields as $field) {
                 $fieldStmt->execute([
-                    'tid'   => $id,
-                    'key'   => $field['key'],
-                    'kind'  => $field['kind'],
-                    'label' => $field['label'] ?? null,
-                    'sort'  => $sort++,
+                    'tid'      => $id,
+                    'key'      => $field['key'],
+                    'kind'     => $field['kind'],
+                    'category' => $field['category'] ?? null,
+                    'label'    => $field['label'] ?? null,
+                    'sort'     => $sort++,
                 ]);
             }
 
@@ -180,7 +181,7 @@ final class TariffTemplateRepository
 
     /**
      * @param  list<int> $ids
-     * @return array<int, list<array{key:string, kind:string, label:?string, sort:int}>>
+     * @return array<int, list<array{key:string, kind:string, label:?string, sort:int, category:?string}>>
      */
     private function fetchFieldsForIds(array $ids): array
     {
@@ -190,7 +191,7 @@ final class TariffTemplateRepository
 
         $placeholders = implode(',', array_fill(0, count($ids), '?'));
         $stmt = $this->pdo->prepare(
-            "SELECT template_id, line_key, component_kind, label, sort_order
+            "SELECT template_id, line_key, component_kind, category, label, sort_order
              FROM tariff_template_fields
              WHERE template_id IN ($placeholders)
              ORDER BY sort_order, id"
@@ -200,10 +201,11 @@ final class TariffTemplateRepository
         $map = [];
         foreach ($stmt->fetchAll() as $row) {
             $map[(int) $row['template_id']][] = [
-                'key'   => (string) $row['line_key'],
-                'kind'  => (string) $row['component_kind'],
-                'label' => $row['label'] !== null ? (string) $row['label'] : null,
-                'sort'  => (int) $row['sort_order'],
+                'key'      => (string) $row['line_key'],
+                'kind'     => (string) $row['component_kind'],
+                'label'    => $row['label'] !== null ? (string) $row['label'] : null,
+                'sort'     => (int) $row['sort_order'],
+                'category' => $row['category'] !== null && $row['category'] !== '' ? (string) $row['category'] : null,
             ];
         }
 

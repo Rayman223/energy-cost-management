@@ -71,7 +71,7 @@ final class TariffController
      * per_kwh). Rétrocompat des intégrations existantes.
      *
      * @param  array<string, mixed> $rawLines
-     * @return list<array{key: string, amount: float, kind: string, label: ?string}>
+     * @return list<array{key: string, amount: float, kind: string, label: ?string, category: ?string}>
      */
     private function normalizeLines(string $energyType, array $rawLines): array
     {
@@ -82,10 +82,11 @@ final class TariffController
             }
             $key      = (string) $key;
             $lines[] = [
-                'key'    => $key,
-                'amount' => (float) $amount,
-                'kind'   => TariffLineCatalog::kindFor($energyType, $key)->value,
-                'label'  => null,
+                'key'      => $key,
+                'amount'   => (float) $amount,
+                'kind'     => TariffLineCatalog::kindFor($energyType, $key)->value,
+                'label'    => null,
+                'category' => null, // dérivée du kind à l'affichage (API plate, sans catégorie)
             ];
         }
 

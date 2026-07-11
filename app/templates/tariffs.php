@@ -13,7 +13,7 @@ use App\Domain\TariffLineCatalog;
  * @var list<string>                                                         $energyTypes
  * @var TariffGrid[]                                                         $grids       Grilles de l'énergie active
  * @var TariffGrid|null                                                      $editGrid
- * @var list<array{key:string,kind:string,label:string,amount:string,custom:bool}> $formFields
+ * @var list<array{key:string,kind:string,label:string,amount:string,custom:bool,category:string}> $formFields
  * @var string|null                                                          $formCountry
  * @var string                                                               $formCurrency
  * @var float                                                                $formVat
@@ -22,15 +22,17 @@ use App\Domain\TariffLineCatalog;
  * @var list<array{code:string,energy_type:string,country:?string,name_key:string,fields:list<array{key:string,kind:ComponentKind,label:string}>}> $builtinTemplates
  * @var list<array{id:int,energy_type:string,country:?string,name:string,fields:list<array{key:string,kind:string,label:?string,sort:int}>}> $userTemplates
  * @var list<string>                                                         $groupOrder
+ * @var list<string>                                                         $relevantCategories  catégories affichées même vides pour l'énergie active
+ * @var array<string,string>                                                 $categoryOptions  value catégorie => libellé
  * @var array<string,string>                                                 $kindOptions
  * @var string                                                               $today
  * @var bool                                                                 $isAdmin
  */
 
-// Regroupement des lignes du formulaire par groupe d'affichage (dérivé du kind).
+// Regroupement des lignes du formulaire par catégorie choisie (défaut : dérivée du kind).
 $grouped = [];
 foreach ($formFields as $i => $f) {
-    $group = ComponentKind::fromStringOrDefault($f['kind'])->group();
+    $group = $f['category'] ?? ComponentKind::fromStringOrDefault($f['kind'])->group();
     $grouped[$group][] = ['i' => $i] + $f;
 }
 $nextIndex = count($formFields);
@@ -303,10 +305,11 @@ $energyLabels = [
       <?php endif; ?>
     </div>
 
-    <!-- Lignes tarifaires groupées par nature -->
+    <!-- Lignes tarifaires groupées par catégorie (choisie par l'utilisateur) -->
     <div class="lines-wrap">
       <?php foreach ($groupOrder as $group): ?>
-        <?php if (empty($grouped[$group]) && $group !== 'taxes') continue; ?>
+        <?php // Catégorie vide et non pertinente pour cette énergie (ex. Injection en gaz/eau) : masquée.
+              if (empty($grouped[$group]) && !in_array($group, $relevantCategories, true)) continue; ?>
         <div class="line-group" data-group="<?= $this->e($group) ?>">
           <div class="line-group-title"><?= $this->te('tariffs.group_' . $group) ?></div>
           <div class="form-grid line-group-body">
@@ -328,17 +331,20 @@ $energyLabels = [
               <label class="form-label"><?= $this->e($f['label']) ?> <span class="unit"><?= $this->e(ComponentKind::fromStringOrDefault($f['kind'])->unit($energy)) ?></span></label>
               <input type="hidden" name="lines[<?= $i ?>][kind]" value="<?= $this->e($f['kind']) ?>">
               <?php endif; ?>
+              <select name="lines[<?= $i ?>][category]" class="form-select line-category-select" aria-label="<?= $this->e($this->t('tariffs.category')) ?>">
+                <?php foreach ($categoryOptions as $cv => $clabel): ?>
+                <option value="<?= $this->e($cv) ?>" <?= $f['category'] === $cv ? 'selected' : '' ?>><?= $this->e($clabel) ?></option>
+                <?php endforeach; ?>
+              </select>
               <div class="line-amount-row">
                 <input type="number" name="lines[<?= $i ?>][amount]" step="0.0000001" class="form-input" placeholder="0.0000000" value="<?= $this->e($f['amount']) ?>">
                 <?php if ($f['custom']): ?><button type="button" class="btn btn-ghost btn-sm line-remove" data-remove-line aria-label="<?= $this->e($this->t('tariffs.remove_field')) ?>">×</button><?php endif; ?>
               </div>
             </div>
             <?php endforeach; ?>
-            <?php if ($group === 'taxes'): ?>
             <div class="form-row full add-field-row">
               <button type="button" class="btn btn-ghost btn-sm" data-add-line><?= $this->te('tariffs.add_field') ?></button>
             </div>
-            <?php endif; ?>
           </div>
         </div>
       <?php endforeach; ?>
@@ -378,6 +384,11 @@ $energyLabels = [
     <select name="lines[__IDX__][kind]" class="form-select line-kind-select">
       <?php foreach ($kindOptions as $kv => $klabel): ?>
       <option value="<?= $this->e($kv) ?>"><?= $this->e($klabel) ?></option>
+      <?php endforeach; ?>
+    </select>
+    <select name="lines[__IDX__][category]" class="form-select line-category-select" aria-label="<?= $this->e($this->t('tariffs.category')) ?>">
+      <?php foreach ($categoryOptions as $cv => $clabel): ?>
+      <option value="<?= $this->e($cv) ?>"><?= $this->e($clabel) ?></option>
       <?php endforeach; ?>
     </select>
     <div class="line-amount-row">

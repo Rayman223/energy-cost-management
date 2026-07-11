@@ -118,6 +118,7 @@
   .line-group-body { grid-template-columns:1fr 1fr; }
   .line-item.is-custom { gap:8px; }
   .line-kind-select { margin-top:2px; }
+  .line-category-select { margin-top:2px; }
   .line-amount-row { display:flex; gap:8px; align-items:center; }
   .line-amount-row .form-input { flex:1; }
   .line-remove { padding:5px 11px; font-size:1rem; line-height:1; }
