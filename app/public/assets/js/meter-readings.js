@@ -1,4 +1,10 @@
-const METER_I18N = (typeof window !== 'undefined' && window.METER_I18N) || {};
+// Libellés i18n lus depuis le data block JSON (#meter-data, non exécutable →
+// compatible CSP sans nonce). Voir meter_readings.php / #98.
+const METER_I18N = (() => {
+  const el = document.getElementById('meter-data');
+  if (!el) return {};
+  try { return JSON.parse(el.textContent).i18n || {}; } catch (e) { return {}; }
+})();
 const tr = (key, fallback) => METER_I18N[key] || fallback;
 
 function setFeedback(id, text, cls = '') {

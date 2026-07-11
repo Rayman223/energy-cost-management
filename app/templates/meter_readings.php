@@ -11,15 +11,10 @@ $now = date('H:i');
 <!DOCTYPE html>
 <html lang="<?= $this->e($this->locale()) ?>">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title><?= $this->te('meter.title') ?> — Manage Energy</title>
-<script nonce="<?= $this->e(\App\Http\SecurityHeaders::nonce()) ?>">(function(){try{var t=localStorage.getItem('theme');if(!t)t=window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';document.documentElement.setAttribute('data-theme',t);}catch(e){document.documentElement.setAttribute('data-theme','light');}})();</script>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="<?= \App\Support\Assets::url('assets/css/tokens.css') ?>">
-<link rel="stylesheet" href="<?= \App\Support\Assets::url('assets/css/dashboard.css') ?>">
+<?= $this->partial('_head', [
+    'title' => $this->t('meter.title') . ' — Manage Energy',
+    'css'   => ['assets/css/dashboard.css'],
+]) ?>
 </head>
 <body>
 <div class="wrap">
@@ -111,20 +106,25 @@ $now = date('H:i');
     <div class="gas-history"><table><thead><tr><th><?= $this->te('meter.date_time') ?></th><th><?= $this->te('meter.index_m3') ?></th><th>Delta</th></tr></thead><tbody id="water-tbody"><tr><td colspan="3" class="td-empty">…</td></tr></tbody></table></div>
   </div>
 </div>
-<script nonce="<?= $this->e(\App\Http\SecurityHeaders::nonce()) ?>">
-window.METER_I18N = <?= json_encode([
-    'invalidUtility' => $this->t('meter.invalid_utility'),
-    'invalidElectricity' => $this->t('meter.invalid_electricity'),
-    'sending' => $this->t('meter.sending'),
-    'saved' => $this->t('meter.saved'),
-    'unknownError' => $this->t('meter.unknown_error'),
-    'networkError' => $this->t('meter.network_error'),
-    'emptyGas' => $this->t('meter.empty_gas'),
-    'emptyWater' => $this->t('meter.empty_water'),
-    'emptyElectricity' => $this->t('meter.empty_electricity'),
-], JSON_UNESCAPED_UNICODE) ?>;
-</script>
-<script defer src="<?= \App\Support\Assets::url('assets/js/theme.js') ?>"></script>
+<?php
+    // État serveur (libellés i18n) transmis à meter-readings.js via un data block
+    // JSON. Un <script type="application/json"> n'est jamais exécuté → hors
+    // script-src, donc compatible avec la CSP durcie (sans nonce). #98
+    $meterData = [
+        'i18n' => [
+            'invalidUtility' => $this->t('meter.invalid_utility'),
+            'invalidElectricity' => $this->t('meter.invalid_electricity'),
+            'sending' => $this->t('meter.sending'),
+            'saved' => $this->t('meter.saved'),
+            'unknownError' => $this->t('meter.unknown_error'),
+            'networkError' => $this->t('meter.network_error'),
+            'emptyGas' => $this->t('meter.empty_gas'),
+            'emptyWater' => $this->t('meter.empty_water'),
+            'emptyElectricity' => $this->t('meter.empty_electricity'),
+        ],
+    ];
+?>
+<script type="application/json" id="meter-data"><?= json_encode($meterData, JSON_HEX_TAG | JSON_UNESCAPED_UNICODE) ?></script>
 <script defer src="<?= \App\Support\Assets::url('assets/js/meter-readings.js') ?>"></script>
 </body>
 </html>
