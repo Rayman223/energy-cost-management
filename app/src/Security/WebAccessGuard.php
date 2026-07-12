@@ -31,8 +31,7 @@ final class WebAccessGuard
             return;
         }
 
-        $expectedUser = (string) ($security['basic_auth']['username'] ?? '');
-        $expectedPass = (string) ($security['basic_auth']['password'] ?? '');
+        [$expectedUser, $expectedPass] = self::expectedCredentials($security);
 
         if ($expectedUser === '' || $expectedPass === '') {
             self::deny(500, self::message($lang, 'invalid_config'), $jsonResponse);
@@ -44,10 +43,7 @@ final class WebAccessGuard
 
         [$user, $pass] = self::extractProvidedCredentials();
 
-        $validUser = hash_equals($expectedUser, $user);
-        $validPass = hash_equals($expectedPass, $pass);
-
-        if ($validUser && $validPass) {
+        if (self::credentialsMatch($security, $user, $pass)) {
             if ($jsonResponse === false) {
                 self::markSessionAuthenticated($expectedUser, $expectedPass);
             }
@@ -67,22 +63,50 @@ final class WebAccessGuard
     /** @param array<string, mixed> $security */
     public static function authenticateForm(array $security, string $username, string $password): bool
     {
-        $expectedUser = (string) ($security['basic_auth']['username'] ?? '');
-        $expectedPass = (string) ($security['basic_auth']['password'] ?? '');
+        if (self::credentialsMatch($security, $username, $password) === false) {
+            return false;
+        }
+
+        [$expectedUser, $expectedPass] = self::expectedCredentials($security);
+        self::markSessionAuthenticated($expectedUser, $expectedPass);
+
+        return true;
+    }
+
+    /**
+     * Compare le couple fourni aux identifiants attendus, sans effet de bord (pas
+     * de session). Les valeurs attendues comme fournies sont `trim`ées : un
+     * espace/retour-ligne parasite (copier-coller depuis config.php) ne doit pas
+     * faire échouer la connexion.
+     *
+     * @param array<string, mixed> $security
+     */
+    public static function credentialsMatch(array $security, string $username, string $password): bool
+    {
+        [$expectedUser, $expectedPass] = self::expectedCredentials($security);
 
         if ($expectedUser === '' || $expectedPass === '') {
             return false;
         }
 
-        $validUser = hash_equals($expectedUser, $username);
-        $validPass = hash_equals($expectedPass, $password);
+        return hash_equals($expectedUser, trim($username))
+            && hash_equals($expectedPass, trim($password));
+    }
 
-        if ($validUser && $validPass) {
-            self::markSessionAuthenticated($expectedUser, $expectedPass);
-            return true;
-        }
-
-        return false;
+    /**
+     * Identifiants attendus, normalisés (`trim`). Source unique pour la
+     * comparaison ET la dérivation du jeton de session, afin que les deux voies
+     * (formulaire + HTTP Basic) restent cohérentes.
+     *
+     * @param array<string, mixed> $security
+     * @return array{0:string,1:string}
+     */
+    private static function expectedCredentials(array $security): array
+    {
+        return [
+            trim((string) ($security['basic_auth']['username'] ?? '')),
+            trim((string) ($security['basic_auth']['password'] ?? '')),
+        ];
     }
 
     /**
