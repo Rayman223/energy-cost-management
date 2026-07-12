@@ -131,7 +131,7 @@ location / {
 location ~ \.php$ {
     try_files $uri /index.php$is_args$args;
     include fastcgi_params;
-    fastcgi_pass unix:/var/run/php-fpm.sock;   # SWAG's PHP-FPM socket
+    fastcgi_pass 127.0.0.1:9000;               # SWAG's PHP-FPM (TCP, cf. default.conf)
     fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
 }
 ```
