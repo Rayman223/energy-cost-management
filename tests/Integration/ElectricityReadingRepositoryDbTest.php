@@ -158,6 +158,34 @@ final class ElectricityReadingRepositoryDbTest extends TestCase
         self::assertSame(2, (int) $stmt->fetchColumn());
     }
 
+    public function testGetHistoryIncludesReadingsOlderThan30Days(): void
+    {
+        $rows = $this->repo()->getHistory();
+        $timestamps = array_column($rows, 'reading_at');
+
+        // '2025-11-30 23:00:00' est antidaté de > 30 jours : masqué par l'ancienne
+        // fenêtre glissante, désormais visible (borne par nombre, pas par date).
+        self::assertContains('2025-11-30 23:00:00', $timestamps);
+        self::assertContains('2026-07-10 12:00:00', $timestamps);
+        // 11 horodatages distincts seedés, tous sous la limite par défaut.
+        self::assertCount(11, $rows);
+        // DESC : plus récent d'abord.
+        self::assertSame('2026-07-10 12:00:00', $timestamps[0]);
+        // Pivot par registre renseigné (import_t1 = 350.0 au dernier relevé).
+        self::assertEqualsWithDelta(350.0, $rows[0]['import_t1'], 0.001);
+    }
+
+    public function testGetHistoryCapsToMostRecentTimestamps(): void
+    {
+        $rows = $this->repo()->getHistory(3);
+
+        self::assertCount(3, $rows);
+        self::assertSame(
+            ['2026-07-10 12:00:00', '2026-07-01 01:00:00', '2026-06-30 23:00:00'],
+            array_column($rows, 'reading_at'),
+        );
+    }
+
     private function pdo(): PDO
     {
         if ($this->pdo === null) {

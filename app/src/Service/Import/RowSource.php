@@ -24,7 +24,9 @@ final class RowSource
      */
     public static function fromCsv($handle, string $delimiter = ','): iterable
     {
-        $header = fgetcsv($handle, 0, $delimiter);
+        // escape: '' → conforme RFC 4180 (pas d'échappement backslash) et aligné
+        // sur le futur défaut de PHP ; requis explicitement depuis PHP 8.4.
+        $header = fgetcsv($handle, 0, $delimiter, escape: '');
         if ($header === false || $header === [null]) {
             throw new InvalidArgumentException('CSV vide ou en-tête manquant.');
         }
@@ -33,7 +35,7 @@ final class RowSource
         $columns = array_map(static fn($h): string => strtolower(trim((string) $h)), $header);
 
         $lineNo = 1;
-        while (($line = fgetcsv($handle, 0, $delimiter)) !== false) {
+        while (($line = fgetcsv($handle, 0, $delimiter, escape: '')) !== false) {
             $lineNo++;
 
             // Ligne vide (fgetcsv renvoie [null] pour une ligne blanche).

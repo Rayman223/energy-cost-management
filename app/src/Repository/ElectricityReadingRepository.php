@@ -125,21 +125,20 @@ final class ElectricityReadingRepository implements LegacyDailyRepositoryInterfa
     // -------------------------------------------------------------------------
 
     /**
-     * Historique des relevés électricité sur les $days derniers jours : chaque
-     * horodatage distinct avec ses index par registre (null si le registre n'a
+     * Historique des relevés électricité : les $limit horodatages distincts les
+     * plus récents, chacun avec ses index par registre (null si le registre n'a
      * pas de valeur à cet instant). DESC (plus récent d'abord).
      *
-     * Borné par fenêtre temporelle (et non par nombre de lignes) car le cron
-     * horaire alimente ce registre : 50 lignes ne couvriraient que ~2 jours et
-     * masqueraient les saisies manuelles. Fenêtre alignée sur
-     * getDailyDeltasForChart() ; une saisie (même antidatée) sur les $days
-     * derniers jours reste donc visible.
+     * Borné par nombre d'horodatages distincts (et non par fenêtre temporelle)
+     * afin qu'une saisie manuelle — même antidatée de plusieurs mois — reste
+     * visible, tout en plafonnant le volume pour les comptes alimentés par le
+     * cron horaire.
      *
      * @return list<array{reading_at: string, import_t1: float|null, import_t2: float|null, export_t1: float|null, export_t2: float|null, production: float|null}>
      */
-    public function getHistory(int $days = 30): array
+    public function getHistory(int $limit = 100): array
     {
-        $days = max(1, $days);
+        $limit = max(1, $limit);
 
         $idToKey = [];
         foreach (ElectricityIngestionInterface::REGISTERS as $key) {
@@ -155,14 +154,25 @@ final class ElectricityReadingRepository implements LegacyDailyRepositoryInterfa
         $ids = array_keys($idToKey);
         $placeholders = implode(', ', array_fill(0, count($ids), '?'));
 
+        // $limit casté en int et interpolé : sûr (entier), et évite la limitation
+        // MySQL « LIMIT paramétré dans une sous-requête IN ». Le sous-SELECT
+        // dérivé « recent » contourne « LIMIT dans une sous-requête IN ».
         $stmt = $this->pdo->prepare(
             "SELECT reading_at, register_id, index_value
              FROM meter_readings
              WHERE register_id IN ($placeholders)
-               AND reading_at >= DATE_SUB(CURDATE(), INTERVAL ? DAY)
+               AND reading_at IN (
+                   SELECT reading_at FROM (
+                       SELECT DISTINCT reading_at
+                       FROM meter_readings
+                       WHERE register_id IN ($placeholders)
+                       ORDER BY reading_at DESC
+                       LIMIT $limit
+                   ) recent
+               )
              ORDER BY reading_at DESC"
         );
-        $stmt->execute([...$ids, $days]);
+        $stmt->execute([...$ids, ...$ids]);
 
         $rows = [];
         foreach ($stmt->fetchAll() as $row) {
