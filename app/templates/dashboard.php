@@ -33,7 +33,7 @@ $fmt = function (mixed $v, int $dec = 3, string $unit = 'kWh'): string {
 <html lang="<?= $this->e($this->locale()) ?>">
 <head>
 <?= $this->partial('_head', [
-    'title'       => 'Manage Energy — Brussels',
+    'title'       => 'Manage Energy',
     'css'         => ['assets/css/dashboard.css'],
     'preconnects' => ['https://cdn.jsdelivr.net'],
 ]) ?>
