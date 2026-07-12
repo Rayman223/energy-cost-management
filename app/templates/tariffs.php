@@ -360,7 +360,7 @@ $energyLabels = [
     <div class="save-tpl-row">
       <label class="form-label">
         <input type="checkbox" name="save_as_template" value="1" data-save-tpl-toggle>
-        <?= $this->te('tariffs.save_as_template') ?>
+        <?= $this->te('tariffs.save_as_template') ?> <span class="unit"><?= $this->te('tariffs.save_as_template_hint') ?></span>
       </label>
       <input type="text" name="template_name" class="form-input save-tpl-name is-hidden" placeholder="<?= $this->e($this->t('tariffs.template_name')) ?>">
       <span class="save-tpl-visibility is-hidden">
