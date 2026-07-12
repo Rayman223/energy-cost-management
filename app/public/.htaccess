@@ -1,0 +1,19 @@
+# Front controller — réécrit les URLs propres (issue #106) vers index.php.
+# Équivalent Apache du `try_files $uri $uri/ /index.php` documenté côté Nginx
+# dans app/docs/installation.md. À utiliser avec un DocumentRoot = app/public
+# et `AllowOverride All` (ou au moins `FileInfo Options`) sur ce répertoire.
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+
+    # Désactiver MultiViews : la négociation de contenu ne doit pas court-circuiter
+    # le routage (on veut toujours passer par le front controller).
+    Options -MultiViews
+
+    # Ne pas réécrire les fichiers/dossiers réellement présents (assets CSS/JS/img).
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteCond %{REQUEST_FILENAME} !-d
+
+    # Tout le reste (y compris les anciennes URLs `/xxx.php`, que le front controller
+    # 308-redirige) part vers le front controller.
+    RewriteRule ^ index.php [L]
+</IfModule>

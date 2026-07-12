@@ -140,6 +140,26 @@ Old `…/xxx.php` URLs are **308-redirected** (method + body preserved, so machi
 clients still posting to `/api.php` keep working) to their clean form by the
 front controller.
 
+With **Apache**, the same fallback ships in the repo as
+[`app/public/.htaccess`](../public/.htaccess) (mirror of the Nginx `try_files`).
+Set the `DocumentRoot` to **`app/public/`**, enable `mod_rewrite`, and allow the
+bundled `.htaccess` to take effect with `AllowOverride All` (or at least
+`FileInfo Options`) on that directory — otherwise clean URLs like `/login` 404:
+
+```apache
+<VirtualHost *:80>
+    DocumentRoot /var/www/energyv3/app/public   # document root = app/public
+    <Directory /var/www/energyv3/app/public>
+        AllowOverride All        # honour the bundled .htaccess (front controller)
+        Require all granted
+    </Directory>
+</VirtualHost>
+```
+
+No rewrite rules to copy by hand: the `.htaccess` routes every non-file request to
+`index.php`, including legacy `…/xxx.php` paths (which the front controller then
+308-redirects to their clean form).
+
 ### Local development
 
 The front controller doubles as a `php -S` router (it serves existing files as-is):
