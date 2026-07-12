@@ -140,6 +140,32 @@ Old `…/xxx.php` URLs are **308-redirected** (method + body preserved, so machi
 clients still posting to `/api.php` keep working) to their clean form by the
 front controller.
 
+#### Sous-domaine SWAG (`energy.domain.com`)
+
+Pour exposer le site sur un sous-domaine dédié, le repo fournit un **site-conf**
+prêt à l'emploi : [`energy.domain.com.conf`](energy.domain.com.conf). Il reprend le
+bloc Nginx ci-dessus dans un `server { server_name energy.*; … }` servi
+directement par le PHP-FPM de SWAG (pas de reverse-proxy — l'app vit dans le
+container SWAG).
+
+1. **DNS** — pointer `energy.domain.com` (A/AAAA, ou CNAME vers l'hôte) sur
+   l'IP de l'Unraid, comme les autres sous-domaines de `domain.com`.
+2. **Certificat** — le wildcard `*.domain.com` géré par SWAG couvre déjà le
+   sous-domaine ; sinon, ajouter `energy` à la variable d'env `SUBDOMAINS` du
+   container et laisser SWAG renouveler le certificat.
+3. **Activer la conf** — copier le fichier dans les site-confs de SWAG puis
+   recharger Nginx :
+
+   ```bash
+   # depuis l'hôte Unraid ; APP_NAME=energyv3 par défaut (cf. deploy_unraid.sh)
+   cp /mnt/user/appdata/swag/www/energyv3/app/docs/energy.domain.com.conf \
+      /mnt/user/appdata/swag/nginx/site-confs/energy.domain.com.conf
+   docker exec swag nginx -t          # vérifie la syntaxe
+   docker exec swag nginx -s reload   # applique sans redémarrer le container
+   ```
+
+   Adapter `energyv3` (chemin `root`) dans le fichier si `APP_NAME` diffère.
+
 With **Apache**, the same fallback ships in the repo as
 [`app/public/.htaccess`](../public/.htaccess) (mirror of the Nginx `try_files`).
 Set the `DocumentRoot` to **`app/public/`**, enable `mod_rewrite`, and allow the
