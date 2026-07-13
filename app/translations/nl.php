@@ -22,6 +22,7 @@ return [
     'common.no'            => 'Nee',
 
     'auth.sign_in'         => 'Aanmelden',
+    'auth.signin_with'     => 'Aanmelden met {provider}',
     'auth.sign_out'        => 'Afmelden',
     'auth.signed_out'      => 'U bent afgemeld.',
     'auth.error'           => 'Aanmelden mislukt. Probeer het opnieuw.',

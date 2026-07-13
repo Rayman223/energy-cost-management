@@ -4,8 +4,11 @@ declare(strict_types=1);
 
 use App\Http\SecurityHeaders;
 use App\I18n\Locale;
+use App\Security\AuthSession;
 use App\Security\Csrf;
+use App\Security\Oidc\OidcClientFactory;
 use App\Security\WebAccessGuard;
+use App\Support\Url;
 use App\View\ViewFactory;
 
 $config = require __DIR__ . '/../bootstrap.php';
@@ -20,6 +23,45 @@ if ($basePath === '/' || $basePath === '.') {
 
 $appRoot = $basePath === '' ? '/' : ($basePath . '/');
 $security = $config['web_security'] ?? [];
+if (!is_array($security)) {
+    $security = [];
+}
+
+$next = (string) ($_GET['next'] ?? $_POST['next'] ?? $appRoot);
+if ($next === '' || str_starts_with($next, '/') === false || str_starts_with($next, '//') || str_contains($next, "\r") || str_contains($next, "\n")) {
+    $next = $appRoot;
+}
+
+$oidc = $config['oidc'] ?? [];
+$oidcEnabled = is_array($oidc) && ($oidc['enabled'] ?? false) === true;
+
+// ── Mode OIDC : page d'atterrissage avec bouton fournisseur ──────────────────
+if ($oidcEnabled) {
+    // L'authentification est portée par la session (comme AuthGuard) : ici on
+    // n'applique que l'allowlist IP, jamais le Basic Auth.
+    WebAccessGuard::enforceIp($security);
+
+    // Déjà connecté : inutile d'afficher la page, on repart vers la cible.
+    if (AuthSession::userId() !== null) {
+        header('Location: ' . $next, true, 302);
+        exit;
+    }
+
+    $issuer = (string) ($oidc['issuer'] ?? '');
+    $locale = Locale::resolve($config, null);
+    $view = ViewFactory::create(__DIR__ . '/../templates', $locale, (string) ($config['i18n']['default_locale'] ?? 'fr'));
+
+    echo $view->render('login-oidc', [
+        'next'      => $next,
+        'provider'  => OidcClientFactory::providerLabel($issuer),
+        'loginUrl'  => Url::to('auth/login'),
+        'available' => Locale::available($config),
+    ]);
+
+    return;
+}
+
+// ── Mode historique : formulaire HTTP Basic Auth ─────────────────────────────
 WebAccessGuard::protect($security);
 
 $securityEnabled = (bool) ($security['enabled'] ?? false);
@@ -31,11 +73,6 @@ if ($securityEnabled === false || $basicEnabled === false) {
 
 $locale = Locale::resolve($config, null);
 $view = ViewFactory::create(__DIR__ . '/../templates', $locale, (string) ($config['i18n']['default_locale'] ?? 'fr'));
-
-$next = (string) ($_GET['next'] ?? $_POST['next'] ?? $appRoot);
-if ($next === '' || str_starts_with($next, '/') === false || str_starts_with($next, '//') || str_contains($next, "\r") || str_contains($next, "\n")) {
-    $next = $appRoot;
-}
 
 $error = '';
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {

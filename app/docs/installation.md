@@ -212,6 +212,7 @@ Set at least `database`, then choose the authentication mode:
 - **Community mode (recommended)** — set `oidc.enabled = true` and fill
   `issuer` / `client_id` / `client_secret`; leave `redirect_uri` empty to derive it
   from the `/auth/login` route. Multi-user accounts, no password/e-mail stored.
+  For Google, follow the step-by-step guide [oidc-google.md](oidc-google.md).
 - **Legacy single-tenant mode** — keep `oidc.enabled = false`; the historic HTTP
   Basic Auth (`web_security.basic_auth`) protects everything and a single implicit
   owner account is used.

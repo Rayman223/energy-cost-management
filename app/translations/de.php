@@ -22,6 +22,7 @@ return [
     'common.no'            => 'Nein',
 
     'auth.sign_in'         => 'Anmelden',
+    'auth.signin_with'     => 'Mit {provider} anmelden',
     'auth.sign_out'        => 'Abmelden',
     'auth.signed_out'      => 'Sie wurden abgemeldet.',
     'auth.error'           => 'Anmeldung fehlgeschlagen. Bitte erneut versuchen.',

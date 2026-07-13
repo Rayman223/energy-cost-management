@@ -22,6 +22,7 @@ return [
     'common.no'            => 'No',
 
     'auth.sign_in'         => 'Sign in',
+    'auth.signin_with'     => 'Sign in with {provider}',
     'auth.sign_out'        => 'Sign out',
     'auth.signed_out'      => 'You have been signed out.',
     'auth.error'           => 'Sign-in failed. Please try again.',

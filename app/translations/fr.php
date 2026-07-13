@@ -28,6 +28,7 @@ return [
 
     // Authentification
     'auth.sign_in'         => 'Se connecter',
+    'auth.signin_with'     => 'Se connecter avec {provider}',
     'auth.sign_out'        => 'Se déconnecter',
     'auth.signed_out'      => 'Vous êtes déconnecté.',
     'auth.error'           => 'La connexion a échoué. Veuillez réessayer.',
