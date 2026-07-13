@@ -20,6 +20,21 @@ use App\Infrastructure\Database;
 final class AuthGuard
 {
     /**
+     * Indique si l'authentification OpenID Connect est active dans la config.
+     * Source unique du prédicat, réutilisée par les pages pour n'exposer les
+     * éléments propres au mode OIDC (landing publique, bouton de déconnexion)
+     * que lorsqu'il est réellement activé.
+     *
+     * @param array<string, mixed> $config
+     */
+    public static function isOidcEnabled(array $config): bool
+    {
+        $oidc = $config['oidc'] ?? [];
+
+        return is_array($oidc) && ($oidc['enabled'] ?? false) === true;
+    }
+
+    /**
      * @param array<string, mixed> $config Configuration complète de l'application.
      */
     public static function protect(array $config, bool $jsonResponse = false): void
@@ -33,10 +48,7 @@ final class AuthGuard
             $security = [];
         }
 
-        $oidc = $config['oidc'] ?? [];
-        $oidcEnabled = is_array($oidc) && ($oidc['enabled'] ?? false) === true;
-
-        if ($oidcEnabled === false) {
+        if (self::isOidcEnabled($config) === false) {
             WebAccessGuard::protect($security, $jsonResponse);
 
             return;

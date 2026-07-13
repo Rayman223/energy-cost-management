@@ -72,6 +72,7 @@ $energyLabels = [
   </div>
   <div class="header-right">
     <a href="<?= $this->url() ?>" class="back"><?= $this->te('nav.back_dashboard') ?></a>
+    <?php if (!empty($oidcEnabled)): ?><a href="<?= $this->url('auth/logout') ?>" class="theme-toggle" title="<?= $this->te('auth.sign_out') ?>">🚪</a><?php endif; ?>
     <button type="button" class="theme-toggle" id="theme-toggle" aria-label="<?= $this->e($this->t('common.theme')) ?>">🌙</button>
   </div>
 </header>

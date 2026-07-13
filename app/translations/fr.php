@@ -39,6 +39,20 @@ return [
     'auth.invalid'         => 'Identifiants invalides.',
     'auth.csrf'            => 'Session expirée, veuillez réessayer.',
 
+    // Page d'accueil (landing publique)
+    'landing.hero_title'    => 'Maîtrisez vos coûts énergétiques',
+    'landing.hero_subtitle' => 'Suivez votre électricité, votre gaz et votre eau, et comprenez ce que vous dépensez — en un coup d\'œil.',
+    'landing.features_title' => 'Ce que vous pouvez faire',
+    'landing.feature1_title' => 'Suivi multi-énergies',
+    'landing.feature1_desc'  => 'Électricité, gaz et eau au même endroit, à partir de vos relevés de compteur.',
+    'landing.feature2_title' => 'Coûts au plus juste',
+    'landing.feature2_desc'  => 'Estimez vos dépenses avec des tarifs fixes ou des prix dynamiques du marché.',
+    'landing.feature3_title' => 'Tableau de bord clair',
+    'landing.feature3_desc'  => 'Deltas mensuels, historique et synchronisation automatique de vos données.',
+    'landing.feature4_title' => 'Privé et multi-comptes',
+    'landing.feature4_desc'  => 'Chaque utilisateur ne voit que ses données ; connexion via votre fournisseur.',
+    'landing.cta'            => 'Se connecter',
+
     // Page compte
     'account.title'        => 'Mon compte',
     'account.admin'        => 'admin',

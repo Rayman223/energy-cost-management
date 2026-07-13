@@ -1,0 +1,100 @@
+/* Page d'accueil publique (landing) — #127.
+   Dépend de tokens.css (variables de thème, .theme-toggle). Réutilise le langage
+   visuel du dashboard (fond pointillé, accents ambre, polices Syne/Space Mono). */
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--sans), Arial, sans-serif;
+  min-height: 100vh;
+  background-image: radial-gradient(circle, var(--dotgrid) 1px, transparent 1px);
+  background-size: 28px 28px;
+}
+
+.landing {
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 0 24px 60px;
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+/* ── En-tête ─────────────────────────────────────────────────────────────── */
+.landing-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 22px 0 18px;
+  border-bottom: 1px solid var(--border);
+  gap: 16px; flex-wrap: wrap;
+}
+.logo { display: flex; align-items: center; gap: 14px; }
+.logo-icon {
+  width: 40px; height: 40px;
+  background: var(--amber);
+  border-radius: 8px;
+  display: grid; place-items: center;
+  font-size: 20px; flex-shrink: 0;
+  box-shadow: 0 0 20px rgba(245,166,35,.35);
+}
+.logo-text { font-size: 1.15rem; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; color: var(--text-strong); }
+.logo-sub  { font-family: var(--mono); font-size: .76rem; color: var(--muted); letter-spacing: .08em; margin-top: 1px; }
+
+.landing-header-right { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+.langs { font-size: .72rem; letter-spacing: .03em; }
+.langs a { text-decoration: none; margin: 0 3px; color: var(--muted); }
+.langs a.lang-active { color: var(--text-strong); font-weight: 700; }
+
+/* ── Hero ────────────────────────────────────────────────────────────────── */
+.hero { text-align: center; padding: 72px 0 56px; }
+.hero h1 {
+  font-size: clamp(1.9rem, 5vw, 3rem); font-weight: 800;
+  letter-spacing: .01em; color: var(--text-strong);
+  max-width: 20ch; margin: 0 auto;
+}
+.hero-subtitle {
+  margin: 20px auto 0; max-width: 60ch;
+  font-size: 1.05rem; color: var(--muted); line-height: 1.6;
+}
+.cta {
+  display: inline-block; margin-top: 32px;
+  background: var(--amber); color: var(--on-amber);
+  border-radius: 10px; padding: 14px 32px;
+  font-weight: 700; font-size: 1rem; text-decoration: none;
+  transition: opacity .2s, transform .1s;
+  box-shadow: 0 6px 22px rgba(184,101,10,.28);
+}
+.cta:hover { opacity: .93; }
+.cta:active { transform: translateY(1px); }
+.cta:focus-visible { outline: 2px solid var(--amber); outline-offset: 3px; }
+
+/* ── Features ────────────────────────────────────────────────────────────── */
+.features { padding: 16px 0 8px; }
+.features h2 {
+  text-align: center; font-size: 1.35rem; font-weight: 700;
+  color: var(--text-strong); margin-bottom: 32px;
+}
+.feature-grid {
+  display: grid; gap: 20px;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+.feature {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 12px; padding: 24px;
+  transition: border-color .15s, transform .15s;
+}
+.feature:hover { border-color: var(--amber); transform: translateY(-2px); }
+.feature-icon {
+  width: 44px; height: 44px; border-radius: 10px;
+  background: var(--amber-dim);
+  display: grid; place-items: center; font-size: 1.4rem; margin-bottom: 14px;
+}
+.feature h3 { font-size: 1.02rem; font-weight: 700; color: var(--text-strong); margin-bottom: 8px; }
+.feature p { font-size: .92rem; color: var(--muted); line-height: 1.55; }
+
+/* ── Pied de page ────────────────────────────────────────────────────────── */
+.landing-footer {
+  margin-top: auto; padding-top: 40px; text-align: center;
+  font-family: var(--mono); font-size: .78rem; color: var(--muted);
+}
+.landing-footer a { color: var(--blue); text-decoration: none; }
+.landing-footer a:hover { text-decoration: underline; }

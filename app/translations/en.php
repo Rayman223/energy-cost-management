@@ -33,6 +33,20 @@ return [
     'auth.invalid'         => 'Invalid credentials.',
     'auth.csrf'            => 'Session expired, please try again.',
 
+    // Landing (public home page)
+    'landing.hero_title'    => 'Take control of your energy costs',
+    'landing.hero_subtitle' => 'Track your electricity, gas and water, and understand what you spend — at a glance.',
+    'landing.features_title' => 'What you can do',
+    'landing.feature1_title' => 'Multi-utility tracking',
+    'landing.feature1_desc'  => 'Electricity, gas and water in one place, from your meter readings.',
+    'landing.feature2_title' => 'Accurate costs',
+    'landing.feature2_desc'  => 'Estimate your spending with fixed tariffs or dynamic market prices.',
+    'landing.feature3_title' => 'Clear dashboard',
+    'landing.feature3_desc'  => 'Monthly deltas, history and automatic data synchronisation.',
+    'landing.feature4_title' => 'Private and multi-account',
+    'landing.feature4_desc'  => 'Each user only sees their own data; sign in through your provider.',
+    'landing.cta'            => 'Sign in',
+
     'account.title'        => 'My account',
     'account.admin'        => 'admin',
     'account.profile'      => 'Profile',

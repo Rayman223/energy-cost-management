@@ -33,6 +33,20 @@ return [
     'auth.invalid'         => 'Ungültige Anmeldedaten.',
     'auth.csrf'            => 'Sitzung abgelaufen, bitte erneut versuchen.',
 
+    // Startseite (öffentliche Landingpage)
+    'landing.hero_title'    => 'Behalten Sie Ihre Energiekosten im Griff',
+    'landing.hero_subtitle' => 'Verfolgen Sie Strom, Gas und Wasser und verstehen Sie Ihre Ausgaben — auf einen Blick.',
+    'landing.features_title' => 'Was Sie tun können',
+    'landing.feature1_title' => 'Multi-Verbrauch-Tracking',
+    'landing.feature1_desc'  => 'Strom, Gas und Wasser an einem Ort, aus Ihren Zählerständen.',
+    'landing.feature2_title' => 'Genaue Kosten',
+    'landing.feature2_desc'  => 'Schätzen Sie Ihre Ausgaben mit festen Tarifen oder dynamischen Marktpreisen.',
+    'landing.feature3_title' => 'Übersichtliches Dashboard',
+    'landing.feature3_desc'  => 'Monatliche Differenzen, Verlauf und automatische Datensynchronisation.',
+    'landing.feature4_title' => 'Privat und mehrbenutzerfähig',
+    'landing.feature4_desc'  => 'Jeder Benutzer sieht nur seine eigenen Daten; Anmeldung über Ihren Anbieter.',
+    'landing.cta'            => 'Anmelden',
+
     'account.title'        => 'Mein Konto',
     'account.admin'        => 'Admin',
     'account.profile'      => 'Profil',

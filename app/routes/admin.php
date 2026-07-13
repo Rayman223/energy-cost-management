@@ -86,6 +86,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 echo $view->render('admin', [
+    'oidcEnabled' => AuthGuard::isOidcEnabled($config),
     'error'     => $error,
     'success'   => $success,
     'users'     => $users->listAll(),

@@ -70,6 +70,7 @@ $fmt = function (mixed $v, int $dec = 3, string $unit = 'kWh'): string {
       <?php if (!empty($isAdmin)): ?><a href="<?= $this->url('admin') ?>" class="theme-toggle" title="<?= $this->te('admin.title') ?>">🛡</a><?php endif; ?>
       <a href="<?= $this->url('tariffs') ?>" class="theme-toggle" title="Tarifs">€</a>
       <a href="<?= $this->url('account') ?>" class="theme-toggle" title="Mon compte">👤</a>
+      <?php if (!empty($oidcEnabled)): ?><a href="<?= $this->url('auth/logout') ?>" class="theme-toggle" title="<?= $this->te('auth.sign_out') ?>">🚪</a><?php endif; ?>
       <span class="langs"><?php foreach ($available as $loc): ?><a href="?lang=<?= $this->e($loc) ?>"<?= $loc === $this->locale() ? ' class="lang-active"' : '' ?>><?= $this->e(strtoupper($loc)) ?></a><?php endforeach; ?></span>
       <button type="button" class="theme-toggle" id="theme-toggle" aria-label="Changer de thème">🌙</button>
     </div>

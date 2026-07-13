@@ -33,6 +33,20 @@ return [
     'auth.invalid'         => 'Ongeldige inloggegevens.',
     'auth.csrf'            => 'Sessie verlopen, probeer het opnieuw.',
 
+    // Startpagina (publieke landingspagina)
+    'landing.hero_title'    => 'Beheer uw energiekosten',
+    'landing.hero_subtitle' => 'Volg uw elektriciteit, gas en water en begrijp wat u uitgeeft — in één oogopslag.',
+    'landing.features_title' => 'Wat u kunt doen',
+    'landing.feature1_title' => 'Multi-energie opvolging',
+    'landing.feature1_desc'  => 'Elektriciteit, gas en water op één plek, op basis van uw meterstanden.',
+    'landing.feature2_title' => 'Nauwkeurige kosten',
+    'landing.feature2_desc'  => 'Schat uw uitgaven met vaste tarieven of dynamische marktprijzen.',
+    'landing.feature3_title' => 'Helder dashboard',
+    'landing.feature3_desc'  => 'Maandelijkse verschillen, historiek en automatische synchronisatie.',
+    'landing.feature4_title' => 'Privé en multi-account',
+    'landing.feature4_desc'  => 'Elke gebruiker ziet alleen zijn eigen gegevens; aanmelden via uw provider.',
+    'landing.cta'            => 'Aanmelden',
+
     'account.title'        => 'Mijn account',
     'account.admin'        => 'beheerder',
     'account.profile'      => 'Profiel',

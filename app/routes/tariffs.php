@@ -394,6 +394,7 @@ $isDynamic = $energy === 'electricity'
     && ($profile['pricing_mode'] ?? 'fixed') !== 'fixed';
 
 echo $view->render('tariffs', [
+    'oidcEnabled'      => AuthGuard::isOidcEnabled($config),
     'error'            => $error,
     'success'          => $success,
     'energy'           => $energy,

@@ -15,6 +15,8 @@ use App\Service\TariffCalculatorService;
 use App\Http\SecurityHeaders;
 use App\I18n\Locale;
 use App\Security\AuthGuard;
+use App\Security\AuthSession;
+use App\Security\WebAccessGuard;
 use App\Support\LocaleContext;
 use App\View\ViewFactory;
 
@@ -22,6 +24,7 @@ use App\View\ViewFactory;
 $config       = [];
 $view         = null;
 $isAdmin      = false;
+$oidcEnabled  = false;
 $currency     = 'EUR';
 $dbError      = null;
 $deltas       = null;
@@ -40,10 +43,33 @@ require_once __DIR__ . '/../autoload.php';
 
 SecurityHeaders::send();
 
+// Bootstrap isolé : une configuration injoignable dégrade vers le dashboard en
+// erreur (bloc try ci-dessous) plutôt que de provoquer un fatal.
 try {
-    $config     = require __DIR__ . '/../bootstrap.php';
+    $config = require __DIR__ . '/../bootstrap.php';
+} catch (\Throwable $e) {
+    $dbError = $e->getMessage();
+}
 
+// Visiteur anonyme en mode OIDC → page d'accueil publique (présentation +
+// invitation à se connecter) plutôt que de rebondir vers l'IdP. Délibérément
+// HORS du try de chargement des données : une erreur de rendu ici doit échouer
+// en 500 (fail-closed), jamais retomber sur le rendu du dashboard authentifié
+// (qui contournerait AuthGuard). En Basic Auth / OIDC désactivé, on n'y entre pas.
+if ($dbError === null && AuthGuard::isOidcEnabled($config)) {
+    WebAccessGuard::enforceIp($config['web_security'] ?? []); // allowlist IP avant tout démarrage de session
+    if (AuthSession::userId() === null) {
+        $locale  = Locale::resolve($config, null);
+        $landing = ViewFactory::create(__DIR__ . '/../templates', $locale, (string) ($config['i18n']['default_locale'] ?? 'fr'));
+        echo $landing->render('welcome', ['available' => Locale::available($config)]);
+
+        return;
+    }
+}
+
+try {
     AuthGuard::protect($config);
+    $oidcEnabled = AuthGuard::isOidcEnabled($config);
 
     $db         = new Database($config['database']);
     $pdo        = $db->pdo();
@@ -133,5 +159,6 @@ echo $view->render('dashboard', [
     'waterInitMonth' => $waterInitMonth,
     'available'    => Locale::available($config),
     'isAdmin'      => $isAdmin,
+    'oidcEnabled'  => $oidcEnabled,
     'currency'     => $currency,
 ]);

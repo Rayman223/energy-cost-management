@@ -160,6 +160,7 @@ $energyId = $energyIdRepo->get($userId);
 $timezoneOptions = Timezones::options($profile['timezone']);
 
 echo $view->render('account', [
+    'oidcEnabled' => AuthGuard::isOidcEnabled($config),
     'error'      => $error,
     'success'    => $success,
     'freshToken' => $freshToken,

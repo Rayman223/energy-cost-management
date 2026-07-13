@@ -45,6 +45,7 @@ try {
 $view ??= ViewFactory::create(__DIR__ . '/../templates', Locale::resolve($config, null), (string) ($config['i18n']['default_locale'] ?? 'fr'));
 
 echo $view->render('meter_readings', [
+    'oidcEnabled' => AuthGuard::isOidcEnabled($config),
     'dbError' => $dbError,
     'gasLatest' => $gasLatest,
     'waterLatest' => $waterLatest,

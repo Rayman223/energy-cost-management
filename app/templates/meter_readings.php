@@ -29,6 +29,7 @@ $now = date('H:i');
     <div class="header-right">
       <a href="<?= $this->url() ?>" class="tool-link"><?= $this->te('nav.back_dashboard') ?></a>
       <span class="langs"><?php foreach ($available as $loc): ?><a href="?lang=<?= $this->e($loc) ?>" style="text-decoration:none;margin:0 3px<?= $loc === $this->locale() ? ';font-weight:700' : '' ?>"><?= $this->e(strtoupper($loc)) ?></a><?php endforeach; ?></span>
+      <?php if (!empty($oidcEnabled)): ?><a href="<?= $this->url('auth/logout') ?>" class="theme-toggle" title="<?= $this->te('auth.sign_out') ?>">🚪</a><?php endif; ?>
       <button type="button" class="theme-toggle" id="theme-toggle" aria-label="<?= $this->te('common.theme') ?>">🌙</button>
     </div>
   </header>
