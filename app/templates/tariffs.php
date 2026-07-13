@@ -72,7 +72,7 @@ $energyLabels = [
   </div>
   <div class="header-right">
     <a href="<?= $this->url() ?>" class="back"><?= $this->te('nav.back_dashboard') ?></a>
-    <?php if (!empty($oidcEnabled)): ?><a href="<?= $this->url('auth/logout') ?>" class="theme-toggle" title="<?= $this->te('auth.sign_out') ?>">🚪</a><?php endif; ?>
+    <?php if (!empty($oidcEnabled)): ?><form method="post" action="<?= $this->url('auth/logout') ?>" class="logout-form"><?= \App\Security\Csrf::field() ?><button type="submit" class="theme-toggle" title="<?= $this->te('auth.sign_out') ?>">🚪</button></form><?php endif; ?>
     <button type="button" class="theme-toggle" id="theme-toggle" aria-label="<?= $this->e($this->t('common.theme')) ?>">🌙</button>
   </div>
 </header>
@@ -407,7 +407,6 @@ $energyLabels = [
 
 <div class="page-footer">
   <span>Manage Energy — <?= $this->te('tariffs.title') ?></span>
-  <a href="../tools/migrate_db.php"><?= $this->te('tariffs.migrate_db') ?></a>
 </div>
 
 </div>

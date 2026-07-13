@@ -227,4 +227,8 @@ INSERT IGNORE INTO schema_migrations (version) VALUES
     ('2026-07-02_webhook_sync_state_user.sql'),
     ('2026-07-03_tariffs_eu.sql'),
     ('2026-07-04_api_tokens.sql'),
-    ('2026-07-05_account_energyid.sql');
+    ('2026-07-05_account_energyid.sql'),
+    ('2026-07-06_tariff_templates_water.sql'),
+    ('2026-07-07_tariff_template_usage.sql'),
+    ('2026-07-10_tariff_line_category.sql'),
+    ('2026-07-11_pricing_mode_and_native_hourly.sql');

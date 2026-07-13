@@ -53,4 +53,40 @@ final class RequestTest extends TestCase
         self::assertNotNull($d);
         self::assertSame('2026-12-31', $d->format('Y-m-d'));
     }
+
+    /**
+     * C3/B7 (#130) : le corps n'est décodé que si Content-Type est
+     * `application/json`. Un `text/plain` (formulaire cross-site forgeable) est
+     * ignoré → vecteur CSRF fermé.
+     */
+    public function testFromGlobalsIgnoresNonJsonContentType(): void
+    {
+        $backup = [$_SERVER, $_GET];
+        $_SERVER['REQUEST_METHOD'] = 'POST';
+        $_SERVER['CONTENT_TYPE']   = 'text/plain';
+        $_GET = ['action' => 'gas_entry'];
+
+        $r = Request::fromGlobals();
+
+        self::assertSame('POST', $r->method());
+        self::assertSame('gas_entry', $r->action());
+        self::assertNull($r->input('counter_m3'));
+
+        [$_SERVER, $_GET] = $backup;
+    }
+
+    public function testFromGlobalsIgnoresBodyForBodilessMethod(): void
+    {
+        $backup = [$_SERVER, $_GET];
+        $_SERVER['REQUEST_METHOD'] = 'GET';
+        $_SERVER['CONTENT_TYPE']   = 'application/json';
+        $_GET = [];
+
+        $r = Request::fromGlobals();
+
+        self::assertSame('GET', $r->method());
+        self::assertNull($r->input('anything'));
+
+        [$_SERVER, $_GET] = $backup;
+    }
 }

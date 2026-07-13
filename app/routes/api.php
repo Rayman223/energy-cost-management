@@ -30,7 +30,19 @@ header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-store');
 // X-Content-Type-Options est posé par SecurityHeaders::send() ci-dessous.
 
-$config = require __DIR__ . '/../bootstrap.php';
+// Bootstrap isolé : une configuration injoignable (ex. config.php absent) dégrade
+// en JSON 503 (cohérent avec le Content-Type déjà émis) plutôt qu'en fatal (#130 C6).
+// bootstrap.php charge l'autoloader avant de valider la config, donc SecurityHeaders
+// reste disponible dans le catch pour poser les en-têtes de sécurité sur l'erreur.
+try {
+    $config = require __DIR__ . '/../bootstrap.php';
+} catch (\Throwable $e) {
+    SecurityHeaders::send();
+    http_response_code(503);
+    echo json_encode(['error' => 'Service unavailable']);
+
+    return;
+}
 
 SecurityHeaders::send();
 
@@ -116,7 +128,7 @@ try {
 $readings = new ReadingsController($elecRepo, $gasRepo, $waterRepo, $syncState);
 $cost     = new CostController($costSvc);
 $tariffs  = new TariffController($tariffRepo);
-$entries  = new MeterEntryController($gasRepo, $waterRepo, $elecRepo);
+$entries  = new MeterEntryController($gasRepo, $waterRepo, $elecRepo, $syncState);
 $ingest   = new IngestController($elecRepo, $gasRepo, $waterRepo);
 
 $router = new Router();

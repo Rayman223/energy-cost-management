@@ -30,7 +30,24 @@ final class Request
         $method = strtoupper((string) ($_SERVER['REQUEST_METHOD'] ?? 'GET'));
 
         $body = [];
-        if ($method === 'POST') {
+        // On ne décode le corps que pour les méthodes qui en portent un
+        // (POST/PUT/PATCH/DELETE — corrige B7 : PUT/PATCH étaient ignorés), et
+        // seulement si le client déclare `application/json`. Ce gating ferme un
+        // vecteur CSRF (C3) : un <form enctype="text/plain"> cross-site ne peut
+        // pas forger un corps JSON, et un vrai `application/json` force un
+        // préflight CORS — impossible à émettre en navigation cross-site simple.
+        //
+        // Exception : les requêtes portant un jeton Bearer (agents machine
+        // d'ingestion) ne sont pas exploitables en CSRF — aucun identifiant
+        // ambiant, un formulaire cross-site ne peut pas poser d'en-tête
+        // Authorization. On tolère donc leur corps JSON sans Content-Type strict
+        // pour préserver la compat des agents ; le gating reste requis pour les
+        // mutations authentifiées par session/Basic (navigateur).
+        $contentType = strtolower((string) ($_SERVER['CONTENT_TYPE'] ?? ''));
+        $carriesBody = in_array($method, ['POST', 'PUT', 'PATCH', 'DELETE'], true);
+        $authHeader  = (string) ($_SERVER['HTTP_AUTHORIZATION'] ?? $_SERVER['REDIRECT_HTTP_AUTHORIZATION'] ?? '');
+        $viaBearer   = stripos($authHeader, 'bearer ') === 0;
+        if ($carriesBody && (str_starts_with($contentType, 'application/json') || $viaBearer)) {
             $decoded = json_decode((string) (file_get_contents('php://input') ?: '{}'), true);
             if (is_array($decoded)) {
                 $body = $decoded;

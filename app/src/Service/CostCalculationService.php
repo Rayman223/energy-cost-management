@@ -163,6 +163,9 @@ final class CostCalculationService
             return ['available' => false, 'reason' => 'Il faut au moins deux relevés gaz.'];
         }
 
+        // Horodatages (base, heure murale locale) parsés dans le fuseau applicatif
+        // fixé par app/bootstrap.php (#130 B6) : cohérent avec les autres calculs
+        // de période de ce service (élec/eau), tous dans le même fuseau.
         $from = new DateTimeImmutable($pair['from']['reading_at']);
         $to   = new DateTimeImmutable($pair['to']['reading_at']);
         $days = max(1, (int) $from->setTime(0, 0, 0)->diff($to->setTime(0, 0, 0))->days);
@@ -342,15 +345,20 @@ final class CostCalculationService
     /**
      * Calcule le nombre de jours pour une période électricité.
      *
-     * Si from et to sont dans le même mois-calendrier : nombre de jours entre les
-     * deux horodatages + 1 (inclusif), avec un minimum de 1.
+     * Convention `[from, to)` (bornes ouvertes à droite, sans +1), identique à
+     * celle du gaz ({@see estimateLastGasPeriod()}) : on compte les jours pleins
+     * écoulés entre minuit de $from et minuit de $to. Ainsi une période
+     * 1er→13 juillet 08:00 vaut 12 jours (et non 13), et une période intra-journée
+     * vaut 1 jour (minimum). Uniformise la proratisation des postes fixes entre
+     * fluides (#130 B1).
+     *
      * Si les horodatages chevauchent deux mois (from en fin de mois N, to en mois N+1) :
      * on utilise le nombre total de jours du mois de $from.
      */
     private function computeDays(DateTimeImmutable $from, DateTimeImmutable $to): int
     {
         if ($from->format('Y-m') === $to->format('Y-m')) {
-            return max(1, (int) $from->diff($to)->days + 1);
+            return max(1, (int) $from->setTime(0, 0, 0)->diff($to->setTime(0, 0, 0))->days);
         }
 
         return (int) $from->format('t');

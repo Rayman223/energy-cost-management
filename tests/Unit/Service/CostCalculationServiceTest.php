@@ -42,9 +42,15 @@ final class CostCalculationServiceTest extends TestCase
     /** @return array<string,mixed> */
     private function electricityDeltas(): array
     {
+        return $this->electricityDeltasFor('2026-06-01 00:00:00', '2026-06-15 12:00:00');
+    }
+
+    /** @return array<string,mixed> */
+    private function electricityDeltasFor(string $from, string $to): array
+    {
         return [
-            'from'        => '2026-06-01 00:00:00',
-            'to'          => '2026-06-15 12:00:00',
+            'from'        => $from,
+            'to'          => $to,
             'prelev_jour' => 100.0,
             'prelev_nuit' => 50.0,
             'injec_jour'  => 20.0,
@@ -127,7 +133,7 @@ final class CostCalculationServiceTest extends TestCase
         $r = $svc->estimateCurrentMonthElectricity();
 
         self::assertTrue($r['available']);
-        self::assertSame(15, $r['days']);                 // 14 j 12 h + 1, même mois
+        self::assertSame(14, $r['days']);                 // [01 00:00, 15 00:00) = 14 j pleins (#130 B1)
         self::assertSame('Elec test', $r['tariff_name']);
         self::assertIsArray($r['cost']);
         self::assertArrayHasKey('total', $r['cost']);
@@ -158,8 +164,36 @@ final class CostCalculationServiceTest extends TestCase
         $r = $svc->estimateMonthElectricity(2026, 6);
 
         self::assertTrue($r['available']);
-        self::assertSame(15, $r['days']);
+        self::assertSame(14, $r['days']);                 // [01 00:00, 15 00:00) = 14 j pleins (#130 B1)
         self::assertArrayHasKey('total', $r['cost']);
+    }
+
+    /**
+     * Convention `[from, to)` (#130 B1) : jours pleins, borne droite exclue,
+     * comme le gaz. Une heure partielle ne compte pas un jour de plus.
+     */
+    public function testElectricityDayCountUsesHalfOpenInterval(): void
+    {
+        $svc = $this->makeService(
+            new FakeLegacyDailyRepository(monthlyDeltasForMonth: $this->electricityDeltasFor('2026-07-01 00:00:00', '2026-07-13 08:00:00')),
+            new FakeTariffRepository(grid: $this->electricityGrid()),
+            new FakeGasReadingRepository(),
+        );
+
+        // [01 00:00, 13 00:00) = 12 jours pleins (les 8 h du 13 ne comptent pas).
+        self::assertSame(12, $svc->estimateMonthElectricity(2026, 7)['days']);
+    }
+
+    public function testElectricityDayCountIntraDayIsOne(): void
+    {
+        $svc = $this->makeService(
+            new FakeLegacyDailyRepository(monthlyDeltasForMonth: $this->electricityDeltasFor('2026-07-05 06:00:00', '2026-07-05 20:00:00')),
+            new FakeTariffRepository(grid: $this->electricityGrid()),
+            new FakeGasReadingRepository(),
+        );
+
+        // Période intra-journée : minimum 1 jour (jamais 0).
+        self::assertSame(1, $svc->estimateMonthElectricity(2026, 7)['days']);
     }
 
     // ── Électricité : tarif dynamique ────────────────────────────────────────

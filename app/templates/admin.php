@@ -30,7 +30,7 @@ $csrf = \App\Security\Csrf::field();
       <span class="langs"><?php foreach ($available as $loc): ?><a href="?lang=<?= $this->e($loc) ?>"<?= $loc === $this->locale() ? ' class="lang-active"' : '' ?>><?= $this->e(strtoupper($loc)) ?></a><?php endforeach; ?></span>
       &nbsp; <a href="<?= $this->url('tariffs') ?>"><?= $this->te('nav.tariffs') ?></a>
       &nbsp; <a href="<?= $this->url() ?>"><?= $this->te('nav.back_dashboard') ?></a>
-      <?php if (!empty($oidcEnabled)): ?>&nbsp; <a href="<?= $this->url('auth/logout') ?>"><?= $this->te('auth.sign_out') ?></a><?php endif; ?>
+      <?php if (!empty($oidcEnabled)): ?>&nbsp; <form method="post" action="<?= $this->url('auth/logout') ?>" class="logout-form"><?= \App\Security\Csrf::field() ?><button type="submit" class="link-button"><?= $this->te('auth.sign_out') ?></button></form><?php endif; ?>
     </div>
   </header>
 

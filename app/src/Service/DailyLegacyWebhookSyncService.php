@@ -14,7 +14,7 @@ final class DailyLegacyWebhookSyncService
     /**
      * State keys électricité pour webhook_sync_state.
      */
-    private const ELEC_STATE_KEYS = [
+    public const ELEC_STATE_KEYS = [
         'prelevement-jour',
         'prelevement-nuit',
         'injection-jour',
@@ -22,8 +22,8 @@ final class DailyLegacyWebhookSyncService
         'production-solaire',
     ];
 
-    private const GAS_STATE_KEY   = 'gas-index';
-    private const WATER_STATE_KEY = 'water-index';
+    public const GAS_STATE_KEY   = 'gas-index';
+    public const WATER_STATE_KEY = 'water-index';
 
     /** @param array<string, mixed> $device */
     public function __construct(

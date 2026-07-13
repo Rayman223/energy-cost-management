@@ -76,6 +76,9 @@ final class BulkImportService
             }
             $report->addImported($inserted);
             $report->addDuplicate(count($indexes) - $inserted);
+            if ($inserted > 0) {
+                $report->noteImportedAt($ts);
+            }
         }
 
         return $report;
@@ -116,7 +119,12 @@ final class BulkImportService
                 $report->addWriteError(sprintf('Ligne %d : erreur d\'écriture en base.', $lineNo));
                 continue;
             }
-            $isNew ? $report->addImported() : $report->addDuplicate();
+            if ($isNew) {
+                $report->addImported();
+                $report->noteImportedAt($ts);
+            } else {
+                $report->addDuplicate();
+            }
         }
 
         return $report;

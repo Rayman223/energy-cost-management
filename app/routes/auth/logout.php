@@ -9,6 +9,7 @@ declare(strict_types=1);
 
 use App\Http\SecurityHeaders;
 use App\Security\AuthSession;
+use App\Security\Csrf;
 use App\Security\WebAccessGuard;
 
 $config = require __DIR__ . '/../../bootstrap.php';
@@ -20,7 +21,17 @@ if (is_array($security)) {
     WebAccessGuard::enforceIp($security);
 }
 
+$home = WebAccessGuard::appRootPath() . '/';
+
+// La déconnexion mute l'état de session : exiger POST + CSRF. SameSite=Lax
+// n'empêche pas une navigation top-level cross-site (un simple lien / <img>
+// ne suffit plus : seul un formulaire de l'app portant le jeton passe).
+if ($_SERVER['REQUEST_METHOD'] !== 'POST' || Csrf::validate($_POST[Csrf::FIELD] ?? null) === false) {
+    header('Location: ' . $home, true, 303);
+    exit;
+}
+
 AuthSession::logout();
 
-header('Location: ' . WebAccessGuard::appRootPath() . '/', true, 302);
+header('Location: ' . $home, true, 303);
 exit;

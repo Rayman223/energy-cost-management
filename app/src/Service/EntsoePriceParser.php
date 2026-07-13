@@ -38,6 +38,13 @@ final class EntsoePriceParser
 
         foreach ($xml->TimeSeries as $series) {
             foreach ($series->Period as $period) {
+                // Anti-collision DST scopée au Period : le repli d'heure d'automne
+                // produit deux positions consécutives sur la même heure locale AU
+                // SEIN d'un même Period. Réinitialisée à chaque Period pour ne PAS
+                // supprimer des heures identiques provenant de séries/périodes qui
+                // se chevauchent (la dédup inter-séries reste résolue à l'upsert DB).
+                /** @var array<string, true> $seenLocalKeys */
+                $seenLocalKeys = [];
                 $resolutionMin = $this->resolutionToMinutes((string) $period->resolution);
                 if ($resolutionMin === 0) {
                     continue;
@@ -72,6 +79,18 @@ final class EntsoePriceParser
                     $periodStart = $start
                         ->modify(sprintf('+%d seconds', ($position - 1) * $stepSeconds))
                         ->setTimezone($localTz);
+
+                    // Repli d'heure (DST automne) : deux instants UTC distincts
+                    // retombent sur la même heure murale locale (ex. 02:00 CEST puis
+                    // 02:00 CET), qui est la clé de stockage aval (sans offset). On
+                    // conserve la PREMIÈRE position et on ignore la seconde plutôt
+                    // que de l'écraser silencieusement. Limite connue : la 2ᵉ heure
+                    // « répétée » n'est pas tarifée à part (stockage UTC = piste #130 B5).
+                    $localKey = $resolutionMin . '@' . $periodStart->format('Y-m-d H:i');
+                    if (isset($seenLocalKeys[$localKey])) {
+                        continue;
+                    }
+                    $seenLocalKeys[$localKey] = true;
 
                     $prices[] = [
                         'period_start'   => $periodStart,

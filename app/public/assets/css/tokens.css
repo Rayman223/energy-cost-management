@@ -74,6 +74,19 @@ body { transition: background-color .25s ease, color .25s ease; }
 .theme-toggle:focus-visible { outline: 2px solid var(--amber); outline-offset: 2px; }
 a.theme-toggle { text-decoration: none; }
 
+/* Déconnexion en POST+CSRF (#130 A2) : le <form> ne doit pas perturber la
+   disposition flex de l'en-tête — display:contents fait participer le bouton
+   directement, comme les liens .theme-toggle voisins. */
+.logout-form { display: contents; }
+
+/* Bouton rendu visuellement comme un lien (déconnexion en POST là où l'ancien
+   <a> était un simple lien texte). */
+.link-button {
+  background: none; border: 0; padding: 0; margin: 0;
+  font: inherit; color: var(--blue); cursor: pointer;
+  text-decoration: underline;
+}
+
 /* ── Utilitaires partagés (résidus d'attributs style inline migrés, #98) ───── */
 .is-hidden { display: none; }
 .lang-active { font-weight: 700; }

@@ -140,5 +140,14 @@ jobs:
         run: |
           echo "<?php declare(strict_types=1); return ['database' => ['host' => '127.0.0.1', 'port' => 3306, 'name' => 'energy_test', 'user' => 'energy_user', 'password' => 'energy_pass', 'charset' => 'utf8mb4']];" > app/config/config.php
 
+      - name: Vérifier que schema.sql et les migrations sont synchronisés (anti-récidive C1)
+        run: |
+          OUT=$(php app/scripts/migrate.php --dry-run)
+          echo "$OUT"
+          if ! echo "$OUT" | grep -q "Aucune migration en attente"; then
+            echo "::error::schema.sql importé mais des migrations restent en attente — le seed schema_migrations de schema.sql est désynchronisé (cf. Issue #130 C1)."
+            exit 1
+          fi
+
       - name: PHPUnit — suite d'intégration (s'exécute contre la base)
         run: vendor/bin/phpunit --testsuite integration

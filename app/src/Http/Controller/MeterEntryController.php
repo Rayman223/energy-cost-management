@@ -9,6 +9,8 @@ use App\Http\Request;
 use App\Http\ValidationException;
 use App\Repository\Contract\ElectricityIngestionInterface;
 use App\Repository\Contract\MeterReadingRepositoryInterface;
+use App\Repository\WebhookSyncStateRepository;
+use App\Service\DailyLegacyWebhookSyncService;
 use DateTimeImmutable;
 use PDOException;
 
@@ -23,17 +25,18 @@ final class MeterEntryController
         private readonly MeterReadingRepositoryInterface $gasRepo,
         private readonly MeterReadingRepositoryInterface $waterRepo,
         private readonly ElectricityIngestionInterface $electricityRepo,
+        private readonly ?WebhookSyncStateRepository $syncState = null,
     ) {
     }
 
     public function gas(Request $request): JsonResponse
     {
-        return $this->saveReading($request, $this->gasRepo);
+        return $this->saveReading($request, $this->gasRepo, [DailyLegacyWebhookSyncService::GAS_STATE_KEY]);
     }
 
     public function water(Request $request): JsonResponse
     {
-        return $this->saveReading($request, $this->waterRepo);
+        return $this->saveReading($request, $this->waterRepo, [DailyLegacyWebhookSyncService::WATER_STATE_KEY]);
     }
 
     public function electricity(Request $request): JsonResponse
@@ -50,7 +53,7 @@ final class MeterEntryController
                 continue;
             }
 
-            $value = filter_var($raw, FILTER_VALIDATE_FLOAT);
+            $value = filter_var(self::normalizeDecimal($raw), FILTER_VALIDATE_FLOAT);
             if ($value === false || $value < 0) {
                 throw new ValidationException('Invalid ' . $key . ' value');
             }
@@ -73,6 +76,13 @@ final class MeterEntryController
 
         $inserted = $this->electricityRepo->insertIndexes($ts, $indexes);
 
+        // Uniquement si au moins une ligne a réellement été insérée (INSERT IGNORE
+        // renvoie 0 sur doublon déjà présent/synchronisé) : cohérent avec gaz/eau,
+        // qui ne reculent le watermark qu'après un save() réussi.
+        if ($inserted > 0) {
+            $this->rewindSyncWatermarks(DailyLegacyWebhookSyncService::ELEC_STATE_KEYS, $ts);
+        }
+
         return JsonResponse::ok([
             'ok'       => true,
             'saved_at' => $ts->format('c'),
@@ -81,10 +91,15 @@ final class MeterEntryController
         ]);
     }
 
-    private function saveReading(Request $request, MeterReadingRepositoryInterface $repo): JsonResponse
+    /**
+     * @param list<string> $sources Clés webhook_sync_state du/des flux concernés.
+     */
+    private function saveReading(Request $request, MeterReadingRepositoryInterface $repo, array $sources): JsonResponse
     {
-        $counterM3 = filter_var($request->input('counter_m3'), FILTER_VALIDATE_FLOAT);
-        if ($counterM3 === false || $counterM3 <= 0) {
+        $counterM3 = filter_var(self::normalizeDecimal($request->input('counter_m3')), FILTER_VALIDATE_FLOAT);
+        // >= 0 (et non > 0) : un compteur neuf peut légitimement afficher 0 ; la
+        // croissance chronologique reste garantie par assertWithinBounds (#130 B8).
+        if ($counterM3 === false || $counterM3 < 0) {
             throw new ValidationException('Invalid counter_m3 value');
         }
 
@@ -119,13 +134,53 @@ final class MeterEntryController
             throw $e;
         }
 
+        $this->rewindSyncWatermarks($sources, $ts);
+
         return JsonResponse::ok(['ok' => true, 'saved_at' => $ts->format('c'), 'counter_m3' => $counterM3]);
+    }
+
+    /**
+     * Après l'insertion d'un relevé (possiblement antidaté), recule le watermark
+     * de synchro EnergyID des flux concernés pour que le relevé soit repêché au
+     * prochain envoi (#130 B2). Le recul cible `reading_at moins 1 seconde` (le
+     * filtre de sync relit en `>` strict) ; `rewindLastSentAt` n'abaisse jamais
+     * à la hausse, donc un relevé récent (postérieur au watermark) est un no-op.
+     *
+     * @param list<string> $sources
+     */
+    private function rewindSyncWatermarks(array $sources, DateTimeImmutable $readingAt): void
+    {
+        if ($this->syncState === null) {
+            return;
+        }
+
+        $target = $readingAt->modify('-1 second');
+        foreach ($sources as $source) {
+            $this->syncState->rewindLastSentAt($source, $target);
+        }
+    }
+
+    /**
+     * Normalise une saisie décimale : accepte la virgule comme séparateur
+     * (usage FR/NL/DE) en la ramenant au point attendu par filter_var (#130 B8).
+     */
+    private static function normalizeDecimal(mixed $raw): mixed
+    {
+        return is_string($raw) ? str_replace(',', '.', $raw) : $raw;
     }
 
     /**
      * Valide qu'une valeur reste dans les bornes de croissance chronologique
      * (relevé précédent ≤ valeur ≤ relevé suivant, bornes inclusives). Logique
      * partagée par les flux gaz/eau et électricité.
+     *
+     * Risque résiduel (TOCTOU, #130 B4) : le contrôle de bornes et l'INSERT ne
+     * sont pas sérialisés par un verrou (pas de SELECT ... FOR UPDATE), donc deux
+     * saisies concurrentes à des horodatages adjacents peuvent théoriquement
+     * franchir chacune le contrôle avant l'écriture de l'autre. En pratique la
+     * saisie manuelle mono-utilisateur rend la fenêtre négligeable ; le doublon
+     * exact reste attrapé par la contrainte d'unicité (gaz/eau) ou l'INSERT
+     * IGNORE (élec).
      */
     private function assertWithinBounds(string $label, float $value, ?float $min, ?float $max, string $unit = ''): void
     {

@@ -67,17 +67,42 @@ final class ElectricityReadingRepository implements LegacyDailyRepositoryInterfa
         $stmt = $this->pdo->prepare(
             'INSERT IGNORE INTO meter_readings (register_id, reading_at, index_value) VALUES (:rid, :at, :val)'
         );
-        $inserted = 0;
-        foreach ($indexByRegister as $key => $value) {
-            if (!isset($map[$key])) {
-                continue;
+
+        // Atomicité du jeu de registres au même horodatage : sans transaction, un
+        // échec en cours de boucle laisserait un relevé partiel (fausse
+        // getHourlyImportDeltas). Garde inTransaction() : l'import en masse
+        // (ImportRunner) ouvre déjà une transaction englobante — ne pas imbriquer.
+        $ownTransaction = !$this->pdo->inTransaction();
+        if ($ownTransaction) {
+            $this->pdo->beginTransaction();
+        }
+
+        try {
+            $inserted = 0;
+            foreach ($indexByRegister as $key => $value) {
+                if (!isset($map[$key])) {
+                    continue;
+                }
+                $stmt->execute([
+                    'rid' => $map[$key],
+                    'at'  => $timestamp->format('Y-m-d H:i:s'),
+                    'val' => $value,
+                ]);
+                $inserted += $stmt->rowCount();
             }
-            $stmt->execute([
-                'rid' => $map[$key],
-                'at'  => $timestamp->format('Y-m-d H:i:s'),
-                'val' => $value,
-            ]);
-            $inserted += $stmt->rowCount();
+        } catch (\Throwable $e) {
+            // Seul un échec de la boucle est rattrapé ici (transaction encore
+            // active). Le commit reste HORS du try : un échec de COMMIT ne doit
+            // pas déclencher un rollBack sur une transaction déjà close (qui
+            // masquerait l'exception d'origine).
+            if ($ownTransaction) {
+                $this->pdo->rollBack();
+            }
+            throw $e;
+        }
+
+        if ($ownTransaction) {
+            $this->pdo->commit();
         }
 
         return $inserted;

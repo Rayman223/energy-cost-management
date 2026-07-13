@@ -25,6 +25,9 @@ final class EnergyIdPayloadFactory
 
     public function unixTs(string $timestamp): int
     {
+        // Le timestamp (issu de la base, heure murale locale) est interprété dans
+        // le fuseau applicatif imposé par app/bootstrap.php (date_default_timezone_set
+        // depuis la config). Ne pas exécuter ce code hors de ce bootstrap (#130 B6).
         return (new DateTimeImmutable($timestamp))->getTimestamp();
     }
 }

@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Service\Import;
 
+use DateTimeImmutable;
+
 /**
  * Bilan d'un import en masse : compteurs cumulés + échantillon borné des
  * erreurs ligne à ligne (pour ne pas exploser la mémoire sur un gros fichier).
@@ -31,9 +33,29 @@ final class ImportReport
     /** @var list<string> */
     private array $errorSamples = [];
 
+    /**
+     * Horodatage le plus ancien effectivement inséré (nouvelle ligne, hors
+     * doublon). Permet à l'orchestrateur de reculer le watermark de synchro
+     * EnergyID quand l'import contient des relevés antidatés (#130 B2).
+     */
+    private ?DateTimeImmutable $earliestImportedAt = null;
+
     public function addImported(int $n = 1): void
     {
         $this->imported += $n;
+    }
+
+    /** Enregistre l'horodatage d'une ligne réellement insérée (garde le minimum). */
+    public function noteImportedAt(DateTimeImmutable $ts): void
+    {
+        if ($this->earliestImportedAt === null || $ts < $this->earliestImportedAt) {
+            $this->earliestImportedAt = $ts;
+        }
+    }
+
+    public function earliestImportedAt(): ?DateTimeImmutable
+    {
+        return $this->earliestImportedAt;
     }
 
     public function addDuplicate(int $n = 1): void

@@ -127,14 +127,17 @@ try {
     }
     $waterCostData = $costSvc->estimateMonthWater($waterInitYear, $waterInitMonth);
 
+    // Le template ne consomme qu'un booléen « ce flux a-t-il déjà été synchronisé »
+    // (pastille stale si un flux ne l'a jamais été) : on ne formate plus les 7
+    // horodatages, jamais affichés (#130 C7).
     $syncStatus = [
-        'prelevement_jour'   => $syncState->getLastSentAt('prelevement-jour')?->format('d/m H:i'),
-        'prelevement_nuit'   => $syncState->getLastSentAt('prelevement-nuit')?->format('d/m H:i'),
-        'injection_jour'     => $syncState->getLastSentAt('injection-jour')?->format('d/m H:i'),
-        'injection_nuit'     => $syncState->getLastSentAt('injection-nuit')?->format('d/m H:i'),
-        'production_solaire' => $syncState->getLastSentAt('production-solaire')?->format('d/m H:i'),
-        'gaz_index'          => $syncState->getLastSentAt('gas-index')?->format('d/m H:i'),
-        'water_index'        => $syncState->getLastSentAt('water-index')?->format('d/m H:i'),
+        'prelevement_jour'   => $syncState->getLastSentAt('prelevement-jour') !== null,
+        'prelevement_nuit'   => $syncState->getLastSentAt('prelevement-nuit') !== null,
+        'injection_jour'     => $syncState->getLastSentAt('injection-jour') !== null,
+        'injection_nuit'     => $syncState->getLastSentAt('injection-nuit') !== null,
+        'production_solaire' => $syncState->getLastSentAt('production-solaire') !== null,
+        'gaz_index'          => $syncState->getLastSentAt('gas-index') !== null,
+        'water_index'        => $syncState->getLastSentAt('water-index') !== null,
     ];
 } catch (\Throwable $e) {
     $dbError = $e->getMessage();

@@ -30,6 +30,29 @@ final class WebhookSyncStateRepository
         return $value ? new DateTimeImmutable((string) $value) : null;
     }
 
+    /**
+     * Abaisse (jamais remonte) le watermark d'un flux à `$to` si le watermark
+     * courant lui est postérieur. Sert à resynchroniser un relevé antidaté
+     * (#123/#130 B2) : sans ce recul, le filtre strict `reading_at > last_sent`
+     * de {@see DailyLegacyWebhookSyncService} ne repêche jamais un relevé inséré
+     * *avant* le dernier envoi. `$to` doit valoir `reading_at moins 1 seconde`
+     * (le filtre relit en `>` strict). No-op si aucune ligne (flux jamais
+     * synchronisé → il enverra tout de toute façon). LEAST garantit qu'un relevé
+     * récent (postérieur au watermark) ne fait rien.
+     */
+    public function rewindLastSentAt(string $source, DateTimeImmutable $to): void
+    {
+        $stmt = $this->pdo->prepare(
+            'UPDATE webhook_sync_state SET last_sent_at = LEAST(last_sent_at, :to)'
+            . ' WHERE user_id = :uid AND source_name = :source'
+        );
+        $stmt->execute([
+            'uid'    => $this->userId,
+            'source' => $source,
+            'to'     => $to->format('Y-m-d H:i:s'),
+        ]);
+    }
+
     public function saveLastSentAt(string $source, DateTimeImmutable $lastSentAt): void
     {
         $sql = <<<'SQL'

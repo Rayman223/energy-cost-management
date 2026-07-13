@@ -9,7 +9,7 @@
  * @var array<string,mixed>|null $gasLatest
  * @var array<string,mixed>|null $waterLatest
  * @var array<string,mixed>|null $waterCostData
- * @var array<string,string|null>|null $syncStatus
+ * @var array<string,bool>|null $syncStatus
  * @var int                      $initYear
  * @var int                      $initMonth
  * @var int                      $gasInitYear
@@ -60,7 +60,7 @@ $fmt = function (mixed $v, int $dec = 3, string $unit = 'kWh'): string {
       <?php
         $syncClass = 'ok';
         if ($dbError) $syncClass = 'error';
-        elseif ($syncStatus && array_filter($syncStatus, fn($v) => $v === null)) $syncClass = 'stale';
+        elseif ($syncStatus && in_array(false, $syncStatus, true)) $syncClass = 'stale';
       ?>
       <div class="sync-badge">
         <span class="sync-dot <?= $syncClass === 'error' ? 'error' : ($syncClass === 'stale' ? 'stale' : '') ?>"></span>
@@ -70,7 +70,7 @@ $fmt = function (mixed $v, int $dec = 3, string $unit = 'kWh'): string {
       <?php if (!empty($isAdmin)): ?><a href="<?= $this->url('admin') ?>" class="theme-toggle" title="<?= $this->te('admin.title') ?>">🛡</a><?php endif; ?>
       <a href="<?= $this->url('tariffs') ?>" class="theme-toggle" title="Tarifs">€</a>
       <a href="<?= $this->url('account') ?>" class="theme-toggle" title="Mon compte">👤</a>
-      <?php if (!empty($oidcEnabled)): ?><a href="<?= $this->url('auth/logout') ?>" class="theme-toggle" title="<?= $this->te('auth.sign_out') ?>">🚪</a><?php endif; ?>
+      <?php if (!empty($oidcEnabled)): ?><form method="post" action="<?= $this->url('auth/logout') ?>" class="logout-form"><?= \App\Security\Csrf::field() ?><button type="submit" class="theme-toggle" title="<?= $this->te('auth.sign_out') ?>">🚪</button></form><?php endif; ?>
       <span class="langs"><?php foreach ($available as $loc): ?><a href="?lang=<?= $this->e($loc) ?>"<?= $loc === $this->locale() ? ' class="lang-active"' : '' ?>><?= $this->e(strtoupper($loc)) ?></a><?php endforeach; ?></span>
       <button type="button" class="theme-toggle" id="theme-toggle" aria-label="Changer de thème">🌙</button>
     </div>
