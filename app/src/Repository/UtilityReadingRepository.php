@@ -117,6 +117,34 @@ final class UtilityReadingRepository implements GasReadingRepositoryInterface, M
         return $row ?: null;
     }
 
+    /** @return array<string, mixed>|null */
+    public function getReadingBefore(DateTimeImmutable $ts): ?array
+    {
+        $stmt = $this->pdo->prepare(
+            'SELECT id, reading_at, counter_m3 FROM utility_readings
+             WHERE user_id = :uid AND energy_type = :etype AND reading_at <= :ts
+             ORDER BY reading_at DESC LIMIT 1'
+        );
+        $stmt->execute(['uid' => $this->userId, 'etype' => $this->energyType, 'ts' => $ts->format('Y-m-d H:i:s')]);
+        $row = $stmt->fetch();
+
+        return $row ?: null;
+    }
+
+    /** @return array<string, mixed>|null */
+    public function getReadingAfter(DateTimeImmutable $ts): ?array
+    {
+        $stmt = $this->pdo->prepare(
+            'SELECT id, reading_at, counter_m3 FROM utility_readings
+             WHERE user_id = :uid AND energy_type = :etype AND reading_at >= :ts
+             ORDER BY reading_at ASC LIMIT 1'
+        );
+        $stmt->execute(['uid' => $this->userId, 'etype' => $this->energyType, 'ts' => $ts->format('Y-m-d H:i:s')]);
+        $row = $stmt->fetch();
+
+        return $row ?: null;
+    }
+
     /** @return array{from: array<string, mixed>|null, to: array<string, mixed>|null} */
     public function getLastTwoReadings(): array
     {

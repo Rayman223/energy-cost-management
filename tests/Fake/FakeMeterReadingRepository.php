@@ -20,11 +20,15 @@ final class FakeMeterReadingRepository implements MeterReadingRepositoryInterfac
      * @param array<string, mixed>|null $latest
      * @param array<int,array{id:int,reading_at:string,counter_m3:float,delta_m3:float|null}> $all
      * @param list<array{reading_at: string, counter_m3: float}> $forInterpolation
+     * @param array<string, mixed>|null $before relevé encadrant renvoyé par getReadingBefore()
+     * @param array<string, mixed>|null $after  relevé encadrant renvoyé par getReadingAfter()
      */
     public function __construct(
         public ?array $latest = null,
         public array $all = [],
         public array $forInterpolation = [],
+        public ?array $before = null,
+        public ?array $after = null,
     ) {
     }
 
@@ -43,6 +47,18 @@ final class FakeMeterReadingRepository implements MeterReadingRepositoryInterfac
     public function getLatest(): ?array
     {
         return $this->latest;
+    }
+
+    /** @return array<string, mixed>|null */
+    public function getReadingBefore(DateTimeImmutable $ts): ?array
+    {
+        return $this->before;
+    }
+
+    /** @return array<string, mixed>|null */
+    public function getReadingAfter(DateTimeImmutable $ts): ?array
+    {
+        return $this->after;
     }
 
     /** @return list<array{reading_at: string, counter_m3: float}> */

@@ -22,6 +22,21 @@ interface MeterReadingRepositoryInterface
     public function getLatest(): ?array;
 
     /**
+     * Dernier relevé à ou avant $ts (borne inclusive : permet au contrôleur de
+     * détecter un doublon d'horodatage). null si aucun.
+     *
+     * @return array<string, mixed>|null
+     */
+    public function getReadingBefore(DateTimeImmutable $ts): ?array;
+
+    /**
+     * Premier relevé à ou après $ts (borne inclusive). null si aucun.
+     *
+     * @return array<string, mixed>|null
+     */
+    public function getReadingAfter(DateTimeImmutable $ts): ?array;
+
+    /**
      * Fenêtre de relevés nécessaire à l'interpolation à minuit d'un mois (le
      * dernier relevé avant le mois, ceux du mois, le premier après le mois),
      * triés par horodatage croissant.

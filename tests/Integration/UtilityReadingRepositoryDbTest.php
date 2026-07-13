@@ -117,6 +117,32 @@ final class UtilityReadingRepositoryDbTest extends TestCase
         self::assertCount(1, $their->getAllReadings());
     }
 
+    public function testReadingBeforeAndAfterAroundBackdatedDate(): void
+    {
+        $gas = new UtilityReadingRepository($this->pdo(), $this->userId, 'gas');
+
+        $gas->save(new DateTimeImmutable('2026-06-01 10:00:00'), 100.0);
+        $gas->save(new DateTimeImmutable('2026-07-01 10:00:00'), 150.0);
+
+        // Date encadrée par les deux relevés existants.
+        $ts = new DateTimeImmutable('2026-06-15 10:00:00');
+        $before = $gas->getReadingBefore($ts);
+        $after  = $gas->getReadingAfter($ts);
+        self::assertNotNull($before);
+        self::assertNotNull($after);
+        self::assertSame(100.0, (float) $before['counter_m3']);
+        self::assertSame(150.0, (float) $after['counter_m3']);
+
+        // Horodatage exact : bornes inclusives → renvoie ce même relevé des deux côtés.
+        $exact = new DateTimeImmutable('2026-06-01 10:00:00');
+        self::assertSame('2026-06-01 10:00:00', $gas->getReadingBefore($exact)['reading_at']);
+        self::assertSame('2026-06-01 10:00:00', $gas->getReadingAfter($exact)['reading_at']);
+
+        // Hors plage : pas de voisin de ce côté.
+        self::assertNull($gas->getReadingBefore(new DateTimeImmutable('2026-05-01 10:00:00')));
+        self::assertNull($gas->getReadingAfter(new DateTimeImmutable('2026-08-01 10:00:00')));
+    }
+
     public function testInterpolationWindow(): void
     {
         $gas = new UtilityReadingRepository($this->pdo(), $this->userId, 'gas');

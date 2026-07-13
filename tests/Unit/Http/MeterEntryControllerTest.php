@@ -59,22 +59,47 @@ final class MeterEntryControllerTest extends TestCase
         self::assertSame(123.5, $gas->saved['counter_m3']);
     }
 
-    public function testRejectsReadingDateBeforeLatest(): void
+    public function testAcceptsBackdatedReadingWithinBounds(): void
     {
-        $gas = new FakeMeterReadingRepository(latest: ['reading_at' => '2026-06-25 12:00:00', 'counter_m3' => 50.0]);
+        $gas = new FakeMeterReadingRepository(
+            before: ['reading_at' => '2026-06-25 08:00:00', 'counter_m3' => 50.0],
+            after:  ['reading_at' => '2026-06-25 12:00:00', 'counter_m3' => 150.0],
+        );
+
+        $res = $this->controller($gas, new FakeMeterReadingRepository())
+            ->gas($this->post(['counter_m3' => 100, 'reading_at' => '2026-06-25 10:00:00']));
+
+        self::assertSame(200, $res->status);
+        self::assertNotNull($gas->saved);
+        self::assertSame(100.0, $gas->saved['counter_m3']);
+    }
+
+    public function testRejectsCounterBelowPreviousReading(): void
+    {
+        $gas = new FakeMeterReadingRepository(before: ['reading_at' => '2026-06-25 08:00:00', 'counter_m3' => 200.0]);
 
         $this->expectException(ValidationException::class);
-        $this->expectExceptionMessage('Reading date must be after the latest entry');
+        $this->expectExceptionMessage('must be ≥ previous reading');
         $this->controller($gas, new FakeMeterReadingRepository())
             ->gas($this->post(['counter_m3' => 100, 'reading_at' => '2026-06-25 10:00:00']));
     }
 
-    public function testRejectsCounterBelowLatest(): void
+    public function testRejectsCounterAboveNextReading(): void
     {
-        $gas = new FakeMeterReadingRepository(latest: ['reading_at' => '2026-06-25 08:00:00', 'counter_m3' => 200.0]);
+        $gas = new FakeMeterReadingRepository(after: ['reading_at' => '2026-06-25 12:00:00', 'counter_m3' => 80.0]);
 
         $this->expectException(ValidationException::class);
-        $this->expectExceptionMessage('Counter value must be');
+        $this->expectExceptionMessage('must be ≤ next reading');
+        $this->controller($gas, new FakeMeterReadingRepository())
+            ->gas($this->post(['counter_m3' => 100, 'reading_at' => '2026-06-25 10:00:00']));
+    }
+
+    public function testRejectsDuplicateTimestamp(): void
+    {
+        $gas = new FakeMeterReadingRepository(before: ['reading_at' => '2026-06-25 10:00:00', 'counter_m3' => 100.0]);
+
+        $this->expectException(ValidationException::class);
+        $this->expectExceptionMessage('already exists at this date');
         $this->controller($gas, new FakeMeterReadingRepository())
             ->gas($this->post(['counter_m3' => 100, 'reading_at' => '2026-06-25 10:00:00']));
     }
@@ -144,5 +169,46 @@ final class MeterEntryControllerTest extends TestCase
         $this->expectException(ValidationException::class);
         $this->expectExceptionMessage('Invalid reading_at date format');
         $controller->electricity($this->elecPost(['reading_at' => 'not-a-date', 'import_t1' => 100]));
+    }
+
+    public function testAcceptsBackdatedElectricityWithinBounds(): void
+    {
+        $elec = new FakeElectricityIngestion(['import_t1' => ['min' => 1000.0, 'max' => 2000.0]]);
+        $res  = $this->controller(new FakeMeterReadingRepository(), new FakeMeterReadingRepository(), $elec)
+            ->electricity($this->elecPost(['reading_at' => '2026-06-25 10:00:00', 'import_t1' => 1500.0]));
+
+        self::assertSame(200, $res->status);
+        self::assertCount(1, $elec->calls);
+        self::assertSame(['import_t1' => 1500.0], $elec->calls[0]['indexes']);
+    }
+
+    public function testRejectsElectricityIndexBelowPrevious(): void
+    {
+        $elec = new FakeElectricityIngestion(['import_t1' => ['min' => 1000.0, 'max' => null]]);
+
+        $this->expectException(ValidationException::class);
+        $this->expectExceptionMessage('import_t1 must be ≥ previous reading');
+        $this->controller(new FakeMeterReadingRepository(), new FakeMeterReadingRepository(), $elec)
+            ->electricity($this->elecPost(['reading_at' => '2026-06-25 10:00:00', 'import_t1' => 500.0]));
+    }
+
+    public function testRejectsElectricityIndexAboveNext(): void
+    {
+        $elec = new FakeElectricityIngestion(['export_t2' => ['min' => null, 'max' => 100.0]]);
+
+        $this->expectException(ValidationException::class);
+        $this->expectExceptionMessage('export_t2 must be ≤ next reading');
+        $this->controller(new FakeMeterReadingRepository(), new FakeMeterReadingRepository(), $elec)
+            ->electricity($this->elecPost(['reading_at' => '2026-06-25 10:00:00', 'export_t2' => 200.0]));
+    }
+
+    public function testRejectsElectricityDuplicateTimestamp(): void
+    {
+        $elec = new FakeElectricityIngestion(['import_t1' => ['min' => 100.0, 'max' => 300.0, 'exists' => true]]);
+
+        $this->expectException(ValidationException::class);
+        $this->expectExceptionMessage('already exists at this date for import_t1');
+        $this->controller(new FakeMeterReadingRepository(), new FakeMeterReadingRepository(), $elec)
+            ->electricity($this->elecPost(['reading_at' => '2026-06-25 10:00:00', 'import_t1' => 200.0]));
     }
 }

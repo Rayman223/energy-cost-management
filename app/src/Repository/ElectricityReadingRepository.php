@@ -83,6 +83,53 @@ final class ElectricityReadingRepository implements LegacyDailyRepositoryInterfa
         return $inserted;
     }
 
+    /**
+     * @param list<string> $registerKeys
+     * @return array<string, array{min: float|null, max: float|null, exists: bool}>
+     */
+    public function readingBounds(DateTimeImmutable $timestamp, array $registerKeys): array
+    {
+        $at = $timestamp->format('Y-m-d H:i:s');
+
+        // Un seul aller-retour par registre : les trois sous-requêtes scalaires
+        // (relevé antérieur, postérieur, exact) sont évaluées ensemble. Chaque
+        // placeholder est distinct — PDO natif interdit la réutilisation d'un nom.
+        $stmt = $this->pdo->prepare(
+            'SELECT
+                (SELECT index_value FROM meter_readings
+                   WHERE register_id = :rid_b AND reading_at < :at_b ORDER BY reading_at DESC LIMIT 1) AS min_v,
+                (SELECT index_value FROM meter_readings
+                   WHERE register_id = :rid_a AND reading_at > :at_a ORDER BY reading_at ASC LIMIT 1) AS max_v,
+                EXISTS(SELECT 1 FROM meter_readings
+                   WHERE register_id = :rid_e AND reading_at = :at_e) AS exists_v'
+        );
+
+        $bounds = [];
+        foreach ($registerKeys as $key) {
+            $rid = $this->registerId($key);
+            if ($rid === null) {
+                $bounds[$key] = ['min' => null, 'max' => null, 'exists' => false];
+                continue;
+            }
+
+            $stmt->execute([
+                'rid_b' => $rid, 'at_b' => $at,
+                'rid_a' => $rid, 'at_a' => $at,
+                'rid_e' => $rid, 'at_e' => $at,
+            ]);
+            /** @var array{min_v: string|null, max_v: string|null, exists_v: int|string} $row */
+            $row = $stmt->fetch();
+
+            $bounds[$key] = [
+                'min'    => $row['min_v'] === null ? null : (float) $row['min_v'],
+                'max'    => $row['max_v'] === null ? null : (float) $row['max_v'],
+                'exists' => (bool) $row['exists_v'],
+            ];
+        }
+
+        return $bounds;
+    }
+
     // -------------------------------------------------------------------------
     // Dashboard : index courants
     // -------------------------------------------------------------------------

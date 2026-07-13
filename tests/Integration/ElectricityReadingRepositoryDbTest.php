@@ -158,6 +158,43 @@ final class ElectricityReadingRepositoryDbTest extends TestCase
         self::assertSame(2, (int) $stmt->fetchColumn());
     }
 
+    public function testReadingBoundsSurroundBackdatedTimestamp(): void
+    {
+        // Date encadrée par '2026-06-01 01:00:00' (202) et '2026-06-30 23:00:00' (300).
+        $bounds = $this->repo()->readingBounds(new \DateTimeImmutable('2026-06-15 10:00:00'), ['import_t1', 'production']);
+
+        self::assertEqualsWithDelta(202.0, $bounds['import_t1']['min'], 0.001);
+        self::assertEqualsWithDelta(300.0, $bounds['import_t1']['max'], 0.001);
+        self::assertFalse($bounds['import_t1']['exists']);
+        // 'production' n'a aucun relevé seedé → pas de borne.
+        self::assertNull($bounds['production']['min']);
+        self::assertNull($bounds['production']['max']);
+        self::assertFalse($bounds['production']['exists']);
+    }
+
+    public function testReadingBoundsFlagsExistingTimestamp(): void
+    {
+        // Horodatage exact d'un relevé seedé : exists=true (bornes strictes → voisins).
+        $bounds = $this->repo()->readingBounds(new \DateTimeImmutable('2026-06-01 01:00:00'), ['import_t1']);
+
+        self::assertTrue($bounds['import_t1']['exists']);
+        self::assertEqualsWithDelta(200.0, $bounds['import_t1']['min'], 0.001); // relevé strictement antérieur (2026-05-31 23:00)
+        self::assertEqualsWithDelta(300.0, $bounds['import_t1']['max'], 0.001); // relevé strictement postérieur (2026-06-30 23:00)
+    }
+
+    public function testReadingBoundsOpenEndedOutsideRange(): void
+    {
+        // Avant tout relevé : que la borne supérieure (premier relevé, 50).
+        $before = $this->repo()->readingBounds(new \DateTimeImmutable('2025-01-01 00:00:00'), ['import_t1']);
+        self::assertNull($before['import_t1']['min']);
+        self::assertEqualsWithDelta(50.0, $before['import_t1']['max'], 0.001);
+
+        // Après tout relevé : que la borne inférieure (dernier relevé, 350).
+        $after = $this->repo()->readingBounds(new \DateTimeImmutable('2027-01-01 00:00:00'), ['import_t1']);
+        self::assertEqualsWithDelta(350.0, $after['import_t1']['min'], 0.001);
+        self::assertNull($after['import_t1']['max']);
+    }
+
     public function testGetHistoryIncludesReadingsOlderThan30Days(): void
     {
         $rows = $this->repo()->getHistory();

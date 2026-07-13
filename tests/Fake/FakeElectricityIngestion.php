@@ -15,6 +15,13 @@ final class FakeElectricityIngestion implements ElectricityIngestionInterface
     /** @var array<string, true> Clés (timestamp|register) déjà vues — simule l'unicité. */
     private array $seen = [];
 
+    /**
+     * @param array<string, array{min?: float|null, max?: float|null, exists?: bool}> $bounds bornes par registre
+     */
+    public function __construct(public array $bounds = [])
+    {
+    }
+
     public function insertIndexes(DateTimeImmutable $timestamp, array $indexByRegister): int
     {
         $this->calls[] = ['timestamp' => $timestamp->format('Y-m-d H:i:s'), 'indexes' => $indexByRegister];
@@ -29,5 +36,24 @@ final class FakeElectricityIngestion implements ElectricityIngestionInterface
         }
 
         return $inserted;
+    }
+
+    /**
+     * @param list<string> $registerKeys
+     * @return array<string, array{min: float|null, max: float|null, exists: bool}>
+     */
+    public function readingBounds(DateTimeImmutable $timestamp, array $registerKeys): array
+    {
+        $out = [];
+        foreach ($registerKeys as $key) {
+            $b = $this->bounds[$key] ?? [];
+            $out[$key] = [
+                'min'    => $b['min'] ?? null,
+                'max'    => $b['max'] ?? null,
+                'exists' => $b['exists'] ?? false,
+            ];
+        }
+
+        return $out;
     }
 }

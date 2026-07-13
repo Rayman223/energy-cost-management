@@ -28,4 +28,16 @@ interface ElectricityIngestionInterface
      * @return int Nombre de lignes réellement insérées (doublons exclus).
      */
     public function insertIndexes(DateTimeImmutable $timestamp, array $indexByRegister): int;
+
+    /**
+     * Bornes de cohérence par registre autour de $timestamp, pour valider une
+     * saisie manuelle (éventuellement antidatée) : min = index du relevé
+     * strictement antérieur, max = index du relevé strictement postérieur
+     * (null si absent), exists = un relevé existe déjà à cet horodatage exact
+     * (l'INSERT IGNORE l'ignorerait silencieusement, d'où un rejet explicite).
+     *
+     * @param list<string> $registerKeys
+     * @return array<string, array{min: float|null, max: float|null, exists: bool}>
+     */
+    public function readingBounds(DateTimeImmutable $timestamp, array $registerKeys): array;
 }
