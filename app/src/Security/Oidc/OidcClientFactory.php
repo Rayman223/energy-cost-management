@@ -69,6 +69,25 @@ final class OidcClientFactory
     }
 
     /**
+     * Libellé d'affichage par clé fournisseur : `label` de config s'il est
+     * renseigné, sinon la clé capitalisée. Source unique partagée par la page
+     * de connexion et la page compte (liaison d'identités #137).
+     *
+     * @param array<string, mixed> $oidcConfig Bloc « oidc » complet.
+     * @return array<string, string> Clé fournisseur → libellé d'affichage.
+     */
+    public static function labelsFromConfig(array $oidcConfig): array
+    {
+        $labels = [];
+        foreach (self::providersFromConfig($oidcConfig) as $key => $block) {
+            $label = (string) ($block['label'] ?? '');
+            $labels[$key] = $label !== '' ? $label : ucfirst($key);
+        }
+
+        return $labels;
+    }
+
+    /**
      * @param array<string, mixed> $config Bloc d'un fournisseur (issue de {@see self::providersFromConfig()}).
      */
     public static function fromConfig(array $config): OpenIDConnectClient

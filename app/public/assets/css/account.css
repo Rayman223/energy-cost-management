@@ -14,3 +14,12 @@ th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--bord
 .inline { display: inline; }
 .btn-compact { margin: 0; padding: 4px 10px; }
 .mt-12 { margin-top: 12px; }
+
+/* Boutons « Lier un fournisseur » (#137) — variante lien de .btn-provider,
+   scoped ici pour ne pas dépendre de login.css (règles body/box incompatibles). */
+.btn-provider { margin-top: 12px; display: inline-flex; align-items: center; gap: 10px;
+  border: 1px solid var(--border); border-radius: 8px; background: var(--bg); color: var(--text-strong);
+  padding: 9px 14px; font-weight: 600; text-decoration: none; transition: border-color .2s; }
+.btn-provider:hover { border-color: var(--amber); }
+.btn-provider-icon { flex: 0 0 auto; }
+.identity-primary { color: var(--muted); font-weight: 400; }

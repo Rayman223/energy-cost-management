@@ -14,9 +14,12 @@ use App\I18n\Locale;
 use App\Infrastructure\Database;
 use App\Repository\ApiTokenRepository;
 use App\Repository\EnergyIdIntegrationRepository;
+use App\Repository\UserIdentityRepository;
 use App\Repository\UserRepository;
 use App\Security\AuthGuard;
 use App\Security\Csrf;
+use App\Security\IdentityUnlinker;
+use App\Security\Oidc\OidcClientFactory;
 use App\Security\UserContext;
 use App\Service\AccountDataExporter;
 use App\Service\AccountEraser;
@@ -48,6 +51,7 @@ $userId = UserContext::currentWebUserId($pdo, $config);
 $users        = new UserRepository($pdo);
 $tokensRepo   = new ApiTokenRepository($pdo);
 $energyIdRepo = new EnergyIdIntegrationRepository($pdo);
+$identityRepo = new UserIdentityRepository($pdo);
 
 // Locale = celle du profil (surchargée par ?lang) → View configurée.
 $profileForLocale = $users->getProfile($userId);
@@ -125,6 +129,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 throw new \RuntimeException($view->t('account.token_not_found'));
             }
             $success = $view->t('account.token_revoked_ok');
+        } elseif ($action === 'unlink_provider') {
+            // Déliaison d'une identité OIDC (#137), atomique : refus de la dernière
+            // + promotion de la primaire gérées dans une transaction verrouillée.
+            $id = filter_var($_POST['identity_id'] ?? null, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
+            if ($id === false) {
+                throw new \RuntimeException($view->t('account.identity_not_found'));
+            }
+            $status = (new IdentityUnlinker($pdo, $identityRepo, $users))->unlink($userId, $id);
+            if ($status === IdentityUnlinker::LAST) {
+                throw new \RuntimeException($view->t('account.identity_last'));
+            }
+            if ($status === IdentityUnlinker::NOT_FOUND) {
+                throw new \RuntimeException($view->t('account.identity_not_found'));
+            }
+            $success = $view->t('account.identity_unlinked');
         } elseif ($action === 'energyid_enable') {
             $energyIdRepo->enable($userId, $deviceId);
             $success = $view->t('account.energyid_enabled_msg');
@@ -159,8 +178,47 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
+// Retour du flux de liaison OIDC (redirection depuis /auth/login, #137).
+if ($success === null && $error === null) {
+    if (isset($_GET['linked'])) {
+        $success = ($_GET['already'] ?? '') === '1'
+            ? $view->t('account.identity_already_linked')
+            : $view->t('account.identity_linked');
+    } elseif (($_GET['link_error'] ?? '') === 'taken') {
+        $error = $view->t('account.identity_taken');
+    } elseif (($_GET['link_error'] ?? '') === 'aborted') {
+        $error = $view->t('account.identity_link_aborted');
+    }
+}
+
 // ── Données pour l'affichage ────────────────────────────────────────────────
 $user     = $users->findById($userId);
+
+// Identités OIDC liées + fournisseurs encore liables (#137). Libellés issus de
+// la config (source unique OidcClientFactory). Carte gardée par oidcEnabled côté vue.
+$providerLabels = OidcClientFactory::labelsFromConfig(is_array($config['oidc'] ?? null) ? $config['oidc'] : []);
+
+$identities = [];
+$linkedKeys = [];
+foreach ($identityRepo->listForUser($userId) as $identity) {
+    $linkedKeys[$identity['provider']] = true;
+    $identities[] = [
+        'id'         => $identity['id'],
+        'provider'   => $identity['provider'],
+        'label'      => $providerLabels[$identity['provider']] ?? ucfirst($identity['provider']),
+        'is_primary' => $user !== null && $user->oidcIss === $identity['oidc_iss'] && $user->oidcSub === $identity['oidc_sub'],
+        'created_at' => $identity['created_at'],
+    ];
+}
+
+$linkableProviders = [];
+foreach ($providerLabels as $pKey => $label) {
+    if (isset($linkedKeys[$pKey])) {
+        continue;
+    }
+    $linkableProviders[] = ['key' => $pKey, 'label' => $label];
+}
+
 $profile  = $users->getProfile($userId) ?? [
     'country' => null, 'timezone' => 'Europe/Brussels', 'currency' => 'EUR', 'bidding_zone' => null, 'pricing_mode' => 'fixed', 'locale' => 'fr',
 ];
@@ -178,6 +236,8 @@ echo $view->render('account', [
     'success'    => $success,
     'freshToken' => $freshToken,
     'user'       => $user,
+    'identities' => $identities,
+    'linkableProviders' => $linkableProviders,
     'profile'    => $profile,
     'tokens'     => $tokens,
     'energyId'   => $energyId,

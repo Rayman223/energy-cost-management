@@ -114,6 +114,21 @@ CREATE TABLE IF NOT EXISTS users (
     UNIQUE KEY uq_users_oidc (oidc_iss, oidc_sub)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+-- ── Identités OIDC liées à un compte (source de vérité pour (iss, sub)) ──
+-- Un compte peut avoir plusieurs identités (Google + Microsoft…). users.oidc_iss/
+-- oidc_sub restent l'identité primaire et pointent toujours vers l'une de ces lignes.
+CREATE TABLE IF NOT EXISTS user_identities (
+    id         BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    user_id    BIGINT UNSIGNED NOT NULL,
+    oidc_iss   VARCHAR(255) NOT NULL COMMENT 'Issuer OpenID (claim iss)',
+    oidc_sub   VARCHAR(255) NOT NULL COMMENT 'Subject OpenID (claim sub)',
+    provider   VARCHAR(60)  NOT NULL DEFAULT '' COMMENT 'Libellé court du fournisseur',
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY uq_user_identities (oidc_iss, oidc_sub),
+    INDEX idx_user_identities_user (user_id),
+    CONSTRAINT fk_user_identities_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 CREATE TABLE IF NOT EXISTS user_profiles (
     user_id      BIGINT UNSIGNED NOT NULL PRIMARY KEY,
     country      VARCHAR(2)  NULL COMMENT 'Code pays ISO 3166-1 alpha-2',
@@ -231,4 +246,5 @@ INSERT IGNORE INTO schema_migrations (version) VALUES
     ('2026-07-06_tariff_templates_water.sql'),
     ('2026-07-07_tariff_template_usage.sql'),
     ('2026-07-10_tariff_line_category.sql'),
-    ('2026-07-11_pricing_mode_and_native_hourly.sql');
+    ('2026-07-11_pricing_mode_and_native_hourly.sql'),
+    ('2026-07-14_user_identities.sql');

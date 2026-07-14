@@ -65,6 +65,22 @@ final class FakeUserRepository implements UserRepositoryInterface
         }
     }
 
+    public function setPrimaryIdentity(int $userId, string $iss, string $sub, string $provider): void
+    {
+        $existing = $this->users[$userId] ?? null;
+        if ($existing !== null) {
+            $this->users[$userId] = new User(
+                $existing->id,
+                $iss,
+                $sub,
+                $provider,
+                $existing->displayName,
+                $existing->role,
+                $existing->status,
+            );
+        }
+    }
+
     /** @var list<int> */
     public array $termsAccepted = [];
 

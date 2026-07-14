@@ -74,4 +74,23 @@ final class OidcClientFactoryTest extends TestCase
         self::assertSame('example', OidcClientFactory::providerLabel('https://auth.example.com/realms/x'));
         self::assertSame('', OidcClientFactory::providerLabel('not-a-url'));
     }
+
+    public function testLabelsFromConfigUsesLabelOrCapitalisedKey(): void
+    {
+        $labels = OidcClientFactory::labelsFromConfig([
+            'providers' => [
+                'google'    => ['issuer' => 'https://accounts.google.com', 'client_id' => 'c', 'label' => 'Google Workspace'],
+                'microsoft' => ['issuer' => 'https://login.microsoftonline.com/common/v2.0', 'client_id' => 'c'],
+                'no_client' => ['issuer' => 'https://auth.example.com/realms/y'], // écarté (incomplet)
+            ],
+        ]);
+
+        // Libellé explicite conservé ; clé capitalisée en secours ; entrée invalide absente.
+        self::assertSame(['google' => 'Google Workspace', 'microsoft' => 'Microsoft'], $labels);
+    }
+
+    public function testLabelsFromConfigEmptyWhenNoProvider(): void
+    {
+        self::assertSame([], OidcClientFactory::labelsFromConfig([]));
+    }
 }

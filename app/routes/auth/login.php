@@ -18,9 +18,11 @@ use App\I18n\LocaleResolver;
 use App\I18n\Translator;
 use App\Infrastructure\Database;
 use App\Repository\UserRepository;
+use App\Repository\UserIdentityRepository;
 use App\Security\AccountProvisioner;
 use App\Security\AuthGuard;
 use App\Security\AuthSession;
+use App\Security\IdentityLinker;
 use App\Security\Oidc\OidcClientFactory;
 use App\Security\Oidc\OidcDiscoveryCache;
 use App\Security\Session;
@@ -79,6 +81,16 @@ try {
             }
         }
         $_SESSION['auth_oidc_provider'] = $key;
+
+        // Mode liaison (#137) : un utilisateur déjà connecté rattache un second
+        // fournisseur. L'id lié provient de la session authentifiée — jamais du
+        // client — et la liaison ne se conclut qu'avec une preuve OIDC complète.
+        // On repart d'un état propre à chaque initiation (pas de flag résiduel).
+        if (($_GET['link'] ?? '') === '1' && AuthSession::userId() !== null) {
+            $_SESSION['auth_link_user_id'] = AuthSession::userId();
+        } else {
+            unset($_SESSION['auth_link_user_id']);
+        }
     }
     $providerConfig = $providers[$key];
 
@@ -122,9 +134,45 @@ try {
         throw new \RuntimeException('Database configuration missing.');
     }
     $database = new Database($config['database']);
-    $provisioner = new AccountProvisioner(new UserRepository($database->pdo()));
-    // La clé de config (google, microsoft, keycloak…) est la valeur stockée en
-    // base — plus fiable que providerLabel() pour un IdP auto-hébergé.
+    $pdo = $database->pdo();
+
+    // Mode liaison (#137). La clé de config (google, microsoft…) est la valeur
+    // stockée en base — plus fiable que providerLabel() pour un IdP auto-hébergé.
+    $sessionUserId = AuthSession::userId();
+    $linkFlag = isset($_SESSION['auth_link_user_id']) && is_int($_SESSION['auth_link_user_id'])
+        ? $_SESSION['auth_link_user_id']
+        : null;
+
+    // Dès qu'une liaison est en cours, on NE provisionne JAMAIS un nouveau compte
+    // dans ce callback : si la session a changé/expiré entre le clic « lier » et
+    // le retour de l'IdP (ex. déconnexion dans un autre onglet), retomber sur
+    // provision() créerait le doublon que la liaison visait justement à éviter.
+    if ($linkFlag !== null) {
+        unset($_SESSION['auth_link_user_id'], $_SESSION['auth_oidc_provider'], $_SESSION['auth_next']);
+        $account = WebAccessGuard::appRootPath() . '/account';
+
+        if ($linkFlag !== $sessionUserId) {
+            // Session incohérente avec l'intention de liaison → abandon propre.
+            header('Location: ' . $account . '?link_error=aborted', true, 302);
+            exit;
+        }
+
+        $status = (new IdentityLinker(new UserIdentityRepository($pdo)))
+            ->link($sessionUserId, $issuer, $sub, $key);
+        if ($status === IdentityLinker::TAKEN_BY_OTHER) {
+            $target = $account . '?link_error=taken';
+        } else {
+            $target = $account . '?linked=' . rawurlencode($key);
+            if ($status === IdentityLinker::ALREADY_LINKED_SELF) {
+                $target .= '&already=1';
+            }
+        }
+
+        header('Location: ' . $target, true, 302);
+        exit;
+    }
+
+    $provisioner = new AccountProvisioner(new UserRepository($pdo));
     $user = $provisioner->provision($issuer, $sub, $key, $displayName);
 
     if ($user->isActive() === false) {

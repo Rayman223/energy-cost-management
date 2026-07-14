@@ -21,6 +21,12 @@ interface UserRepositoryInterface
 
     public function updateDisplayName(int $userId, string $displayName): void;
 
+    /**
+     * Repointe l'identité primaire du compte (`users.oidc_iss/oidc_sub/provider`)
+     * vers une identité liée existante — utilisé à la déliaison de la primaire.
+     */
+    public function setPrimaryIdentity(int $userId, string $iss, string $sub, string $provider): void;
+
     public function acceptTermsIfNeeded(int $userId): void;
 
     public function touchLastLogin(int $userId): void;

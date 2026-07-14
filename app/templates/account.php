@@ -9,6 +9,8 @@ use App\Domain\User;
  * @var string|null $success
  * @var string|null $freshToken
  * @var User|null   $user
+ * @var list<array{id:int,provider:string,label:string,is_primary:bool,created_at:string}> $identities
+ * @var list<array{key:string,label:string}> $linkableProviders
  * @var array{country:?string,timezone:string,currency:string,bidding_zone:?string,pricing_mode:string,locale:string} $profile
  * @var list<array{id:int,name:string,prefix:string,scopes:string,last_used_at:?string,created_at:string,revoked_at:?string}> $tokens
  * @var array{enabled:bool,device_id:string,claimed_at:?string}|null $energyId
@@ -104,6 +106,40 @@ $csrf = \App\Security\Csrf::field();
       <button type="submit"><?= $this->te('account.save_profile') ?></button>
     </form>
   </div>
+
+  <!-- ── Fournisseurs de connexion (identités OIDC liées, #137) ─────────── -->
+  <?php if (!empty($oidcEnabled)): ?>
+  <div class="card">
+    <h2><?= $this->te('account.identities') ?></h2>
+    <p class="hint"><?= $this->te('account.identities_hint') ?></p>
+    <table>
+      <tr><th><?= $this->te('account.identity_provider') ?></th><th><?= $this->te('account.identity_since') ?></th><th></th></tr>
+      <?php foreach ($identities as $idn): ?>
+      <tr>
+        <td><?= $this->partial('oidc-provider-icon', ['key' => $idn['provider']]) ?> <?= $this->e($idn['label']) ?><?= $idn['is_primary'] ? ' <span class="identity-primary">· ' . $this->te('account.identity_primary') . '</span>' : '' ?></td>
+        <td class="muted"><?= $this->e($idn['created_at']) ?></td>
+        <td><?php if (count($identities) > 1): ?>
+          <form method="post" class="inline" data-confirm="<?= $this->e($this->t('account.identity_unlink_confirm', ['provider' => $idn['label']])) ?>" data-confirm-ok="<?= $this->e($this->t('account.identity_unlink')) ?>" data-confirm-danger>
+            <?= $csrf ?>
+            <input type="hidden" name="action" value="unlink_provider">
+            <input type="hidden" name="identity_id" value="<?= $idn['id'] ?>">
+            <button type="submit" class="ghost btn-compact"><?= $this->te('account.identity_unlink') ?></button>
+          </form>
+        <?php endif; ?></td>
+      </tr>
+      <?php endforeach; ?>
+    </table>
+    <?php if ($linkableProviders !== []): ?>
+      <p class="hint mt-12"><?= $this->te('account.identity_link_hint') ?></p>
+      <?php foreach ($linkableProviders as $lp): ?>
+        <a class="btn-provider" href="<?= $this->e($this->url('auth/login') . '?provider=' . rawurlencode($lp['key']) . '&link=1') ?>">
+          <?= $this->partial('oidc-provider-icon', ['key' => $lp['key']]) ?>
+          <span><?= $this->te('account.identity_link_with', ['provider' => $lp['label']]) ?></span>
+        </a>
+      <?php endforeach; ?>
+    <?php endif; ?>
+  </div>
+  <?php endif; ?>
 
   <!-- ── Jetons API ─────────────────────────────────────────────────────── -->
   <div class="card">

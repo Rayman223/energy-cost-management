@@ -42,11 +42,10 @@ if ($oidcEnabled) {
 
     // Un bouton par fournisseur activé (l'utilisateur choisit son IdP).
     $providers = [];
-    foreach (OidcClientFactory::providersFromConfig(is_array($oidc) ? $oidc : []) as $key => $bloc) {
-        $label = (string) ($bloc['label'] ?? '');
+    foreach (OidcClientFactory::labelsFromConfig(is_array($oidc) ? $oidc : []) as $key => $label) {
         $providers[] = [
             'key'   => $key,
-            'label' => $label !== '' ? $label : ucfirst($key),
+            'label' => $label,
             'href'  => Url::to('auth/login') . '?provider=' . rawurlencode($key) . '&next=' . rawurlencode($next),
         ];
     }

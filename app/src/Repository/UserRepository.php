@@ -17,12 +17,33 @@ final class UserRepository implements UserRepositoryInterface
 
     public function findByOidc(string $iss, string $sub): ?User
     {
+        // Résolution via user_identities (source de vérité #137) : une identité
+        // liée pointe vers son compte, qui peut en porter plusieurs. La ligne
+        // users renvoyée reste l'identité primaire du compte.
         $stmt = $this->pdo->prepare(
-            'SELECT id, oidc_iss, oidc_sub, provider, display_name, role, status
-             FROM users WHERE oidc_iss = :iss AND oidc_sub = :sub LIMIT 1'
+            'SELECT u.id, u.oidc_iss, u.oidc_sub, u.provider, u.display_name, u.role, u.status
+             FROM users u
+             JOIN user_identities ui ON ui.user_id = u.id
+             WHERE ui.oidc_iss = :iss AND ui.oidc_sub = :sub LIMIT 1'
         );
         $stmt->execute(['iss' => $iss, 'sub' => $sub]);
         $row = $stmt->fetch();
+        if (is_array($row)) {
+            return self::mapRow($row);
+        }
+
+        // Filet de transition : si le backfill #137 n'a pas encore peuplé
+        // user_identities (code déployé avant `migrate.php`), on retombe sur les
+        // colonnes primaires de `users`. Sans ça, tous les comptes existants
+        // échoueraient à se connecter tant que la migration n'est pas jouée.
+        // Post-backfill, ce second appel ne renvoie jamais rien de plus (toute
+        // identité primaire est aussi dans user_identities) : filet inoffensif.
+        $legacy = $this->pdo->prepare(
+            'SELECT id, oidc_iss, oidc_sub, provider, display_name, role, status
+             FROM users WHERE oidc_iss = :iss AND oidc_sub = :sub LIMIT 1'
+        );
+        $legacy->execute(['iss' => $iss, 'sub' => $sub]);
+        $row = $legacy->fetch();
 
         return is_array($row) ? self::mapRow($row) : null;
     }
@@ -67,6 +88,20 @@ final class UserRepository implements UserRepositoryInterface
             $this->pdo->prepare('INSERT INTO user_profiles (user_id) VALUES (:id)')
                 ->execute(['id' => $id]);
 
+            // Identité primaire (#137) : chaque compte a au moins une ligne dans
+            // user_identities, source de vérité de la recherche (iss, sub). Même
+            // transaction → une course (unicité) fait rollback, relue par
+            // AccountProvisioner via findByOidc().
+            $this->pdo->prepare(
+                'INSERT INTO user_identities (user_id, oidc_iss, oidc_sub, provider)
+                 VALUES (:uid, :iss, :sub, :provider)'
+            )->execute([
+                'uid'      => $id,
+                'iss'      => $iss,
+                'sub'      => $sub,
+                'provider' => $provider,
+            ]);
+
             $this->pdo->commit();
         } catch (\Throwable $e) {
             if ($this->pdo->inTransaction()) {
@@ -87,6 +122,24 @@ final class UserRepository implements UserRepositoryInterface
     {
         $this->pdo->prepare('UPDATE users SET display_name = :name WHERE id = :id')
             ->execute(['name' => $displayName, 'id' => $userId]);
+    }
+
+    /**
+     * Repointe l'identité primaire du compte (#137). Appelé lors de la déliaison
+     * de l'identité primaire : `users.oidc_iss/oidc_sub` doit toujours
+     * correspondre à une ligne réelle de `user_identities`, sinon un futur
+     * provisioning du même `(iss, sub)` violerait `uq_users_oidc`.
+     */
+    public function setPrimaryIdentity(int $userId, string $iss, string $sub, string $provider): void
+    {
+        $this->pdo->prepare(
+            'UPDATE users SET oidc_iss = :iss, oidc_sub = :sub, provider = :provider WHERE id = :id'
+        )->execute([
+            'iss'      => $iss,
+            'sub'      => $sub,
+            'provider' => $provider,
+            'id'       => $userId,
+        ]);
     }
 
     /** Persiste la langue choisie dans le profil (crée la ligne au besoin). */
