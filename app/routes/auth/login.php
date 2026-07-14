@@ -6,6 +6,11 @@ declare(strict_types=1);
  * Connexion OpenID Connect — sert à la fois d'initiateur (redirige vers l'IdP)
  * et de callback (redirect_uri pointe sur ce fichier). À la 1re connexion, le
  * compte est auto-créé (inscription ouverte).
+ *
+ * Multi-fournisseurs : le fournisseur est choisi à l'initiation via `?provider=`
+ * puis mémorisé en session (`auth_oidc_provider`) et relu au callback — le
+ * redirect_uri reste unique et sans query (contrainte Microsoft/Google + routeur
+ * à correspondance exacte).
  */
 
 use App\Http\SecurityHeaders;
@@ -14,10 +19,13 @@ use App\I18n\Translator;
 use App\Infrastructure\Database;
 use App\Repository\UserRepository;
 use App\Security\AccountProvisioner;
+use App\Security\AuthGuard;
 use App\Security\AuthSession;
 use App\Security\Oidc\OidcClientFactory;
 use App\Security\Session;
 use App\Security\WebAccessGuard;
+use App\Support\SafeRedirect;
+use App\Support\Url;
 use Jumbojett\OpenIDConnectClientException;
 
 $config = require __DIR__ . '/../../bootstrap.php';
@@ -32,7 +40,7 @@ if (is_array($security)) {
 $home = WebAccessGuard::appRootPath() . '/';
 
 $oidcConfig = $config['oidc'] ?? [];
-if (!is_array($oidcConfig) || ($oidcConfig['enabled'] ?? false) !== true) {
+if (!is_array($oidcConfig) || AuthGuard::isOidcEnabled($config) === false) {
     header('Location: ' . $home, true, 302);
     exit;
 }
@@ -40,30 +48,50 @@ if (!is_array($oidcConfig) || ($oidcConfig['enabled'] ?? false) !== true) {
 Session::start();
 
 // Cible de redirection post-connexion (protégée contre l'open redirect).
-$next = (string) ($_GET['next'] ?? $_SESSION['auth_next'] ?? $home);
-if (
-    $next === ''
-    || str_starts_with($next, '/') === false
-    || str_starts_with($next, '//')
-    || str_contains($next, "\r")
-    || str_contains($next, "\n")
-) {
-    $next = $home;
-}
+$next = SafeRedirect::sanitize((string) ($_GET['next'] ?? $_SESSION['auth_next'] ?? $home), $home);
 $_SESSION['auth_next'] = $next;
 
-// redirect_uri : si non configuré, le dériver en honorant X-Forwarded-Proto
-// (SWAG termine le TLS) pour éviter un callback http:// rejeté par l'IdP.
-if (($oidcConfig['redirect_uri'] ?? '') === '') {
-    $scheme = Session::isHttps() ? 'https' : 'http';
-    $host = (string) ($_SERVER['HTTP_HOST'] ?? 'localhost');
-    // Callback = la route « /auth/login » (le front controller #106 fait pointer
-    // SCRIPT_NAME sur /index.php, inexploitable ici).
-    $oidcConfig['redirect_uri'] = $scheme . '://' . $host . WebAccessGuard::appRootPath() . '/auth/login';
-}
-
 try {
-    $oidc = OidcClientFactory::fromConfig($oidcConfig);
+    $providers = OidcClientFactory::providersFromConfig($oidcConfig);
+    if ($providers === []) {
+        header('Location: ' . $home, true, 302);
+        exit;
+    }
+
+    // Résolution du fournisseur. Au callback, l'IdP ne renvoie ni ?provider ni
+    // query personnalisée : on relit la clé mémorisée à l'initiation.
+    $isCallback = isset($_GET['code']) || isset($_GET['error']) || isset($_GET['state']);
+    if ($isCallback) {
+        $key = (string) ($_SESSION['auth_oidc_provider'] ?? '');
+        if (!isset($providers[$key])) {
+            throw new \RuntimeException('OIDC callback without provider context');
+        }
+    } else {
+        $key = is_string($_GET['provider'] ?? null) ? (string) $_GET['provider'] : '';
+        if (!isset($providers[$key])) {
+            if (count($providers) === 1) {
+                $key = (string) array_key_first($providers); // rétro-compat bookmarks
+            } else {
+                // Choix ambigu : renvoyer vers la page de sélection brandée.
+                header('Location: ' . Url::to('login') . '?next=' . rawurlencode($next), true, 302);
+                exit;
+            }
+        }
+        $_SESSION['auth_oidc_provider'] = $key;
+    }
+    $providerConfig = $providers[$key];
+
+    // redirect_uri : si non configuré, le dériver en honorant X-Forwarded-Proto
+    // (SWAG termine le TLS) pour éviter un callback http:// rejeté par l'IdP.
+    if ((string) ($providerConfig['redirect_uri'] ?? '') === '') {
+        $scheme = Session::isHttps() ? 'https' : 'http';
+        $host = (string) ($_SERVER['HTTP_HOST'] ?? 'localhost');
+        // Callback = la route « /auth/login » (le front controller #106 fait pointer
+        // SCRIPT_NAME sur /index.php, inexploitable ici).
+        $providerConfig['redirect_uri'] = $scheme . '://' . $host . WebAccessGuard::appRootPath() . '/auth/login';
+    }
+
+    $oidc = OidcClientFactory::fromConfig($providerConfig);
     $oidc->authenticate(); // 1er appel : redirige vers l'IdP. Retour : valide le code.
 
     $sub = $oidc->getVerifiedClaims('sub');
@@ -87,12 +115,16 @@ try {
         }
     }
 
-    $issuer = (string) ($oidcConfig['issuer'] ?? '');
-    $provider = OidcClientFactory::providerLabel($issuer);
+    $issuer = (string) ($providerConfig['issuer'] ?? '');
 
+    if (!is_array($config['database'] ?? null)) {
+        throw new \RuntimeException('Database configuration missing.');
+    }
     $database = new Database($config['database']);
     $provisioner = new AccountProvisioner(new UserRepository($database->pdo()));
-    $user = $provisioner->provision($issuer, $sub, $provider, $displayName);
+    // La clé de config (google, microsoft, keycloak…) est la valeur stockée en
+    // base — plus fiable que providerLabel() pour un IdP auto-hébergé.
+    $user = $provisioner->provision($issuer, $sub, $key, $displayName);
 
     if ($user->isActive() === false) {
         http_response_code(403);
@@ -102,7 +134,7 @@ try {
     }
 
     AuthSession::login($user->id);
-    unset($_SESSION['auth_next']);
+    unset($_SESSION['auth_next'], $_SESSION['auth_oidc_provider']);
 
     header('Location: ' . $next, true, 302);
     exit;

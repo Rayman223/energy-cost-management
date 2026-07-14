@@ -23,6 +23,8 @@ return [
 
     'auth.sign_in'         => 'Anmelden',
     'auth.signin_with'     => 'Mit {provider} anmelden',
+    'auth.choose_provider' => 'Wählen Sie Ihren Anbieter',
+    'auth.no_provider'     => 'Es ist kein Anmeldeanbieter konfiguriert.',
     'auth.sign_out'        => 'Abmelden',
     'auth.signed_out'      => 'Sie wurden abgemeldet.',
     'auth.error'           => 'Anmeldung fehlgeschlagen. Bitte erneut versuchen.',

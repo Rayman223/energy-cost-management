@@ -97,19 +97,33 @@ Edit the `oidc` block of `app/config/config.php`
 
 ```php
 'oidc' => [
-    'enabled'       => true,
-    'issuer'        => 'https://accounts.google.com',
-    'client_id'     => '<your-client-id>.apps.googleusercontent.com',
-    'client_secret' => '<your-client-secret>',
-    // Leave empty to auto-derive from the /auth/login route (recommended);
-    // or set it to the exact Authorized redirect URI from step 3.
-    'redirect_uri'  => '',
-    'scopes'        => ['openid', 'profile'],
+    'enabled'   => true,
+    'providers' => [
+        'google' => [
+            'issuer'        => 'https://accounts.google.com',
+            'client_id'     => '<your-client-id>.apps.googleusercontent.com',
+            'client_secret' => '<your-client-secret>',
+            // Leave empty to auto-derive from the /auth/login route (recommended);
+            // or set it to the exact Authorized redirect URI from step 3.
+            'redirect_uri'  => '',
+            'scopes'        => ['openid', 'profile'],
+        ],
+    ],
 ],
 ```
 
 Setting `enabled => true` switches the app to multi-user OIDC mode. Leaving it
 `false` keeps the historic single-tenant HTTP Basic Auth (`web_security`).
+
+> **Multiple providers.** Add more entries under `providers` (e.g. `microsoft`,
+> `keycloak`) to show one button per IdP on the sign-in page — see
+> [oidc-microsoft.md](oidc-microsoft.md) and [oidc-generic.md](oidc-generic.md).
+> The provider key (`google`, `microsoft`…) is stored in `users.provider` and
+> picks the button icon.
+>
+> **Backwards compatible.** The older flat form (`issuer`/`client_id`/… directly
+> under `oidc`, without a `providers` list) is still accepted and behaves as a
+> single implicit provider — an existing Google install keeps working unchanged.
 
 ---
 
@@ -145,6 +159,12 @@ Setting `enabled => true` switches the app to multi-user OIDC mode. Leaving it
 
 ## Other identity providers
 
-Prefer Microsoft, a self-hosted IdP (Keycloak/Authentik/Zitadel), or offering a
-choice for users without Google? Tracked in issue
-[#122](https://github.com/Rayman223/Manage-energy-costs/issues/122).
+The app supports several providers side by side — one button per configured IdP:
+
+- **Microsoft / Entra ID** — [oidc-microsoft.md](oidc-microsoft.md).
+- **Self-hosted OIDC** (Keycloak, Authentik, Zitadel) — [oidc-generic.md](oidc-generic.md).
+
+> **The same person via two different IdPs = two distinct accounts.** Identity is
+> the `issuer` + `subject` pair; there is no cross-provider account linking. A user
+> who signs in with Google and later with Microsoft ends up with two separate
+> accounts.

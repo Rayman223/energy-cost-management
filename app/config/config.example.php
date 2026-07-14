@@ -70,18 +70,29 @@ return [
         ],
     ],
 
-    // Authentification OpenID Connect (générique, configurable).
+    // Authentification OpenID Connect (multi-fournisseurs).
     // enabled=false → comportement historique (Basic Auth ci-dessus) inchangé.
-    // enabled=true  → connexion déléguée à l'issuer OIDC, comptes multi-utilisateurs.
+    // enabled=true  → connexion déléguée aux IdP OIDC, comptes multi-utilisateurs.
+    //
+    // Rétro-compat : l'ancienne forme plate (issuer/client_id/… directement sous
+    // 'oidc', sans 'providers') reste acceptée et vaut un fournisseur unique.
     'oidc' => [
-        'enabled'       => false,
-        'issuer'        => 'https://accounts.google.com',
-        'client_id'     => 'change_me',
-        'client_secret' => 'change_me',
-        // Laisser vide pour dériver automatiquement l'URL de la route /auth/login.
-        'redirect_uri'  => '',
-        // Pas d'e-mail demandé : openid (obligatoire) + profile (nom d'affichage).
-        'scopes'        => ['openid', 'profile'],
+        'enabled'   => false,
+        'providers' => [
+            // La clé (google, microsoft, keycloak…) choisit l'icône du bouton et
+            // la valeur stockée en base (users.provider). Une même personne via
+            // deux IdP différents = deux comptes distincts (identité = iss+sub).
+            'google' => [
+                'issuer'        => 'https://accounts.google.com',
+                'client_id'     => 'change_me',
+                'client_secret' => 'change_me',
+                'redirect_uri'  => '',                  // vide = dérivé (…/auth/login)
+                'scopes'        => ['openid', 'profile'], // pas d'e-mail : openid + profile
+                // 'label'      => 'Google',            // libellé bouton (défaut : clé capitalisée)
+            ],
+            // 'microsoft' => [ 'issuer' => 'https://login.microsoftonline.com/<tenant-id>/v2.0', … ], // cf. app/docs/oidc-microsoft.md
+            // 'keycloak'  => [ 'issuer' => 'https://auth.example.com/realms/mon-realm', …, 'label' => 'Keycloak' ], // cf. app/docs/oidc-generic.md
+        ],
     ],
 
     // Internationalisation.

@@ -13,12 +13,70 @@ use Jumbojett\OpenIDConnectClient;
 final class OidcClientFactory
 {
     /**
-     * @param array<string, mixed> $config
+     * Normalise le bloc `oidc` en une liste `clé fournisseur → bloc fournisseur`.
+     *
+     * Deux formes acceptées :
+     *  - **multi-fournisseurs** : `$oidcConfig['providers']` est un array non
+     *    vide. Seules les entrées à clé string (bornée par `VARCHAR(60)` de
+     *    `users.provider`) avec `issuer` **et** `client_id` non vides sont
+     *    conservées ; les blocs incomplets sont ignorés silencieusement.
+     *  - **plate historique** : pas de `providers` mais un `issuer` à la racine.
+     *    Le bloc entier fait office de fournisseur unique, dont la clé implicite
+     *    est dérivée via {@see self::providerLabel()} (rétro-compat : une install
+     *    Google existante continue d'écrire `provider = 'google'`).
+     *
+     * @param array<string, mixed> $oidcConfig Bloc « oidc » complet.
+     * @return array<string, array<string, mixed>> Clé fournisseur → bloc fournisseur.
+     */
+    public static function providersFromConfig(array $oidcConfig): array
+    {
+        $providers = $oidcConfig['providers'] ?? null;
+        if (is_array($providers) && $providers !== []) {
+            $clean = [];
+            foreach ($providers as $key => $block) {
+                // Tolérant à la casse : une clé « Microsoft » est normalisée en
+                // « microsoft » (icône du bouton + valeur users.provider cohérentes)
+                // plutôt que rejetée silencieusement.
+                $key = is_string($key) ? strtolower($key) : '';
+                if (preg_match('/^[a-z0-9_-]{1,60}$/', $key) !== 1) {
+                    continue;
+                }
+                if (!is_array($block)) {
+                    continue;
+                }
+                $issuer = $block['issuer'] ?? null;
+                $clientId = $block['client_id'] ?? null;
+                if (!is_string($issuer) || $issuer === '' || !is_string($clientId) || $clientId === '') {
+                    continue;
+                }
+                $clean[$key] = $block;
+            }
+
+            return $clean;
+        }
+
+        $issuer = $oidcConfig['issuer'] ?? null;
+        if (is_string($issuer) && $issuer !== '') {
+            $key = self::providerLabel($issuer);
+            if ($key === '') {
+                $key = 'oidc';
+            }
+
+            return [$key => $oidcConfig];
+        }
+
+        return [];
+    }
+
+    /**
+     * @param array<string, mixed> $config Bloc d'un fournisseur (issue de {@see self::providersFromConfig()}).
      */
     public static function fromConfig(array $config): OpenIDConnectClient
     {
+        $issuer = (string) ($config['issuer'] ?? '');
+
         $client = new OpenIDConnectClient(
-            (string) ($config['issuer'] ?? ''),
+            $issuer,
             (string) ($config['client_id'] ?? ''),
             (string) ($config['client_secret'] ?? ''),
         );
@@ -30,6 +88,17 @@ final class OidcClientFactory
 
         $client->setCodeChallengeMethod('S256');
         $client->addScope(self::scopes($config));
+
+        // Microsoft/Entra multi-tenant : l'issuer configuré (common/organizations/
+        // consumers) ne correspond jamais à l'issuer réel des jetons, qui contient
+        // le GUID du tenant de l'utilisateur. On assouplit la validation à tout
+        // tenant login.microsoftonline.com valide (cf. app/docs/oidc-microsoft.md).
+        if (preg_match('#^https://login\.microsoftonline\.com/(common|organizations|consumers)/v2\.0/?$#', $issuer) === 1) {
+            $client->setIssuerValidator(
+                static fn (string $iss): bool =>
+                    preg_match('#^https://login\.microsoftonline\.com/[0-9a-fA-F-]{36}/v2\.0$#', $iss) === 1
+            );
+        }
 
         return $client;
     }

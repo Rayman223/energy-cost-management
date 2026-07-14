@@ -23,6 +23,8 @@ return [
 
     'auth.sign_in'         => 'Aanmelden',
     'auth.signin_with'     => 'Aanmelden met {provider}',
+    'auth.choose_provider' => 'Kies uw provider',
+    'auth.no_provider'     => 'Er is geen aanmeldprovider geconfigureerd.',
     'auth.sign_out'        => 'Afmelden',
     'auth.signed_out'      => 'U bent afgemeld.',
     'auth.error'           => 'Aanmelden mislukt. Probeer het opnieuw.',

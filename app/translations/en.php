@@ -23,6 +23,8 @@ return [
 
     'auth.sign_in'         => 'Sign in',
     'auth.signin_with'     => 'Sign in with {provider}',
+    'auth.choose_provider' => 'Choose your provider',
+    'auth.no_provider'     => 'No sign-in provider is configured.',
     'auth.sign_out'        => 'Sign out',
     'auth.signed_out'      => 'You have been signed out.',
     'auth.error'           => 'Sign-in failed. Please try again.',

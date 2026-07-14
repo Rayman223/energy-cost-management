@@ -4,10 +4,12 @@ declare(strict_types=1);
 
 use App\Http\SecurityHeaders;
 use App\I18n\Locale;
+use App\Security\AuthGuard;
 use App\Security\AuthSession;
 use App\Security\Csrf;
 use App\Security\Oidc\OidcClientFactory;
 use App\Security\WebAccessGuard;
+use App\Support\SafeRedirect;
 use App\Support\Url;
 use App\View\ViewFactory;
 
@@ -15,25 +17,16 @@ $config = require __DIR__ . '/../bootstrap.php';
 
 SecurityHeaders::send();
 
-$scriptName = str_replace('\\', '/', (string) ($_SERVER['SCRIPT_NAME'] ?? '/login.php'));
-$basePath = str_replace('\\', '/', dirname($scriptName));
-if ($basePath === '/' || $basePath === '.') {
-    $basePath = '';
-}
-
-$appRoot = $basePath === '' ? '/' : ($basePath . '/');
+$appRoot = WebAccessGuard::appRootPath() . '/';
 $security = $config['web_security'] ?? [];
 if (!is_array($security)) {
     $security = [];
 }
 
-$next = (string) ($_GET['next'] ?? $_POST['next'] ?? $appRoot);
-if ($next === '' || str_starts_with($next, '/') === false || str_starts_with($next, '//') || str_contains($next, "\r") || str_contains($next, "\n")) {
-    $next = $appRoot;
-}
+$next = SafeRedirect::sanitize((string) ($_GET['next'] ?? $_POST['next'] ?? $appRoot), $appRoot);
 
 $oidc = $config['oidc'] ?? [];
-$oidcEnabled = is_array($oidc) && ($oidc['enabled'] ?? false) === true;
+$oidcEnabled = AuthGuard::isOidcEnabled($config);
 
 // ── Mode OIDC : page d'atterrissage avec bouton fournisseur ──────────────────
 if ($oidcEnabled) {
@@ -47,14 +40,23 @@ if ($oidcEnabled) {
         exit;
     }
 
-    $issuer = (string) ($oidc['issuer'] ?? '');
+    // Un bouton par fournisseur activé (l'utilisateur choisit son IdP).
+    $providers = [];
+    foreach (OidcClientFactory::providersFromConfig(is_array($oidc) ? $oidc : []) as $key => $bloc) {
+        $label = (string) ($bloc['label'] ?? '');
+        $providers[] = [
+            'key'   => $key,
+            'label' => $label !== '' ? $label : ucfirst($key),
+            'href'  => Url::to('auth/login') . '?provider=' . rawurlencode($key) . '&next=' . rawurlencode($next),
+        ];
+    }
+
     $locale = Locale::resolve($config, null);
     $view = ViewFactory::create(__DIR__ . '/../templates', $locale, (string) ($config['i18n']['default_locale'] ?? 'fr'));
 
     echo $view->render('login-oidc', [
         'next'      => $next,
-        'provider'  => OidcClientFactory::providerLabel($issuer),
-        'loginUrl'  => Url::to('auth/login'),
+        'providers' => $providers,
         'available' => Locale::available($config),
     ]);
 

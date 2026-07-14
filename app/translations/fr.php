@@ -29,6 +29,8 @@ return [
     // Authentification
     'auth.sign_in'         => 'Se connecter',
     'auth.signin_with'     => 'Se connecter avec {provider}',
+    'auth.choose_provider' => 'Choisissez votre fournisseur',
+    'auth.no_provider'     => 'Aucun fournisseur de connexion n\'est configuré.',
     'auth.sign_out'        => 'Se déconnecter',
     'auth.signed_out'      => 'Vous êtes déconnecté.',
     'auth.error'           => 'La connexion a échoué. Veuillez réessayer.',

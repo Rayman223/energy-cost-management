@@ -128,9 +128,15 @@ return [
                         'user' => 'energy_user', 'password' => 'change_me', 'charset' => 'utf8mb4' ],
 
     // Authentication. enabled=false keeps the legacy single-tenant Basic Auth.
-    'oidc'         => [ 'enabled' => false, 'issuer' => 'https://accounts.google.com',
-                        'client_id' => 'change_me', 'client_secret' => 'change_me',
-                        'redirect_uri' => '', 'scopes' => ['openid', 'profile'] ],
+    // Multi-provider: one entry per IdP under 'providers' (key = button icon +
+    // stored users.provider). The legacy flat form (issuer/client_id under
+    // 'oidc' directly) still works as a single implicit provider.
+    'oidc'         => [ 'enabled' => false, 'providers' => [
+                        'google' => [ 'issuer' => 'https://accounts.google.com',
+                            'client_id' => 'change_me', 'client_secret' => 'change_me',
+                            'redirect_uri' => '', 'scopes' => ['openid', 'profile'] ],
+                        // 'microsoft' => [ 'issuer' => 'https://login.microsoftonline.com/<tenant-id>/v2.0', … ],
+                    ] ],
 
     'web_security' => [ 'enabled' => true, 'allowed_ips' => [],   // [] = no IP restriction
                         'basic_auth' => [ 'enabled' => true, 'username' => 'admin', 'password' => 'change_me_now' ] ],
