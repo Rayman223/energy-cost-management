@@ -89,6 +89,21 @@ final class OidcClientFactory
         $client->setCodeChallengeMethod('S256');
         $client->addScope(self::scopes($config));
 
+        // Découverte OIDC mise en cache par issuer : injectée telle quelle, la lib
+        // ne re-télécharge plus le well-known à chaque initiation/callback. On EXCLUT
+        // la clé `issuer` du document afin de préserver l'issuer configuré (et donc la
+        // validation, dont l'assouplissement Microsoft ci-dessous). Cache absent/
+        // expiré/corrompu → découverte à la volée (comportement historique).
+        if ($issuer !== '') {
+            $discovery = (new OidcDiscoveryCache())->get($issuer);
+            if ($discovery !== null) {
+                unset($discovery['issuer']);
+                if ($discovery !== []) {
+                    $client->providerConfigParam($discovery);
+                }
+            }
+        }
+
         // Microsoft/Entra multi-tenant : l'issuer configuré (common/organizations/
         // consumers) ne correspond jamais à l'issuer réel des jetons, qui contient
         // le GUID du tenant de l'utilisateur. On assouplit la validation à tout

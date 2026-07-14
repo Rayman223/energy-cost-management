@@ -22,6 +22,7 @@ use App\Security\AccountProvisioner;
 use App\Security\AuthGuard;
 use App\Security\AuthSession;
 use App\Security\Oidc\OidcClientFactory;
+use App\Security\Oidc\OidcDiscoveryCache;
 use App\Security\Session;
 use App\Security\WebAccessGuard;
 use App\Support\SafeRedirect;
@@ -139,6 +140,16 @@ try {
     header('Location: ' . $next, true, 302);
     exit;
 } catch (\Throwable $e) {
+    // Un endpoint déplacé côté IdP peut faire échouer l'auth avec une découverte
+    // mise en cache périmée : on invalide l'entrée pour re-découvrir au prochain
+    // essai plutôt que de rester bloqué jusqu'au TTL.
+    if (isset($providerConfig) && is_array($providerConfig)) {
+        $failedIssuer = (string) ($providerConfig['issuer'] ?? '');
+        if ($failedIssuer !== '') {
+            (new OidcDiscoveryCache())->invalidate($failedIssuer);
+        }
+    }
+
     $i18n = $config['i18n'] ?? [];
     $available = ['fr', 'en'];
     $default = 'fr';

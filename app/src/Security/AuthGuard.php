@@ -20,6 +20,16 @@ use App\Infrastructure\Database;
 final class AuthGuard
 {
     /**
+     * Fenêtre (secondes) pendant laquelle le statut du compte est considéré
+     * vérifié sans nouveau SELECT. Compromis : un blocage administratif se
+     * propage en {@see self::STATUS_CHECK_TTL} s au maximum.
+     */
+    private const STATUS_CHECK_TTL = 60;
+
+    /** Clé de session : horodatage de la dernière vérification « compte actif ». */
+    public const STATUS_CHECK_KEY = 'account_status_checked_at';
+
+    /**
      * Indique si l'authentification OpenID Connect est active dans la config.
      * Source unique du prédicat, réutilisée par les pages pour n'exposer les
      * éléments propres au mode OIDC (landing publique, bouton de déconnexion)
@@ -83,6 +93,17 @@ final class AuthGuard
             return;
         }
 
+        // Cache session à TTL court : évite une connexion PDO + un SELECT à CHAQUE
+        // page protégée. Le statut a été confirmé « actif » il y a moins de
+        // STATUS_CHECK_TTL s → on saute la revérification. Invalidé au login.
+        $checkedAt = $_SESSION[self::STATUS_CHECK_KEY] ?? null;
+        $now       = time();
+        // Borne des deux côtés : un horodatage futur (horloge reculée, valeur
+        // corrompue) ne doit pas suspendre la vérification au-delà du TTL.
+        if (is_int($checkedAt) && $checkedAt <= $now && ($now - $checkedAt) < self::STATUS_CHECK_TTL) {
+            return;
+        }
+
         try {
             $stmt = (new Database($database))->pdo()->prepare('SELECT status FROM users WHERE id = :id LIMIT 1');
             $stmt->execute(['id' => $userId]);
@@ -91,8 +112,10 @@ final class AuthGuard
             return; // Base injoignable : ne pas verrouiller abusivement.
         }
 
-        // Compte encore actif → rien à faire.
+        // Compte encore actif → mémoriser l'instant de vérification et sortir.
         if ($status === 'active') {
+            $_SESSION[self::STATUS_CHECK_KEY] = $now;
+
             return;
         }
 

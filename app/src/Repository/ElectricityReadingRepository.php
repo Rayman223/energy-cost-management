@@ -35,10 +35,19 @@ final class ElectricityReadingRepository implements LegacyDailyRepositoryInterfa
     /** @var array<string, int>|null Cache register_key => register_id. */
     private ?array $registerMap = null;
 
+    /**
+     * Topologie (compteur + registres) créée/résolue une seule fois par requête.
+     * Évite ~7 requêtes superflues par ligne lors d'un import en masse (O1).
+     */
+    private bool $topologyEnsured = false;
+
     /** @var array<string, mixed> Cache requête-scopé des deltas du mois courant. */
     private array $monthlyDeltasCache = [];
 
     private bool $monthlyDeltasComputed = false;
+
+    /** @var array<string, array<string, mixed>> Cache requête-scopé des deltas par mois donné (clé "Y-n"). */
+    private array $monthlyDeltasForMonthCache = [];
 
     public function __construct(
         private readonly PDO $pdo,
@@ -59,10 +68,16 @@ final class ElectricityReadingRepository implements LegacyDailyRepositoryInterfa
      */
     public function insertIndexes(DateTimeImmutable $timestamp, array $indexByRegister): int
     {
-        $topology = new MeterTopology($this->pdo);
-        $meterId = $topology->ensureElectricityMeter($this->userId);
-        $map = $topology->ensureRegisters($meterId);
-        $this->registerMap = $map;
+        // Topologie résolue/créée au premier appel seulement : la carte des
+        // registres ne change pas au cours d'une requête HTTP. En import en masse,
+        // évite ~7 requêtes (ensureElectricityMeter + ensureRegisters) par ligne.
+        if (!$this->topologyEnsured) {
+            $topology = new MeterTopology($this->pdo);
+            $meterId = $topology->ensureElectricityMeter($this->userId);
+            $this->registerMap = $topology->ensureRegisters($meterId);
+            $this->topologyEnsured = true;
+        }
+        $map = $this->registerMap ?? [];
 
         $stmt = $this->pdo->prepare(
             'INSERT IGNORE INTO meter_readings (register_id, reading_at, index_value) VALUES (:rid, :at, :val)'
@@ -103,6 +118,15 @@ final class ElectricityReadingRepository implements LegacyDailyRepositoryInterfa
 
         if ($ownTransaction) {
             $this->pdo->commit();
+        }
+
+        // De nouveaux relevés rendent obsolètes les deltas mensuels mémoïsés :
+        // on invalide pour rester cohérent si la même instance écrit puis relit
+        // (mois courant comme mois donné).
+        if ($inserted > 0) {
+            $this->monthlyDeltasComputed       = false;
+            $this->monthlyDeltasCache          = [];
+            $this->monthlyDeltasForMonthCache  = [];
         }
 
         return $inserted;
@@ -284,7 +308,13 @@ final class ElectricityReadingRepository implements LegacyDailyRepositoryInterfa
     /** @return array<string, mixed> */
     public function getMonthlyDeltasForMonth(int $year, int $month): array
     {
-        return $this->interpolatedMonthlyDeltas($year, $month);
+        // Mémoïsation requête-scopée (même motif que getMonthlyDeltas) : la vue
+        // « mois donné » appelle estimateMonthElectricity PUIS
+        // estimateMonthElectricityDynamic, tous deux via cette méthode — sans
+        // cache le calcul mensuel (interpolation) serait exécuté 2× (O2).
+        $key = $year . '-' . $month;
+
+        return $this->monthlyDeltasForMonthCache[$key] ??= $this->interpolatedMonthlyDeltas($year, $month);
     }
 
     /**
@@ -307,18 +337,37 @@ final class ElectricityReadingRepository implements LegacyDailyRepositoryInterfa
             return [];
         }
 
-        $result = ['from' => $monthStart, 'to' => $nextMonthStart];
         $outKeys = ['import_t1' => 'prelev_jour', 'import_t2' => 'prelev_nuit', 'export_t1' => 'injec_jour', 'export_t2' => 'injec_nuit'];
 
+        // rid par clé (null si le registre est absent) + liste des rid présents à
+        // interpoler en une passe. Chaque borne est résolue par un batch (2 requêtes)
+        // plutôt que 2 requêtes × registre (O3).
+        $rids    = [];
+        $elecIds = [];
+        foreach (array_keys($outKeys) as $registerKey) {
+            $rid              = $this->registerId($registerKey);
+            $rids[$registerKey] = $rid;
+            if ($rid !== null) {
+                $elecIds[] = $rid;
+            }
+        }
+        $solarId = $this->registerId('production');
+
+        $startIds    = $solarId === null ? $elecIds : [...$elecIds, $solarId];
+        $startValues = $this->interpolatedValuesAt($startIds, $monthStart);
+        $endValues   = $this->interpolatedValuesAt($elecIds, $nextMonthStart);
+
+        $result = ['from' => $monthStart, 'to' => $nextMonthStart];
+
         foreach ($outKeys as $registerKey => $outKey) {
-            $rid = $this->registerId($registerKey);
+            $rid = $rids[$registerKey];
             if ($rid === null) {
                 $result[$outKey] = 0.0;
                 continue;
             }
 
-            $start = $this->interpolatedValueAt($rid, $monthStart);
-            $end   = $this->interpolatedValueAt($rid, $nextMonthStart);
+            $start = $startValues[$rid];
+            $end   = $endValues[$rid];
             if ($start === null || $end === null) {
                 return [];
             }
@@ -331,12 +380,12 @@ final class ElectricityReadingRepository implements LegacyDailyRepositoryInterfa
             }
         }
 
-        // Solaire : interpolé aux mêmes instants (fin = borne 'to' résolue).
-        $solarId = $this->registerId('production');
+        // Solaire : début déjà batché ; fin à la borne 'to' résolue (mois en cours →
+        // dernier relevé), donc un appel dédié à l'instant final.
         $result['solar']      = null;
         $result['solar_unit'] = null;
         if ($solarId !== null) {
-            $sStart = $this->interpolatedValueAt($solarId, $monthStart);
+            $sStart = $startValues[$solarId];
             $sEnd   = $this->interpolatedValueAt($solarId, (string) $result['to']);
             if ($sStart !== null && $sEnd !== null) {
                 $result['solar']      = round(max(0.0, $sEnd['value'] - $sStart['value']), 3);
@@ -556,41 +605,108 @@ final class ElectricityReadingRepository implements LegacyDailyRepositoryInterfa
      */
     private function interpolatedValueAt(int $registerId, string $instant): ?array
     {
-        $stmt = $this->pdo->prepare(
-            'SELECT reading_at, index_value FROM meter_readings
-             WHERE register_id = :rid AND reading_at <= :i ORDER BY reading_at DESC LIMIT 1'
-        );
-        $stmt->execute(['rid' => $registerId, 'i' => $instant]);
-        $before = $stmt->fetch() ?: null;
+        return $this->interpolatedValuesAt([$registerId], $instant)[$registerId];
+    }
+
+    /**
+     * Index interpolé à un instant pour PLUSIEURS registres en 2 requêtes (au
+     * lieu de 2 par registre). Même sémantique que {@see interpolatedValueAt}.
+     *
+     * @param list<int> $registerIds
+     * @return array<int, array{value: float, timestamp: string}|null> register_id => valeur interpolée (ou null si registre vide)
+     */
+    private function interpolatedValuesAt(array $registerIds, string $instant): array
+    {
+        /** @var array<int, array{value: float, timestamp: string}|null> $result */
+        $result = array_fill_keys($registerIds, null);
+        if ($registerIds === []) {
+            return $result;
+        }
+
+        $before = $this->boundaryReadings($registerIds, $instant, false);
+        $after  = $this->boundaryReadings($registerIds, $instant, true);
+
+        foreach ($registerIds as $rid) {
+            $result[$rid] = self::interpolateBetween($before[$rid] ?? null, $after[$rid] ?? null, $instant);
+        }
+
+        return $result;
+    }
+
+    /**
+     * Pour chaque registre, le relevé le plus proche d'un côté de l'instant en
+     * UNE requête : dernier `<=` instant si $after=false, premier `>=` si vrai.
+     *
+     * Greatest/least-per-groupe indexé : l'agrégat borné (`MAX`/`MIN` de
+     * reading_at) se résout par seek sur `uq_meter_readings (register_id,
+     * reading_at)` — pas de scan de tout l'historique — puis jointure sur cette
+     * clé unique pour récupérer index_value. (Une fenêtre `ROW_NUMBER()` lirait
+     * au contraire toutes les lignes de la partition avant de filtrer.)
+     *
+     * @param list<int> $registerIds
+     * @return array<int, array{reading_at: string, index_value: float}>
+     */
+    private function boundaryReadings(array $registerIds, string $instant, bool $after): array
+    {
+        $placeholders = implode(', ', array_fill(0, count($registerIds), '?'));
+        $cmp = $after ? '>=' : '<=';
+        $agg = $after ? 'MIN' : 'MAX';
 
         $stmt = $this->pdo->prepare(
-            'SELECT reading_at, index_value FROM meter_readings
-             WHERE register_id = :rid AND reading_at >= :i ORDER BY reading_at ASC LIMIT 1'
+            "SELECT r.register_id, r.reading_at, r.index_value
+             FROM meter_readings r
+             JOIN (
+                 SELECT register_id, $agg(reading_at) AS bound_at
+                 FROM meter_readings
+                 WHERE register_id IN ($placeholders) AND reading_at $cmp ?
+                 GROUP BY register_id
+             ) b ON b.register_id = r.register_id AND r.reading_at = b.bound_at"
         );
-        $stmt->execute(['rid' => $registerId, 'i' => $instant]);
-        $after = $stmt->fetch() ?: null;
+        $stmt->execute([...$registerIds, $instant]);
 
+        $out = [];
+        foreach ($stmt->fetchAll() as $row) {
+            $out[(int) $row['register_id']] = [
+                'reading_at'  => (string) $row['reading_at'],
+                'index_value' => (float) $row['index_value'],
+            ];
+        }
+
+        return $out;
+    }
+
+    /**
+     * Interpolation linéaire entre deux relevés encadrant un instant. Clamp sur
+     * la borne présente si l'autre manque ; null si les deux manquent.
+     *
+     * @param array{reading_at: string, index_value: float}|null $before
+     * @param array{reading_at: string, index_value: float}|null $after
+     * @return array{value: float, timestamp: string}|null
+     */
+    private static function interpolateBetween(?array $before, ?array $after, string $instant): ?array
+    {
         if ($before === null && $after === null) {
             return null;
         }
         if ($before === null) {
-            return ['value' => (float) $after['index_value'], 'timestamp' => (string) $after['reading_at']];
+            /** @var array{reading_at: string, index_value: float} $after */
+            return ['value' => $after['index_value'], 'timestamp' => $after['reading_at']];
         }
-        if ($after === null || (string) $before['reading_at'] === $instant) {
-            return ['value' => (float) $before['index_value'], 'timestamp' => (string) $before['reading_at']];
+        if ($after === null || $before['reading_at'] === $instant) {
+            return ['value' => $before['index_value'], 'timestamp' => $before['reading_at']];
         }
-        if ((string) $after['reading_at'] === $instant) {
-            return ['value' => (float) $after['index_value'], 'timestamp' => (string) $after['reading_at']];
+        if ($after['reading_at'] === $instant) {
+            return ['value' => $after['index_value'], 'timestamp' => $after['reading_at']];
         }
 
-        $aTs  = (int) strtotime((string) $before['reading_at']);
-        $bTs  = (int) strtotime((string) $after['reading_at']);
+        $aTs  = (int) strtotime($before['reading_at']);
+        $bTs  = (int) strtotime($after['reading_at']);
         $iTs  = (int) strtotime($instant);
         $span = $bTs - $aTs;
         $frac = $span > 0 ? ($iTs - $aTs) / $span : 0.0;
 
-        $a = (float) $before['index_value'];
-        $b = (float) $after['index_value'];
+        $a = $before['index_value'];
+        $b = $after['index_value'];
 
         return ['value' => $a + ($b - $a) * $frac, 'timestamp' => $instant];
     }

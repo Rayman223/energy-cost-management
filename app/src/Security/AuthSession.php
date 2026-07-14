@@ -19,6 +19,9 @@ final class AuthSession
             session_regenerate_id(true);
         }
         $_SESSION[self::KEY] = $userId;
+        // Force une revérification « compte actif » au premier hit protégé après
+        // connexion (cf. AuthGuard::enforceActiveAccount, cache session TTL).
+        unset($_SESSION[AuthGuard::STATUS_CHECK_KEY]);
     }
 
     public static function userId(): ?int
