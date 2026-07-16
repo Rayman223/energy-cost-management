@@ -83,6 +83,8 @@ return [
     'account.token_fresh_title' => 'Nieuwe API-token',
     'account.token_fresh_hint' => 'Kopieer het nu: het wordt nooit meer getoond.',
     'account.token_revoked_ok' => 'Token ingetrokken.',
+    'account.tokens_usage' => 'Hoe verstuurt u uw meterstanden via de API met een token?',
+    'account.tokens_usage_link' => 'Bekijk de API-verzendgids',
 
     'account.identities' => 'Aanmeldproviders',
     'account.identities_hint' => 'Koppel meerdere providers (Google, Microsoft…) aan dit account zodat u met beide kunt aanmelden.',
@@ -260,6 +262,28 @@ return [
     'legal.terms'          => 'Gebruiksvoorwaarden',
     'legal.updated'        => 'Laatst bijgewerkt: {date}. Model nog juridisch te valideren.',
     'legal.my_account'     => 'Mijn account',
+
+    // API-verzendgids (#132)
+    'apiguide.title' => 'API-verzendgids',
+    'apiguide.intro' => 'Deze pagina legt uit hoe u uw meterstanden (elektriciteit, gas, water) automatisch naar de app stuurt met een API-token. Maak eerst een token aan via „Mijn account” en gebruik het vervolgens in uw verzoeken zoals hieronder getoond.',
+    'apiguide.auth_title' => 'Authenticatie',
+    'apiguide.auth_desc' => 'Elk verzoek moet uw token bevatten in de HTTP-header Authorization (tokens beginnen met „mec_”):',
+    'apiguide.auth_note' => 'Het token wordt slechts één keer getoond bij het aanmaken: bewaar het veilig. Bij een lek trekt u het in via „Mijn account”.',
+    'apiguide.elec_title' => 'Elektriciteit',
+    'apiguide.elec_desc' => 'Stuur uw elektriciteitsmeterstand. Het veld „timestamp” is de datum/tijd van de meting; ten minste één register is vereist.',
+    'apiguide.elec_registers' => 'Toegestane registers: import_t1, import_t2, export_t1, export_t2, production (in kWh).',
+    'apiguide.gas_title' => 'Gas',
+    'apiguide.gas_desc' => 'Stuur uw gasmeterstand. Het veld „reading_at” is de datum/tijd en „counter_m3” de waarde in m³.',
+    'apiguide.water_title' => 'Water',
+    'apiguide.water_desc' => 'Zelfde formaat als gas: „reading_at” en „counter_m3” (m³).',
+    'apiguide.response_title' => 'Antwoord',
+    'apiguide.response_desc' => 'Bij succes geeft de API terug hoeveel metingen zijn ontvangen en daadwerkelijk toegevoegd:',
+    'apiguide.batch_desc' => 'U kunt meerdere metingen in één verzoek versturen via een „readings”-array:',
+    'apiguide.notes_title' => 'Goed om te weten',
+    'apiguide.note_idempotent' => 'Idempotent: een reeds verzonden meting opnieuw sturen maakt geen duplicaat.',
+    'apiguide.note_batch_limit' => 'Tot 1000 metingen per verzoek.',
+    'apiguide.note_rate_limit' => 'Snelheidslimiet: {limit} verzoeken per uur per token (daarna antwoord 429).',
+    'apiguide.note_errors' => 'Veelvoorkomende fouten: 401 (ongeldig of ingetrokken token), 422 (ongeldige gegevens), 429 (limiet overschreden).',
 
     // Administration (P7)
     'nav.admin' => 'Beheer',

@@ -83,6 +83,8 @@ return [
     'account.token_fresh_title' => 'Neues API-Token',
     'account.token_fresh_hint' => 'Kopieren Sie es jetzt: Es wird nie wieder angezeigt.',
     'account.token_revoked_ok' => 'Token widerrufen.',
+    'account.tokens_usage' => 'Wie senden Sie Ihre Messwerte per API mit einem Token?',
+    'account.tokens_usage_link' => 'Zum API-Sendeleitfaden',
 
     'account.identities' => 'Anmelde-Anbieter',
     'account.identities_hint' => 'Verknüpfen Sie mehrere Anbieter (Google, Microsoft…) mit diesem Konto, um sich mit einem beliebigen anmelden zu können.',
@@ -260,6 +262,28 @@ return [
     'legal.terms'          => 'Nutzungsbedingungen',
     'legal.updated'        => 'Zuletzt aktualisiert: {date}. Vorlage noch juristisch zu prüfen.',
     'legal.my_account'     => 'Mein Konto',
+
+    // API-Sendeleitfaden (#132)
+    'apiguide.title' => 'API-Sendeleitfaden',
+    'apiguide.intro' => 'Diese Seite erklärt, wie Sie Ihre Messwerte (Strom, Gas, Wasser) mithilfe eines API-Tokens automatisch an die App senden. Erstellen Sie zunächst ein Token unter „Mein Konto“ und verwenden Sie es dann wie unten gezeigt in Ihren Anfragen.',
+    'apiguide.auth_title' => 'Authentifizierung',
+    'apiguide.auth_desc' => 'Jede Anfrage muss Ihr Token im HTTP-Header Authorization enthalten (Tokens beginnen mit „mec_“):',
+    'apiguide.auth_note' => 'Das Token wird nur einmal bei der Erstellung angezeigt: Bewahren Sie es sicher auf. Bei einem Leck widerrufen Sie es unter „Mein Konto“.',
+    'apiguide.elec_title' => 'Strom',
+    'apiguide.elec_desc' => 'Senden Sie Ihren Stromzählerstand. Das Feld „timestamp“ ist Datum/Uhrzeit der Ablesung; mindestens ein Register ist erforderlich.',
+    'apiguide.elec_registers' => 'Zulässige Register: import_t1, import_t2, export_t1, export_t2, production (in kWh).',
+    'apiguide.gas_title' => 'Gas',
+    'apiguide.gas_desc' => 'Senden Sie Ihren Gaszählerstand. Das Feld „reading_at“ ist Datum/Uhrzeit und „counter_m3“ der Wert in m³.',
+    'apiguide.water_title' => 'Wasser',
+    'apiguide.water_desc' => 'Gleiches Format wie Gas: „reading_at“ und „counter_m3“ (m³).',
+    'apiguide.response_title' => 'Antwort',
+    'apiguide.response_desc' => 'Bei Erfolg gibt die API zurück, wie viele Messwerte empfangen und tatsächlich eingefügt wurden:',
+    'apiguide.batch_desc' => 'Sie können mehrere Messwerte in einer einzigen Anfrage über ein „readings“-Array senden:',
+    'apiguide.notes_title' => 'Gut zu wissen',
+    'apiguide.note_idempotent' => 'Idempotent: Das erneute Senden eines bereits übermittelten Messwerts erzeugt kein Duplikat.',
+    'apiguide.note_batch_limit' => 'Bis zu 1000 Messwerte pro Anfrage.',
+    'apiguide.note_rate_limit' => 'Ratenbegrenzung: {limit} Anfragen pro Stunde und Token (danach Antwort 429).',
+    'apiguide.note_errors' => 'Häufige Fehler: 401 (ungültiges oder widerrufenes Token), 422 (ungültige Daten), 429 (Limit überschritten).',
 
     // Administration (P7)
     'nav.admin' => 'Admin',

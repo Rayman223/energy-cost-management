@@ -62,6 +62,14 @@ return [
         // Examples: ['192.168.1.0/24', '10.0.0.42']
         'allowed_ips' => [],
 
+        // Optional allowlist of expected Host headers (anti-spoofing). When set,
+        // any request whose Host is not listed falls back to the first entry when
+        // building absolute URLs shown to users (e.g. the copy-paste curl command
+        // on /api-guide), so a forged Host cannot redirect a pasted token.
+        // Empty array = accept the current Host if well-formed. Examples:
+        // ['energie.example.eu', 'energie.example.eu:8443']
+        'trusted_hosts' => [],
+
         // HTTP Basic authentication for all web endpoints (dashboard + API).
         'basic_auth' => [
             'enabled'  => true,

@@ -90,6 +90,8 @@ return [
     'account.token_fresh_title' => 'Nouveau jeton API',
     'account.token_fresh_hint' => 'Copiez-le maintenant : il ne sera plus jamais affiché.',
     'account.token_revoked_ok' => 'Jeton révoqué.',
+    'account.tokens_usage' => 'Comment envoyer vos relevés via l’API avec un jeton ?',
+    'account.tokens_usage_link' => 'Voir le guide d’envoi API',
 
     'account.identities' => 'Fournisseurs de connexion',
     'account.identities_hint' => 'Reliez plusieurs fournisseurs (Google, Microsoft…) à ce compte pour vous connecter indifféremment avec l’un ou l’autre.',
@@ -271,6 +273,28 @@ return [
     'legal.terms'          => 'Conditions générales d\'utilisation',
     'legal.updated'        => 'Dernière mise à jour : {date}. Modèle à faire valider juridiquement.',
     'legal.my_account'     => 'Mon compte',
+
+    // Guide d'envoi API (#132)
+    'apiguide.title' => 'Guide d’envoi API',
+    'apiguide.intro' => 'Cette page explique comment pousser automatiquement vos relevés (électricité, gaz, eau) vers l’application à l’aide d’un jeton API. Créez d’abord un jeton depuis « Mon compte », puis utilisez-le dans vos requêtes comme ci-dessous.',
+    'apiguide.auth_title' => 'Authentification',
+    'apiguide.auth_desc' => 'Chaque requête doit porter votre jeton dans l’en-tête HTTP Authorization (les jetons commencent par « mec_ ») :',
+    'apiguide.auth_note' => 'Le jeton n’est affiché qu’une seule fois à sa création : conservez-le en lieu sûr. En cas de fuite, révoquez-le depuis « Mon compte ».',
+    'apiguide.elec_title' => 'Électricité',
+    'apiguide.elec_desc' => 'Envoyez vos index de compteur électrique. Le champ « timestamp » est la date/heure du relevé ; au moins un registre est requis.',
+    'apiguide.elec_registers' => 'Registres acceptés : import_t1, import_t2, export_t1, export_t2, production (en kWh).',
+    'apiguide.gas_title' => 'Gaz',
+    'apiguide.gas_desc' => 'Envoyez l’index de votre compteur gaz. Le champ « reading_at » est la date/heure et « counter_m3 » la valeur en m³.',
+    'apiguide.water_title' => 'Eau',
+    'apiguide.water_desc' => 'Même format que le gaz : « reading_at » et « counter_m3 » (m³).',
+    'apiguide.response_title' => 'Réponse',
+    'apiguide.response_desc' => 'En cas de succès, l’API renvoie le nombre de relevés reçus et réellement insérés :',
+    'apiguide.batch_desc' => 'Vous pouvez envoyer plusieurs relevés en une seule requête via un tableau « readings » :',
+    'apiguide.notes_title' => 'Bon à savoir',
+    'apiguide.note_idempotent' => 'Idempotent : renvoyer un relevé déjà transmis ne crée pas de doublon.',
+    'apiguide.note_batch_limit' => 'Jusqu’à 1000 relevés par requête.',
+    'apiguide.note_rate_limit' => 'Limite d’appels : {limit} requêtes par heure et par jeton (réponse 429 au-delà).',
+    'apiguide.note_errors' => 'Erreurs courantes : 401 (jeton invalide ou révoqué), 422 (données invalides), 429 (quota dépassé).',
 
     // Administration (P7)
     'nav.admin' => 'Admin',

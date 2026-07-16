@@ -83,6 +83,8 @@ return [
     'account.token_fresh_title' => 'New API token',
     'account.token_fresh_hint' => 'Copy it now: it will never be shown again.',
     'account.token_revoked_ok' => 'Token revoked.',
+    'account.tokens_usage' => 'How to send your readings via the API with a token?',
+    'account.tokens_usage_link' => 'See the API sending guide',
 
     'account.identities' => 'Sign-in providers',
     'account.identities_hint' => 'Link several providers (Google, Microsoft…) to this account so you can sign in with either one.',
@@ -261,6 +263,28 @@ return [
     'legal.terms'          => 'Terms of service',
     'legal.updated'        => 'Last updated: {date}. Template pending legal review.',
     'legal.my_account'     => 'My account',
+
+    // API sending guide (#132)
+    'apiguide.title' => 'API sending guide',
+    'apiguide.intro' => 'This page explains how to automatically push your readings (electricity, gas, water) to the app using an API token. First create a token from “My account”, then use it in your requests as shown below.',
+    'apiguide.auth_title' => 'Authentication',
+    'apiguide.auth_desc' => 'Every request must carry your token in the HTTP Authorization header (tokens start with “mec_”):',
+    'apiguide.auth_note' => 'The token is shown only once when created: keep it safe. If it leaks, revoke it from “My account”.',
+    'apiguide.elec_title' => 'Electricity',
+    'apiguide.elec_desc' => 'Send your electricity meter index. The “timestamp” field is the reading date/time; at least one register is required.',
+    'apiguide.elec_registers' => 'Accepted registers: import_t1, import_t2, export_t1, export_t2, production (in kWh).',
+    'apiguide.gas_title' => 'Gas',
+    'apiguide.gas_desc' => 'Send your gas meter index. The “reading_at” field is the date/time and “counter_m3” the value in m³.',
+    'apiguide.water_title' => 'Water',
+    'apiguide.water_desc' => 'Same format as gas: “reading_at” and “counter_m3” (m³).',
+    'apiguide.response_title' => 'Response',
+    'apiguide.response_desc' => 'On success, the API returns how many readings were received and actually inserted:',
+    'apiguide.batch_desc' => 'You can send several readings in a single request via a “readings” array:',
+    'apiguide.notes_title' => 'Good to know',
+    'apiguide.note_idempotent' => 'Idempotent: resending an already-sent reading does not create a duplicate.',
+    'apiguide.note_batch_limit' => 'Up to 1000 readings per request.',
+    'apiguide.note_rate_limit' => 'Rate limit: {limit} requests per hour per token (429 response beyond that).',
+    'apiguide.note_errors' => 'Common errors: 401 (invalid or revoked token), 422 (invalid data), 429 (rate limit exceeded).',
 
     // Administration (P7)
     'nav.admin' => 'Admin',

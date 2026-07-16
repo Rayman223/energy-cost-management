@@ -13,7 +13,6 @@ th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--bord
 .token-secret { word-break: break-all; padding: 12px; border: 1px dashed var(--blue); border-radius: 8px; }
 .inline { display: inline; }
 .btn-compact { margin: 0; padding: 4px 10px; }
-.mt-12 { margin-top: 12px; }
 
 /* Boutons « Lier un fournisseur » (#137) — variante lien de .btn-provider,
    scoped ici pour ne pas dépendre de login.css (règles body/box incompatibles). */

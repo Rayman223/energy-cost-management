@@ -1,0 +1,19 @@
+/* Guide d'envoi API (#132) — spécifique ; base commune dans page-standalone.css. */
+ul { padding-left: 1.2rem; }
+li { margin: .35rem 0; }
+
+/* Blocs de code : lisibles, avec scroll horizontal sur mobile (pas de débordement de page). */
+pre {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px 14px;
+  overflow-x: auto;
+  margin: 12px 0;
+}
+pre code {
+  font-family: var(--mono, 'Space Mono', monospace);
+  font-size: .82rem;
+  color: var(--text-strong);
+  white-space: pre;
+}

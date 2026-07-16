@@ -90,6 +90,7 @@ a.theme-toggle { text-decoration: none; }
 /* ── Utilitaires partagés (résidus d'attributs style inline migrés, #98) ───── */
 .is-hidden { display: none; }
 .lang-active { font-weight: 700; }
+.mt-12 { margin-top: 12px; }
 
 /* Pied de page commun (dashboard + tarifs). */
 .page-footer {

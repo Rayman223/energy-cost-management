@@ -14,7 +14,7 @@ $title = $page === 'privacy' ? $this->t('legal.privacy') : $this->t('legal.terms
 <head>
 <?= $this->partial('_head', [
     'title' => $title . ' — ' . $this->t('app.title'),
-    'css'   => ['assets/css/legal.css'],
+    'css'   => ['assets/css/page-standalone.css', 'assets/css/legal.css'],
 ]) ?>
 </head>
 <body>

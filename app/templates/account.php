@@ -175,6 +175,8 @@ $csrf = \App\Security\Csrf::field();
       <input type="text" name="token_name" placeholder="Agent HomeWizard" required>
       <button type="submit"><?= $this->te('account.token_create') ?></button>
     </form>
+    <p class="hint mt-12"><?= $this->te('account.tokens_usage') ?>
+       <a href="<?= $this->url('api-guide') ?>"><?= $this->te('account.tokens_usage_link') ?></a></p>
   </div>
 
   <!-- ── EnergyID (opt-in BE/NL) ────────────────────────────────────────── -->

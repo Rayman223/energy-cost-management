@@ -58,6 +58,7 @@ $routes = [
     '/tariffs'        => 'tariffs.php',
     '/meter-readings' => 'meter-readings.php',
     '/api'            => 'api.php',
+    '/api-guide'      => 'api-guide.php',
     '/login'          => 'login.php',
     '/privacy'        => 'privacy.php',
     '/terms'          => 'terms.php',
