@@ -25,6 +25,15 @@ Un réimport du même fichier ne crée donc **aucun doublon** ; le rapport disti
   l'en-tête — virgule, point-virgule (exports tableur FR/BE) ou tabulation : celui
   qui découpe le plus de colonnes l'emporte, à égalité la virgule. Le BOM UTF-8
   éventuel est retiré. La CLI peut forcer le séparateur (`RowSource::fromCsv($h, ';')`).
+  - **Décimale à la virgule** (#150) : sur un fichier délimité par `;` ou tabulation,
+    une valeur comme `1234,5` est acceptée automatiquement (convertie en `1234.5`) —
+    aucune option à régler, la virgule ne peut y être qu'une décimale. Le motif est
+    volontairement étroit : les **séparateurs de milliers** (`1 234,5`, `1.234,5`)
+    restent refusés (message « valeur invalide »). Sur un fichier délimité par `,`,
+    une virgule dans une valeur (forcément quotée, `"1,234"`) est **ambiguë** (millier
+    anglo-saxon vs décimale) et n'est **jamais** réinterprétée. Le prédicat métier
+    ({@see ReadingParser::parseValue()}, partagé avec l'API d'ingestion) reste strict :
+    la conversion est purement une affaire de présentation CSV.
 - **JSON** : `{"readings":[ {…}, … ]}` ou un tableau d'objets en tête. ⚠️ Le JSON
   est **entièrement chargé en mémoire** (fichier + tableau décodé) — il n'est pas
   streamé comme le CSV. Il reste borné par les plafonds (taille ~8 Mo à l'upload,

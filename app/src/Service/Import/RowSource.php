@@ -49,6 +49,10 @@ final class RowSource
 
         $delimiter ??= self::sniffDelimiter($headerLine);
 
+        // Fichier délimité par « ; » ou tabulation → une virgule dans une valeur ne
+        // peut être qu'une décimale (aucune ambiguïté possible). Cf. self::normalizeDecimal().
+        $commaIsDecimal = $delimiter !== ',';
+
         // escape: '' → conforme RFC 4180 (pas d'échappement backslash) et aligné
         // sur le futur défaut de PHP ; requis explicitement depuis PHP 8.4.
         $header = str_getcsv(rtrim($headerLine, "\r\n"), $delimiter, escape: '');
@@ -70,7 +74,8 @@ final class RowSource
 
             $row = [];
             foreach ($columns as $i => $col) {
-                $row[$col] = isset($line[$i]) ? trim((string) $line[$i]) : '';
+                $cell = isset($line[$i]) ? trim((string) $line[$i]) : '';
+                $row[$col] = self::normalizeDecimal($cell, $commaIsDecimal);
             }
 
             yield $lineNo => $row;
@@ -104,6 +109,28 @@ final class RowSource
         }
 
         return $best;
+    }
+
+    /**
+     * Réinterprète « 1234,5 » en « 1234.5 » quand le fichier n'est **pas** délimité
+     * par la virgule : dans ce cas une virgule ne peut être qu'une décimale (exports
+     * tableur FR/BE — #150). Sur un fichier délimité par « , », une valeur à virgule
+     * a forcément été quotée (`"1,234"`) et l'ambiguïté milliers/décimale est réelle :
+     * on ne devine pas, on laisse tel quel (rejeté en aval).
+     *
+     * Motif volontairement **étroit** (`^-?\d+,\d+$`) : ni séparateur de milliers
+     * (`1 234,5`), ni format mixte (`1.234,5`) — ceux-là restent rejetés par
+     * {@see ReadingParser::parseValue()}, qui demeure strict (règle partagée avec
+     * l'API d'ingestion). Le motif ne peut matcher un horodatage (`-`/`:`/espaces),
+     * donc l'appliquer à toutes les cellules est sûr sans connaître leur rôle.
+     */
+    private static function normalizeDecimal(string $value, bool $commaIsDecimal): string
+    {
+        if ($commaIsDecimal && preg_match('/^-?\d+,\d+$/', $value) === 1) {
+            return str_replace(',', '.', $value);
+        }
+
+        return $value;
     }
 
     /**

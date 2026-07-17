@@ -44,6 +44,65 @@ final class RowSourceTest extends TestCase
         self::assertSame(['timestamp' => '2026-01-01 08:00:00', 'import_t1' => '1000'], $rows[2]);
     }
 
+    /**
+     * Sur un fichier délimité par « ; », une décimale à la virgule est réinterprétée
+     * en point (exports tableur FR/BE — #150), sans que l'utilisateur configure rien.
+     */
+    public function testCsvSemicolonNormalizesDecimalComma(): void
+    {
+        $csv = "Date;HP_Jour;HP_Nuit\n2026-01-01 08:00:00;1234,5;0,75\n";
+        $rows = iterator_to_array($this->csvRows($csv));
+
+        self::assertSame('1234.5', $rows[2]['hp_jour']);
+        self::assertSame('0.75', $rows[2]['hp_nuit']);
+        // L'horodatage (avec « - » et « : ») ne matche jamais le motif décimal.
+        self::assertSame('2026-01-01 08:00:00', $rows[2]['date']);
+    }
+
+    /** Idem en tabulation : une virgule ne peut y être qu'une décimale (#150). */
+    public function testCsvTabNormalizesDecimalComma(): void
+    {
+        $csv = "timestamp\timport_t1\n2026-01-01 08:00:00\t1234,5\n";
+        $rows = iterator_to_array($this->csvRows($csv));
+
+        self::assertSame('1234.5', $rows[2]['import_t1']);
+    }
+
+    /**
+     * Fichier délimité par « , » : une valeur quotée « 1,234 » est ambiguë
+     * (millier vs décimale) — on ne devine pas, on laisse tel quel (#150).
+     */
+    public function testCsvCommaDelimiterDoesNotReinterpretComma(): void
+    {
+        $csv = "timestamp,import_t1\n\"2026-01-01 08:00:00\",\"1,234\"\n";
+        $rows = iterator_to_array($this->csvRows($csv));
+
+        self::assertSame('1,234', $rows[2]['import_t1']);
+    }
+
+    /** Non-régression : la décimale au point reste intacte, quel que soit le délimiteur. */
+    public function testCsvDecimalDotIsUnchanged(): void
+    {
+        $semi = iterator_to_array($this->csvRows("Date;HP_Jour\n2026-01-01 08:00:00;1234.5\n"));
+        self::assertSame('1234.5', $semi[2]['hp_jour']);
+
+        $comma = iterator_to_array($this->csvRows("timestamp,import_t1\n2026-01-01 08:00:00,1234.5\n"));
+        self::assertSame('1234.5', $comma[2]['import_t1']);
+    }
+
+    /**
+     * Motif étroit : séparateur de milliers (`1 234,5`) et format mixte (`1.234,5`)
+     * ne sont pas normalisés — ils restent tels quels et seront rejetés en aval (#150).
+     */
+    public function testCsvSemicolonLeavesThousandSeparatorsUntouched(): void
+    {
+        $csv = "Date;HP_Jour;HP_Nuit\n2026-01-01 08:00:00;\"1 234,5\";\"1.234,5\"\n";
+        $rows = iterator_to_array($this->csvRows($csv));
+
+        self::assertSame('1 234,5', $rows[2]['hp_jour']);
+        self::assertSame('1.234,5', $rows[2]['hp_nuit']);
+    }
+
     /** Le BOM des exports tableur ne doit pas coller au 1er nom de colonne (#134). */
     public function testCsvStripsUtf8Bom(): void
     {
