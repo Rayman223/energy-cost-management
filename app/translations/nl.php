@@ -318,7 +318,7 @@ return [
 
     // Import en masse (P8)
     'import.title' => 'Mijn gegevens importeren',
-    'import.hint' => 'CSV- of JSON-indexbestand (elektriciteit per register, of gas/water). Kies hieronder de eenheid van het bestand. Herimport zonder duplicaten (idempotent).',
+    'import.hint' => 'CSV- of JSON-bestand met meterstanden (elektriciteit, gas of water). Het CSV-scheidingsteken wordt automatisch herkend (komma, puntkomma of tab); de eerste regel moet de koptekst zijn. Tijdstempels in het formaat JJJJ-MM-DD UU:MM:SS. Herimport zonder duplicaten (idempotent) — laat bij twijfel de simulatie aangevinkt.',
     'import.file' => 'Bestand (CSV of JSON)',
     'import.energy_type' => 'Energietype',
     'import.type_electricity' => 'Elektriciteit',
@@ -331,6 +331,13 @@ return [
     'import.unit_l' => 'liter',
     'import.ts_col' => 'Tijdstempelkolom (optioneel)',
     'import.value_col' => 'Waardekolom (optioneel)',
+    'import.columns_title' => 'Te importeren meterstanden',
+    'import.columns_hint' => 'Geef voor elke meterstand de naam van de kolom die hem bevat — meerdere meterstanden kunnen in één keer worden geïmporteerd. Laat een meterstand leeg om hem niet te importeren. Standaard wordt de kolom met de naam van de meterstand gebruikt.',
+    'import.reg_import_t1' => 'Afname piekuren (of enkelvoudig tarief)',
+    'import.reg_import_t2' => 'Afname daluren',
+    'import.reg_export_t1' => 'Injectie piekuren',
+    'import.reg_export_t2' => 'Injectie daluren',
+    'import.reg_production' => 'Zonneproductie',
     'import.dry_run' => 'Simulatie (niets wegschrijven)',
     'import.submit' => 'Importeren',
     'import.imported' => 'Geïmporteerd',

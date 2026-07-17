@@ -319,7 +319,7 @@ return [
 
     // Import en masse (P8)
     'import.title' => 'Import my data',
-    'import.hint' => 'CSV or JSON index file (electricity by register, or gas/water). Pick the file\'s unit below. Re-import creates no duplicates (idempotent).',
+    'import.hint' => 'CSV or JSON file of meter readings (electricity, gas or water). The CSV separator is detected automatically (comma, semicolon or tab); the first line must be the header. Timestamps are expected as YYYY-MM-DD HH:MM:SS. Re-import creates no duplicates (idempotent) — when in doubt, leave the dry run ticked.',
     'import.file' => 'File (CSV or JSON)',
     'import.energy_type' => 'Energy type',
     'import.type_electricity' => 'Electricity',
@@ -332,6 +332,13 @@ return [
     'import.unit_l' => 'litre',
     'import.ts_col' => 'Timestamp column (optional)',
     'import.value_col' => 'Value column (optional)',
+    'import.columns_title' => 'Readings to import',
+    'import.columns_hint' => 'For each reading, give the name of the file column holding it — several readings can be imported in one go. Leave a reading blank to skip it. By default, the column named after the reading is used.',
+    'import.reg_import_t1' => 'Consumption, peak hours (or single rate)',
+    'import.reg_import_t2' => 'Consumption, off-peak hours',
+    'import.reg_export_t1' => 'Feed-in, peak hours',
+    'import.reg_export_t2' => 'Feed-in, off-peak hours',
+    'import.reg_production' => 'Solar production',
     'import.dry_run' => 'Dry run (no writes)',
     'import.submit' => 'Import',
     'import.imported' => 'Imported',

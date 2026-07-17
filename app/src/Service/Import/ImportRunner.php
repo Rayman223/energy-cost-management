@@ -15,9 +15,9 @@ use RuntimeException;
 /**
  * Orchestrateur d'import partagé : ouvre la transaction, applique le plafond de
  * lignes (stop-and-report), dispatche vers {@see BulkImportService} puis
- * commit/rollback (dry-run). Point d'entrée unique pour les trois voies —
- * self-service (page compte), admin (page admin) et CLI — afin d'éviter la
- * duplication de l'orchestration transaction/dry-run.
+ * commit/rollback (dry-run). Point d'entrée unique des deux voies — self-service
+ * (page compte) et CLI — afin d'éviter la duplication de l'orchestration
+ * transaction/dry-run. (L'import admin pour un tiers a été retiré en #90.)
  *
  * - {@see self::runFromRequest()} / {@see self::runUploaded()} : fichier téléversé
  *   (UI web) — valident le téléversement (taille, format, `is_uploaded_file`).
@@ -35,32 +35,80 @@ final class ImportRunner
     /**
      * Extrait les champs d'import d'une requête POST et délègue au téléversement.
      *
-     * @param array<string, mixed> $post  Champs $_POST (energy_type, ts_col, value_col, unit, dry_run).
+     * @param array<string, mixed> $post  Champs $_POST (energy_type, ts_col, value_col, unit, registers, dry_run).
      * @param array<string, mixed> $files Entrée $_FILES (clé `import_file`).
      * @throws RuntimeException si le téléversement ou le format est invalide.
+     * @throws \InvalidArgumentException si le mapping ou le type d'énergie est invalide.
+     *         Message sûr à afficher (aucun détail interne) : la route le présente tel quel.
      */
     public function runFromRequest(PDO $pdo, int $targetUserId, array $post, array $files): ImportReport
     {
         $energyType = strtolower(trim((string) ($post['energy_type'] ?? '')));
-
-        $overrides = [];
-        $tsCol = trim((string) ($post['ts_col'] ?? ''));
-        if ($tsCol !== '') {
-            $overrides['ts_col'] = $tsCol;
-        }
-        $valueCol = trim((string) ($post['value_col'] ?? ''));
-        if ($valueCol !== '') {
-            $overrides['value_col'] = $valueCol;
-        }
-        $unit = trim((string) ($post['unit'] ?? ''));
-        if ($unit !== '') {
-            $overrides['unit'] = $unit;
-        }
-        $dryRun = ($post['dry_run'] ?? '') === '1';
+        $dryRun     = ($post['dry_run'] ?? '') === '1';
 
         $file = is_array($files['import_file'] ?? null) ? $files['import_file'] : [];
 
-        return $this->runUploaded($pdo, $targetUserId, $energyType, $overrides, $file, $dryRun);
+        return $this->runUploaded($pdo, $targetUserId, $energyType, self::parseOverrides($post), $file, $dryRun);
+    }
+
+    /**
+     * Traduit les champs de mapping d'un POST en surcharges pour
+     * {@see ImportMapping::preset()}. Champ vide = surcharge absente (on garde le
+     * défaut du preset).
+     *
+     * Le formulaire poste `registers[<register_key>] = <colonne>` — le sens naturel
+     * d'un `<label>` (« quelle colonne alimente l'index heure pleine ? »). Le preset
+     * attend l'inverse (`colonne => register_key`, une colonne ne pouvant alimenter
+     * qu'un registre) : on inverse ici. Aucune validation des clés de registre à ce
+     * stade — {@see ImportMapping::preset()} rejette déjà les inconnues.
+     *
+     * Statique et publique pour être testable sans PDO ni téléversement.
+     *
+     * @param array<string, mixed> $post
+     * @return array{ts_col?: string, value_col?: string, unit?: string, registers?: array<string, string>}
+     * @throws \InvalidArgumentException si deux registres visent la même colonne.
+     */
+    public static function parseOverrides(array $post): array
+    {
+        $overrides = [];
+        foreach (['ts_col', 'value_col', 'unit'] as $field) {
+            $value = is_scalar($post[$field] ?? null) ? trim((string) $post[$field]) : '';
+            if ($value !== '') {
+                $overrides[$field] = $value;
+            }
+        }
+
+        $registers = [];
+        $posted    = is_array($post['registers'] ?? null) ? $post['registers'] : [];
+        foreach ($posted as $registerKey => $column) {
+            if (!is_scalar($column) || !is_string($registerKey)) {
+                continue;
+            }
+            $column = strtolower(trim((string) $column));
+            if ($column === '') {
+                // Registre laissé vide : l'utilisateur ne veut pas l'importer.
+                continue;
+            }
+            if (isset($registers[$column])) {
+                // Sans ce garde, l'inversion écraserait silencieusement le premier
+                // registre et l'import serait faux sans que rien ne le signale.
+                throw new \InvalidArgumentException(sprintf(
+                    'La colonne « %s » est affectée à deux index (« %s » et « %s ») : une colonne ne peut alimenter qu\'un seul index.',
+                    $column,
+                    $registers[$column],
+                    strtolower(trim($registerKey))
+                ));
+            }
+            $registers[$column] = strtolower(trim($registerKey));
+        }
+
+        // Aucun mapping saisi → pas de surcharge : le preset garde son défaut (une
+        // colonne par clé de registre), donc les fichiers déjà conformes passent.
+        if ($registers !== []) {
+            $overrides['registers'] = $registers;
+        }
+
+        return $overrides;
     }
 
     /**

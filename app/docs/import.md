@@ -21,7 +21,10 @@ Un réimport du même fichier ne crée donc **aucun doublon** ; le rapport disti
 ## Formats & mapping
 
 - **CSV** : 1ʳᵉ ligne = en-tête (normalisé en minuscules). Lu **en flux**
-  (gros fichiers sans surcharge mémoire).
+  (gros fichiers sans surcharge mémoire). Le **séparateur est auto-détecté** depuis
+  l'en-tête — virgule, point-virgule (exports tableur FR/BE) ou tabulation : celui
+  qui découpe le plus de colonnes l'emporte, à égalité la virgule. Le BOM UTF-8
+  éventuel est retiré. La CLI peut forcer le séparateur (`RowSource::fromCsv($h, ';')`).
 - **JSON** : `{"readings":[ {…}, … ]}` ou un tableau d'objets en tête. ⚠️ Le JSON
   est **entièrement chargé en mémoire** (fichier + tableau décodé) — il n'est pas
   streamé comme le CSV. Il reste borné par les plafonds (taille ~8 Mo à l'upload,
@@ -35,16 +38,30 @@ Le **mapping** est basé sur des **presets** par type d'énergie, avec surcharge
 
 Surcharges : nom de la colonne d'horodatage (`--ts-col` / champ UI), de la
 colonne de valeur gaz/eau (`--value-col`), mapping colonne→registre pour
-l'électricité (`--map=col:registre,…`, CLI), ou **unité** du fichier (champ UI
-`unit` : `wh`/`kwh` pour l'électricité, `m3`/`l` pour l'eau, `m3` pour le gaz).
-Les valeurs sont converties vers l'unité canonique de stockage (kWh / m³) avant
-écriture ; une unité non proposée pour le type retombe sur l'unité canonique.
+l'électricité (`--map=col:registre,…` en CLI ; champs « Index à importer » en UI),
+ou **unité** du fichier (champ UI `unit` : `wh`/`kwh` pour l'électricité, `m3`/`l`
+pour l'eau, `m3` pour le gaz). Les valeurs sont converties vers l'unité canonique
+de stockage (kWh / m³) avant écriture ; une unité non proposée pour le type
+retombe sur l'unité canonique.
+
+**Mapping des index électricité (#134)** — un fichier contenant plusieurs index
+les importe **tous en une passe** : chaque registre reçoit le nom de la colonne qui
+le porte. En UI, le formulaire poste `registers[<register_key>] = <colonne>` et
+{@see ImportRunner::parseOverrides()} inverse en `colonne => register_key` (le sens
+attendu par le preset) ; un champ laissé vide = index non importé, et si aucun n'est
+renseigné le défaut du preset s'applique. Une même colonne affectée à deux index est
+refusée. Les compteurs **mono-horaires** versent tout dans `import_t1` (pas de
+registre « normal » séparé) — c'est déjà la convention du dashboard et de l'API.
 
 ## Voies d'import
 
 ### 1. Self-service (tout membre) — page « Mon compte »
 Carte « Importer mes données » : fichier + type + surcharges optionnelles + case
 **Simulation** (dry-run). La cible est **toujours** l'utilisateur connecté.
+`assets/js/import.js` lit l'en-tête du CSV choisi pour proposer ses colonnes en
+autocomplétion et pré-remplir les index dont une colonne porte exactement le nom —
+confort seulement : sans JS, tout se saisit à la main et le formulaire reste
+soumettable (les champs hors type sont ignorés côté serveur).
 
 ### 2. CLI
 ```bash

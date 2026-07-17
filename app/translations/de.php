@@ -318,7 +318,7 @@ return [
 
     // Import en masse (P8)
     'import.title' => 'Meine Daten importieren',
-    'import.hint' => 'CSV- oder JSON-Zählerstandsdatei (Strom je Register, oder Gas/Wasser). Einheit der Datei unten wählen. Reimport ohne Duplikate (idempotent).',
+    'import.hint' => 'CSV- oder JSON-Datei mit Zählerständen (Strom, Gas oder Wasser). Das CSV-Trennzeichen wird automatisch erkannt (Komma, Semikolon oder Tabulator); die erste Zeile muss die Kopfzeile sein. Zeitstempel im Format JJJJ-MM-TT HH:MM:SS. Reimport ohne Duplikate (idempotent) — im Zweifel die Simulation aktiviert lassen.',
     'import.file' => 'Datei (CSV oder JSON)',
     'import.energy_type' => 'Energieart',
     'import.type_electricity' => 'Strom',
@@ -331,6 +331,13 @@ return [
     'import.unit_l' => 'Liter',
     'import.ts_col' => 'Zeitstempel-Spalte (optional)',
     'import.value_col' => 'Wertspalte (optional)',
+    'import.columns_title' => 'Zu importierende Zählerstände',
+    'import.columns_hint' => 'Geben Sie für jeden Zählerstand den Namen der Spalte an, die ihn enthält — mehrere Zählerstände lassen sich in einem Durchgang importieren. Für einen nicht zu importierenden Zählerstand das Feld leer lassen. Standardmäßig wird die Spalte mit dem Namen des Zählerstands verwendet.',
+    'import.reg_import_t1' => 'Bezug Hochtarif (oder Eintarif)',
+    'import.reg_import_t2' => 'Bezug Niedertarif',
+    'import.reg_export_t1' => 'Einspeisung Hochtarif',
+    'import.reg_export_t2' => 'Einspeisung Niedertarif',
+    'import.reg_production' => 'Solarproduktion',
     'import.dry_run' => 'Simulation (kein Schreiben)',
     'import.submit' => 'Importieren',
     'import.imported' => 'Importiert',

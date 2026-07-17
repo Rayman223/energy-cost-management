@@ -11,6 +11,11 @@ button.danger { background: var(--red, #d43); }
 table { width: 100%; border-collapse: collapse; font-size: .84rem; }
 th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--border); }
 .token-secret { word-break: break-all; padding: 12px; border: 1px dashed var(--blue); border-radius: 8px; }
+
+/* Mapping colonne → index de l'import électricité (#134). */
+.import-registers { margin: 14px 0 0; padding: 4px 12px 12px; border: 1px solid var(--border); border-radius: 8px; }
+.import-registers legend { padding: 0 6px; font-size: .82rem; font-weight: 600; color: var(--text-strong); }
+.import-registers .hint { margin: 6px 0 0; }
 .inline { display: inline; }
 .btn-compact { margin: 0; padding: 4px 10px; }
 

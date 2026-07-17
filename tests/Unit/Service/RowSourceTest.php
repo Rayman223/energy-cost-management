@@ -27,6 +27,54 @@ final class RowSourceTest extends TestCase
         iterator_to_array($this->csvRows(''));
     }
 
+    /** Export tableur FR/BE : séparateur « ; » détecté sans rien préciser (#134). */
+    public function testCsvDetectsSemicolonDelimiter(): void
+    {
+        $csv = "Date;HP_Jour;HP_Nuit\n2026-01-01 08:00:00;1000;2000\n";
+        $rows = iterator_to_array($this->csvRows($csv));
+
+        self::assertSame(['date' => '2026-01-01 08:00:00', 'hp_jour' => '1000', 'hp_nuit' => '2000'], $rows[2]);
+    }
+
+    public function testCsvDetectsTabDelimiter(): void
+    {
+        $csv = "timestamp\timport_t1\n2026-01-01 08:00:00\t1000\n";
+        $rows = iterator_to_array($this->csvRows($csv));
+
+        self::assertSame(['timestamp' => '2026-01-01 08:00:00', 'import_t1' => '1000'], $rows[2]);
+    }
+
+    /** Le BOM des exports tableur ne doit pas coller au 1er nom de colonne (#134). */
+    public function testCsvStripsUtf8Bom(): void
+    {
+        $csv = "\xEF\xBB\xBFtimestamp;import_t1\n2026-01-01 08:00:00;1000\n";
+        $rows = iterator_to_array($this->csvRows($csv));
+
+        self::assertSame(['timestamp' => '2026-01-01 08:00:00', 'import_t1' => '1000'], $rows[2]);
+    }
+
+    /**
+     * Un délimiteur présent uniquement dans un champ quoté ne doit pas l'emporter :
+     * ici « ; » découpe 2 colonnes, la virgule une seule (elle est quotée).
+     */
+    public function testCsvIgnoresDelimiterInsideQuotedHeader(): void
+    {
+        $csv = "\"Relevé, jour\";import_t1\n2026-01-01 08:00:00;1000\n";
+        $rows = iterator_to_array($this->csvRows($csv));
+
+        self::assertSame(['relevé, jour' => '2026-01-01 08:00:00', 'import_t1' => '1000'], $rows[2]);
+    }
+
+    /** Délimiteur explicite : prioritaire sur la détection (CLI). */
+    public function testCsvExplicitDelimiterWins(): void
+    {
+        // « ; » découperait 2 colonnes, mais on impose la virgule : 1 seule colonne.
+        $csv = "a;b\n1;2\n";
+        $rows = iterator_to_array($this->csvRows($csv, ','));
+
+        self::assertSame(['a;b' => '1;2'], $rows[2]);
+    }
+
     public function testJsonReadingsEnvelope(): void
     {
         $json = '{"readings":[{"reading_at":"2026-02-01 00:00:00","counter_m3":5},{"reading_at":"2026-02-02 00:00:00","counter_m3":6}]}';
@@ -52,15 +100,16 @@ final class RowSourceTest extends TestCase
     }
 
     /**
+     * @param non-empty-string|null $delimiter null = auto-détection
      * @return iterable<int, array<string, string>>
      */
-    private function csvRows(string $content): iterable
+    private function csvRows(string $content, ?string $delimiter = null): iterable
     {
         $handle = fopen('php://memory', 'r+');
         self::assertNotFalse($handle);
         fwrite($handle, $content);
         rewind($handle);
 
-        return RowSource::fromCsv($handle);
+        return RowSource::fromCsv($handle, $delimiter);
     }
 }

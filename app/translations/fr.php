@@ -329,7 +329,7 @@ return [
 
     // Import en masse (P8)
     'import.title' => 'Importer mes données',
-    'import.hint' => 'Fichier CSV ou JSON d\'index (électricité par registres, ou gaz/eau). Choisissez l\'unité du fichier ci-dessous. Réimport sans doublon (idempotent).',
+    'import.hint' => 'Fichier CSV ou JSON d\'index relevés (électricité, gaz ou eau). Le séparateur du CSV est détecté automatiquement (virgule, point-virgule ou tabulation) ; la 1ʳᵉ ligne doit être l\'en-tête. Horodatage attendu au format AAAA-MM-JJ HH:MM:SS. Réimport sans doublon (idempotent) : dans le doute, laissez la simulation cochée.',
     'import.file' => 'Fichier (CSV ou JSON)',
     'import.energy_type' => 'Type d\'énergie',
     'import.type_electricity' => 'Électricité',
@@ -342,6 +342,13 @@ return [
     'import.unit_l' => 'litre',
     'import.ts_col' => 'Colonne horodatage (optionnel)',
     'import.value_col' => 'Colonne valeur (optionnel)',
+    'import.columns_title' => 'Index à importer',
+    'import.columns_hint' => 'Indiquez, pour chaque index, le nom de la colonne du fichier qui le contient — plusieurs index s\'importent en une seule fois. Laissez vide un index à ne pas importer. Par défaut, la colonne portant le nom de l\'index est utilisée.',
+    'import.reg_import_t1' => 'Prélèvement heure pleine (ou mono-horaire)',
+    'import.reg_import_t2' => 'Prélèvement heure creuse',
+    'import.reg_export_t1' => 'Injection heure pleine',
+    'import.reg_export_t2' => 'Injection heure creuse',
+    'import.reg_production' => 'Production solaire',
     'import.dry_run' => 'Simulation (aucune écriture)',
     'import.submit' => 'Importer',
     'import.imported' => 'Importés',

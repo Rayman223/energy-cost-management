@@ -236,13 +236,35 @@ $csrf = \App\Security\Csrf::field();
       <div class="row">
         <div>
           <label for="ts_col"><?= $this->te('import.ts_col') ?></label>
-          <input id="ts_col" type="text" name="ts_col" placeholder="timestamp">
+          <input id="ts_col" type="text" name="ts_col" list="import-columns" placeholder="timestamp">
         </div>
-        <div>
+        <div id="import-value-col">
           <label for="value_col"><?= $this->te('import.value_col') ?></label>
-          <input id="value_col" type="text" name="value_col" placeholder="value">
+          <input id="value_col" type="text" name="value_col" list="import-columns" placeholder="value">
         </div>
       </div>
+
+      <!-- Mapping colonne → index, électricité (#134). Un champ par registre :
+           plusieurs index d'un même fichier s'importent donc en une passe. Masqué
+           pour gaz/eau par import.js ; sans JS, tout reste visible et le serveur
+           ignore les champs hors sujet. -->
+      <fieldset id="import-registers" class="import-registers">
+        <legend><?= $this->te('import.columns_title') ?></legend>
+        <p class="hint"><?= $this->te('import.columns_hint') ?></p>
+        <div class="row">
+          <?php foreach (\App\Infrastructure\MeterTopology::ELECTRICITY_REGISTERS as $register): ?>
+            <div>
+              <label for="reg_<?= $this->e($register) ?>"><?= $this->te('import.reg_' . $register) ?></label>
+              <input id="reg_<?= $this->e($register) ?>" type="text" name="registers[<?= $this->e($register) ?>]"
+                     list="import-columns" placeholder="<?= $this->e($register) ?>">
+            </div>
+          <?php endforeach; ?>
+        </div>
+      </fieldset>
+
+      <!-- Colonnes du fichier choisi, injectées par import.js (autocomplétion). -->
+      <datalist id="import-columns"></datalist>
+
       <label class="mt-12"><input type="checkbox" name="dry_run" value="1" checked> <?= $this->te('import.dry_run') ?></label>
       <button type="submit"><?= $this->te('import.submit') ?></button>
     </form>
