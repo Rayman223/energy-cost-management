@@ -24,6 +24,7 @@ use App\Security\UserContext;
 use App\Service\AccountDataExporter;
 use App\Service\AccountEraser;
 use App\Service\Import\ImportRunner;
+use App\Support\DiscordLink;
 use App\Support\LocaleContext;
 
 // Bootstrap isolé : une configuration injoignable (ex. config.php absent) dégrade
@@ -232,6 +233,7 @@ $timezoneOptions = Timezones::options($profile['timezone']);
 
 echo $view->render('account', [
     'oidcEnabled' => AuthGuard::isOidcEnabled($config),
+    'discordUrl'  => DiscordLink::inviteUrl($config),
     'error'      => $error,
     'success'    => $success,
     'freshToken' => $freshToken,

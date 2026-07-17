@@ -28,6 +28,7 @@ use App\Domain\TariffLineCatalog;
  * @var string                                                               $today
  * @var bool                                                                 $isAdmin
  * @var bool                                                                 $isDynamic  Tarif dynamique actif → lignes d'énergie fournisseur ignorées
+ * @var ?string                                                              $discordUrl
  */
 
 // Regroupement des lignes du formulaire par catégorie choisie (défaut : dérivée du kind).
@@ -72,6 +73,7 @@ $energyLabels = [
   </div>
   <div class="header-right">
     <a href="<?= $this->url() ?>" class="back"><?= $this->te('nav.back_dashboard') ?></a>
+    <?= $this->partial('discord-link', ['url' => $discordUrl ?? null]) ?>
     <?php if (!empty($oidcEnabled)): ?><form method="post" action="<?= $this->url('auth/logout') ?>" class="logout-form"><?= \App\Security\Csrf::field() ?><button type="submit" class="theme-toggle" title="<?= $this->te('auth.sign_out') ?>">🚪</button></form><?php endif; ?>
     <button type="button" class="theme-toggle" id="theme-toggle" aria-label="<?= $this->e($this->t('common.theme')) ?>">🌙</button>
   </div>

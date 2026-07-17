@@ -6,6 +6,7 @@
  * multi-fournisseurs de #122). Voir #127.
  *
  * @var list<string> $available Locales proposées dans le sélecteur de langue.
+ * @var ?string      $discordUrl URL d'invitation Discord, ou null si non configurée.
  */
 ?>
 <!doctype html>
@@ -28,6 +29,7 @@
       </div>
     </div>
     <div class="landing-header-right">
+      <?= $this->partial('discord-link', ['url' => $discordUrl ?? null]) ?>
       <span class="langs"><?php foreach ($available as $loc): ?><a href="?lang=<?= $this->e($loc) ?>"<?= $loc === $this->locale() ? ' class="lang-active"' : '' ?>><?= $this->e(strtoupper($loc)) ?></a><?php endforeach; ?></span>
       <button type="button" class="theme-toggle" id="theme-toggle" aria-label="<?= $this->te('common.theme') ?>">🌙</button>
     </div>

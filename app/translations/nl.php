@@ -250,6 +250,7 @@ return [
     'meter.empty_water' => 'Geen watermeterstand geregistreerd.',
     'meter.empty_electricity' => 'Geen elektriciteitsstand geregistreerd.',
     'common.theme' => 'Thema wisselen',
+'common.discord' => 'Word lid van Discord',
 
     'dash.subtitle'        => 'Verbruiksopvolging',
     'dash.month'           => 'Verbruik — huidige maand',

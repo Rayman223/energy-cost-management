@@ -218,6 +218,7 @@ Set at least `database`, then choose the authentication mode:
   owner account is used.
 
 Optionally set `dynamic_prices` (ENTSO-E token), `energyid`, `i18n`, and `api`.
+Set `discord.invite_url` to show a Discord link in the page header (empty = hidden).
 
 ---
 

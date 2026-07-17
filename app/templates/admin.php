@@ -8,6 +8,7 @@
  * @var list<array{id:int,provider:string,display_name:string,role:string,status:string,created_at:string,last_login_at:?string}> $users
  * @var int          $currentId
  * @var list<string> $available
+ * @var ?string      $discordUrl
  */
 $csrf = \App\Security\Csrf::field();
 ?>
@@ -27,6 +28,7 @@ $csrf = \App\Security\Csrf::field();
       <div class="logo-sub"><?= $this->te('admin.subtitle') ?></div>
     </div>
     <div>
+      <?= $this->partial('discord-link', ['url' => $discordUrl ?? null]) ?>
       <span class="langs"><?php foreach ($available as $loc): ?><a href="?lang=<?= $this->e($loc) ?>"<?= $loc === $this->locale() ? ' class="lang-active"' : '' ?>><?= $this->e(strtoupper($loc)) ?></a><?php endforeach; ?></span>
       &nbsp; <a href="<?= $this->url('tariffs') ?>"><?= $this->te('nav.tariffs') ?></a>
       &nbsp; <a href="<?= $this->url() ?>"><?= $this->te('nav.back_dashboard') ?></a>

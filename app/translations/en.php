@@ -251,6 +251,7 @@ return [
     'meter.empty_electricity' => 'No electricity reading recorded.',
 
     'common.theme' => 'Toggle theme',
+'common.discord' => 'Join us on Discord',
 
     'dash.subtitle'        => 'Consumption tracking',
     'dash.month'           => 'Consumption — current month',

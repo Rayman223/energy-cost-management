@@ -9,6 +9,7 @@ use App\Repository\UserRepository;
 use App\Repository\UtilityReadingRepository;
 use App\Security\AuthGuard;
 use App\Security\UserContext;
+use App\Support\DiscordLink;
 use App\Support\LocaleContext;
 use App\View\ViewFactory;
 
@@ -46,6 +47,7 @@ $view ??= ViewFactory::create(__DIR__ . '/../templates', Locale::resolve($config
 
 echo $view->render('meter_readings', [
     'oidcEnabled' => AuthGuard::isOidcEnabled($config),
+    'discordUrl'  => DiscordLink::inviteUrl($config),
     'dbError' => $dbError,
     'gasLatest' => $gasLatest,
     'waterLatest' => $waterLatest,

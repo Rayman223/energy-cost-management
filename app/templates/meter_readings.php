@@ -4,6 +4,7 @@
  * @var array<string,mixed>|null $gasLatest
  * @var array<string,mixed>|null $waterLatest
  * @var list<string> $available
+ * @var ?string $discordUrl
  */
 $today = date('Y-m-d');
 $now = date('H:i');
@@ -28,6 +29,7 @@ $now = date('H:i');
     </div>
     <div class="header-right">
       <a href="<?= $this->url() ?>" class="tool-link"><?= $this->te('nav.back_dashboard') ?></a>
+      <?= $this->partial('discord-link', ['url' => $discordUrl ?? null]) ?>
       <span class="langs"><?php foreach ($available as $loc): ?><a href="?lang=<?= $this->e($loc) ?>" style="text-decoration:none;margin:0 3px<?= $loc === $this->locale() ? ';font-weight:700' : '' ?>"><?= $this->e(strtoupper($loc)) ?></a><?php endforeach; ?></span>
       <?php if (!empty($oidcEnabled)): ?><form method="post" action="<?= $this->url('auth/logout') ?>" class="logout-form"><?= \App\Security\Csrf::field() ?><button type="submit" class="theme-toggle" title="<?= $this->te('auth.sign_out') ?>">🚪</button></form><?php endif; ?>
       <button type="button" class="theme-toggle" id="theme-toggle" aria-label="<?= $this->te('common.theme') ?>">🌙</button>

@@ -16,6 +16,7 @@ use App\Repository\UserRepository;
 use App\Security\AuthGuard;
 use App\Security\Csrf;
 use App\Security\UserContext;
+use App\Support\DiscordLink;
 use App\Support\LocaleContext;
 
 // Bootstrap isolé : une configuration injoignable (ex. config.php absent) dégrade
@@ -408,6 +409,7 @@ $isDynamic = $energy === 'electricity'
 
 echo $view->render('tariffs', [
     'oidcEnabled'      => AuthGuard::isOidcEnabled($config),
+    'discordUrl'       => DiscordLink::inviteUrl($config),
     'error'            => $error,
     'success'          => $success,
     'energy'           => $energy,

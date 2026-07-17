@@ -259,6 +259,7 @@ return [
     'meter.empty_electricity' => 'Aucun index électricité enregistré.',
 
     'common.theme' => 'Changer de thème',
+'common.discord' => 'Rejoindre le Discord',
 
     // Dashboard (titres de sections rendues côté serveur)
     'dash.subtitle'        => 'Suivi de consommation',

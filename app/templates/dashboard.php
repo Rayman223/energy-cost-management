@@ -18,6 +18,7 @@
  * @var int                      $waterInitMonth
  * @var list<string>             $available
  * @var bool                     $isAdmin
+ * @var ?string                  $discordUrl
  */
 
 // Helper de présentation : valeur numérique localisée via le Formatter (closure
@@ -71,6 +72,7 @@ $fmt = function (mixed $v, int $dec = 3, string $unit = 'kWh'): string {
       <a href="<?= $this->url('tariffs') ?>" class="theme-toggle" title="Tarifs">€</a>
       <a href="<?= $this->url('account') ?>" class="theme-toggle" title="Mon compte">👤</a>
       <?php if (!empty($oidcEnabled)): ?><form method="post" action="<?= $this->url('auth/logout') ?>" class="logout-form"><?= \App\Security\Csrf::field() ?><button type="submit" class="theme-toggle" title="<?= $this->te('auth.sign_out') ?>">🚪</button></form><?php endif; ?>
+      <?= $this->partial('discord-link', ['url' => $discordUrl ?? null]) ?>
       <span class="langs"><?php foreach ($available as $loc): ?><a href="?lang=<?= $this->e($loc) ?>"<?= $loc === $this->locale() ? ' class="lang-active"' : '' ?>><?= $this->e(strtoupper($loc)) ?></a><?php endforeach; ?></span>
       <button type="button" class="theme-toggle" id="theme-toggle" aria-label="Changer de thème">🌙</button>
     </div>

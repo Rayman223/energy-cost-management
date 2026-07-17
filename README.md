@@ -144,6 +144,9 @@ return [
     'i18n'         => [ 'default_locale' => 'fr', 'available' => ['fr', 'en', 'nl', 'de'] ],
     'api'          => [ 'rate_limit_per_hour' => 600 ],          // per Bearer token
 
+    // Discord link shown in the page header. Empty = link hidden.
+    'discord'      => [ 'invite_url' => '' ],                    // e.g. https://discord.gg/xxxxxxx
+
     // Optional: day-ahead spot prices (ENTSO-E), EnergyID sync, local meter agent.
     'dynamic_prices' => [ 'enabled' => true, 'provider' => 'entsoe', 'security_token' => 'change_me',
                           'bidding_zone' => '10YBE----------2', 'vat_rate' => 0.21 ],

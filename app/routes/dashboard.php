@@ -17,6 +17,7 @@ use App\I18n\Locale;
 use App\Security\AuthGuard;
 use App\Security\AuthSession;
 use App\Security\WebAccessGuard;
+use App\Support\DiscordLink;
 use App\Support\LocaleContext;
 use App\View\ViewFactory;
 
@@ -61,7 +62,10 @@ if ($dbError === null && AuthGuard::isOidcEnabled($config)) {
     if (AuthSession::userId() === null) {
         $locale  = Locale::resolve($config, null);
         $landing = ViewFactory::create(__DIR__ . '/../templates', $locale, (string) ($config['i18n']['default_locale'] ?? 'fr'));
-        echo $landing->render('welcome', ['available' => Locale::available($config)]);
+        echo $landing->render('welcome', [
+            'available'  => Locale::available($config),
+            'discordUrl' => DiscordLink::inviteUrl($config),
+        ]);
 
         return;
     }
@@ -163,5 +167,6 @@ echo $view->render('dashboard', [
     'available'    => Locale::available($config),
     'isAdmin'      => $isAdmin,
     'oidcEnabled'  => $oidcEnabled,
+    'discordUrl'   => DiscordLink::inviteUrl($config),
     'currency'     => $currency,
 ]);

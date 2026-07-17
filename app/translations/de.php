@@ -250,6 +250,7 @@ return [
     'meter.empty_water' => 'Kein Wasserzählerstand erfasst.',
     'meter.empty_electricity' => 'Kein Stromzählerstand erfasst.',
     'common.theme' => 'Thema umschalten',
+'common.discord' => 'Discord beitreten',
 
     'dash.subtitle'        => 'Verbrauchsverfolgung',
     'dash.month'           => 'Verbrauch — laufender Monat',

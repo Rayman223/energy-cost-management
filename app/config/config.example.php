@@ -114,6 +114,11 @@ return [
         'rate_limit_per_hour' => 600, // requêtes/heure par jeton
     ],
 
+    // Lien vers le serveur Discord, affiché dans l'en-tête des pages.
+    'discord' => [
+        'invite_url' => '', // ex. https://discord.gg/xxxxxxx (vide = lien masqué)
+    ],
+
     // Agent client (app/scripts/agent_push.php) : pousse les index des
     // compteurs locaux vers le serveur communautaire. Membre uniquement —
     // inutile sur le serveur central.
