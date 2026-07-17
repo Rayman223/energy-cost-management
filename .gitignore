@@ -1,5 +1,9 @@
 app/config/config.php
 
+# Sauvegardes SQL & fichiers d'exécution (backup_db.sh) — hors dépôt
+/backups/
+/var/
+
 # Outils de dev (Composer / PHPUnit) — non déployés en production
 /vendor/
 /.phpunit.cache/
