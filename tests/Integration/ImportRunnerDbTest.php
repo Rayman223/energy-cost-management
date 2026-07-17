@@ -64,7 +64,7 @@ final class ImportRunnerDbTest extends TestCase
 
         $rows = [];
         for ($day = 1; $day <= 5; $day++) {
-            $rows[$day + 1] = ['timestamp' => sprintf('2026-01-%02d 08:00:00', $day), 'counter_m3' => (string) (100 + $day)];
+            $rows[$day + 1] = ['timestamp' => sprintf('2026-01-%02d 08:00:00', $day), 'value' =>(string) (100 + $day)];
         }
 
         // Plafond volontairement bas (2 lignes) → tronqué mais N premières gardées.
@@ -81,8 +81,8 @@ final class ImportRunnerDbTest extends TestCase
         $userId = (new UserRepository($this->pdo()))->create('https://iss.example', 'dry-owner', 'example', 'Dry')->id;
 
         $rows = [
-            2 => ['timestamp' => '2026-02-01 08:00:00', 'counter_m3' => '10'],
-            3 => ['timestamp' => '2026-02-02 08:00:00', 'counter_m3' => '11'],
+            2 => ['timestamp' => '2026-02-01 08:00:00', 'value' =>'10'],
+            3 => ['timestamp' => '2026-02-02 08:00:00', 'value' =>'11'],
         ];
 
         $report = (new ImportRunner())->run($this->pdo(), ImportMapping::preset('gas'), $rows, $userId, 'gas', true);

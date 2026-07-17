@@ -31,11 +31,14 @@ Le **mapping** est basé sur des **presets** par type d'énergie, avec surcharge
 | Type | Colonne horodatage (défaut) | Colonnes valeur (défaut) |
 |---|---|---|
 | electricity | `timestamp` | une colonne par registre, nommée comme la clé (`import_t1`, …) |
-| gas / water | `timestamp` | `counter_m3` |
+| gas / water | `timestamp` | `value` |
 
 Surcharges : nom de la colonne d'horodatage (`--ts-col` / champ UI), de la
-colonne de valeur gaz/eau (`--value-col`), ou mapping colonne→registre pour
-l'électricité (`--map=col:registre,…`, CLI).
+colonne de valeur gaz/eau (`--value-col`), mapping colonne→registre pour
+l'électricité (`--map=col:registre,…`, CLI), ou **unité** du fichier (champ UI
+`unit` : `wh`/`kwh` pour l'électricité, `m3`/`l` pour l'eau, `m3` pour le gaz).
+Les valeurs sont converties vers l'unité canonique de stockage (kWh / m³) avant
+écriture ; une unité non proposée pour le type retombe sur l'unité canonique.
 
 ## Voies d'import
 

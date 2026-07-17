@@ -25,7 +25,7 @@ final class ImportMappingTest extends TestCase
         $m = ImportMapping::preset('gas');
 
         self::assertFalse($m->isElectricity());
-        self::assertSame('counter_m3', $m->valueColumn);
+        self::assertSame('value', $m->valueColumn);
     }
 
     public function testOverridesAreNormalized(): void
@@ -53,5 +53,35 @@ final class ImportMappingTest extends TestCase
     {
         $this->expectException(InvalidArgumentException::class);
         ImportMapping::preset('electricity', ['registers' => ['col' => 'nonexistent']]);
+    }
+
+    public function testDefaultUnitFactorIsCanonical(): void
+    {
+        self::assertSame(1.0, ImportMapping::preset('electricity')->unitToCanonicalFactor);
+        self::assertSame(1.0, ImportMapping::preset('gas')->unitToCanonicalFactor);
+        self::assertSame(1.0, ImportMapping::preset('water')->unitToCanonicalFactor);
+    }
+
+    public function testSubUnitConvertsToCanonical(): void
+    {
+        // Wh → kWh et litre → m³ : facteur 0.001 (÷1000).
+        self::assertSame(0.001, ImportMapping::preset('electricity', ['unit' => 'wh'])->unitToCanonicalFactor);
+        self::assertSame(0.001, ImportMapping::preset('water', ['unit' => 'l'])->unitToCanonicalFactor);
+        self::assertSame(1.0, ImportMapping::preset('water', ['unit' => 'm3'])->unitToCanonicalFactor);
+    }
+
+    public function testUnitIsNormalized(): void
+    {
+        self::assertSame(0.001, ImportMapping::preset('water', ['unit' => ' L '])->unitToCanonicalFactor);
+    }
+
+    public function testUnitNotAllowedForTypeFallsBackToCanonical(): void
+    {
+        // Une unité non proposée pour le type (ex. requête sans JS soumettant
+        // l'unité d'un autre type) retombe sur l'unité canonique (facteur 1) au
+        // lieu d'échouer — jamais de diviseur de sous-unité appliqué par erreur.
+        self::assertSame(1.0, ImportMapping::preset('gas', ['unit' => 'l'])->unitToCanonicalFactor);
+        self::assertSame(1.0, ImportMapping::preset('water', ['unit' => 'wh'])->unitToCanonicalFactor);
+        self::assertSame(1.0, ImportMapping::preset('electricity', ['unit' => 'l'])->unitToCanonicalFactor);
     }
 }

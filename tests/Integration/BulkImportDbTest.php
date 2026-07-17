@@ -67,9 +67,9 @@ final class BulkImportDbTest extends TestCase
         $sink   = new UtilityReadingRepository($this->pdo(), $userId, 'gas');
 
         $rows = [
-            2 => ['timestamp' => '2026-01-01 08:00:00', 'counter_m3' => '100.5'],
-            3 => ['timestamp' => '2026-01-02 08:00:00', 'counter_m3' => '101.0'],
-            4 => ['timestamp' => 'oops',                'counter_m3' => '5'], // erreur rapportée
+            2 => ['timestamp' => '2026-01-01 08:00:00', 'value' =>'100.5'],
+            3 => ['timestamp' => '2026-01-02 08:00:00', 'value' =>'101.0'],
+            4 => ['timestamp' => 'oops',                'value' =>'5'], // erreur rapportée
         ];
 
         $first = $this->service->importUtility($rows, ImportMapping::preset('gas'), $sink);

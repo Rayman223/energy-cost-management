@@ -219,6 +219,16 @@ $csrf = \App\Security\Csrf::field();
           </select>
         </div>
         <div>
+          <label for="unit"><?= $this->te('import.unit') ?></label>
+          <select id="unit" name="unit">
+            <?php foreach (\App\Service\Import\ImportMapping::UNITS['electricity'] as $u): ?>
+              <option value="<?= $this->e($u) ?>"><?= $this->te('import.unit_' . $u) ?></option>
+            <?php endforeach; ?>
+          </select>
+        </div>
+      </div>
+      <div class="row">
+        <div>
           <label for="import_file"><?= $this->te('import.file') ?></label>
           <input id="import_file" type="file" name="import_file" accept=".csv,.json" required>
         </div>
@@ -230,7 +240,7 @@ $csrf = \App\Security\Csrf::field();
         </div>
         <div>
           <label for="value_col"><?= $this->te('import.value_col') ?></label>
-          <input id="value_col" type="text" name="value_col" placeholder="counter_m3">
+          <input id="value_col" type="text" name="value_col" placeholder="value">
         </div>
       </div>
       <label class="mt-12"><input type="checkbox" name="dry_run" value="1" checked> <?= $this->te('import.dry_run') ?></label>
@@ -254,6 +264,19 @@ $csrf = \App\Security\Csrf::field();
     </form>
   </div>
 </div>
+<?php
+// Options d'unité par type d'énergie (valeur => libellé traduit), pour la
+// bascule côté client. Bloc de données JSON (jamais exécuté) : hors script-src,
+// compatible avec la CSP durcie (sans nonce). Cf. dashboard.php / #98.
+$unitOptions = [];
+foreach (\App\Service\Import\ImportMapping::UNITS as $type => $units) {
+    foreach ($units as $u) {
+        $unitOptions[$type][] = [$u, $this->t('import.unit_' . $u)];
+    }
+}
+?>
+<script type="application/json" id="import-units"><?= json_encode($unitOptions, JSON_HEX_TAG | JSON_UNESCAPED_UNICODE) ?></script>
+<script defer src="<?= \App\Support\Assets::url('assets/js/import.js') ?>"></script>
 <script defer src="<?= \App\Support\Assets::url('assets/js/confirm.js') ?>"></script>
 </body>
 </html>

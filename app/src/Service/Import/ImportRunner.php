@@ -35,7 +35,7 @@ final class ImportRunner
     /**
      * Extrait les champs d'import d'une requête POST et délègue au téléversement.
      *
-     * @param array<string, mixed> $post  Champs $_POST (energy_type, ts_col, value_col, dry_run).
+     * @param array<string, mixed> $post  Champs $_POST (energy_type, ts_col, value_col, unit, dry_run).
      * @param array<string, mixed> $files Entrée $_FILES (clé `import_file`).
      * @throws RuntimeException si le téléversement ou le format est invalide.
      */
@@ -52,6 +52,10 @@ final class ImportRunner
         if ($valueCol !== '') {
             $overrides['value_col'] = $valueCol;
         }
+        $unit = trim((string) ($post['unit'] ?? ''));
+        if ($unit !== '') {
+            $overrides['unit'] = $unit;
+        }
         $dryRun = ($post['dry_run'] ?? '') === '1';
 
         $file = is_array($files['import_file'] ?? null) ? $files['import_file'] : [];
@@ -61,7 +65,7 @@ final class ImportRunner
 
     /**
      * @param array<string, mixed> $file      Entrée $_FILES (name, tmp_name, error, size…).
-     * @param array{ts_col?: string, value_col?: string, registers?: array<string, string>} $overrides
+     * @param array{ts_col?: string, value_col?: string, unit?: string, registers?: array<string, string>} $overrides
      * @throws RuntimeException si le téléversement ou le format est invalide.
      */
     public function runUploaded(

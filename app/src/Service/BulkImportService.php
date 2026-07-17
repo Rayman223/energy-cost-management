@@ -54,7 +54,9 @@ final class BulkImportService
                     $rowError = true;
                     break;
                 }
-                $indexes[$registerKey] = $value;
+                // Ramène la valeur lue à l'unité canonique de stockage (kWh) : le
+                // facteur vaut 1 en kWh, 0.001 si le fichier est en Wh.
+                $indexes[$registerKey] = $value * $mapping->unitToCanonicalFactor;
             }
 
             if ($rowError) {
@@ -109,9 +111,12 @@ final class BulkImportService
             }
             $value = ReadingParser::parseValue($raw);
             if ($value === null) {
-                $report->addError(sprintf('Ligne %d : valeur m³ invalide (%s).', $lineNo, $raw));
+                $report->addError(sprintf('Ligne %d : valeur invalide (%s).', $lineNo, $raw));
                 continue;
             }
+            // Ramène la valeur lue à l'unité canonique de stockage (m³) : le
+            // facteur vaut 1 en m³, 0.001 si le fichier est en litres.
+            $value *= $mapping->unitToCanonicalFactor;
 
             try {
                 $isNew = $sink->saveIgnore($ts, $value);
