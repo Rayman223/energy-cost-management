@@ -95,6 +95,7 @@ $csrf = \App\Security\Csrf::field();
           </select>
         </div>
       </div>
+      <?php if (!empty($dynamicEnabled)): ?>
       <label><?= $this->te('account.bidding_zone') ?></label>
       <input type="text" name="bidding_zone" value="<?= $this->e($profile['bidding_zone'] ?? '') ?>" placeholder="10YBE----------2">
       <?php $pricingMode = $profile['pricing_mode'] ?? 'fixed'; ?>
@@ -105,6 +106,13 @@ $csrf = \App\Security\Csrf::field();
         <option value="dynamic_quarter"<?= $pricingMode === 'dynamic_quarter' ? ' selected' : '' ?>><?= $this->te('account.pricing_mode_dynamic_quarter') ?></option>
       </select>
       <p class="hint"><?= $this->te('account.pricing_mode_hint') ?></p>
+      <?php else: ?>
+      <?php // Zone de marché et mode tarifaire masqués et non soumis : la route reconduit
+            // les valeurs en base (préservation), pas besoin de champ caché ici. ?>
+      <label><?= $this->te('account.pricing_mode') ?></label>
+      <p><?= $this->te('account.pricing_mode_fixed') ?></p>
+      <p class="hint"><?= $this->te('account.pricing_mode_dynamic_disabled') ?></p>
+      <?php endif; ?>
       <button type="submit"><?= $this->te('account.save_profile') ?></button>
     </form>
   </div>

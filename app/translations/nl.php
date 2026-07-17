@@ -63,6 +63,7 @@ return [
     'account.pricing_mode_dynamic_hourly' => 'Dynamisch tarief — per uur (1u)',
     'account.pricing_mode_dynamic_quarter' => 'Dynamisch tarief — 15 min (binnenkort: voorlopig per uur berekend)',
     'account.pricing_mode_hint' => 'Bij een dynamisch tarief komt de energieprijs van ENTSO-E; de energieregels van het tariefraster worden genegeerd, terwijl belastingen en vaste kosten blijven gelden.',
+    'account.pricing_mode_dynamic_disabled' => 'Dynamische tarieven zijn uitgeschakeld op deze server: het vaste tarief wordt toegepast.',
     'account.save_profile' => 'Profiel opslaan',
     'account.profile_saved' => 'Profiel opgeslagen.',
 

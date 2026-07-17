@@ -63,6 +63,7 @@ return [
     'account.pricing_mode_dynamic_hourly' => 'Dynamic tariff — hourly (1h)',
     'account.pricing_mode_dynamic_quarter' => 'Dynamic tariff — 15 min (coming soon: computed hourly for now)',
     'account.pricing_mode_hint' => 'With a dynamic tariff the energy price comes from ENTSO-E; the tariff grid energy lines are ignored, while taxes and fixed fees still apply.',
+    'account.pricing_mode_dynamic_disabled' => 'Dynamic pricing is disabled on this server: the fixed tariff applies.',
     'account.save_profile' => 'Save profile',
     'account.profile_saved' => 'Profile saved.',
 

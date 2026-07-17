@@ -17,6 +17,7 @@ use App\Security\AuthGuard;
 use App\Security\Csrf;
 use App\Security\UserContext;
 use App\Support\DiscordLink;
+use App\Support\DynamicPricing;
 use App\Support\LocaleContext;
 
 // Bootstrap isolé : une configuration injoignable (ex. config.php absent) dégrade
@@ -403,8 +404,10 @@ $today = date('Y-m-d');
 
 // Tarif dynamique (profil) : les lignes d'énergie fournisseur de la grille sont
 // alors ignorées au calcul (prix ENTSO-E) → on les grise dans le formulaire.
-// Ne concerne que l'électricité.
+// Ne concerne que l'électricité, et seulement si le tarif dynamique est activé
+// côté serveur (sinon le calcul retombe en fixe : griser induirait en erreur).
 $isDynamic = $energy === 'electricity'
+    && DynamicPricing::isEnabled($config)
     && ($profile['pricing_mode'] ?? 'fixed') !== 'fixed';
 
 echo $view->render('tariffs', [

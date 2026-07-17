@@ -70,6 +70,7 @@ return [
     'account.pricing_mode_dynamic_hourly' => 'Tarif dynamique — horaire (1 h)',
     'account.pricing_mode_dynamic_quarter' => 'Tarif dynamique — 15 min (bientôt : calculé en horaire pour l’instant)',
     'account.pricing_mode_hint' => 'En tarif dynamique, le prix de l’énergie vient d’ENTSO-E ; les lignes d’énergie de la grille tarifaire sont ignorées, les taxes et forfaits restent pris en compte.',
+    'account.pricing_mode_dynamic_disabled' => 'Le tarif dynamique est désactivé sur ce serveur : le tarif fixe est appliqué.',
     'account.save_profile' => 'Enregistrer le profil',
     'account.profile_saved' => 'Profil enregistré.',
 

@@ -25,6 +25,7 @@ use App\Service\AccountDataExporter;
 use App\Service\AccountEraser;
 use App\Service\Import\ImportRunner;
 use App\Support\DiscordLink;
+use App\Support\DynamicPricing;
 use App\Support\LocaleContext;
 
 // Bootstrap isolé : une configuration injoignable (ex. config.php absent) dégrade
@@ -109,10 +110,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $chosenLocale = (string) ($config['i18n']['default_locale'] ?? 'fr');
             }
 
-            $zone = trim((string) ($_POST['bidding_zone'] ?? '')) ?: null;
-
             // updateProfile valide et normalise pricing_mode (liste blanche unique côté repository).
-            $pricingMode = (string) ($_POST['pricing_mode'] ?? 'fixed');
+            if (DynamicPricing::isEnabled($config)) {
+                $zone        = trim((string) ($_POST['bidding_zone'] ?? '')) ?: null;
+                $pricingMode = (string) ($_POST['pricing_mode'] ?? 'fixed');
+            } else {
+                // Tarif dynamique désactivé : zone de marché et mode tarifaire sont masqués
+                // et non éditables. On reconduit les valeurs déjà en base plutôt que de les
+                // lire du POST : relire les effacerait (champs absents du formulaire), alors
+                // qu'un pricing_mode/bidding_zone dynamique doit être préservé le temps que le
+                // flag revienne. Neutralise aussi tout POST forgé (ni modif, ni activation).
+                $storedProfile = $profileForLocale ?? [];
+                $storedZone    = $storedProfile['bidding_zone'] ?? null;
+                $zone          = (is_string($storedZone) && $storedZone !== '') ? $storedZone : null;
+                $pricingMode   = (string) ($storedProfile['pricing_mode'] ?? 'fixed');
+            }
 
             $users->updateProfile($userId, $country, $timezone, $currency, $zone, $chosenLocale, $pricingMode);
             $success = $view->t('account.profile_saved');
@@ -233,6 +245,7 @@ $timezoneOptions = Timezones::options($profile['timezone']);
 
 echo $view->render('account', [
     'oidcEnabled' => AuthGuard::isOidcEnabled($config),
+    'dynamicEnabled' => DynamicPricing::isEnabled($config),
     'discordUrl'  => DiscordLink::inviteUrl($config),
     'error'      => $error,
     'success'    => $success,

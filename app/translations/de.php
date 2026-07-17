@@ -63,6 +63,7 @@ return [
     'account.pricing_mode_dynamic_hourly' => 'Dynamischer Tarif — stündlich (1 h)',
     'account.pricing_mode_dynamic_quarter' => 'Dynamischer Tarif — 15 Min (demnächst: vorerst stündlich berechnet)',
     'account.pricing_mode_hint' => 'Beim dynamischen Tarif stammt der Energiepreis von ENTSO-E; die Energiezeilen des Tarifrasters werden ignoriert, Steuern und Pauschalen gelten weiterhin.',
+    'account.pricing_mode_dynamic_disabled' => 'Der dynamische Tarif ist auf diesem Server deaktiviert: Es gilt der Festtarif.',
     'account.save_profile' => 'Profil speichern',
     'account.profile_saved' => 'Profil gespeichert.',
 

@@ -25,6 +25,7 @@ use App\Security\UserContext;
 use App\Security\WebAccessGuard;
 use App\Service\CostCalculationService;
 use App\Service\TariffCalculatorService;
+use App\Support\DynamicPricing;
 
 header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-store');
@@ -126,7 +127,7 @@ try {
 }
 
 $readings = new ReadingsController($elecRepo, $gasRepo, $waterRepo, $syncState);
-$cost     = new CostController($costSvc);
+$cost     = new CostController($costSvc, DynamicPricing::isEnabled($config));
 $tariffs  = new TariffController($tariffRepo);
 $entries  = new MeterEntryController($gasRepo, $waterRepo, $elecRepo, $syncState);
 $ingest   = new IngestController($elecRepo, $gasRepo, $waterRepo);

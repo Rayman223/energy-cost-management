@@ -14,24 +14,35 @@ use App\Service\CostCalculationService;
  */
 final class CostController
 {
-    public function __construct(private readonly CostCalculationService $costSvc)
-    {
+    /**
+     * @param bool $dynamicEnabled Tarif dynamique activé côté serveur
+     *   (`dynamic_prices.enabled`). Faux ⇒ la clé `dynamic` est omise de la
+     *   réponse et l'UI n'affiche pas la section dédiée.
+     */
+    public function __construct(
+        private readonly CostCalculationService $costSvc,
+        private readonly bool $dynamicEnabled = true,
+    ) {
     }
 
     public function monthCost(Request $request): JsonResponse
     {
         [$year, $month] = $this->yearMonth($request);
 
-        $data            = $this->costSvc->estimateMonthElectricity($year, $month);
-        $data['dynamic'] = $this->costSvc->estimateMonthElectricityDynamic($year, $month);
+        $data = $this->costSvc->estimateMonthElectricity($year, $month);
+        if ($this->dynamicEnabled) {
+            $data['dynamic'] = $this->costSvc->estimateMonthElectricityDynamic($year, $month);
+        }
 
         return JsonResponse::ok($data);
     }
 
     public function costEstimate(Request $request): JsonResponse
     {
-        $data            = $this->costSvc->estimateCurrentMonthElectricity();
-        $data['dynamic'] = $this->costSvc->estimateCurrentMonthElectricityDynamic();
+        $data = $this->costSvc->estimateCurrentMonthElectricity();
+        if ($this->dynamicEnabled) {
+            $data['dynamic'] = $this->costSvc->estimateCurrentMonthElectricityDynamic();
+        }
 
         return JsonResponse::ok($data);
     }

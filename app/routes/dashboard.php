@@ -18,6 +18,7 @@ use App\Security\AuthGuard;
 use App\Security\AuthSession;
 use App\Security\WebAccessGuard;
 use App\Support\DiscordLink;
+use App\Support\DynamicPricing;
 use App\Support\LocaleContext;
 use App\View\ViewFactory;
 
@@ -115,7 +116,11 @@ try {
 
     $deltas      = $elecRepo->getMonthlyDeltas();
     $cost        = $costSvc->estimateCurrentMonthElectricity();
-    $cost['dynamic'] = $costSvc->estimateCurrentMonthElectricityDynamic();
+    // Tarif dynamique désactivé côté serveur ⇒ on n'expose pas la section (le JS
+    // ne rend « ⚡ Tarif dynamique » que si data.dynamic est présent).
+    if (DynamicPricing::isEnabled($config)) {
+        $cost['dynamic'] = $costSvc->estimateCurrentMonthElectricityDynamic();
+    }
     $gasCostData = $costSvc->estimateLastGasPeriod();
     if (!empty($gasCostData['period_from'])) {
         $gasPeriodFrom = new DateTimeImmutable($gasCostData['period_from']);
