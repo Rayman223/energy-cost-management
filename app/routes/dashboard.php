@@ -8,7 +8,6 @@ use App\Repository\ElectricityReadingRepository;
 use App\Repository\TariffRepository;
 use App\Repository\UserRepository;
 use App\Repository\UtilityReadingRepository;
-use App\Repository\WebhookSyncStateRepository;
 use App\Security\UserContext;
 use App\Service\CostCalculationService;
 use App\Service\TariffCalculatorService;
@@ -32,7 +31,6 @@ $dbError      = null;
 $deltas       = null;
 $cost         = null;
 $gasCostData  = null;
-$syncStatus   = null;
 $gasLatest    = null;
 $waterLatest  = null;
 $waterCostData = null;
@@ -99,7 +97,6 @@ try {
     $elecRepo   = new ElectricityReadingRepository($pdo, $userId);
     $gasRepo    = new UtilityReadingRepository($pdo, $userId, 'gas');
     $waterRepo  = new UtilityReadingRepository($pdo, $userId, 'water');
-    $syncState  = new WebhookSyncStateRepository($pdo, $userId);
     $tariffRepo = new TariffRepository($pdo, $userId, $isAdmin);
     $dynPriceRepo = new DynamicPriceRepository($pdo, $zone);
     $pricingMode  = (string) ($profile['pricing_mode'] ?? 'fixed');
@@ -135,19 +132,6 @@ try {
         $waterInitMonth = (int) $waterPeriod->format('n');
     }
     $waterCostData = $costSvc->estimateMonthWater($waterInitYear, $waterInitMonth);
-
-    // Le template ne consomme qu'un booléen « ce flux a-t-il déjà été synchronisé »
-    // (pastille stale si un flux ne l'a jamais été) : on ne formate plus les 7
-    // horodatages, jamais affichés (#130 C7).
-    $syncStatus = [
-        'prelevement_jour'   => $syncState->getLastSentAt('prelevement-jour') !== null,
-        'prelevement_nuit'   => $syncState->getLastSentAt('prelevement-nuit') !== null,
-        'injection_jour'     => $syncState->getLastSentAt('injection-jour') !== null,
-        'injection_nuit'     => $syncState->getLastSentAt('injection-nuit') !== null,
-        'production_solaire' => $syncState->getLastSentAt('production-solaire') !== null,
-        'gaz_index'          => $syncState->getLastSentAt('gas-index') !== null,
-        'water_index'        => $syncState->getLastSentAt('water-index') !== null,
-    ];
 } catch (\Throwable $e) {
     $dbError = $e->getMessage();
 }
@@ -162,7 +146,6 @@ echo $view->render('dashboard', [
     'gasLatest'    => $gasLatest,
     'waterLatest'  => $waterLatest,
     'waterCostData' => $waterCostData,
-    'syncStatus'   => $syncStatus,
     'initYear'     => (int) date('Y'),
     'initMonth'    => (int) date('n'),
     'gasInitYear'  => $gasInitYear,

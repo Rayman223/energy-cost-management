@@ -258,7 +258,6 @@ return [
     'dash.gas'             => 'Gas',
     'dash.water'           => 'Wasser',
     'dash.db_offline'      => 'DB offline',
-    'dash.sync'            => 'Sync',
 
     'legal.privacy'        => 'Datenschutzerklärung',
     'legal.terms'          => 'Nutzungsbedingungen',

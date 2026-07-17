@@ -37,26 +37,6 @@
   .clock span { display: block; }
   .clock .time { font-size: 1.05rem; color: var(--text); }
 
-  .sync-badge {
-    display: flex; align-items: center; gap: 8px;
-    background: var(--surface); border: 1px solid var(--border);
-    border-radius: 6px; padding: 6px 12px;
-    font-family: var(--mono); font-size: .78rem; color: var(--muted);
-  }
-  .sync-dot {
-    width: 7px; height: 7px; border-radius: 50%;
-    background: var(--green);
-    box-shadow: 0 0 8px var(--green);
-    animation: pulse 2.4s ease-in-out infinite;
-  }
-  .sync-dot.stale { background: var(--amber); box-shadow: 0 0 8px var(--amber); }
-  .sync-dot.error { background: var(--red);   box-shadow: 0 0 8px var(--red); animation: none; }
-
-  @keyframes pulse {
-    0%,100% { opacity: 1; }
-    50%      { opacity: .35; }
-  }
-
   /* ── Section titles ─────────────────────────────────────────────────────── */
   .section-header {
     display: flex; align-items: baseline; gap: 12px;
@@ -243,13 +223,6 @@
   .form-feedback.ok  { color: var(--green); }
   .form-feedback.err { color: var(--red); }
 
-  /* ── Sync status ────────────────────────────────────────────────────────── */
-  .sync-table { width: 100%; }
-  .sync-table td:first-child { color: var(--muted); font-size: .78rem; padding-right: 16px; }
-  .sync-table td:last-child  { font-family: var(--mono); font-size: .78rem; color: var(--text); }
-  .sync-table tr { border-top: 1px solid var(--border); }
-  .sync-table tr:first-child { border: none; }
-  .sync-table td { padding: 8px 16px; }
 
   /* ── Tools strip ────────────────────────────────────────────────────────── */
   .tools-strip { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 8px; }

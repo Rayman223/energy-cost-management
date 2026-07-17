@@ -72,7 +72,7 @@ app/
 ├── docs/                          ← installation.md · architecture.md · import.md · security-review.md · plan/ · …
 ├── public/                        ← index · tariffs · account · admin · login · privacy · terms · api · auth/
 │   └── assets/                    ← versioned CSS/JS (cache-busting)
-├── scripts/                       ← migrate · backfill_multitenant · import_* · cron_* · agent_push
+├── scripts/                       ← migrate · import_* · cron_* · agent_push
 ├── sql/                           ← schema.sql · migrations/
 ├── templates/ · translations/     ← HTML views · i18n catalogs (fr/en/nl/de)
 └── src/                           ← Domain · Http · I18n · Infrastructure · Repository · Security · Service · Support · View

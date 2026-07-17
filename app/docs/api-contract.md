@@ -33,7 +33,7 @@
 ### Conventions de réponse
 
 - Les actions **« données »** (`today`, `monthly_delta`, `chart_data`,
-  `gas_history`, `water_history`, `sync_status`, `tariffs`) renvoient directement
+  `gas_history`, `water_history`, `tariffs`) renvoient directement
   l'objet/tableau métier, **sans** enveloppe `{ ok }`.
 - Les actions **« estimation de coût »** (`month_cost`, `cost_estimate`,
   `gas_cost`, `gas_month_cost`) renvoient un objet avec `available: bool` ; si
@@ -58,7 +58,6 @@
 | `gas_cost` | — | `estimateLastGasPeriod()`. |
 | `gas_month_cost` | `year`, `month` (mêmes défauts/validations que `month_cost`) | `estimateMonthGas(year, month)`. |
 | `water_month_cost` | `year`, `month` (mêmes défauts/validations que `month_cost`) | `estimateMonthWater(year, month)` — **volume m³ uniquement** (pas de coût : aucun tarif eau). |
-| `sync_status` | — | Dates ISO‑8601 du dernier envoi EnergyID par flux (`prelevement_jour`, `prelevement_nuit`, `injection_jour`, `injection_nuit`, `production_solaire`, `gaz_index`, `water_index`) ; `null` si jamais envoyé. |
 | `tariffs` | — | `{ electricity: [...], gas: [...] }` ; chaque grille : `{ id, name, valid_from (Y-m-d), valid_to (Y-m-d|null), lines }`. |
 | *(autre)* | — | `400 { ok:false, error:"Unknown action" }`. |
 

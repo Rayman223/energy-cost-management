@@ -9,7 +9,6 @@
  * @var array<string,mixed>|null $gasLatest
  * @var array<string,mixed>|null $waterLatest
  * @var array<string,mixed>|null $waterCostData
- * @var array<string,bool>|null $syncStatus
  * @var int                      $initYear
  * @var int                      $initMonth
  * @var int                      $gasInitYear
@@ -57,15 +56,6 @@ $fmt = function (mixed $v, int $dec = 3, string $unit = 'kWh'): string {
       <div class="clock">
         <span class="time" id="clock-time">--:--:--</span>
         <span id="clock-date">--- -- ----</span>
-      </div>
-      <?php
-        $syncClass = 'ok';
-        if ($dbError) $syncClass = 'error';
-        elseif ($syncStatus && in_array(false, $syncStatus, true)) $syncClass = 'stale';
-      ?>
-      <div class="sync-badge">
-        <span class="sync-dot <?= $syncClass === 'error' ? 'error' : ($syncClass === 'stale' ? 'stale' : '') ?>"></span>
-        <?= $dbError ? 'DB offline' : 'Sync' ?>
       </div>
       <a href="<?= $this->url('meter-readings') ?>" class="theme-toggle" title="<?= $this->te('nav.meter_readings') ?>">📝</a>
       <?php if (!empty($isAdmin)): ?><a href="<?= $this->url('admin') ?>" class="theme-toggle" title="<?= $this->te('admin.title') ?>">🛡</a><?php endif; ?>
@@ -286,12 +276,6 @@ $fmt = function (mixed $v, int $dec = 3, string $unit = 'kWh'): string {
   <!-- Water consumption content (volume m³, pas de coût) -->
   <div id="water-cost-content">
     <div class="async-note">Chargement…</div>
-  </div>
-
-  <!-- ── Webhook Sync Status ────────────────────────────────────────────── -->
-  <div class="section-header">
-    <span class="section-title">Webhook sync — état</span>
-    <span class="section-line"></span>
   </div>
 
   <div class="page-footer">

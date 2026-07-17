@@ -1,8 +1,8 @@
 -- ============================================================
 -- Migration 2026-07-02 — webhook_sync_state multi-tenant (Issue #53 / P2, étape 2)
 -- Ajoute user_id et passe la PK en composite (user_id, source_name).
--- Les lignes existantes reçoivent user_id=0 ; le script
--- app/scripts/finalize_multitenant.php les réattribue au propriétaire.
+-- Les lignes existantes reçoivent user_id=0 ; elles ont été réattribuées au
+-- propriétaire lors de la finalisation multi-tenant (migration terminée).
 -- Baselinée dans schema.sql (jamais rejouée sur base fraîche).
 -- ============================================================
 

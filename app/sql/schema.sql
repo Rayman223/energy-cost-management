@@ -8,9 +8,8 @@ SET NAMES utf8mb4;
 SET time_zone = '+00:00';
 
 -- NB : les anciennes tables mono-tenant (Data_Dries, Data_Solaire, Data_Brusol,
--- Data_gaz, Data_eau) ne font plus partie du schéma. Sur une installation
--- existante, elles sont migrées puis supprimées par
--- app/scripts/finalize_multitenant.php (après backfill vers le compte owner).
+-- Data_gaz, Data_eau) ne font plus partie du schéma. La migration multi-tenant
+-- (rattachement au compte owner puis suppression de ces tables) est terminée.
 
 -- ── Tarifs énergétiques (catalogue partagé + surcharges personnelles) ─────
 CREATE TABLE IF NOT EXISTS tariff_grids (

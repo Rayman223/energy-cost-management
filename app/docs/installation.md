@@ -269,21 +269,12 @@ UPDATE users SET role = 'admin' WHERE id = 1;   -- the owner's id from step 4
 
 ## 6. Migrate data from the old project
 
-The historic tables migrated are `Data_Dries` (electricity T1/T2 + injection),
-`Data_Solaire` (production), `Data_gaz`, `Data_eau`. `Data_Brusol` is **not**
-migrated (dropped). Two options:
+The historic tables from the old mono-tenant project are `Data_Dries`
+(electricity T1/T2 + injection), `Data_Solaire` (production), `Data_gaz`,
+`Data_eau`. `Data_Brusol` is **not** migrated (dropped).
 
-**A. Legacy tables in the same database** — if the old `Data_*` tables were
-imported into this database, run the one-shot backfill **after** the owner exists
-(step 4). It attaches everything to the owner and is idempotent:
-
-```bash
-php app/scripts/backfill_multitenant.php            # → first user (the owner)
-php app/scripts/backfill_multitenant.php --user=42  # → a specific user id
-```
-
-**B. Fresh database / CSV export** — export the old readings to CSV and use the
-bulk importer (idempotent, re-runnable), targeting the owner:
+Export the old readings to CSV and use the bulk importer (idempotent,
+re-runnable), targeting the owner:
 
 ```bash
 php app/scripts/import_readings.php --type=electricity --file=elec.csv --user=1 --execute
