@@ -3,42 +3,44 @@
 ## Contexte
 Aucun mécanisme de sauvegarde de la base n'existe dans Manage-energy-costs.
 L'issue demande de s'inspirer du backup journalier de Battle-Conquest
-(`scripts/backup_db.sh` : `mysqldump | gzip` + lock + rotation) pour produire
-une sauvegarde SQL complète de la base.
+(`mysqldump | gzip` + lock + rotation) pour produire une sauvegarde SQL complète.
 
-Différence clé adaptée ici : Battle-Conquest lit les identifiants depuis un
-`.env`, alors que ce projet les stocke dans un tableau PHP
-[app/config/config.php](../../config/config.php) sous la clé `database`. Le
-script extrait donc les identifiants via `php -r` (quoting sûr via
-`escapeshellarg`).
+**Pivot d'approche** : la 1ʳᵉ version (`backup_db.sh`) appelait `mysqldump`. Or le
+déploiement cible tourne dans un container web **Alpine (swag)** qui n'embarque
+pas le client MariaDB, et l'y installer via `custom-cont-init.d` n'est pas
+pérenne (ré-exécuté à chaque redémarrage, dépendance à un dépôt apk). Le
+container a en revanche PHP + PDO/MySQL (l'app s'en sert déjà). La sauvegarde est
+donc réimplémentée **100 % PHP via PDO**, sans binaire externe : elle tourne
+telle quelle dans swag.
 
 Lien : https://github.com/Rayman223/Manage-energy-costs/issues/140
 
 ## Fichiers impactés
-- [app/scripts/backup_db.sh](../../scripts/backup_db.sh) — nouveau script bash de
-  backup (exécutable). Aligné sur le bash existant `deploy_unraid.sh`.
+- [app/src/Service/DatabaseBackupService.php](../../src/Service/DatabaseBackupService.php)
+  — génère le dump SQL logique par fragments (générateur) : tables (structure +
+  données en lecture non bufferisée), vues, triggers, routines, events. Exclut
+  les colonnes générées des INSERT ; DELIMITER pour les objets à corps multi-instructions.
+- [app/scripts/backup_db.php](../../scripts/backup_db.php) — CLI : verrou `flock`,
+  snapshot cohérent (`START TRANSACTION WITH CONSISTENT SNAPSHOT`), écriture
+  gzip atomique `.part` → `rename`, rotation 30 j, logs (erreurs sur stderr).
 - [.gitignore](../../../.gitignore) — ignore `/backups/` et `/var/`.
-- [README.md](../../../README.md) — entrée crontab + note dans « Cron jobs ».
+- [README.md](../../../README.md) — entrée crontab + note « dump PHP, sans mysqldump ».
+- (supprimé) `app/scripts/backup_db.sh` — remplacé par la version PHP.
 
 ## Étapes
-- [x] Créer la branche `feat/140-backup-sql` depuis `origin/main`.
-- [x] Écrire `app/scripts/backup_db.sh` :
-  - `set -euo pipefail`, `PROJECT_DIR` = racine dépôt.
-  - Identifiants lus depuis `config.php` via `php -r` + `escapeshellarg`.
-  - Lock `var/backup-db.lock` + `trap cleanup EXIT`.
-  - Mot de passe passé via fichier `[client]` temporaire (`chmod 600`,
-    `--defaults-extra-file`) → non exposé dans `ps aux`.
-  - `mysqldump --single-transaction --routines --triggers --events --quick`
-    `| gzip` → `backups/<db>_<ts>.sql.gz`.
-  - Rotation `find … -mtime +30 -delete`.
-- [x] `.gitignore` : `/backups/`, `/var/`.
-- [x] README : entrée crontab (03:00) + note client `mysqldump` requis.
-- [ ] Commit `feat(#140)` + PR `Closes #140`.
+- [x] Service `DatabaseBackupService` (dump PDO, streaming, objets non-table).
+- [x] Script `backup_db.php` (flock, snapshot, `.part`→rename, rotation, stderr).
+- [x] Supprimer `backup_db.sh`, mettre à jour README + `.gitignore`.
+- [x] PHPStan niveau 6 vert sur les deux fichiers (pas d'ajout en baseline).
 
 ## Vérification
-- `bash -n app/scripts/backup_db.sh` (syntaxe) — OK.
-- Exécution manuelle : `bash app/scripts/backup_db.sh` → une archive
-  `backups/<db>_<ts>.sql.gz` non vide, `gunzip -t` valide.
-- Mot de passe absent de `ps aux` pendant le dump.
-- 2ᵉ exécution : lock et rotation opérationnels.
-- `git status` : `backups/` et `var/` ignorés.
+- `php -l` + **PHPStan niveau 6** (PHAR 2.2.2) : 0 erreur sur les fichiers neufs.
+- Exécution réelle : archive `backups/<db>_<ts>.sql.gz` valide (`gunzip -t`),
+  16 `CREATE TABLE`, aucun `.part` résiduel.
+- **Round-trip restore** : réimport du dump → import `rc=0`, 16 tables, row-count
+  identique avant/après.
+- **Fidélité des données** : `CHECKSUM TABLE` identique avant/après sur une table
+  piégée (NULL, quote, backslash, newline, unicode) ; colonne **générée exclue**
+  de l'INSERT et recalculée correctement au restore.
+- Verrou : 2ᵉ exécution concurrente rejetée (« backup déjà en cours »).
+- Cron container : `docker exec swag php /config/www/energyv3/app/scripts/backup_db.php`.

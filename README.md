@@ -218,14 +218,18 @@ column mapping: [`app/docs/import.md`](app/docs/import.md).
 15 1 * * * /usr/bin/php /path/app/scripts/cron_daily_webhook.php   >> /var/log/energy-daily.log 2>&1
 # Day-ahead dynamic prices, after market publication (~13:30)
 30 13 * * * /usr/bin/php /path/app/scripts/cron_dynamic_prices.php >> /var/log/energy-dynamic.log 2>&1
-# Daily full SQL backup (03:00) — mysqldump | gzip into backups/, 30-day rotation
-0 3 * * *  /path/app/scripts/backup_db.sh                          >> /var/log/energy-backup.log 2>&1
+# Daily full SQL backup (03:00) — pure-PHP dump | gzip into backups/, 30-day rotation
+0 3 * * *  /usr/bin/php /path/app/scripts/backup_db.php            >> /var/log/energy-backup.log 2>&1
 ```
 
-The backup script (`app/scripts/backup_db.sh`) reads DB credentials from
-`app/config/config.php`, requires the `mysqldump` client on the host, and writes
-timestamped `backups/<db>_*.sql.gz` archives (git-ignored) with automatic
-30-day rotation.
+The backup script (`app/scripts/backup_db.php`) produces a complete logical dump
+**in pure PHP via PDO** — no `mysqldump` binary required — so it runs as-is inside
+the web container (e.g. swag/Alpine). It reads DB credentials from
+`app/config/config.php`, dumps tables (structure + data), views, triggers,
+routines and events under a consistent snapshot, and writes timestamped
+`backups/<db>_*.sql.gz` archives (git-ignored) atomically (`.part` → rename) with
+a `flock` lock and automatic 30-day rotation. Containerized example:
+`docker exec <web-container> php /config/www/energyv3/app/scripts/backup_db.php`.
 
 Dynamic prices use the `dynamic_prices` config (ENTSO-E by default; free token at
 [transparency.entsoe.eu](https://transparency.entsoe.eu/)). The dashboard then
