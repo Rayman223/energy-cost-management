@@ -5,6 +5,7 @@ declare(strict_types=1);
 use App\Http\Controller\CostController;
 use App\Http\Controller\IngestController;
 use App\Http\Controller\MeterEntryController;
+use App\Http\Controller\ReadingDeletionController;
 use App\Http\Controller\ReadingsController;
 use App\Http\Controller\TariffController;
 use App\Http\JsonResponse;
@@ -132,6 +133,7 @@ $readings = new ReadingsController($elecRepo, $gasRepo, $waterRepo);
 $cost     = new CostController($costSvc, DynamicPricing::isEnabled($config));
 $tariffs  = new TariffController($tariffRepo);
 $entries  = new MeterEntryController($gasRepo, $waterRepo, $elecRepo, $syncState);
+$deletion = new ReadingDeletionController($gasRepo, $waterRepo, $elecRepo);
 $ingest   = new IngestController($elecRepo, $gasRepo, $waterRepo);
 
 $router = new Router();
@@ -165,6 +167,15 @@ if ($viaToken === false) {
     $router->add('POST', 'gas_entry',         $entries->gas(...));
     $router->add('POST', 'water_entry',       $entries->water(...));
     $router->add('POST', 'save_tariff', $tariffs->save(...));
+
+    // POST (suppression de relevés) : par ligne (gaz/eau par id, élec par
+    // horodatage) ou intégralité d'un fluide (« Tout supprimer »).
+    $router->add('POST', 'delete_gas_reading',         $deletion->gasReading(...));
+    $router->add('POST', 'delete_water_reading',       $deletion->waterReading(...));
+    $router->add('POST', 'delete_electricity_reading', $deletion->electricityReading(...));
+    $router->add('POST', 'delete_gas_all',             $deletion->gasAll(...));
+    $router->add('POST', 'delete_water_all',           $deletion->waterAll(...));
+    $router->add('POST', 'delete_electricity_meter',   $deletion->electricityMeter(...));
 
     // La gestion des jetons API se fait sur la page « Mon compte » (account.php).
 }

@@ -158,6 +158,75 @@ final class UtilityReadingRepositoryDbTest extends TestCase
         self::assertSame('2026-07-05 10:00:00', $window[2]['reading_at']);
     }
 
+    public function testSaveIgnoreReplaceOverwritesExistingValue(): void
+    {
+        $water = new UtilityReadingRepository($this->pdo(), $this->userId, 'water');
+        $ts    = new DateTimeImmutable('2026-06-01 10:00:00');
+
+        // Import fautif (mauvaise unité), puis correction avec « écraser ».
+        self::assertTrue($water->saveIgnore($ts, 100.0));
+        self::assertFalse($water->saveIgnore($ts, 10.0), 'sans replace : doublon ignoré');
+        self::assertSame(100.0, (float) $water->getLatest()['counter_m3']);
+
+        self::assertTrue($water->saveIgnore($ts, 10.0, true), 'avec replace : valeur mise à jour');
+        self::assertSame(10.0, (float) $water->getLatest()['counter_m3']);
+        self::assertCount(1, $water->getAllReadings(), 'aucun doublon créé');
+
+        // Réécrire la même valeur ne touche aucune ligne.
+        self::assertFalse($water->saveIgnore($ts, 10.0, true));
+    }
+
+    public function testDeleteReadingRemovesOnlyTargetRow(): void
+    {
+        $gas = new UtilityReadingRepository($this->pdo(), $this->userId, 'gas');
+        $gas->save(new DateTimeImmutable('2026-06-01 10:00:00'), 100.0);
+        $gas->save(new DateTimeImmutable('2026-07-01 10:00:00'), 150.0);
+
+        $all = $gas->getAllReadings();
+        $targetId = $all[0]['id']; // plus récent (150.0)
+
+        self::assertTrue($gas->deleteReading($targetId));
+        $remaining = $gas->getAllReadings();
+        self::assertCount(1, $remaining);
+        self::assertSame(100.0, $remaining[0]['counter_m3']);
+
+        // Supprimer un id déjà parti est un no-op.
+        self::assertFalse($gas->deleteReading($targetId));
+    }
+
+    public function testDeleteReadingIsScopedPerUserAndFluid(): void
+    {
+        $otherId = (new UserRepository($this->pdo()))->create('https://iss.test', 'other-del', 'test', 'Autre')->id;
+
+        $mineGas = new UtilityReadingRepository($this->pdo(), $this->userId, 'gas');
+        $mineGas->save(new DateTimeImmutable('2026-06-01 10:00:00'), 100.0);
+        $mineId = $mineGas->getAllReadings()[0]['id'];
+
+        // Un autre utilisateur ne peut pas supprimer mon relevé.
+        $theirGas = new UtilityReadingRepository($this->pdo(), $otherId, 'gas');
+        self::assertFalse($theirGas->deleteReading($mineId));
+
+        // L'autre fluide (eau) du même utilisateur ne peut pas non plus.
+        $mineWater = new UtilityReadingRepository($this->pdo(), $this->userId, 'water');
+        self::assertFalse($mineWater->deleteReading($mineId));
+
+        // Le bon repo, lui, supprime bien.
+        self::assertTrue($mineGas->deleteReading($mineId));
+    }
+
+    public function testDeleteAllClearsOnlyThatFluid(): void
+    {
+        $gas   = new UtilityReadingRepository($this->pdo(), $this->userId, 'gas');
+        $water = new UtilityReadingRepository($this->pdo(), $this->userId, 'water');
+        $gas->save(new DateTimeImmutable('2026-06-01 10:00:00'), 100.0);
+        $gas->save(new DateTimeImmutable('2026-07-01 10:00:00'), 150.0);
+        $water->save(new DateTimeImmutable('2026-06-01 10:00:00'), 40.0);
+
+        self::assertSame(2, $gas->deleteAll());
+        self::assertSame([], $gas->getAllReadings());
+        self::assertCount(1, $water->getAllReadings(), 'l\'eau est intacte');
+    }
+
     private function pdo(): PDO
     {
         if ($this->pdo === null) {

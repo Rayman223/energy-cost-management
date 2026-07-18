@@ -64,9 +64,11 @@ final class ElectricityReadingRepository implements LegacyDailyRepositoryInterfa
      * besoin. INSERT IGNORE : idempotent en cas de relance ou de renvoi.
      *
      * @param array<string, float> $indexByRegister register_key => index cumulé
-     * @return int Nombre de lignes réellement insérées (doublons exclus).
+     * @param bool $replace Si true, un index déjà présent au même horodatage est
+     *        écrasé (ON DUPLICATE KEY UPDATE) au lieu d'être ignoré.
+     * @return int Nombre de lignes réellement écrites (insérées ou mises à jour).
      */
-    public function insertIndexes(DateTimeImmutable $timestamp, array $indexByRegister): int
+    public function insertIndexes(DateTimeImmutable $timestamp, array $indexByRegister, bool $replace = false): int
     {
         // Topologie résolue/créée au premier appel seulement : la carte des
         // registres ne change pas au cours d'une requête HTTP. En import en masse,
@@ -79,8 +81,14 @@ final class ElectricityReadingRepository implements LegacyDailyRepositoryInterfa
         }
         $map = $this->registerMap ?? [];
 
+        // ON DUPLICATE KEY UPDATE renvoie rowCount() = 2 pour une mise à jour, 1
+        // pour une insertion : on plafonne à 1 par registre écrit pour compter des
+        // « lignes touchées » cohérentes avec le mode INSERT IGNORE.
         $stmt = $this->pdo->prepare(
-            'INSERT IGNORE INTO meter_readings (register_id, reading_at, index_value) VALUES (:rid, :at, :val)'
+            $replace
+                ? 'INSERT INTO meter_readings (register_id, reading_at, index_value) VALUES (:rid, :at, :val)
+                   ON DUPLICATE KEY UPDATE index_value = VALUES(index_value)'
+                : 'INSERT IGNORE INTO meter_readings (register_id, reading_at, index_value) VALUES (:rid, :at, :val)'
         );
 
         // Atomicité du jeu de registres au même horodatage : sans transaction, un
@@ -103,7 +111,9 @@ final class ElectricityReadingRepository implements LegacyDailyRepositoryInterfa
                     'at'  => $timestamp->format('Y-m-d H:i:s'),
                     'val' => $value,
                 ]);
-                $inserted += $stmt->rowCount();
+                // rowCount() : 0 (doublon ignoré ou valeur identique), 1 (inséré)
+                // ou 2 (mis à jour en mode replace) → compter une ligne touchée.
+                $inserted += $stmt->rowCount() > 0 ? 1 : 0;
             }
         } catch (\Throwable $e) {
             // Seul un échec de la boucle est rattrapé ici (transaction encore
@@ -124,12 +134,70 @@ final class ElectricityReadingRepository implements LegacyDailyRepositoryInterfa
         // on invalide pour rester cohérent si la même instance écrit puis relit
         // (mois courant comme mois donné).
         if ($inserted > 0) {
-            $this->monthlyDeltasComputed       = false;
-            $this->monthlyDeltasCache          = [];
-            $this->monthlyDeltasForMonthCache  = [];
+            $this->invalidateMonthlyDeltaCaches();
         }
 
         return $inserted;
+    }
+
+    /**
+     * Supprime tous les index (les 5 registres) à un horodatage donné pour le
+     * compteur de l'utilisateur. La jointure sur meters.user_id garantit qu'on ne
+     * touche que le compteur du bon utilisateur.
+     *
+     * @return int Nombre de lignes meter_readings supprimées (0 à 5).
+     */
+    public function deleteReadingAt(DateTimeImmutable $timestamp): int
+    {
+        $stmt = $this->pdo->prepare(
+            'DELETE mr FROM meter_readings mr
+             JOIN meter_registers reg ON reg.id = mr.register_id
+             JOIN meters m ON m.id = reg.meter_id
+             WHERE m.user_id = :uid AND m.energy_type = :etype AND mr.reading_at = :at'
+        );
+        $stmt->execute([
+            'uid'   => $this->userId,
+            'etype' => 'electricity',
+            'at'    => $timestamp->format('Y-m-d H:i:s'),
+        ]);
+
+        $this->invalidateMonthlyDeltaCaches();
+
+        return $stmt->rowCount();
+    }
+
+    /**
+     * Supprime le compteur électricité de l'utilisateur ; les registres et tous
+     * les relevés partent en cascade (ON DELETE CASCADE). insertIndexes recrée le
+     * compteur paresseusement au prochain import/saisie.
+     *
+     * @return int Nombre de compteurs supprimés (0 ou 1).
+     */
+    public function deleteMeter(): int
+    {
+        $stmt = $this->pdo->prepare(
+            'DELETE FROM meters WHERE user_id = :uid AND energy_type = :etype'
+        );
+        $stmt->execute(['uid' => $this->userId, 'etype' => 'electricity']);
+
+        // La topologie mémoïsée pointe sur un compteur qui n'existe plus : la
+        // réinitialiser pour qu'un insertIndexes ultérieur le recrée proprement.
+        $this->topologyEnsured = false;
+        $this->registerMap     = null;
+        $this->invalidateMonthlyDeltaCaches();
+
+        return $stmt->rowCount();
+    }
+
+    /**
+     * Invalide les deltas mensuels mémoïsés : une suppression rend obsolètes les
+     * agrégats calculés (comme une insertion). Cf. insertIndexes.
+     */
+    private function invalidateMonthlyDeltaCaches(): void
+    {
+        $this->monthlyDeltasComputed      = false;
+        $this->monthlyDeltasCache         = [];
+        $this->monthlyDeltasForMonthCache = [];
     }
 
     /**

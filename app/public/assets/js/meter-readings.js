@@ -26,15 +26,23 @@ function fmtIndex(v) {
   return parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ' ') + '.' + parts[1];
 }
 
+// Bouton « supprimer » (icône corbeille) porté par chaque ligne d'historique.
+// L'attribut data-* (data-id pour gaz/eau, data-at pour l'électricité) transporte
+// la cible ; la suppression est déléguée au <tbody> (voir wireRowDeletion).
+function delButton(attr, value) {
+  const label = tr('delete', 'Delete');
+  return `<td class="td-actions"><button type="button" class="btn btn-red btn-sm" data-del ${attr}="${value}" aria-label="${label}" title="${label}">🗑</button></td>`;
+}
+
 function renderReadings(tbodyId, rows, emptyLabel) {
   const tbody = document.getElementById(tbodyId);
   if (!tbody) return;
   if (!Array.isArray(rows) || rows.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="3" class="td-empty">${emptyLabel}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="4" class="td-empty">${emptyLabel}</td></tr>`;
     return;
   }
   tbody.innerHTML = rows.map(r =>
-    `<tr><td>${r.reading_at.slice(0, 16)}</td><td>${fmtIndex(r.counter_m3)}</td><td class="td-delta">${r.delta_m3 !== null ? '+' + fmtIndex(r.delta_m3) + ' m³' : '—'}</td></tr>`
+    `<tr><td>${r.reading_at.slice(0, 16)}</td><td>${fmtIndex(r.counter_m3)}</td><td class="td-delta">${r.delta_m3 !== null ? '+' + fmtIndex(r.delta_m3) + ' m³' : '—'}</td>${delButton('data-id', r.id)}</tr>`
   ).join('');
 }
 
@@ -51,12 +59,12 @@ function renderElectricityReadings(tbodyId, rows, emptyLabel) {
   const tbody = document.getElementById(tbodyId);
   if (!tbody) return;
   if (!Array.isArray(rows) || rows.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="6" class="td-empty">${emptyLabel}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="7" class="td-empty">${emptyLabel}</td></tr>`;
     return;
   }
   const cell = (v) => (v === null || v === undefined) ? '—' : fmtIndex(v);
   tbody.innerHTML = rows.map(r =>
-    `<tr><td>${r.reading_at.slice(0, 16)}</td>${ELEC_KEYS.map(k => `<td>${cell(r[k])}</td>`).join('')}</tr>`
+    `<tr><td>${r.reading_at.slice(0, 16)}</td>${ELEC_KEYS.map(k => `<td>${cell(r[k])}</td>`).join('')}${delButton('data-at', r.reading_at)}</tr>`
   ).join('');
 }
 
@@ -152,6 +160,75 @@ async function submitElectricity() {
 document.getElementById('electricity-btn')?.addEventListener('click', submitElectricity);
 document.getElementById('gas-btn')?.addEventListener('click', () => submitUtility('gas', 'gas_entry'));
 document.getElementById('water-btn')?.addEventListener('click', () => submitUtility('water', 'water_entry'));
+
+// ── Suppression de relevés ──────────────────────────────────────────────────
+
+// Ouvre la modale de confirmation au design du site (confirm.js). Repli sur le
+// confirm() natif si le script n'est pas chargé, pour ne jamais supprimer sans
+// confirmation.
+function confirmDelete(message, confirmText, onConfirm) {
+  if (typeof window.siteConfirm === 'function') {
+    window.siteConfirm(message, onConfirm, { danger: true, confirmText });
+  } else if (window.confirm(message)) {
+    onConfirm();
+  }
+}
+
+async function deleteAndReload(action, payload, feedbackId, reloadFn) {
+  setFeedback(feedbackId, '');
+  try {
+    const res = await fetch(`api?action=${action}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error || '');
+    // deleted:0 → rien n'a été supprimé (relevé déjà retiré ailleurs) : message
+    // neutre plutôt qu'une fausse confirmation, puis rechargement pour refléter
+    // l'état réel du tableau.
+    if (data.deleted === 0) {
+      setFeedback(feedbackId, tr('deleteNone', 'No reading deleted.'), '');
+    } else {
+      setFeedback(feedbackId, tr('deleted', '✓ Deleted.'), 'ok');
+    }
+    await reloadFn();
+  } catch (e) {
+    setFeedback(feedbackId, `✗ ${tr('deleteError', 'Deletion failed.')}`, 'err');
+  }
+}
+
+const reloadGas = () => loadHistory('gas_history', 'gas-tbody', tr('emptyGas', 'No gas reading recorded.'));
+const reloadWater = () => loadHistory('water_history', 'water-tbody', tr('emptyWater', 'No water reading recorded.'));
+
+// Délégation sur le <tbody> : les lignes sont re-rendues à chaque rechargement,
+// mais le tbody persiste, donc un seul écouteur suffit.
+function wireRowDeletion(tbodyId, action, payloadFromBtn, feedbackId, reloadFn) {
+  const tbody = document.getElementById(tbodyId);
+  if (!tbody) return;
+  tbody.addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-del]');
+    if (!btn) return;
+    confirmDelete(tr('deleteConfirm', 'Delete this reading?'), tr('delete', 'Delete'),
+      () => deleteAndReload(action, payloadFromBtn(btn), feedbackId, reloadFn));
+  });
+}
+
+function wireDeleteAll(btnId, action, feedbackId, reloadFn) {
+  document.getElementById(btnId)?.addEventListener('click', () => {
+    confirmDelete(tr('deleteAllConfirm', 'Delete all readings for this utility?'), tr('deleteAll', 'Delete all'),
+      () => deleteAndReload(action, {}, feedbackId, reloadFn));
+  });
+}
+
+wireRowDeletion('gas-tbody', 'delete_gas_reading', (btn) => ({ id: parseInt(btn.dataset.id, 10) }), 'gas-del-feedback', reloadGas);
+wireRowDeletion('water-tbody', 'delete_water_reading', (btn) => ({ id: parseInt(btn.dataset.id, 10) }), 'water-del-feedback', reloadWater);
+wireRowDeletion('electricity-tbody', 'delete_electricity_reading', (btn) => ({ reading_at: btn.dataset.at }), 'electricity-del-feedback', loadElectricityHistory);
+
+wireDeleteAll('gas-delete-all', 'delete_gas_all', 'gas-del-feedback', reloadGas);
+wireDeleteAll('water-delete-all', 'delete_water_all', 'water-del-feedback', reloadWater);
+wireDeleteAll('electricity-delete-all', 'delete_electricity_meter', 'electricity-del-feedback', loadElectricityHistory);
+
 loadElectricityHistory();
-loadHistory('gas_history', 'gas-tbody', tr('emptyGas', 'No gas reading recorded.'));
-loadHistory('water_history', 'water-tbody', tr('emptyWater', 'No water reading recorded.'));
+reloadGas();
+reloadWater();

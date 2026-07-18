@@ -14,6 +14,12 @@ use DateTimeImmutable;
  */
 interface UtilityIngestionInterface
 {
-    /** @return bool true si le relevé a été inséré, false si doublon ignoré. */
-    public function saveIgnore(DateTimeImmutable $readingAt, float $counterM3): bool;
+    /**
+     * @param bool $replace Si true, un relevé déjà présent au même horodatage est
+     *        écrasé (ON DUPLICATE KEY UPDATE) au lieu d'être ignoré — pour corriger
+     *        un import fautif. Par défaut false (INSERT IGNORE idempotent).
+     * @return bool true si le relevé a été inséré ou mis à jour, false si doublon
+     *         ignoré (uniquement possible quand $replace vaut false).
+     */
+    public function saveIgnore(DateTimeImmutable $readingAt, float $counterM3, bool $replace = false): bool;
 }

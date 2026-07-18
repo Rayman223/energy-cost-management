@@ -8,6 +8,25 @@
 (function () {
   'use strict';
 
+  // Avertissement : « Remplacer les valeurs existantes » (overwrite) n'a aucun
+  // effet en simulation (dry-run), qui annule toute écriture. On le signale dès
+  // que les deux cases sont cochées. Bloc indépendant du reste (qui peut sortir
+  // tôt si le formulaire d'unités est absent).
+  (function wireOverwriteWarning() {
+    var overwrite = document.querySelector('input[name="overwrite"]');
+    var dryRun = document.querySelector('input[name="dry_run"]');
+    var warning = document.getElementById('import-overwrite-warning');
+    if (!overwrite || !dryRun || !warning) {
+      return;
+    }
+    function sync() {
+      warning.hidden = !(overwrite.checked && dryRun.checked);
+    }
+    overwrite.addEventListener('change', sync);
+    dryRun.addEventListener('change', sync);
+    sync();
+  })();
+
   // Doit rester aligné sur RowSource::DELIMITERS (même ordre : à égalité, le
   // premier gagne, donc la virgule — le comportement historique).
   var DELIMITERS = [',', ';', '\t'];

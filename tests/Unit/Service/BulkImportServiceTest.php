@@ -57,6 +57,57 @@ final class BulkImportServiceTest extends TestCase
         self::assertSame(2, $second->duplicates());
     }
 
+    public function testUtilityReimportWithReplaceOverwritesInsteadOfIgnoring(): void
+    {
+        // Cas de l'issue #162 : import fautif, puis ré-import corrigé au même
+        // horodatage avec « écraser » → la valeur est mise à jour, pas ignorée.
+        $sink = new FakeUtilityIngestion();
+
+        $wrong = [2 => ['timestamp' => '2026-01-01 08:00:00', 'value' => '100']];
+        $this->service->importUtility($wrong, ImportMapping::preset('water'), $sink);
+        self::assertSame(100.0, $sink->saved['2026-01-01 08:00:00']);
+
+        $fixed  = [2 => ['timestamp' => '2026-01-01 08:00:00', 'value' => '10']];
+        $report = $this->service->importUtility($fixed, ImportMapping::preset('water'), $sink, null, true);
+
+        self::assertSame(10.0, $sink->saved['2026-01-01 08:00:00'], 'la valeur doit être écrasée');
+        self::assertSame(1, $report->imported(), 'la ligne écrasée compte comme importée');
+        self::assertSame(0, $report->duplicates());
+    }
+
+    public function testUtilityReimportWithReplaceCountsIdenticalValueAsDuplicate(): void
+    {
+        // Réécrire la même valeur ne « touche » aucune ligne (ON DUPLICATE KEY
+        // UPDATE renvoie 0) → comptée comme doublon, pas comme import.
+        $sink = new FakeUtilityIngestion();
+        $rows = [2 => ['timestamp' => '2026-01-01 08:00:00', 'value' => '42']];
+
+        $this->service->importUtility($rows, ImportMapping::preset('gas'), $sink);
+        $report = $this->service->importUtility($rows, ImportMapping::preset('gas'), $sink, null, true);
+
+        self::assertSame(0, $report->imported());
+        self::assertSame(1, $report->duplicates());
+    }
+
+    public function testElectricityReimportWithReplaceOverwritesExistingIndexes(): void
+    {
+        $sink = new FakeElectricityIngestion();
+        $rows = [2 => ['timestamp' => '2026-01-01 00:00:00', 'import_t1' => '1000', 'import_t2' => '2000']];
+
+        $first = $this->service->importElectricity($rows, ImportMapping::preset('electricity'), $sink);
+        self::assertSame(2, $first->imported());
+
+        // Sans replace : doublons ignorés.
+        $second = $this->service->importElectricity($rows, ImportMapping::preset('electricity'), $sink);
+        self::assertSame(0, $second->imported());
+        self::assertSame(2, $second->duplicates());
+
+        // Avec replace : les 2 registres sont réécrits (comptés importés).
+        $third = $this->service->importElectricity($rows, ImportMapping::preset('electricity'), $sink, null, true);
+        self::assertSame(2, $third->imported());
+        self::assertSame(0, $third->duplicates());
+    }
+
     public function testUtilityImportHonoursValueColumnOverride(): void
     {
         $rows = [2 => ['timestamp' => '2026-01-01 08:00:00', 'gaz naturel' => '42.0']];
@@ -141,7 +192,7 @@ final class BulkImportServiceTest extends TestCase
         // Une erreur base sur une ligne (ex. dépassement DECIMAL) est comptée et
         // n'annule pas les autres lignes (bug #2), sans fuiter de détail (bug #4).
         $sink = new class implements UtilityIngestionInterface {
-            public function saveIgnore(DateTimeImmutable $readingAt, float $counterM3): bool
+            public function saveIgnore(DateTimeImmutable $readingAt, float $counterM3, bool $replace = false): bool
             {
                 if ($counterM3 === 999.0) {
                     throw new \RuntimeException('SQLSTATE[22003]: numeric value out of range');

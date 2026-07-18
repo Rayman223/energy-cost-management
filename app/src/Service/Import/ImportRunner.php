@@ -35,7 +35,7 @@ final class ImportRunner
     /**
      * Extrait les champs d'import d'une requête POST et délègue au téléversement.
      *
-     * @param array<string, mixed> $post  Champs $_POST (energy_type, ts_col, value_col, unit, registers, dry_run).
+     * @param array<string, mixed> $post  Champs $_POST (energy_type, ts_col, value_col, unit, registers, dry_run, overwrite).
      * @param array<string, mixed> $files Entrée $_FILES (clé `import_file`).
      * @throws RuntimeException si le téléversement ou le format est invalide.
      * @throws \InvalidArgumentException si le mapping ou le type d'énergie est invalide.
@@ -45,10 +45,11 @@ final class ImportRunner
     {
         $energyType = strtolower(trim((string) ($post['energy_type'] ?? '')));
         $dryRun     = ($post['dry_run'] ?? '') === '1';
+        $replace    = ($post['overwrite'] ?? '') === '1';
 
         $file = is_array($files['import_file'] ?? null) ? $files['import_file'] : [];
 
-        return $this->runUploaded($pdo, $targetUserId, $energyType, self::parseOverrides($post), $file, $dryRun);
+        return $this->runUploaded($pdo, $targetUserId, $energyType, self::parseOverrides($post), $file, $dryRun, $replace);
     }
 
     /**
@@ -123,6 +124,7 @@ final class ImportRunner
         array $overrides,
         array $file,
         bool $dryRun,
+        bool $replace = false,
     ): ImportReport {
         $tmp  = is_string($file['tmp_name'] ?? null) ? $file['tmp_name'] : '';
         $name = is_string($file['name'] ?? null) ? $file['name'] : '';
@@ -153,7 +155,7 @@ final class ImportRunner
         // schéma/SQL vers l'utilisateur). La CLI, elle, appelle run() en direct et
         // affiche la cause réelle à l'opérateur.
         try {
-            return $this->run($pdo, $mapping, $this->openRows($tmp, $ext === 'json'), $targetUserId, $energyType, $dryRun);
+            return $this->run($pdo, $mapping, $this->openRows($tmp, $ext === 'json'), $targetUserId, $energyType, $dryRun, $replace);
         } catch (\InvalidArgumentException $e) {
             // Erreurs « métier » (format/fichier) : message sûr à afficher.
             throw new RuntimeException($e->getMessage(), 0, $e);
@@ -185,6 +187,7 @@ final class ImportRunner
         int $targetUserId,
         string $energyType,
         bool $dryRun,
+        bool $replace = false,
     ): ImportReport {
         $report = new ImportReport();
 
@@ -193,9 +196,9 @@ final class ImportRunner
             $capped = $this->capped($rows, $report);
 
             if ($mapping->isElectricity()) {
-                $this->service->importElectricity($capped, $mapping, new ElectricityReadingRepository($pdo, $targetUserId), $report);
+                $this->service->importElectricity($capped, $mapping, new ElectricityReadingRepository($pdo, $targetUserId), $report, $replace);
             } else {
-                $this->service->importUtility($capped, $mapping, new UtilityReadingRepository($pdo, $targetUserId, $energyType), $report);
+                $this->service->importUtility($capped, $mapping, new UtilityReadingRepository($pdo, $targetUserId, $energyType), $report, $replace);
             }
 
             if ($dryRun) {

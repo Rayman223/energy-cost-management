@@ -103,6 +103,11 @@
     cancel.focus();
   }
 
+  // Exposé pour un usage programmatique (ex. lignes rendues côté client par
+  // fetch, sans <form>/<a> dans le DOM) : window.siteConfirm(message, onConfirm,
+  // { danger, confirmText }).
+  window.siteConfirm = openConfirm;
+
   document.addEventListener('submit', function (e) {
     var form = e.target;
     if (!(form instanceof HTMLFormElement) || !form.dataset.confirm || form.dataset.confirmAccepted === 'true') {

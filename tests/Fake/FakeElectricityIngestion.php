@@ -22,14 +22,16 @@ final class FakeElectricityIngestion implements ElectricityIngestionInterface
     {
     }
 
-    public function insertIndexes(DateTimeImmutable $timestamp, array $indexByRegister): int
+    public function insertIndexes(DateTimeImmutable $timestamp, array $indexByRegister, bool $replace = false): int
     {
         $this->calls[] = ['timestamp' => $timestamp->format('Y-m-d H:i:s'), 'indexes' => $indexByRegister];
 
         $inserted = 0;
         foreach (array_keys($indexByRegister) as $key) {
             $unique = $timestamp->format('Y-m-d H:i:s') . '|' . $key;
-            if (!isset($this->seen[$unique])) {
+            // En mode replace, un index déjà vu est réécrit → compté comme ligne
+            // touchée (simule ON DUPLICATE KEY UPDATE).
+            if (!isset($this->seen[$unique]) || $replace) {
                 $this->seen[$unique] = true;
                 $inserted++;
             }

@@ -144,6 +144,48 @@ final class ImportRunnerDbTest extends TestCase
         self::assertSame(3, $again->duplicates());
     }
 
+    /**
+     * Cas de l'issue #162 : un import eau fautif, puis un ré-import corrigé aux
+     * mêmes horodatages avec `overwrite=1` → les valeurs sont écrasées en base
+     * (au lieu d'être ignorées comme doublons).
+     */
+    public function testWebReimportWithOverwriteCorrectsExistingValues(): void
+    {
+        $userId = (new UserRepository($this->pdo()))->create('https://iss.example', 'ovr-owner', 'example', 'Ovr')->id;
+
+        $wrong = $this->tempCsv("timestamp,value\n2026-05-01 08:00:00,1500\n2026-05-02 08:00:00,1600\n");
+        $first = (new ImportRunner())->runFromRequest($this->pdo(), $userId, ['energy_type' => 'water', 'dry_run' => '0'], $this->uploadedFile($wrong));
+        self::assertSame(2, $first->imported());
+        self::assertSame(1500.0, $this->waterValue($userId, '2026-05-01 08:00:00'));
+
+        // Ré-import corrigé SANS overwrite : ignoré (doublons).
+        $noOverwrite = $this->tempCsv("timestamp,value\n2026-05-01 08:00:00,1.5\n");
+        $ignored = (new ImportRunner())->runFromRequest($this->pdo(), $userId, ['energy_type' => 'water', 'dry_run' => '0'], $this->uploadedFile($noOverwrite));
+        self::assertSame(0, $ignored->imported());
+        self::assertSame(1, $ignored->duplicates());
+        self::assertSame(1500.0, $this->waterValue($userId, '2026-05-01 08:00:00'), 'valeur inchangée');
+
+        // Ré-import corrigé AVEC overwrite : valeurs écrasées.
+        $fixed = $this->tempCsv("timestamp,value\n2026-05-01 08:00:00,1.5\n2026-05-02 08:00:00,1.6\n");
+        $report = (new ImportRunner())->runFromRequest($this->pdo(), $userId, ['energy_type' => 'water', 'dry_run' => '0', 'overwrite' => '1'], $this->uploadedFile($fixed));
+        self::assertSame(2, $report->imported());
+        self::assertSame(1.5, $this->waterValue($userId, '2026-05-01 08:00:00'));
+        self::assertSame(1.6, $this->waterValue($userId, '2026-05-02 08:00:00'));
+        self::assertSame(2, $this->countRows('utility_readings', $userId), 'aucun doublon créé');
+    }
+
+    /** Index eau (counter_m3) d'un utilisateur à un horodatage donné (null si absent). */
+    private function waterValue(int $userId, string $readingAt): ?float
+    {
+        $stmt = $this->pdo()->prepare(
+            "SELECT counter_m3 FROM utility_readings WHERE user_id = :uid AND energy_type = 'water' AND reading_at = :at"
+        );
+        $stmt->execute(['uid' => $userId, 'at' => $readingAt]);
+        $value = $stmt->fetchColumn();
+
+        return $value === false ? null : (float) $value;
+    }
+
     /** Index d'un registre à un horodatage donné (null si absent). */
     private function indexValue(int $userId, string $registerKey, string $readingAt): ?float
     {

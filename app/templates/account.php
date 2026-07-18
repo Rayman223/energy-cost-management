@@ -288,6 +288,9 @@ $csrf = \App\Security\Csrf::field();
       <datalist id="import-columns"></datalist>
 
       <label class="mt-12"><input type="checkbox" name="dry_run" value="1" checked> <?= $this->te('import.dry_run') ?></label>
+      <label class="mt-12"><input type="checkbox" name="overwrite" value="1"> <?= $this->te('import.overwrite') ?></label>
+      <p class="hint"><?= $this->te('import.overwrite_hint') ?></p>
+      <p class="hint" id="import-overwrite-warning" role="alert" hidden>⚠ <?= $this->te('import.overwrite_dryrun_warning') ?></p>
       <button type="submit"><?= $this->te('import.submit') ?></button>
     </form>
   </div>

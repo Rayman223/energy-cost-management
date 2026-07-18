@@ -31,8 +31,10 @@ final class BulkImportService
      * @param iterable<int, array<string, string>> $rows numéro de ligne => colonnes normalisées
      * @param ImportReport|null $report Rapport à remplir (créé si null) — permet à
      *        l'orchestrateur de pré-créer le rapport (cap/troncature partagés).
+     * @param bool $replace Ré-import « écraser » : les valeurs déjà présentes au
+     *        même horodatage sont mises à jour au lieu d'être ignorées.
      */
-    public function importElectricity(iterable $rows, ImportMapping $mapping, ElectricityIngestionInterface $sink, ?ImportReport $report = null): ImportReport
+    public function importElectricity(iterable $rows, ImportMapping $mapping, ElectricityIngestionInterface $sink, ?ImportReport $report = null, bool $replace = false): ImportReport
     {
         $report ??= new ImportReport();
 
@@ -68,7 +70,7 @@ final class BulkImportService
             }
 
             try {
-                $inserted = $sink->insertIndexes($ts, $indexes);
+                $inserted = $sink->insertIndexes($ts, $indexes, $replace);
             } catch (\Throwable) {
                 // Erreur au niveau base (valeur hors bornes, verrou…) : on la
                 // compte comme échec réel et on poursuit — une ligne fautive ne
@@ -92,8 +94,10 @@ final class BulkImportService
      * @param iterable<int, array<string, string>> $rows numéro de ligne => colonnes normalisées
      * @param ImportReport|null $report Rapport à remplir (créé si null) — permet à
      *        l'orchestrateur de pré-créer le rapport (cap/troncature partagés).
+     * @param bool $replace Ré-import « écraser » : les valeurs déjà présentes au
+     *        même horodatage sont mises à jour au lieu d'être ignorées.
      */
-    public function importUtility(iterable $rows, ImportMapping $mapping, UtilityIngestionInterface $sink, ?ImportReport $report = null): ImportReport
+    public function importUtility(iterable $rows, ImportMapping $mapping, UtilityIngestionInterface $sink, ?ImportReport $report = null, bool $replace = false): ImportReport
     {
         $report ??= new ImportReport();
         $valueColumn = $mapping->valueColumn ?? 'counter_m3';
@@ -119,7 +123,7 @@ final class BulkImportService
             $value *= $mapping->unitToCanonicalFactor;
 
             try {
-                $isNew = $sink->saveIgnore($ts, $value);
+                $isNew = $sink->saveIgnore($ts, $value, $replace);
             } catch (\Throwable) {
                 $report->addWriteError(sprintf('Ligne %d : erreur d\'écriture en base.', $lineNo));
                 continue;

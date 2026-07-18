@@ -25,9 +25,12 @@ interface ElectricityIngestionInterface
      * Insère un jeu d'index au même horodatage (INSERT IGNORE : idempotent).
      *
      * @param array<string, float> $indexByRegister register_key => index cumulé
-     * @return int Nombre de lignes réellement insérées (doublons exclus).
+     * @param bool $replace Si true, un index déjà présent au même horodatage est
+     *        écrasé (ON DUPLICATE KEY UPDATE) au lieu d'être ignoré — pour corriger
+     *        un import fautif. Par défaut false (INSERT IGNORE).
+     * @return int Nombre de lignes réellement écrites (insérées ou mises à jour).
      */
-    public function insertIndexes(DateTimeImmutable $timestamp, array $indexByRegister): int;
+    public function insertIndexes(DateTimeImmutable $timestamp, array $indexByRegister, bool $replace = false): int;
 
     /**
      * Bornes de cohérence par registre autour de $timestamp, pour valider une

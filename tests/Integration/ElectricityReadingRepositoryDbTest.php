@@ -223,6 +223,60 @@ final class ElectricityReadingRepositoryDbTest extends TestCase
         );
     }
 
+    public function testInsertIndexesReplaceOverwritesExistingIndex(): void
+    {
+        $repo = $this->repo();
+        $ts   = new \DateTimeImmutable('2026-07-10 12:00:00'); // horodatage seedé (import_t1 = 350)
+
+        // Sans replace : doublon ignoré, valeur inchangée.
+        self::assertSame(0, $repo->insertIndexes($ts, ['import_t1' => 999.0]));
+        self::assertEqualsWithDelta(350.0, $this->repo()->getHistory(1)[0]['import_t1'], 0.001);
+
+        // Avec replace : la valeur est écrasée.
+        self::assertSame(1, $repo->insertIndexes($ts, ['import_t1' => 999.0], true));
+        self::assertEqualsWithDelta(999.0, $this->repo()->getHistory(1)[0]['import_t1'], 0.001);
+    }
+
+    public function testDeleteReadingAtRemovesAllRegistersAtThatTimestamp(): void
+    {
+        $repo = $this->repo();
+
+        // 4 registres seedés à cet horodatage.
+        $deleted = $repo->deleteReadingAt(new \DateTimeImmutable('2026-07-10 12:00:00'));
+        self::assertSame(4, $deleted);
+
+        $timestamps = array_column($this->repo()->getHistory(), 'reading_at');
+        self::assertNotContains('2026-07-10 12:00:00', $timestamps);
+        self::assertContains('2026-07-01 01:00:00', $timestamps); // les autres restent
+    }
+
+    public function testDeleteReadingAtIsScopedPerUser(): void
+    {
+        $otherId = (new UserRepository($this->pdo()))->create('https://iss.test', 'other-del', 'test', 'Autre')->id;
+        $other   = new ElectricityReadingRepository($this->pdo(), $otherId);
+
+        // L'autre utilisateur (sans compteur) ne supprime rien de mes relevés.
+        self::assertSame(0, $other->deleteReadingAt(new \DateTimeImmutable('2026-07-10 12:00:00')));
+        self::assertContains('2026-07-10 12:00:00', array_column($this->repo()->getHistory(), 'reading_at'));
+    }
+
+    public function testDeleteMeterCascadesRegistersAndReadings(): void
+    {
+        $repo = $this->repo();
+
+        self::assertSame(1, $repo->deleteMeter());
+
+        // Compteur, registres et relevés partis en cascade.
+        self::assertSame(0, (int) $this->pdo()->query('SELECT COUNT(*) FROM meters')->fetchColumn());
+        self::assertSame(0, (int) $this->pdo()->query('SELECT COUNT(*) FROM meter_registers')->fetchColumn());
+        self::assertSame(0, (int) $this->pdo()->query('SELECT COUNT(*) FROM meter_readings')->fetchColumn());
+
+        // Un nouvel insertIndexes recrée compteur/registres paresseusement.
+        $repo->insertIndexes(new \DateTimeImmutable('2026-08-01 00:00:00'), ['import_t1' => 400.0]);
+        self::assertSame(1, (int) $this->pdo()->query('SELECT COUNT(*) FROM meters')->fetchColumn());
+        self::assertCount(1, $this->repo()->getHistory());
+    }
+
     private function pdo(): PDO
     {
         if ($this->pdo === null) {

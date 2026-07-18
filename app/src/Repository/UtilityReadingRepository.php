@@ -46,13 +46,23 @@ final class UtilityReadingRepository implements GasReadingRepositoryInterface, M
      * Variante idempotente pour l'ingestion API/batch : INSERT IGNORE sur
      * l'unicité (user, type, horodatage). Contrairement à save(), n'échoue pas
      * sur un renvoi du même relevé.
+     *
+     * En mode $replace (ré-import « écraser »), un relevé déjà présent au même
+     * horodatage est mis à jour (ON DUPLICATE KEY UPDATE) — pour corriger un
+     * import fautif sans passer par la suppression. rowCount() vaut alors 2 pour
+     * une mise à jour, 1 pour une insertion, 0 si la valeur était identique : on
+     * renvoie true dès qu'une ligne a été insérée ou modifiée.
      */
-    public function saveIgnore(DateTimeImmutable $readingAt, float $counterM3): bool
+    public function saveIgnore(DateTimeImmutable $readingAt, float $counterM3, bool $replace = false): bool
     {
-        $stmt = $this->pdo->prepare(
-            'INSERT IGNORE INTO utility_readings (user_id, energy_type, reading_at, counter_m3)
-             VALUES (:uid, :etype, :reading_at, :counter_m3)'
-        );
+        $sql = $replace
+            ? 'INSERT INTO utility_readings (user_id, energy_type, reading_at, counter_m3)
+               VALUES (:uid, :etype, :reading_at, :counter_m3)
+               ON DUPLICATE KEY UPDATE counter_m3 = VALUES(counter_m3)'
+            : 'INSERT IGNORE INTO utility_readings (user_id, energy_type, reading_at, counter_m3)
+               VALUES (:uid, :etype, :reading_at, :counter_m3)';
+
+        $stmt = $this->pdo->prepare($sql);
         $stmt->execute([
             'uid'        => $this->userId,
             'etype'      => $this->energyType,
@@ -61,6 +71,40 @@ final class UtilityReadingRepository implements GasReadingRepositoryInterface, M
         ]);
 
         return $stmt->rowCount() > 0;
+    }
+
+    /**
+     * Supprime un relevé précis, scopé sur l'utilisateur ET le type de fluide :
+     * un id appartenant à un autre utilisateur (ou à l'autre fluide) n'est jamais
+     * touché.
+     *
+     * @return bool true si une ligne a été supprimée.
+     */
+    public function deleteReading(int $id): bool
+    {
+        $stmt = $this->pdo->prepare(
+            'DELETE FROM utility_readings
+             WHERE id = :id AND user_id = :uid AND energy_type = :etype'
+        );
+        $stmt->execute(['id' => $id, 'uid' => $this->userId, 'etype' => $this->energyType]);
+
+        return $stmt->rowCount() > 0;
+    }
+
+    /**
+     * Supprime tous les relevés du fluide pour l'utilisateur (pour repartir
+     * propre après un import raté).
+     *
+     * @return int Nombre de relevés supprimés.
+     */
+    public function deleteAll(): int
+    {
+        $stmt = $this->pdo->prepare(
+            'DELETE FROM utility_readings WHERE user_id = :uid AND energy_type = :etype'
+        );
+        $stmt->execute(['uid' => $this->userId, 'etype' => $this->energyType]);
+
+        return $stmt->rowCount();
     }
 
     /**
