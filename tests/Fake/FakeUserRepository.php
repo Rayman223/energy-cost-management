@@ -105,6 +105,9 @@ final class FakeUserRepository implements UserRepositoryInterface
             'timezone' => 'Europe/Brussels',
             'currency' => 'EUR',
             'bidding_zone' => null,
+            'pricing_mode' => 'fixed',
+            'vat_rate' => 21.0,
+            'supplier_markup_per_kwh' => 0.0,
             'locale' => 'fr',
         ];
     }

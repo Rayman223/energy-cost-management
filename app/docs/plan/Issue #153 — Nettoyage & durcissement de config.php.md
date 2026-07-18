@@ -42,7 +42,17 @@ garde CI `--schema-only --strict`, `energyid.enabled`, déblocage nl/de (`Locale
 ## P3 — TVA & marge par utilisateur (après #147, déjà mergée)
 Migration `2026-07-17_user_dynamic_pricing.sql`, formule alignée `* (1 + vat/100) + markup`,
 UI /account, RGPD, bugs #88.
-- [ ] À venir (branche empilée sur P2)
+- [x] Migration `2026-07-17_user_dynamic_pricing.sql` + synchro `schema.sql` (colonnes + seed)
+- [x] `CostCalculationService` : ctor `dynamicEnabled/vatRatePercent/supplierMarkupPerKwh`, formule `× (1 + vat/100) + markup`
+- [x] `UserRepository` : `updateProfile` (+2 params, borne TVA [0,100]) + `getProfile` (cast) + interface
+- [x] Routes `account.php` (parse/validation dans le garde `$dynamicEnabled`), `dashboard.php`, `api.php` (câblage profil)
+- [x] Template `account.php` : 2 champs sous le garde #147 (rendu vérifié ON/OFF)
+- [x] `config.example.php` : retrait des 2 clés + déclarées `moved` au schéma P2
+- [x] 4 catalogues de traduction (6 clés `account.*`)
+- [x] Bugs #88 : `AccountDataExporter` (8 colonnes profil) + `FakeUserRepository`
+- [x] Tests : `CostCalculationServiceTest` (verrou facteur 100), `UserRepositoryDbTest`, `AccountRgpdDbTest`
+- [x] Issue de suivi DTO `UserProfile` : #160
+- [x] Vérifs : php -l, PHPUnit (279), PHPStan 6, CLI (warning `moved` + garde CI)
 
 ## Vérification
 - P1 : `grep -rn "meters\]\|agent_push\|cron_hourly\|MeterApiService" app/ --include=*.php | grep -v worktrees` → 0.

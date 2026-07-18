@@ -110,6 +110,11 @@ final class AccountRgpdDbTest extends TestCase
         self::assertSame($this->userId, $data['user']['id']);
         self::assertSame('rgpd', $data['user']['oidc_sub']);
         self::assertNotNull($data['profile']);
+        // L'export RGPD du profil couvre les 8 colonnes, dont pricing_mode (lacune
+        // préexistante #88) et les données économiques par utilisateur (#153).
+        self::assertArrayHasKey('pricing_mode', $data['profile']);
+        self::assertArrayHasKey('vat_rate', $data['profile']);
+        self::assertArrayHasKey('supplier_markup_per_kwh', $data['profile']);
         self::assertCount(1, $data['meters']);
         self::assertCount(1, $data['meter_readings']);
         self::assertSame('import_t1', $data['meter_readings'][0]['register_key']);

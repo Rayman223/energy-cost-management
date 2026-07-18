@@ -32,7 +32,7 @@ interface UserRepositoryInterface
     public function touchLastLogin(int $userId): void;
 
     /**
-     * @return array{country: ?string, timezone: string, currency: string, bidding_zone: ?string, pricing_mode: string, locale: string}|null
+     * @return array{country: ?string, timezone: string, currency: string, bidding_zone: ?string, pricing_mode: string, vat_rate: float, supplier_markup_per_kwh: float, locale: string}|null
      */
     public function getProfile(int $userId): ?array;
 }

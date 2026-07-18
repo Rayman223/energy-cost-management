@@ -11,7 +11,7 @@ use App\Domain\User;
  * @var User|null   $user
  * @var list<array{id:int,provider:string,label:string,is_primary:bool,created_at:string}> $identities
  * @var list<array{key:string,label:string}> $linkableProviders
- * @var array{country:?string,timezone:string,currency:string,bidding_zone:?string,pricing_mode:string,locale:string} $profile
+ * @var array{country:?string,timezone:string,currency:string,bidding_zone:?string,pricing_mode:string,vat_rate:float,supplier_markup_per_kwh:float,locale:string} $profile
  * @var list<array{id:int,name:string,prefix:string,scopes:string,last_used_at:?string,created_at:string,revoked_at:?string}> $tokens
  * @var array{enabled:bool,device_id:string,claimed_at:?string}|null $energyId
  * @var string       $deviceId
@@ -106,6 +106,18 @@ $csrf = \App\Security\Csrf::field();
         <option value="dynamic_quarter"<?= $pricingMode === 'dynamic_quarter' ? ' selected' : '' ?>><?= $this->te('account.pricing_mode_dynamic_quarter') ?></option>
       </select>
       <p class="hint"><?= $this->te('account.pricing_mode_hint') ?></p>
+      <?php
+        // Format décimal fixe puis retrait des zéros de fin : évite la notation
+        // scientifique du cast (string) d'un petit float (0.0000001 → "1.0E-7"),
+        // invalide/illisible dans un input number.
+        $num = static fn (float $v, int $d): string => rtrim(rtrim(number_format($v, $d, '.', ''), '0'), '.');
+      ?>
+      <label><?= $this->te('account.vat_rate') ?></label>
+      <input type="number" name="vat_rate" step="0.01" min="0" max="100" value="<?= $this->e($num((float) ($profile['vat_rate'] ?? 21.0), 2)) ?>">
+      <p class="hint"><?= $this->te('account.vat_rate_hint') ?></p>
+      <label><?= $this->te('account.supplier_markup') ?></label>
+      <input type="number" name="supplier_markup_per_kwh" step="0.0000001" min="-1" max="1" value="<?= $this->e($num((float) ($profile['supplier_markup_per_kwh'] ?? 0.0), 7)) ?>">
+      <p class="hint"><?= $this->te('account.supplier_markup_hint') ?></p>
       <?php else: ?>
       <?php // Zone de marché et mode tarifaire masqués et non soumis : la route reconduit
             // les valeurs en base (préservation), pas besoin de champ caché ici. ?>

@@ -117,9 +117,11 @@ try {
         gasRepo: $gasRepo,
         calculator: new TariffCalculatorService(),
         dynamicPriceRepo: $dynPriceRepo,
-        dynamicConfig: $config['dynamic_prices'] ?? [],
+        dynamicEnabled: DynamicPricing::isEnabled($config),
         waterRepo: $waterRepo,
         pricingMode: $pricingMode,
+        vatRatePercent: (float) ($profile['vat_rate'] ?? 21.0),
+        supplierMarkupPerKwh: (float) ($profile['supplier_markup_per_kwh'] ?? 0.0),
     );
 } catch (\Throwable $e) {
     JsonResponse::error('Bootstrap failed: ' . $e->getMessage(), 503)->send();

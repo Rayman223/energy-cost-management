@@ -168,6 +168,13 @@ final class UserRepository implements UserRepositoryInterface
      */
     public const PRICING_MODES = ['fixed', 'dynamic_hourly', 'dynamic_quarter'];
 
+    /**
+     * NOTE : signature volontairement longue (9 paramètres positionnels), assumée
+     * transitoire — `updateProfile` n'est pas dans l'interface et n'a qu'un seul
+     * appelant (routes/account.php). Un DTO `App\Domain\UserProfile` couvrant
+     * lecture et écriture est prévu (issue de suivi #160). Les 2 nouveaux `float`
+     * sont type-distincts des `string` qui précèdent : pas de risque d'inversion.
+     */
     public function updateProfile(
         int $userId,
         ?string $country,
@@ -176,18 +183,27 @@ final class UserRepository implements UserRepositoryInterface
         ?string $biddingZone,
         string $locale,
         string $pricingMode = 'fixed',
+        float $vatRate = 21.0,
+        float $supplierMarkupPerKwh = 0.0,
     ): void {
         if (!in_array($pricingMode, self::PRICING_MODES, true)) {
             $pricingMode = 'fixed';
         }
+        // Bornage côté repository (dernière ligne de défense, comme PRICING_MODES
+        // ci-dessus) : TVA en % ∈ [0,100] (unité de tariff_grids.vat_rate), marge
+        // ∈ [-1,1] €/kWh (négatif = remise). Garde symétrique aux deux champs pour
+        // qu'aucun appelant ne puisse déborder DECIMAL(5,2) / DECIMAL(12,7).
+        $vatRate              = max(0.0, min(100.0, $vatRate));
+        $supplierMarkupPerKwh = max(-1.0, min(1.0, $supplierMarkupPerKwh));
 
         $stmt = $this->pdo->prepare(
-            'INSERT INTO user_profiles (user_id, country, timezone, currency, bidding_zone, pricing_mode, locale)
-             VALUES (:uid, :country, :tz, :currency, :zone, :pricing_mode, :locale)
+            'INSERT INTO user_profiles (user_id, country, timezone, currency, bidding_zone, pricing_mode, vat_rate, supplier_markup_per_kwh, locale)
+             VALUES (:uid, :country, :tz, :currency, :zone, :pricing_mode, :vat, :markup, :locale)
              ON DUPLICATE KEY UPDATE
                 country = VALUES(country), timezone = VALUES(timezone),
                 currency = VALUES(currency), bidding_zone = VALUES(bidding_zone),
-                pricing_mode = VALUES(pricing_mode), locale = VALUES(locale)'
+                pricing_mode = VALUES(pricing_mode), vat_rate = VALUES(vat_rate),
+                supplier_markup_per_kwh = VALUES(supplier_markup_per_kwh), locale = VALUES(locale)'
         );
         $stmt->execute([
             'uid'          => $userId,
@@ -196,6 +212,8 @@ final class UserRepository implements UserRepositoryInterface
             'currency'     => $currency,
             'zone'         => $biddingZone,
             'pricing_mode' => $pricingMode,
+            'vat'          => $vatRate,
+            'markup'       => $supplierMarkupPerKwh,
             'locale'       => $locale,
         ]);
     }
@@ -273,7 +291,7 @@ final class UserRepository implements UserRepositoryInterface
     public function getProfile(int $userId): ?array
     {
         $stmt = $this->pdo->prepare(
-            'SELECT country, timezone, currency, bidding_zone, pricing_mode, locale
+            'SELECT country, timezone, currency, bidding_zone, pricing_mode, vat_rate, supplier_markup_per_kwh, locale
              FROM user_profiles WHERE user_id = :id LIMIT 1'
         );
         $stmt->execute(['id' => $userId]);
@@ -294,6 +312,8 @@ final class UserRepository implements UserRepositoryInterface
             'currency' => (string) $row['currency'],
             'bidding_zone' => $row['bidding_zone'] !== null ? (string) $row['bidding_zone'] : null,
             'pricing_mode' => $pricingMode,
+            'vat_rate' => (float) ($row['vat_rate'] ?? 21.0),
+            'supplier_markup_per_kwh' => (float) ($row['supplier_markup_per_kwh'] ?? 0.0),
             'locale' => (string) $row['locale'],
         ];
     }

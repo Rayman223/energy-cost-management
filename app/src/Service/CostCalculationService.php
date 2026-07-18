@@ -26,12 +26,17 @@ final class CostCalculationService
     private const DEFAULT_PCS = 10.55;
 
     /**
-     * @param array<string, mixed> $dynamicConfig Bloc de config `dynamic_prices`
-     *        (enabled, supplier_markup_per_kwh, vat_rate…). Vide = tarif dynamique désactivé.
+     * @param bool $dynamicEnabled Kill-switch global du tarif dynamique (config
+     *        `dynamic_prices.enabled`). false = tarif dynamique désactivé.
      * @param string $pricingMode Mode de tarification choisi par l'utilisateur
      *        ('fixed' | 'dynamic_hourly' | 'dynamic_quarter'). Sélectionne la
      *        résolution des prix dynamiques ; le calcul au quart d'heure est
      *        différé → 'dynamic_quarter' retombe sur l'horaire pour l'instant.
+     * @param float $vatRatePercent TVA appliquée au prix spot, EN POURCENTAGE
+     *        (21.0 = 21 %), par utilisateur (user_profiles.vat_rate). Même unité
+     *        que tariff_grids.vat_rate — cf. #153, unification d'unité.
+     * @param float $supplierMarkupPerKwh Marge fournisseur €/kWh ajoutée au prix
+     *        spot TTC, par utilisateur (user_profiles.supplier_markup_per_kwh).
      */
     public function __construct(
         private readonly LegacyDailyRepositoryInterface $legacyRepo,
@@ -40,9 +45,11 @@ final class CostCalculationService
         private readonly TariffCalculatorService $calculator,
         private readonly MonthlyConsumptionInterpolator $interpolator = new MonthlyConsumptionInterpolator(),
         private readonly ?DynamicPriceRepositoryInterface $dynamicPriceRepo = null,
-        private readonly array $dynamicConfig = [],
+        private readonly bool $dynamicEnabled = false,
         private readonly ?MeterReadingRepositoryInterface $waterRepo = null,
         private readonly string $pricingMode = 'fixed',
+        private readonly float $vatRatePercent = 21.0,
+        private readonly float $supplierMarkupPerKwh = 0.0,
     ) {
     }
 
@@ -407,7 +414,7 @@ final class CostCalculationService
      */
     private function buildDynamicResponse(array $deltas, TariffGrid $tariff, int $days): array
     {
-        if ($this->dynamicPriceRepo === null || ($this->dynamicConfig['enabled'] ?? false) !== true) {
+        if ($this->dynamicPriceRepo === null || !$this->dynamicEnabled) {
             return ['available' => false, 'reason' => 'Tarif dynamique non configuré.'];
         }
 
@@ -436,8 +443,8 @@ final class CostCalculationService
             return ['available' => false, 'reason' => 'Aucun prix dynamique pour cette période (lancez cron_dynamic_prices).'];
         }
 
-        $vat    = (float) ($this->dynamicConfig['vat_rate'] ?? 0.21);
-        $markup = (float) ($this->dynamicConfig['supplier_markup_per_kwh'] ?? 0.0);
+        $vatRatePercent = $this->vatRatePercent;
+        $markup         = $this->supplierMarkupPerKwh;
 
         $energyTtc  = 0.0;
         $totalKwh   = 0.0;
@@ -451,7 +458,7 @@ final class CostCalculationService
             $totalKwh += $kwh;
 
             if (isset($prices[$hour])) {
-                $rateTtc     = $prices[$hour] * (1.0 + $vat) + $markup;
+                $rateTtc     = $prices[$hour] * (1.0 + $vatRatePercent / 100.0) + $markup;
                 $coveredKwh += $kwh;
             } else {
                 // Heure sans prix dynamique → repli sur le tarif fournisseur classique (déjà TTC).

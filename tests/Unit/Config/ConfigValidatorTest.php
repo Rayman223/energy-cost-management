@@ -138,6 +138,27 @@ final class ConfigValidatorTest extends TestCase
         self::assertFalse($byPath['oidc']->isRuntimeSignal());
     }
 
+    public function testMovedKeyIsRuntimeSignal(): void
+    {
+        // Une clé déplacée (P3 : vat_rate/supplier_markup_per_kwh) encore présente
+        // en config voit sa valeur ignorée au runtime → doit être un signal
+        // journalisé (finding #1), même en section désactivée.
+        $issues = ConfigValidator::validate([
+            'database'       => $this->fullDatabase(),
+            'dynamic_prices' => ['enabled' => false, 'vat_rate' => 0.21],
+        ]);
+
+        $byPath = [];
+        foreach ($issues as $issue) {
+            $byPath[$issue->path] = $issue;
+        }
+
+        self::assertArrayHasKey('dynamic_prices.vat_rate', $byPath);
+        self::assertSame(ConfigIssue::KIND_MOVED, $byPath['dynamic_prices.vat_rate']->kind);
+        self::assertTrue($byPath['dynamic_prices.vat_rate']->isRuntimeSignal());
+        self::assertStringContainsString('/account', $byPath['dynamic_prices.vat_rate']->message);
+    }
+
     public function testSentinelInDisabledSectionIsIgnored(): void
     {
         $issues = ConfigValidator::validate([

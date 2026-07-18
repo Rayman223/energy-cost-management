@@ -82,8 +82,15 @@ final class ConfigSchema
                         'security_token'          => ['sentinel' => true],
                         'bidding_zone'            => [],
                         'timeout'                 => [],
-                        'supplier_markup_per_kwh' => [],
-                        'vat_rate'                => [],
+                        // Déplacés vers user_profiles (#153, P3). ATTENTION à l'unité :
+                        // la TVA passe de la fraction (0.21) au pourcentage (21.00).
+                        'vat_rate' => [
+                            'moved' => 'déplacé vers le profil utilisateur — reportez la valeur dans /account. '
+                                . "ATTENTION : l'unité passe de la fraction (0.21) au pourcentage (21.00).",
+                        ],
+                        'supplier_markup_per_kwh' => [
+                            'moved' => 'déplacé vers le profil utilisateur — reportez la valeur dans /account.',
+                        ],
                     ],
                 ],
 

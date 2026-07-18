@@ -135,6 +135,8 @@ CREATE TABLE IF NOT EXISTS user_profiles (
     currency     CHAR(3)     NOT NULL DEFAULT 'EUR' COMMENT 'Devise ISO 4217',
     bidding_zone VARCHAR(32) NULL COMMENT 'Zone de marché ENTSO-E',
     pricing_mode ENUM('fixed', 'dynamic_hourly', 'dynamic_quarter') NOT NULL DEFAULT 'fixed' COMMENT 'Type de tarification électricité (fixe / dynamique 1h / dynamique 15min)',
+    vat_rate     DECIMAL(5,2)  NOT NULL DEFAULT 21.00 COMMENT 'Taux de TVA en % applique au prix spot dynamique',
+    supplier_markup_per_kwh DECIMAL(12,7) NOT NULL DEFAULT 0.0000000 COMMENT 'Marge fournisseur EUR/kWh ajoutee au prix spot TTC',
     locale       VARCHAR(8)  NOT NULL DEFAULT 'fr',
     CONSTRAINT fk_user_profiles_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
@@ -246,4 +248,5 @@ INSERT IGNORE INTO schema_migrations (version) VALUES
     ('2026-07-07_tariff_template_usage.sql'),
     ('2026-07-10_tariff_line_category.sql'),
     ('2026-07-11_pricing_mode_and_native_hourly.sql'),
-    ('2026-07-14_user_identities.sql');
+    ('2026-07-14_user_identities.sql'),
+    ('2026-07-17_user_dynamic_pricing.sql');

@@ -80,6 +80,36 @@ final class UserRepositoryDbTest extends TestCase
         self::assertSame('EUR', $profile['currency']);
         self::assertSame('fr', $profile['locale']);
         self::assertSame('Europe/Brussels', $profile['timezone']);
+        // Défauts des colonnes TVA/marge par utilisateur (#153).
+        self::assertSame(21.0, $profile['vat_rate']);
+        self::assertSame(0.0, $profile['supplier_markup_per_kwh']);
+    }
+
+    public function testUpdateProfilePersistsVatAndMarkup(): void
+    {
+        $repo = new UserRepository($this->pdo());
+        $user = $repo->create('https://iss.example', 'sub-vat', 'example', 'Vera');
+
+        $repo->updateProfile($user->id, 'FR', 'Europe/Paris', 'EUR', null, 'fr', 'dynamic_hourly', 20.0, 0.0123456);
+
+        $profile = $repo->getProfile($user->id);
+        self::assertNotNull($profile);
+        self::assertSame('dynamic_hourly', $profile['pricing_mode']);
+        self::assertSame(20.0, $profile['vat_rate']);
+        self::assertEqualsWithDelta(0.0123456, $profile['supplier_markup_per_kwh'], 0.0000001);
+
+        // vat_rate ∈ [0,100] et supplier_markup ∈ [-1,1] bornés côté repository.
+        $repo->updateProfile($user->id, 'FR', 'Europe/Paris', 'EUR', null, 'fr', 'dynamic_hourly', 250.0, 5.0);
+        $clamped = $repo->getProfile($user->id);
+        self::assertNotNull($clamped);
+        self::assertSame(100.0, $clamped['vat_rate']);
+        self::assertSame(1.0, $clamped['supplier_markup_per_kwh']);
+
+        $repo->updateProfile($user->id, 'FR', 'Europe/Paris', 'EUR', null, 'fr', 'dynamic_hourly', -10.0, -5.0);
+        $clampedLow = $repo->getProfile($user->id);
+        self::assertNotNull($clampedLow);
+        self::assertSame(0.0, $clampedLow['vat_rate']);
+        self::assertSame(-1.0, $clampedLow['supplier_markup_per_kwh']);
     }
 
     public function testUpdateDisplayName(): void

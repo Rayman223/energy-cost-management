@@ -30,16 +30,15 @@ return [
     ],
 
     // Tarif dynamique (prix day-ahead du marché spot, ex. ENTSO-E).
-    // price stocké en €/kWh HTVA ; marge fournisseur + TVA appliquées au calcul.
+    // Le marché (prix spot, token, zone) est global au site ; l'économique
+    // (TVA, marge fournisseur) est passé PAR UTILISATEUR dans /account (#153).
     'dynamic_prices' => [
         'enabled'                 => true,
         'provider'                => 'entsoe',
         'api_url'                 => 'https://web-api.tp.entsoe.eu/api',
         'security_token'          => 'change_me',       // token ENTSO-E (inscription gratuite)
-        'bidding_zone'            => '10YBE----------2', // zone de marché Belgique
+        'bidding_zone'            => '10YBE----------2', // zone de marché Belgique (fallback)
         'timeout'                 => 30,
-        'supplier_markup_per_kwh' => 0.0,               // marge fournisseur €/kWh TTC (contrats dynamiques BE)
-        'vat_rate'                => 0.21,              // le spot ENTSO-E est HTVA
     ],
 
     'web_security' => [

@@ -203,6 +203,8 @@ final class CostCalculationServiceTest extends TestCase
         FakeTariffRepository $tariff,
         FakeDynamicPriceRepository $dynamic,
         bool $enabled = true,
+        float $vatRatePercent = 21.0,
+        float $supplierMarkupPerKwh = 0.0,
     ): CostCalculationService {
         return new CostCalculationService(
             legacyRepo: $legacy,
@@ -210,7 +212,9 @@ final class CostCalculationServiceTest extends TestCase
             gasRepo: new FakeGasReadingRepository(),
             calculator: new TariffCalculatorService(),
             dynamicPriceRepo: $dynamic,
-            dynamicConfig: ['enabled' => $enabled, 'vat_rate' => 0.21, 'supplier_markup_per_kwh' => 0.0],
+            dynamicEnabled: $enabled,
+            vatRatePercent: $vatRatePercent,
+            supplierMarkupPerKwh: $supplierMarkupPerKwh,
         );
     }
 
@@ -236,6 +240,36 @@ final class CostCalculationServiceTest extends TestCase
         self::assertEqualsWithDelta(66.7, $r['coverage_pct'], 0.1); // 10/15 couverts
         self::assertSame('dynamic', $r['cost']['mode']);
         self::assertCount(1, $r['daily']);
+    }
+
+    /**
+     * Verrou anti-facteur-100 (#153) : vatRatePercent est un POURCENTAGE (21.0),
+     * pas une fraction (0.21). La même valeur numérique interprétée dans la
+     * mauvaise unité produit un résultat manifestement différent.
+     */
+    public function testDynamicVatRateIsPercentNotFraction(): void
+    {
+        $legacy = new FakeLegacyDailyRepository(
+            monthlyDeltasForMonth: $this->electricityDeltas(),
+            hourlyImportDeltas: [['hour' => '2026-06-10 10:00:00', 'import_kwh' => 10.0]],
+        );
+        $prices = new FakeDynamicPriceRepository(pricesByHour: ['2026-06-10 10:00:00' => 0.20]);
+
+        // 21.0 % (correct) : 10 × (0.20 × 1.21) = 2.42.
+        $correct = $this->makeDynamicService($legacy, new FakeTariffRepository(grid: $this->electricityGrid()), $prices, vatRatePercent: 21.0)
+            ->estimateMonthElectricityDynamic(2026, 6);
+        self::assertEqualsWithDelta(2.42, $correct['energy_dynamic'], 0.0001);
+
+        // 0.21 (fraction saisie par erreur comme %) : 10 × (0.20 × 1.0021) = 2.0042,
+        // arrondi à 2 décimales dans la réponse → 2.0. La différence avec 2.42 reste
+        // manifeste (le prix moyen non arrondi la confirme au 6e chiffre).
+        $wrong = $this->makeDynamicService($legacy, new FakeTariffRepository(grid: $this->electricityGrid()), $prices, vatRatePercent: 0.21)
+            ->estimateMonthElectricityDynamic(2026, 6);
+        self::assertEqualsWithDelta(2.0, $wrong['energy_dynamic'], 0.0001);
+        self::assertEqualsWithDelta(0.20042, $wrong['avg_price_kwh'], 0.000001);
+
+        // Les deux unités doivent produire des montants nettement distincts.
+        self::assertGreaterThan(0.4, abs($correct['energy_dynamic'] - $wrong['energy_dynamic']));
     }
 
     public function testMonthElectricityDynamicUsesNativeHourlyOverAverage(): void
