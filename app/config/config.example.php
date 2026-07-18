@@ -26,21 +26,6 @@ return [
         ],
     ],
 
-    'meters' => [
-        'timeout'   => 10,
-        'dries_url' => 'http://192.168.1.5/api/v1/data',
-        'solar_url' => 'http://192.168.1.7/api/v1/data',
-        // Paths tested in order: first numeric value found is used.
-        'paths' => [
-            'prelev_jour'         => ['total_power_import_t1_kwh'],
-            'prelev_nuit'         => ['total_power_import_t2_kwh'],
-            'injec_jour'          => ['total_power_export_t1_kwh'],
-            'injec_nuit'          => ['total_power_export_t2_kwh'],
-            // Solar dongle: same structure as P1 meter, cumulative kWh export index.
-            'solar_production_wh' => ['total_power_export_kwh'],
-        ],
-    ],
-
     // Tarif dynamique (prix day-ahead du marché spot, ex. ENTSO-E).
     // price stocké en €/kWh HTVA ; marge fournisseur + TVA appliquées au calcul.
     'dynamic_prices' => [
@@ -117,15 +102,6 @@ return [
     // Lien vers le serveur Discord, affiché dans l'en-tête des pages.
     'discord' => [
         'invite_url' => '', // ex. https://discord.gg/xxxxxxx (vide = lien masqué)
-    ],
-
-    // Agent client (app/scripts/agent_push.php) : pousse les index des
-    // compteurs locaux vers le serveur communautaire. Membre uniquement —
-    // inutile sur le serveur central.
-    'agent' => [
-        'api_url'   => '',           // ex. https://energie.example.eu/api (l'ancien /api.php reste redirigé)
-        'api_token' => 'change_me',  // créé via l'action api_token_create
-        'timeout'   => 15,
     ],
 
     'timezone' => 'Europe/Brussels',

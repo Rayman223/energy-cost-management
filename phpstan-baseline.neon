@@ -18,8 +18,3 @@ parameters:
 			count: 1
 			path: app/src/Service/DailyLegacyWebhookSyncService.php
 
-		-
-			message: '#^Variable \$pdo in isset\(\) always exists and is not nullable\.$#'
-			identifier: isset.variable
-			count: 1
-			path: app/tools/conversion_solaire.php

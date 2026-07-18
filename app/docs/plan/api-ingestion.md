@@ -21,7 +21,7 @@ Erreurs d'auth : `401` (jeton invalide/révoqué, session absente), `403` (allow
 | Action | Corps | Réponse |
 |---|---|---|
 | `GET ?action=api_tokens` | — | `{tokens: [{id, name, prefix, scopes, last_used_at, created_at, revoked_at}]}` |
-| `POST ?action=api_token_create` | `{"name": "Agent HomeWizard"}` | `{ok, id, prefix, token}` — **token affiché une seule fois** |
+| `POST ?action=api_token_create` | `{"name": "Import automatisé"}` | `{ok, id, prefix, token}` — **token affiché une seule fois** |
 | `POST ?action=api_token_revoke` | `{"id": 3}` | `{ok}` |
 
 ## Ingestion (session ou Bearer) — idempotente
@@ -61,7 +61,9 @@ Réponse : `{"ok": true, "received": 1, "inserted": 1}`.
 `422` avec `{"ok": false, "error": "<message>"}` — ex. registre manquant, `counter_m3` négatif,
 horodatage illisible, batch > 1000.
 
-## Agent de référence
-[app/scripts/agent_push.php](../../scripts/agent_push.php) : lit les compteurs locaux (config `meters`) et
-pousse vers `agent.api_url` avec `agent.api_token`. Cron horaire côté membre. Le script `cron_hourly.php`
-(écriture directe en base) reste utilisable quand l'app et les compteurs partagent le même hôte.
+## Modes d'ingestion des relevés
+Trois voies alimentent les relevés, toutes scopées par utilisateur :
+- **API Bearer** — `POST ?action=ingest_electricity` / `ingest_gas` / `ingest_water` avec un jeton `mec_…`
+  (cf. ci-dessus). Voie recommandée pour tout client automatisé.
+- **Import CSV** — via l'UI d'import (cf. [app/docs/import.md](../import.md)).
+- **Saisie manuelle** — formulaires `gas_entry` / `water_entry` de l'interface web.

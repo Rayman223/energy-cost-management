@@ -72,7 +72,7 @@ app/
 ├── docs/                          ← installation.md · architecture.md · import.md · security-review.md · plan/ · …
 ├── public/                        ← index · tariffs · account · admin · login · privacy · terms · api · auth/
 │   └── assets/                    ← versioned CSS/JS (cache-busting)
-├── scripts/                       ← migrate · import_* · cron_* · agent_push
+├── scripts/                       ← migrate · import_* · cron_*
 ├── sql/                           ← schema.sql · migrations/
 ├── templates/ · translations/     ← HTML views · i18n catalogs (fr/en/nl/de)
 └── src/                           ← Domain · Http · I18n · Infrastructure · Repository · Security · Service · Support · View
@@ -215,8 +215,6 @@ column mapping: [`app/docs/import.md`](app/docs/import.md).
 ## Cron jobs
 
 ```cron
-# Hourly meter ingestion (owner's local meters, via the agent or local polling)
-0 * * * *  /usr/bin/php /path/app/scripts/cron_hourly.php          >> /var/log/energy-hourly.log 2>&1
 # Daily EnergyID push (01:15) — iterates over opted-in users
 15 1 * * * /usr/bin/php /path/app/scripts/cron_daily_webhook.php   >> /var/log/energy-daily.log 2>&1
 # Day-ahead dynamic prices, after market publication (~13:30)

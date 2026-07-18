@@ -47,7 +47,6 @@
 
 | `action` | Paramètres | Réponse (forme) |
 |----------|-----------|-----------------|
-| `live` | — | `{ ok, timestamp, dries_w?, solar_w?, dries_error?, solar_error? }` — lecture temps réel des compteurs (HomeWizard) ; chaque compteur indisponible ajoute un `*_error` au lieu de faire échouer la requête. |
 | `today` | — | Index du jour (`LegacyDailyRepository::getTodayIndexValues`). |
 | `monthly_delta` | — | Deltas du mois courant (`getMonthlyDeltas`). |
 | `chart_data` | `days` (défaut 30) | Séries journalières pour le graphique (`getDailyDeltasForChart`). |
