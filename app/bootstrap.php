@@ -16,6 +16,22 @@ if (!is_file($configPath)) {
 
 $config = require $configPath;
 
+// Validation non bloquante : on journalise les constats à signal runtime mais on
+// ne throw jamais — index.php:15 garantit contractuellement que le routeur survit
+// à un bootstrap cassé, et la prod ne doit pas 500 pour un config imparfait. On
+// journalise les ERROR (database) ET les dérives silencieuses dangereuses
+// (sentinelle en section active, clé déplacée dont la valeur est désormais
+// ignorée) ; les sections absentes / clés inconnues restent muettes pour ne pas
+// spammer (cf. ConfigIssue::isRuntimeSignal). Le rapport complet est le métier de
+// app/scripts/config_check.php.
+if (is_array($config)) {
+    foreach (App\Config\ConfigValidator::validate($config) as $issue) {
+        if ($issue->isRuntimeSignal()) {
+            error_log('[config] ' . $issue->severity . ' ' . $issue->path . ' : ' . $issue->message);
+        }
+    }
+}
+
 date_default_timezone_set($config['timezone'] ?? 'UTC');
 
 return $config;

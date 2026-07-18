@@ -108,7 +108,7 @@ final class Locale
     {
         $i18n = is_array($config['i18n'] ?? null) ? $config['i18n'] : [];
 
-        $available = ['fr', 'en'];
+        $available = ['fr', 'en', 'nl', 'de'];
         if (isset($i18n['available']) && is_array($i18n['available'])) {
             $clean = [];
             foreach ($i18n['available'] as $loc) {

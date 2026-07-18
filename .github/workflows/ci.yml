@@ -35,6 +35,9 @@ jobs:
             | xargs -0 -n1 -P4 php -d display_errors=stderr -l
           echo "All PHP files passed syntax check."
 
+      - name: Vérifier que config.example.php ne dérive pas du schéma
+        run: php app/scripts/config_check.php --file=app/config/config.example.php --schema-only --strict
+
   js-lint:
     name: JS Syntax (node --check)
     runs-on: ubuntu-latest

@@ -13,6 +13,9 @@ return [
     ],
 
     'energyid' => [
+        // Kill-switch global du push EnergyID (lu par cron_daily_webhook.php).
+        // Absent ⇒ activé par défaut. Mettre à false pour couper l'export.
+        'enabled'             => true,
         'provisioning_key'    => 'change_me',
         'provisioning_secret' => 'change_me',
         'timeout'             => 15,

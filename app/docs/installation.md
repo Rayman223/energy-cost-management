@@ -207,6 +207,13 @@ deployments):
 cp app/config/config.example.php app/config/config.php
 ```
 
+After editing, validate the file against the schema (no database connection, lists
+missing sections and leftover `change_me` sentinels):
+
+```bash
+php app/scripts/config_check.php
+```
+
 Set at least `database`, then choose the authentication mode:
 
 - **Community mode (recommended)** — set `oidc.enabled = true` and fill

@@ -29,7 +29,15 @@ Doc : README (arbre scripts + crontab), api-contract.md (action `live`), api-ing
 ## P2 — Validateur de config
 Namespace `App\Config` (`ConfigSchema`, `ConfigValidator`, `ConfigIssue`), CLI `config_check.php`,
 garde CI `--schema-only --strict`, `energyid.enabled`, déblocage nl/de (`Locale.php`).
-- [ ] À venir (branche empilée sur P1)
+- [x] `App\Config\ConfigIssue` / `ConfigSchema` / `ConfigValidator` (fonction pure)
+- [x] CLI `app/scripts/config_check.php` (--file, --schema-only, --strict ; codes 0/1/2)
+- [x] Validation non bloquante au bootstrap (error_log ERROR, jamais throw)
+- [x] Garde CI dans le job `lint` (--schema-only --strict sur config.example.php)
+- [x] `energyid.enabled` ajouté au template + schéma
+- [x] Déblocage nl/de (`Locale::settings` défaut `['fr','en','nl','de']`)
+- [x] Tests `ConfigValidatorTest`, `ConfigExampleTest`, `LocaleTest` adapté
+- [x] `installation.md` : mention de `config_check.php`
+- [x] Vérifs : php -l, PHPUnit (278), PHPStan 6, CLI sur les 3 scénarios clés
 
 ## P3 — TVA & marge par utilisateur (après #147, déjà mergée)
 Migration `2026-07-17_user_dynamic_pricing.sql`, formule alignée `* (1 + vat/100) + markup`,

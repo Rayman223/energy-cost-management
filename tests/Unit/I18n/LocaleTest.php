@@ -62,7 +62,9 @@ final class LocaleTest extends TestCase
     public function testAvailableReadsConfig(): void
     {
         self::assertSame(['fr', 'en', 'nl', 'de'], Locale::available($this->config));
-        self::assertSame(['fr', 'en'], Locale::available([]));
+        // Sans section i18n : les 4 langues livrées sont disponibles (défaut aligné
+        // sur les catalogues app/translations/{fr,en,nl,de}.php, cf. #153).
+        self::assertSame(['fr', 'en', 'nl', 'de'], Locale::available([]));
     }
 
     public function testExplicitChoiceReturnsValidQuery(): void
