@@ -184,6 +184,8 @@ CREATE TABLE IF NOT EXISTS utility_readings (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- ── Intégration EnergyID par utilisateur (opt-in, BE/NL) ─────────────────
+-- GELÉE (#70) : plus lue ni écrite par le code, remplacée par user_integrations.
+-- Conservée pour rollback ; DROP prévu dans une migration ultérieure.
 CREATE TABLE IF NOT EXISTS energyid_integrations (
     user_id    BIGINT UNSIGNED NOT NULL PRIMARY KEY,
     enabled    TINYINT(1) NOT NULL DEFAULT 0,
@@ -191,6 +193,21 @@ CREATE TABLE IF NOT EXISTS energyid_integrations (
     claimed_at DATETIME NULL,
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     CONSTRAINT fk_energyid_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ── Intégrations d'export par utilisateur (opt-in, générique #70) ────────
+-- Système de modules « connecteurs d'export » : chaque module (energyid, ...)
+-- range son opt-in et ses réglages propres dans `settings` (JSON). Remplace
+-- energyid_integrations : device_id/claimed_at deviennent des clés du JSON.
+CREATE TABLE IF NOT EXISTS user_integrations (
+    user_id    BIGINT UNSIGNED NOT NULL,
+    module_key VARCHAR(60) NOT NULL COMMENT 'Clé du module (energyid, ...)',
+    enabled    TINYINT(1) NOT NULL DEFAULT 0,
+    settings   JSON NOT NULL COMMENT 'Réglages propres au module (device_id, claimed_at, ...)',
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (user_id, module_key),
+    CONSTRAINT fk_user_integrations_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- ── Jetons API (authentification machine des agents) ─────────────────────
@@ -249,4 +266,5 @@ INSERT IGNORE INTO schema_migrations (version) VALUES
     ('2026-07-10_tariff_line_category.sql'),
     ('2026-07-11_pricing_mode_and_native_hourly.sql'),
     ('2026-07-14_user_identities.sql'),
-    ('2026-07-17_user_dynamic_pricing.sql');
+    ('2026-07-17_user_dynamic_pricing.sql'),
+    ('2026-07-18_user_integrations.sql');

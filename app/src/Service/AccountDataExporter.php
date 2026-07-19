@@ -56,7 +56,7 @@ final class AccountDataExporter
         $tail = [
             '"tariff_grids":' . self::enc($this->all('SELECT id, energy_type, country, currency, name, valid_from, valid_to, pcs_coefficient FROM tariff_grids WHERE user_id = :uid ORDER BY id', $userId)),
             '"api_tokens":' . self::enc($this->all('SELECT id, name, prefix, scopes, last_used_at, created_at, revoked_at FROM api_tokens WHERE user_id = :uid ORDER BY id', $userId)),
-            '"energyid":' . self::enc($this->one('SELECT enabled, device_id, claimed_at FROM energyid_integrations WHERE user_id = :uid', $userId)),
+            '"integrations":' . self::enc($this->integrations($userId)),
             '"sync_state":' . self::enc($this->all('SELECT source_name, last_sent_at, updated_at FROM webhook_sync_state WHERE user_id = :uid ORDER BY source_name', $userId)),
         ];
         echo ',' . implode(',', $tail) . '}';
@@ -96,6 +96,30 @@ final class AccountDataExporter
     private static function enc(mixed $value): string
     {
         return json_encode($value, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR);
+    }
+
+    /**
+     * Connecteurs d'export : décode la colonne JSON `settings` (renvoyée en
+     * chaîne par PDO) pour qu'elle apparaisse comme objet imbriqué dans l'export,
+     * et non comme chaîne JSON doublement échappée.
+     *
+     * @return list<array<string, mixed>>
+     */
+    private function integrations(int $userId): array
+    {
+        $rows = $this->all(
+            'SELECT module_key, enabled, settings, updated_at FROM user_integrations WHERE user_id = :uid ORDER BY module_key',
+            $userId
+        );
+
+        foreach ($rows as $i => $row) {
+            if (is_string($row['settings'] ?? null)) {
+                $decoded = json_decode($row['settings'], true);
+                $rows[$i]['settings'] = is_array($decoded) ? $decoded : $row['settings'];
+            }
+        }
+
+        return $rows;
     }
 
     /** @return array<string, mixed>|null */

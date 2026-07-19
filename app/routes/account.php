@@ -3,8 +3,8 @@
 declare(strict_types=1);
 
 /**
- * Page « Mon compte » (self-service) : profil, jetons API, intégration EnergyID
- * (opt-in BE/NL), et RGPD (export + suppression). Session uniquement.
+ * Page « Mon compte » (self-service) : profil, jetons API, connecteurs d'export
+ * (opt-in par module, ex. EnergyID), et RGPD (export + suppression). Session uniquement.
  */
 
 use App\Domain\Timezones;
@@ -12,9 +12,10 @@ use App\Http\SecurityHeaders;
 use App\Http\UploadLimits;
 use App\I18n\Locale;
 use App\Infrastructure\Database;
+use App\Integration\ModuleRegistry;
 use App\Repository\ApiTokenRepository;
-use App\Repository\EnergyIdIntegrationRepository;
 use App\Repository\UserIdentityRepository;
+use App\Repository\UserIntegrationRepository;
 use App\Repository\UserRepository;
 use App\Security\AuthGuard;
 use App\Security\Csrf;
@@ -50,10 +51,10 @@ $db     = new Database($config['database']);
 $pdo    = $db->pdo();
 $userId = UserContext::currentWebUserId($pdo, $config);
 
-$users        = new UserRepository($pdo);
-$tokensRepo   = new ApiTokenRepository($pdo);
-$energyIdRepo = new EnergyIdIntegrationRepository($pdo);
-$identityRepo = new UserIdentityRepository($pdo);
+$users           = new UserRepository($pdo);
+$tokensRepo      = new ApiTokenRepository($pdo);
+$integrationRepo = new UserIntegrationRepository($pdo);
+$identityRepo    = new UserIdentityRepository($pdo);
 
 // Locale = celle du profil (surchargée par ?lang) → View configurée.
 $profileForLocale = $users->getProfile($userId);
@@ -63,10 +64,6 @@ $error        = null;
 $success      = null;
 $freshToken   = null; // secret affiché une seule fois
 $importReport = null; // bilan du dernier import (self-service)
-
-// deviceId EnergyID dérivé de l'utilisateur (non secret).
-$deviceBase = (string) ($config['energyid']['device']['deviceId'] ?? 'manage-energy');
-$deviceId   = $deviceBase . '-u' . $userId;
 
 // ── Export RGPD (téléchargement JSON) — court-circuite le rendu HTML ─────────
 if (($_GET['export'] ?? '') === '1') {
@@ -175,12 +172,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 throw new \RuntimeException($view->t('account.identity_not_found'));
             }
             $success = $view->t('account.identity_unlinked');
-        } elseif ($action === 'energyid_enable') {
-            $energyIdRepo->enable($userId, $deviceId);
-            $success = $view->t('account.energyid_enabled_msg');
-        } elseif ($action === 'energyid_disable') {
-            $energyIdRepo->disable($userId);
-            $success = $view->t('account.energyid_disabled_msg');
+        } elseif ($action === 'integration_enable' || $action === 'integration_disable') {
+            $moduleKey = (string) ($_POST['module_key'] ?? '');
+            $module    = ModuleRegistry::find($moduleKey, $config);
+            if ($module === null) {
+                throw new \RuntimeException($view->t('account.integration_unknown'));
+            }
+            if ($action === 'integration_enable') {
+                $integrationRepo->enable($userId, $moduleKey, $module->defaultSettings($userId));
+                $success = $view->t('integration.' . $moduleKey . '.enabled_msg');
+            } else {
+                $integrationRepo->disable($userId, $moduleKey);
+                $success = $view->t('integration.' . $moduleKey . '.disabled_msg');
+            }
         } elseif ($action === 'import') {
             // Import self-service : la cible est TOUJOURS l'utilisateur courant
             // (aucun champ « utilisateur cible » — l'import ne concerne que soi).
@@ -254,7 +258,17 @@ $profile  = $users->getProfile($userId) ?? [
     'country' => null, 'timezone' => 'Europe/Brussels', 'currency' => 'EUR', 'bidding_zone' => null, 'pricing_mode' => 'fixed', 'vat_rate' => 21.0, 'supplier_markup_per_kwh' => 0.0, 'locale' => 'fr',
 ];
 $tokens   = $tokensRepo->listForUser($userId);
-$energyId = $energyIdRepo->get($userId);
+
+// Connecteurs d'export (opt-in) : une carte par module du registre.
+$integrations = [];
+foreach (ModuleRegistry::all($config) as $module) {
+    $row = $integrationRepo->get($userId, $module->key());
+    $integrations[] = [
+        'key'     => $module->key(),
+        'enabled' => $row !== null && $row['enabled'],
+        'status'  => $module->statusFor($userId, $row),
+    ];
+}
 
 // Garantit que le fuseau courant du profil reste sélectionnable même s'il n'est
 // plus listé par la timezone database installée (sinon le <select> retomberait
@@ -273,8 +287,7 @@ echo $view->render('account', [
     'linkableProviders' => $linkableProviders,
     'profile'    => $profile,
     'tokens'     => $tokens,
-    'energyId'   => $energyId,
-    'deviceId'   => $deviceId,
+    'integrations' => $integrations,
     'available'  => Locale::available($config),
     'importReport' => $importReport,
     'timezoneOptions' => $timezoneOptions,

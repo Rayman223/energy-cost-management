@@ -59,7 +59,9 @@ final class ConfigSchema
                 ],
 
                 'energyid' => [
-                    // Kill-switch global lu par cron_daily_webhook.php (?? true).
+                    // Module d'export (#70) : code dans app/src/Integration/EnergyId/.
+                    // Kill-switch global lu par le cron d'export (?? true). Tout nouveau
+                    // module d'export déclare sa section de config ici + dans config.example.php.
                     'enabledDefault' => true,
                     'absentHint'     => 'push EnergyID indisponible',
                     'children'       => [

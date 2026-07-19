@@ -2,10 +2,10 @@
 
 declare(strict_types=1);
 
-namespace Tests\Unit\Service;
+namespace Tests\Unit\Integration\EnergyId;
 
-use App\Service\ElectricityReadingMerger;
-use App\Service\EnergyIdPayloadFactory;
+use App\Integration\EnergyId\ElectricityReadingMerger;
+use App\Integration\EnergyId\EnergyIdPayloadFactory;
 use PHPUnit\Framework\TestCase;
 
 final class ElectricityReadingMergerTest extends TestCase

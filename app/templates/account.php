@@ -13,8 +13,7 @@ use App\Domain\User;
  * @var list<array{key:string,label:string}> $linkableProviders
  * @var array{country:?string,timezone:string,currency:string,bidding_zone:?string,pricing_mode:string,vat_rate:float,supplier_markup_per_kwh:float,locale:string} $profile
  * @var list<array{id:int,name:string,prefix:string,scopes:string,last_used_at:?string,created_at:string,revoked_at:?string}> $tokens
- * @var array{enabled:bool,device_id:string,claimed_at:?string}|null $energyId
- * @var string       $deviceId
+ * @var list<array{key:string,enabled:bool,status:\App\Integration\IntegrationStatus}> $integrations
  * @var list<string> $available
  * @var \App\Service\Import\ImportReport|null $importReport
  * @var list<array{id:string,label:string}> $timezoneOptions
@@ -201,25 +200,10 @@ $csrf = \App\Security\Csrf::field();
        <a href="<?= $this->url('api-guide') ?>"><?= $this->te('account.tokens_usage_link') ?></a></p>
   </div>
 
-  <!-- ── EnergyID (opt-in BE/NL) ────────────────────────────────────────── -->
-  <div class="card">
-    <h2><?= $this->te('account.energyid') ?> <span class="muted"><?= $this->te('account.energyid_region') ?></span></h2>
-    <p class="hint"><?= $this->te('account.energyid_hint') ?></p>
-    <?php if ($energyId !== null && $energyId['enabled']): ?>
-      <p><?= $this->te('account.token_status') ?> : <strong><?= $this->te('account.energyid_on') ?></strong>
-        <?php if ($energyId['claimed_at'] !== null): ?>
-          · <?= $this->te('account.energyid_claimed', ['date' => $energyId['claimed_at']]) ?>
-        <?php else: ?>
-          · <span class="muted"><?= $this->te('account.energyid_pending') ?></span>
-        <?php endif; ?>
-      </p>
-      <p class="muted"><?= $this->te('account.energyid_device') ?> : <code><?= $this->e($energyId['device_id']) ?></code></p>
-      <form method="post"><?= $csrf ?><input type="hidden" name="action" value="energyid_disable"><button type="submit" class="ghost"><?= $this->te('account.energyid_disable') ?></button></form>
-    <?php else: ?>
-      <p class="muted"><?= $this->te('account.energyid_off_hint') ?> <code><?= $this->e($deviceId) ?></code></p>
-      <form method="post"><?= $csrf ?><input type="hidden" name="action" value="energyid_enable"><button type="submit"><?= $this->te('account.energyid_enable') ?></button></form>
-    <?php endif; ?>
-  </div>
+  <!-- ── Connecteurs d'export (opt-in par module, ex. EnergyID) ─────────── -->
+  <?php foreach ($integrations as $integration): ?>
+    <?= $this->partial('integration-card', ['integration' => $integration, 'csrf' => $csrf]) ?>
+  <?php endforeach; ?>
 
   <!-- ── Import en masse (self-service : mes propres données) ───────────── -->
   <div class="card">

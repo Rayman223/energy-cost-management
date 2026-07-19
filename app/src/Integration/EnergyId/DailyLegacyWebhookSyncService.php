@@ -2,8 +2,9 @@
 
 declare(strict_types=1);
 
-namespace App\Service;
+namespace App\Integration\EnergyId;
 
+use App\Domain\SyncStateKeys;
 use App\Repository\ElectricityReadingRepository;
 use App\Repository\UtilityReadingRepository;
 use App\Repository\WebhookSyncStateRepository;
@@ -11,20 +12,6 @@ use DateTimeImmutable;
 
 final class DailyLegacyWebhookSyncService
 {
-    /**
-     * State keys électricité pour webhook_sync_state.
-     */
-    public const ELEC_STATE_KEYS = [
-        'prelevement-jour',
-        'prelevement-nuit',
-        'injection-jour',
-        'injection-nuit',
-        'production-solaire',
-    ];
-
-    public const GAS_STATE_KEY   = 'gas-index';
-    public const WATER_STATE_KEY = 'water-index';
-
     /** @param array<string, mixed> $device */
     public function __construct(
         private readonly ElectricityReadingRepository $electricityRepository,
@@ -122,7 +109,7 @@ final class DailyLegacyWebhookSyncService
         if ($result['ok']) {
             $lastTs = new DateTimeImmutable($elec->lastTimestamp);
 
-            foreach (self::ELEC_STATE_KEYS as $stateKey) {
+            foreach (SyncStateKeys::ELEC as $stateKey) {
                 $this->syncState->saveLastSentAt($stateKey, $lastTs);
             }
 
@@ -152,7 +139,7 @@ final class DailyLegacyWebhookSyncService
      */
     private function syncGas(array &$session, DateTimeImmutable $until): ?array
     {
-        $from = $this->syncState->getLastSentAt(self::GAS_STATE_KEY);
+        $from = $this->syncState->getLastSentAt(SyncStateKeys::GAS);
         $this->log(sprintf(
             '[gas] Envoi à partir du: %s',
             $from !== null ? $from->format('Y-m-d H:i:s') : '(aucun historique)'
@@ -184,7 +171,7 @@ final class DailyLegacyWebhookSyncService
 
         if ($result['ok']) {
             $lastTs = new DateTimeImmutable($rows[array_key_last($rows)]['timestamp']);
-            $this->syncState->saveLastSentAt(self::GAS_STATE_KEY, $lastTs);
+            $this->syncState->saveLastSentAt(SyncStateKeys::GAS, $lastTs);
 
             $this->log(sprintf(
                 '[gas] OK (attempt %d) — last_sent_at mis a jour: %s',
@@ -212,7 +199,7 @@ final class DailyLegacyWebhookSyncService
      */
     private function syncWater(array &$session, DateTimeImmutable $until): ?array
     {
-        $from = $this->syncState->getLastSentAt(self::WATER_STATE_KEY);
+        $from = $this->syncState->getLastSentAt(SyncStateKeys::WATER);
         $this->log(sprintf(
             '[water] Envoi à partir du: %s',
             $from !== null ? $from->format('Y-m-d H:i:s') : '(aucun historique)'
@@ -245,7 +232,7 @@ final class DailyLegacyWebhookSyncService
 
         if ($result['ok']) {
             $lastTs = new DateTimeImmutable($rows[array_key_last($rows)]['timestamp']);
-            $this->syncState->saveLastSentAt(self::WATER_STATE_KEY, $lastTs);
+            $this->syncState->saveLastSentAt(SyncStateKeys::WATER, $lastTs);
 
             $this->log(sprintf(
                 '[water] OK (attempt %d) — last_sent_at mis a jour: %s',
@@ -275,7 +262,7 @@ final class DailyLegacyWebhookSyncService
     {
         $earliest = null;
 
-        foreach (self::ELEC_STATE_KEYS as $stateKey) {
+        foreach (SyncStateKeys::ELEC as $stateKey) {
             $lastSentAt = $this->syncState->getLastSentAt($stateKey);
 
             if ($lastSentAt === null) {

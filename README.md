@@ -215,8 +215,9 @@ column mapping: [`app/docs/import.md`](app/docs/import.md).
 ## Cron jobs
 
 ```cron
-# Daily EnergyID push (01:15) — iterates over opted-in users
-15 1 * * * /usr/bin/php /path/app/scripts/cron_daily_webhook.php   >> /var/log/energy-daily.log 2>&1
+# Daily export sync (01:15) — iterates over export modules & opted-in users
+# (EnergyID, …). `cron_daily_webhook.php` remains a deprecated alias.
+15 1 * * * /usr/bin/php /path/app/scripts/cron_export_sync.php      >> /var/log/energy-daily.log 2>&1
 # Day-ahead dynamic prices, after market publication (~13:30)
 30 13 * * * /usr/bin/php /path/app/scripts/cron_dynamic_prices.php >> /var/log/energy-dynamic.log 2>&1
 # Daily full SQL backup (03:00) — pure-PHP dump | gzip into backups/, 30-day rotation

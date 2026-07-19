@@ -4,11 +4,11 @@ declare(strict_types=1);
 
 namespace App\Service\Import;
 
+use App\Domain\SyncStateKeys;
 use App\Repository\ElectricityReadingRepository;
 use App\Repository\UtilityReadingRepository;
 use App\Repository\WebhookSyncStateRepository;
 use App\Service\BulkImportService;
-use App\Service\DailyLegacyWebhookSyncService;
 use PDO;
 use RuntimeException;
 
@@ -234,9 +234,9 @@ final class ImportRunner
         }
 
         $sources = match (strtolower($energyType)) {
-            'gas'   => [DailyLegacyWebhookSyncService::GAS_STATE_KEY],
-            'water' => [DailyLegacyWebhookSyncService::WATER_STATE_KEY],
-            default => DailyLegacyWebhookSyncService::ELEC_STATE_KEYS,
+            'gas'   => [SyncStateKeys::GAS],
+            'water' => [SyncStateKeys::WATER],
+            default => SyncStateKeys::ELEC,
         };
 
         $syncState = new WebhookSyncStateRepository($pdo, $targetUserId);

@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace App\Service;
+namespace App\Integration\EnergyId;
 
 /**
  * Points de mesure électricité prêts à envoyer (résultat de ElectricityReadingMerger),

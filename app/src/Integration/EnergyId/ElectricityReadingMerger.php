@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace App\Service;
+namespace App\Integration\EnergyId;
 
 /**
  * Fusionne les 5 jeux de relevés journaliers électricité (4 index Dries

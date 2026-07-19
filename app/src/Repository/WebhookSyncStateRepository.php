@@ -34,7 +34,7 @@ final class WebhookSyncStateRepository
      * Abaisse (jamais remonte) le watermark d'un flux à `$to` si le watermark
      * courant lui est postérieur. Sert à resynchroniser un relevé antidaté
      * (#123/#130 B2) : sans ce recul, le filtre strict `reading_at > last_sent`
-     * de {@see DailyLegacyWebhookSyncService} ne repêche jamais un relevé inséré
+     * de {@see \App\Integration\EnergyId\DailyLegacyWebhookSyncService} ne repêche jamais un relevé inséré
      * *avant* le dernier envoi. `$to` doit valoir `reading_at moins 1 seconde`
      * (le filtre relit en `>` strict). No-op si aucune ligne (flux jamais
      * synchronisé → il enverra tout de toute façon). LEAST garantit qu'un relevé

@@ -4,13 +4,13 @@ declare(strict_types=1);
 
 namespace App\Http\Controller;
 
+use App\Domain\SyncStateKeys;
 use App\Http\JsonResponse;
 use App\Http\Request;
 use App\Http\ValidationException;
 use App\Repository\Contract\ElectricityIngestionInterface;
 use App\Repository\Contract\MeterReadingRepositoryInterface;
 use App\Repository\WebhookSyncStateRepository;
-use App\Service\DailyLegacyWebhookSyncService;
 use DateTimeImmutable;
 use PDOException;
 
@@ -31,12 +31,12 @@ final class MeterEntryController
 
     public function gas(Request $request): JsonResponse
     {
-        return $this->saveReading($request, $this->gasRepo, [DailyLegacyWebhookSyncService::GAS_STATE_KEY]);
+        return $this->saveReading($request, $this->gasRepo, [SyncStateKeys::GAS]);
     }
 
     public function water(Request $request): JsonResponse
     {
-        return $this->saveReading($request, $this->waterRepo, [DailyLegacyWebhookSyncService::WATER_STATE_KEY]);
+        return $this->saveReading($request, $this->waterRepo, [SyncStateKeys::WATER]);
     }
 
     public function electricity(Request $request): JsonResponse
@@ -80,7 +80,7 @@ final class MeterEntryController
         // renvoie 0 sur doublon déjà présent/synchronisé) : cohérent avec gaz/eau,
         // qui ne reculent le watermark qu'après un save() réussi.
         if ($inserted > 0) {
-            $this->rewindSyncWatermarks(DailyLegacyWebhookSyncService::ELEC_STATE_KEYS, $ts);
+            $this->rewindSyncWatermarks(SyncStateKeys::ELEC, $ts);
         }
 
         return JsonResponse::ok([

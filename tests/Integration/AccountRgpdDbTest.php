@@ -6,7 +6,7 @@ namespace Tests\Integration;
 
 use App\Infrastructure\MeterTopology;
 use App\Repository\ApiTokenRepository;
-use App\Repository\EnergyIdIntegrationRepository;
+use App\Repository\UserIntegrationRepository;
 use App\Repository\TariffRepository;
 use App\Repository\TariffTemplateRepository;
 use App\Repository\TariffTemplateUsageRepository;
@@ -70,8 +70,8 @@ final class AccountRgpdDbTest extends TestCase
     {
         foreach ([
             'meter_readings', 'meter_registers', 'meters', 'utility_readings',
-            'tariff_grid_lines', 'tariff_grids', 'api_tokens', 'energyid_integrations',
-            'webhook_sync_state', 'tariff_template_usages', 'tariff_template_fields',
+            'tariff_grid_lines', 'tariff_grids', 'api_tokens', 'user_integrations',
+            'energyid_integrations', 'webhook_sync_state', 'tariff_template_usages', 'tariff_template_fields',
             'tariff_templates', 'user_profiles', 'users',
         ] as $table) {
             $this->pdo()->exec('DELETE FROM ' . $table);
@@ -92,7 +92,7 @@ final class AccountRgpdDbTest extends TestCase
             ['key' => 'energy', 'amount' => 0.05, 'kind' => 'energy_flat', 'label' => null],
         ], 10.55);
         (new ApiTokenRepository($pdo))->create($this->userId, 'Agent');
-        (new EnergyIdIntegrationRepository($pdo))->enable($this->userId, 'dev-u' . $this->userId);
+        (new UserIntegrationRepository($pdo))->enable($this->userId, 'energyid', ['device_id' => 'dev-u' . $this->userId]);
         (new WebhookSyncStateRepository($pdo, $this->userId))->saveLastSentAt('gas-index', new DateTimeImmutable('2026-06-02 01:00:00'));
     }
 
@@ -122,7 +122,9 @@ final class AccountRgpdDbTest extends TestCase
         self::assertCount(1, $data['tariff_grids']);
         self::assertCount(1, $data['api_tokens']);
         self::assertArrayNotHasKey('token_hash', $data['api_tokens'][0]); // pas de secret
-        self::assertTrue((bool) $data['energyid']['enabled']);
+        self::assertCount(1, $data['integrations']);
+        self::assertSame('energyid', $data['integrations'][0]['module_key']);
+        self::assertTrue((bool) $data['integrations'][0]['enabled']);
         self::assertCount(1, $data['sync_state']);
     }
 
@@ -139,7 +141,7 @@ final class AccountRgpdDbTest extends TestCase
             'utility_readings' => 'user_id',
             'tariff_grids' => 'user_id',
             'api_tokens' => 'user_id',
-            'energyid_integrations' => 'user_id',
+            'user_integrations' => 'user_id',
             'webhook_sync_state' => 'user_id',
         ] as $table => $col) {
             $stmt = $this->pdo()->prepare("SELECT COUNT(*) FROM {$table} WHERE {$col} = :uid");
