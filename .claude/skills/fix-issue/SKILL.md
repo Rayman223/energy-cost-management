@@ -1,6 +1,6 @@
 ---
 name: fix-issue
-description: Workflow complet pour fix d'une issue GitHub Manage-energy-costs — lecture de l'issue, plan dans app/docs/plan/, implémentation (PHP vanilla, autoloader App\ → app/src/), commit, puis création de la PR associée (Closes #X). À utiliser quand l'utilisateur demande "fix issue #X" ou "résous l'issue #X".
+description: Workflow complet pour fix d'une issue GitHub Manage-energy-costs — lecture de l'issue, plan de travail, implémentation (PHP vanilla, autoloader App\ → app/src/), commit, puis création de la PR associée (Closes #X). À utiliser quand l'utilisateur demande "fix issue #X" ou "résous l'issue #X".
 ---
 
 # Fix Issue Workflow
@@ -25,25 +25,12 @@ Projet **PHP « vanilla »** (pas de framework), avec Composer et une suite PHPU
 4. Identifier la branche cible : créer `fix/<num>-<slug>` (bugfix) ou `feat/<num>-<slug>` (feature) depuis `main`, sinon utiliser la branche en cours.
 
 ## Phase 2 — Plan
-Créer ou mettre à jour `app/docs/plan/Issue #<num> — <titre>.md` :
+Établir un plan de travail (via `TodoWrite`, **sans** créer de fichier de plan versionné) couvrant :
 
-    # Issue #<num> — <titre>
-
-    ## Contexte
-    [Pourquoi, problème observé, lien GH]
-
-    ## Fichiers impactés
-    - [path/file.php:LL](path/file.php#LLL) — rôle
-    - ...
-
-    ## Étapes
-    - [ ] Étape 1
-    - [ ] Étape 2
-
-    ## Vérification
-    [Comment tester end-to-end]
-
-Référencer les fichiers avec `path:line` (convention projet).
+- **Contexte** : pourquoi, problème observé, lien GH.
+- **Fichiers impactés** : `path/file.php:LL` — rôle (convention projet `path:line`).
+- **Étapes** : tâches ordonnées à cocher au fil de l'eau.
+- **Vérification** : comment tester end-to-end.
 
 ## Phase 3 — Implémentation
 - Respecter le sens des dépendances : route → Service → Repository → Infrastructure. Les scripts de route `app/routes/*.php` ne font que câblage + rendu ; la logique métier descend en Service/Repository.
@@ -51,7 +38,7 @@ Référencer les fichiers avec `path:line` (convention projet).
 - Réutiliser l'existant (ex. `TariffCalculatorService`, repositories) plutôt que dupliquer.
 - Garder PHPStan niveau 6 vert : typer les nouveaux paramètres/retours, ne pas introduire de code mort.
 - Ajouter/compléter les tests PHPUnit quand le changement touche du code métier, et lancer `vendor/bin/phpunit tests/Unit` en local.
-- Mettre à jour le plan au fil de l'eau (cocher ✅).
+- Mettre à jour le plan de travail (`TodoWrite`) au fil de l'eau.
 
 ## Phase 4 — Commit
 Format aligné sur l'historique :
@@ -59,7 +46,7 @@ Format aligné sur l'historique :
 - `feat(#<num>): <description>` — feature
 - `chore(#<num>): <description>` — cleanup
 
-Plusieurs commits autorisés si phases distinctes. Ne committer **que** les fichiers liés à la demande. Un **nouveau** fichier du projet (source, test, doc de plan) doit être ajouté (`git add`) et devient suivi — c'est attendu. Ne jamais committer ce qui n'a pas vocation à être versionné : configuration locale, dotfiles non suivis à la racine, `.mcp.json`.
+Plusieurs commits autorisés si phases distinctes. Ne committer **que** les fichiers liés à la demande. Un **nouveau** fichier du projet (source, test) doit être ajouté (`git add`) et devient suivi — c'est attendu. Ne jamais committer ce qui n'a pas vocation à être versionné : configuration locale, dotfiles non suivis à la racine, `.mcp.json`.
 
 > **Nuance `/.claude/`** : le dossier est listé dans `.gitignore`, mais certains fichiers y sont **déjà versionnés** (partagés avec l'équipe) et restent committables — la config partagée `.claude/settings.json` et **tout** le dossier des skills `.claude/skills/**`, y compris les **nouveaux** skills créés (qui doivent eux aussi être ajoutés à git). En revanche, ne pas committer la config locale du harness non suivie.
 
