@@ -10,6 +10,7 @@ use App\Integration\IntegrationStatus;
 use App\Repository\ElectricityReadingRepository;
 use App\Repository\UtilityReadingRepository;
 use App\Repository\WebhookSyncStateRepository;
+use App\Support\Dates;
 use DateTimeImmutable;
 use PDO;
 
@@ -110,7 +111,7 @@ final class EnergyIdModule implements ExportModuleInterface
 
         $claimedAt   = is_string($settings['claimed_at'] ?? null) ? $settings['claimed_at'] : null;
         // claimed_at = horodatage du run (temps PHP, comme les watermarks de sync).
-        $interpreted = self::interpretReports($reports, $claimedAt, $until->format('Y-m-d H:i:s'));
+        $interpreted = self::interpretReports($reports, $claimedAt, Dates::toDbString($until));
 
         if ($interpreted['claimLog'] !== null) {
             $logger($interpreted['claimLog']);

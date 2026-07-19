@@ -18,6 +18,7 @@ $view    = null;
 $dbError = null;
 $gasLatest = null;
 $waterLatest = null;
+$timezone = 'Europe/Brussels';
 
 require_once __DIR__ . '/../../vendor/autoload.php';
 
@@ -33,6 +34,7 @@ try {
     $userId = UserContext::currentWebUserId($pdo, $config);
     $users  = new UserRepository($pdo);
     $profile = $users->getProfile($userId);
+    $timezone = (string) ($profile['timezone'] ?? 'Europe/Brussels');
     $view   = LocaleContext::viewFor($config, $users, $userId, $profile['locale'] ?? null, __DIR__ . '/../templates');
 
     $gasRepo = new UtilityReadingRepository($pdo, $userId, 'gas');
@@ -52,4 +54,5 @@ echo $view->render('meter_readings', [
     'gasLatest' => $gasLatest,
     'waterLatest' => $waterLatest,
     'available' => Locale::available($config),
+    'timezone' => $timezone,
 ]);

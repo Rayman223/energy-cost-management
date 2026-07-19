@@ -11,6 +11,7 @@ use App\Repository\Contract\LegacyDailyRepositoryInterface;
 use App\Repository\Contract\MeterReadingRepositoryInterface;
 use App\Repository\Contract\TariffRepositoryInterface;
 use DateTimeImmutable;
+use DateTimeZone;
 
 /**
  * Orchestrates cost calculation for a given period using active tariff grids.
@@ -342,7 +343,8 @@ final class CostCalculationService
     {
         return array_map(
             static fn (array $r): array => [
-                'ts'    => (new DateTimeImmutable($r['reading_at']))->getTimestamp(),
+                // reading_at est stocké en UTC : instant absolu déterministe.
+                'ts'    => (new DateTimeImmutable($r['reading_at'], new DateTimeZone('UTC')))->getTimestamp(),
                 'value' => (float) $r['counter_m3'],
             ],
             $readings,

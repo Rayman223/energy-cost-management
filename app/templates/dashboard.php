@@ -163,6 +163,7 @@ $fmt = function (mixed $v, int $dec = 3, string $unit = 'kWh'): string {
     $dashboardData = [
         'locale'            => $this->locale(),
         'currency'          => $currency ?? 'EUR',
+        'timezone'          => $timezone ?? 'Europe/Brussels',
         'initCost'          => $cost ?? ['available' => false, 'reason' => 'No data'],
         'initYear'          => (int) $initYear,
         'initMonth'         => (int) $initMonth,
@@ -284,6 +285,7 @@ $fmt = function (mixed $v, int $dec = 3, string $unit = 'kWh'): string {
 
 </div><!-- /wrap -->
 
+<script defer src="<?= \App\Support\Assets::url('assets/js/tz.js') ?>"></script>
 <script defer src="<?= \App\Support\Assets::url('assets/js/dashboard.js') ?>"></script>
 </body>
 </html>

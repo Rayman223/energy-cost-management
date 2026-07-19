@@ -6,6 +6,7 @@ namespace App\View;
 
 use App\I18n\Formatter;
 use App\I18n\Translator;
+use App\Support\Dates;
 use App\Support\Url;
 
 /**
@@ -121,6 +122,27 @@ final class View
     public function locale(): string
     {
         return $this->formatter?->locale() ?? 'fr';
+    }
+
+    /**
+     * Affiche une date/heure stockée en UTC (chaîne DATETIME de la base) dans le
+     * fuseau `$tz` de l'utilisateur, échappée et au format 'Y-m-d H:i'. Renvoie
+     * `$fallback` si la valeur est vide, ou la valeur brute échappée si le fuseau
+     * est invalide (dégradation gracieuse, jamais d'exception en rendu).
+     */
+    public function localDateTime(?string $dbUtc, string $tz = 'UTC', string $fallback = '—'): string
+    {
+        if ($dbUtc === null || $dbUtc === '') {
+            return $fallback;
+        }
+
+        try {
+            $dt = Dates::fromDbString($dbUtc)->setTimezone(new \DateTimeZone($tz));
+        } catch (\Throwable) {
+            return $this->e($dbUtc);
+        }
+
+        return $this->e($dt->format('Y-m-d H:i'));
     }
 
     /**

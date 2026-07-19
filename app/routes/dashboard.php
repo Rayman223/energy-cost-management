@@ -27,6 +27,7 @@ $view         = null;
 $isAdmin      = false;
 $oidcEnabled  = false;
 $currency     = 'EUR';
+$timezone     = 'Europe/Brussels';
 $dbError      = null;
 $deltas       = null;
 $cost         = null;
@@ -84,6 +85,9 @@ try {
     $isAdmin    = ($users->findById($userId)?->isAdmin()) ?? false;
     $profile    = $users->getProfile($userId);
     $currency   = (string) ($profile['currency'] ?? 'EUR');
+    // Fuseau d'affichage propre à l'utilisateur : les dates (stockées en UTC)
+    // sont reconverties vers ce fuseau côté client (window.APP_TIMEZONE).
+    $timezone   = (string) ($profile['timezone'] ?? 'Europe/Brussels');
 
     // Locale (profil, surchargée par ?lang persisté) → View configurée.
     $view = LocaleContext::viewFor($config, $users, $userId, $profile['locale'] ?? null, __DIR__ . '/../templates');
@@ -159,4 +163,5 @@ echo $view->render('dashboard', [
     'oidcEnabled'  => $oidcEnabled,
     'discordUrl'   => DiscordLink::inviteUrl($config),
     'currency'     => $currency,
+    'timezone'     => $timezone,
 ]);

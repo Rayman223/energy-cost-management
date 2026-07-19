@@ -138,7 +138,7 @@ $csrf = \App\Security\Csrf::field();
       <?php foreach ($identities as $idn): ?>
       <tr>
         <td><?= $this->partial('oidc-provider-icon', ['key' => $idn['provider']]) ?> <?= $this->e($idn['label']) ?><?= $idn['is_primary'] ? ' <span class="identity-primary">· ' . $this->te('account.identity_primary') . '</span>' : '' ?></td>
-        <td class="muted"><?= $this->e($idn['created_at']) ?></td>
+        <td class="muted"><?= $this->localDateTime($idn['created_at'] ?? null, $profile['timezone'] ?? 'UTC') ?></td>
         <td><?php if (count($identities) > 1): ?>
           <form method="post" class="inline" data-confirm="<?= $this->e($this->t('account.identity_unlink_confirm', ['provider' => $idn['label']])) ?>" data-confirm-ok="<?= $this->e($this->t('account.identity_unlink')) ?>" data-confirm-danger>
             <?= $csrf ?>
@@ -175,7 +175,7 @@ $csrf = \App\Security\Csrf::field();
         <tr>
           <td><?= $this->e($t['name']) ?></td>
           <td><code><?= $this->e($t['prefix']) ?>…</code></td>
-          <td class="muted"><?= $this->e($t['last_used_at'] ?? '—') ?></td>
+          <td class="muted"><?= $this->localDateTime($t['last_used_at'] ?? null, $profile['timezone'] ?? 'UTC') ?></td>
           <td><?= $t['revoked_at'] !== null ? '<span class="muted">' . $this->te('account.token_revoked') . '</span>' : $this->te('account.token_active') ?></td>
           <td><?php if ($t['revoked_at'] === null): ?>
             <form method="post" class="inline" data-confirm="<?= $this->e($this->t('account.token_revoke_confirm')) ?>" data-confirm-ok="<?= $this->e($this->t('account.token_revoke')) ?>" data-confirm-danger>

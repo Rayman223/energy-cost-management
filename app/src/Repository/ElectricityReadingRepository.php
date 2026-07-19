@@ -7,6 +7,7 @@ namespace App\Repository;
 use App\Infrastructure\MeterTopology;
 use App\Repository\Contract\ElectricityIngestionInterface;
 use App\Repository\Contract\LegacyDailyRepositoryInterface;
+use App\Support\Dates;
 use DateTimeImmutable;
 use PDO;
 
@@ -108,7 +109,7 @@ final class ElectricityReadingRepository implements LegacyDailyRepositoryInterfa
                 }
                 $stmt->execute([
                     'rid' => $map[$key],
-                    'at'  => $timestamp->format('Y-m-d H:i:s'),
+                    'at'  => Dates::toDbString($timestamp),
                     'val' => $value,
                 ]);
                 // rowCount() : 0 (doublon ignoré ou valeur identique), 1 (inséré)
@@ -158,7 +159,7 @@ final class ElectricityReadingRepository implements LegacyDailyRepositoryInterfa
         $stmt->execute([
             'uid'   => $this->userId,
             'etype' => 'electricity',
-            'at'    => $timestamp->format('Y-m-d H:i:s'),
+            'at'    => Dates::toDbString($timestamp),
         ]);
 
         $this->invalidateMonthlyDeltaCaches();
@@ -206,7 +207,7 @@ final class ElectricityReadingRepository implements LegacyDailyRepositoryInterfa
      */
     public function readingBounds(DateTimeImmutable $timestamp, array $registerKeys): array
     {
-        $at = $timestamp->format('Y-m-d H:i:s');
+        $at = Dates::toDbString($timestamp);
 
         // Un seul aller-retour par registre : les trois sous-requêtes scalaires
         // (relevé antérieur, postérieur, exact) sont évaluées ensemble. Chaque
@@ -544,8 +545,8 @@ final class ElectricityReadingRepository implements LegacyDailyRepositoryInterfa
             );
             $stmt->execute([
                 'rid'  => $rid,
-                'from' => $from->format('Y-m-d H:i:s'),
-                'to'   => $to->format('Y-m-d H:i:s'),
+                'from' => Dates::toDbString($from),
+                'to'   => Dates::toDbString($to),
             ]);
             foreach ($stmt->fetchAll() as $row) {
                 $ts = (string) $row['reading_at'];
@@ -592,7 +593,7 @@ final class ElectricityReadingRepository implements LegacyDailyRepositoryInterfa
         }
 
         $boundsWhere = 'register_id = :rid AND reading_at <= :to';
-        $params      = ['rid' => $rid, 'to' => $toInclusive->format('Y-m-d H:i:s')];
+        $params      = ['rid' => $rid, 'to' => Dates::toDbString($toInclusive)];
 
         if ($fromExclusive !== null) {
             $boundsWhere       .= ' AND DATE(reading_at) > :from_day';
@@ -637,6 +638,12 @@ final class ElectricityReadingRepository implements LegacyDailyRepositoryInterfa
             return null;
         }
 
+        // « Aujourd'hui » = jour UTC (la session MariaDB est forcée en +00:00, cf.
+        // Database.php). Limite connue : pour un utilisateur dont le fuseau diffère
+        // de l'UTC, un relevé pris juste après minuit local peut tomber la veille en
+        // UTC. Impact borné (fenêtre de quelques heures autour de minuit) ; le second
+        // SELECT retombe de toute façon sur le dernier relevé global. Passer à un jour
+        // « local par utilisateur » supposerait de propager son fuseau ici (CONVERT_TZ).
         foreach ([
             'SELECT reading_at, index_value FROM meter_readings
              WHERE register_id = :rid AND reading_at >= CURDATE() AND reading_at < CURDATE() + INTERVAL 1 DAY
@@ -786,6 +793,11 @@ final class ElectricityReadingRepository implements LegacyDailyRepositoryInterfa
      */
     private function dailyFirstValuesSince(int $registerId, int $days): array
     {
+        // Regroupement par jour UTC (session MariaDB forcée en +00:00, cf.
+        // Database.php). Limite connue : les frontières de jour du graphe suivent
+        // l'UTC et non le fuseau de l'utilisateur — un relevé de nuit peut basculer
+        // au jour adjacent. Un « jour local » exigerait un CONVERT_TZ paramétré par
+        // le fuseau de l'utilisateur (imparfait autour d'une transition d'heure).
         $stmt = $this->pdo->prepare(
             'SELECT r.reading_at, r.index_value
              FROM meter_readings r

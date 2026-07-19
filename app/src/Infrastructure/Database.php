@@ -24,6 +24,11 @@ final class Database
         $this->pdo = new PDO($dsn, $config['user'], $config['password'], [
             PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
             PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+            // Fuseau de session forcé à UTC, rejoué à chaque (re)connexion. Rend
+            // NOW()/CURRENT_TIMESTAMP/DEFAULT CURRENT_TIMESTAMP indépendants du
+            // fuseau du serveur MariaDB (qui peut être CEST/SYSTEM). +00:00 est
+            // DST-proof : toute la chaîne applicative stocke et lit en UTC.
+            PDO::MYSQL_ATTR_INIT_COMMAND => "SET time_zone = '+00:00'",
         ]);
     }
 

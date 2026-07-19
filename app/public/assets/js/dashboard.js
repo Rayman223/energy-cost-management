@@ -9,6 +9,7 @@
   try { d = JSON.parse(el.textContent); } catch (e) { return; }
   window.APP_LOCALE = d.locale;
   window.APP_CURRENCY = d.currency;
+  window.APP_TIMEZONE = d.timezone;
   window.__INIT_COST__ = d.initCost;
   window.__INIT_YEAR__ = d.initYear;
   window.__INIT_MONTH__ = d.initMonth;
@@ -422,8 +423,9 @@ function costVatRows(c, row) {
 
     const c           = data.cost;
     const kwh         = +(data.kwh ?? 0);
-    const from        = data.period_from ? data.period_from.slice(0, 10) : '—';
-    const to          = data.period_to   ? data.period_to.slice(0, 10)   : '—';
+    const _day        = (v) => window.TZ ? window.TZ.formatReadingAt(v).slice(0, 10) : v.slice(0, 10);
+    const from        = data.period_from ? _day(data.period_from) : '—';
+    const to          = data.period_to   ? _day(data.period_to)   : '—';
 
     const isCurrentPeriod = (gasNavYear === NOW_YEAR && gasNavMonth === NOW_MONTH);
     const periodLabel     = isCurrentPeriod ? 'Estimation période en cours' : `${MONTHS_FR[gasNavMonth-1]} ${gasNavYear}`;
@@ -615,8 +617,9 @@ function costVatRows(c, row) {
       return;
     }
 
-    const from = data.period_from ? data.period_from.slice(0, 10) : '—';
-    const to   = data.period_to   ? data.period_to.slice(0, 10)   : '—';
+    const _day = (v) => window.TZ ? window.TZ.formatReadingAt(v).slice(0, 10) : v.slice(0, 10);
+    const from = data.period_from ? _day(data.period_from) : '—';
+    const to   = data.period_to   ? _day(data.period_to)   : '—';
     const isCurrent = (wNavYear === NOW_YEAR && wNavMonth === NOW_MONTH);
     const label = isCurrent ? 'Estimation mois en cours' : `${MONTHS_FR[wNavMonth-1]} ${wNavYear}`;
     const projNote = data.is_projection ? ' <span class="t-dim">(projection fin de mois)</span>' : '';
@@ -918,7 +921,7 @@ function renderReadings(tbodyId, rows, emptyLabel) {
   }
   tbody.innerHTML = rows.map(r =>
     `<tr>
-      <td>${r.reading_at.slice(0, 16)}</td>
+      <td>${window.TZ ? window.TZ.formatReadingAt(r.reading_at) : r.reading_at.slice(0, 16)}</td>
       <td>${fmtM3(r.counter_m3)}</td>
       <td class="td-delta">${r.delta_m3 !== null ? '+' + fmtM3(r.delta_m3) + ' m³' : '—'}</td>
     </tr>`
@@ -963,12 +966,12 @@ async function submitGas() {
     const res  = await fetch('api?action=gas_entry', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ counter_m3: value, reading_at: `${date} ${time}:00` }),
+      body: JSON.stringify({ counter_m3: value, reading_at: window.TZ ? window.TZ.localInputToDbUtc(date, time) : `${date} ${time}:00` }),
     });
     const data = await res.json();
 
     if (data.ok) {
-      feedback.textContent = `✓ Enregistré — ${data.counter_m3} m³ le ${data.saved_at.slice(0, 10)}`;
+      feedback.textContent = `✓ Enregistré — ${data.counter_m3} m³ le ${window.TZ ? window.TZ.formatReadingAt(data.saved_at).slice(0, 10) : data.saved_at.slice(0, 10)}`;
       feedback.className   = 'form-feedback ok';
       document.getElementById('gas-value').value = '';
       // Reload gas table
@@ -1012,12 +1015,12 @@ async function submitWater() {
     const res  = await fetch('api?action=water_entry', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ counter_m3: value, reading_at: `${date} ${time}:00` }),
+      body: JSON.stringify({ counter_m3: value, reading_at: window.TZ ? window.TZ.localInputToDbUtc(date, time) : `${date} ${time}:00` }),
     });
     const data = await res.json();
 
     if (data.ok) {
-      feedback.textContent = `✓ Enregistré — ${data.counter_m3} m³ le ${data.saved_at.slice(0, 10)}`;
+      feedback.textContent = `✓ Enregistré — ${data.counter_m3} m³ le ${window.TZ ? window.TZ.formatReadingAt(data.saved_at).slice(0, 10) : data.saved_at.slice(0, 10)}`;
       feedback.className   = 'form-feedback ok';
       document.getElementById('water-value').value = '';
       // Reload water table

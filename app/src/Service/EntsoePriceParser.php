@@ -13,7 +13,8 @@ use SimpleXMLElement;
  * Parse un document ENTSO-E « Publication_MarketDocument » (prix day-ahead A44).
  *
  * Logique pure (aucun I/O) → testable sans réseau, à la manière de MonthlyConsumptionInterpolator.
- * Normalise les prix en €/kWh HTVA dans la timezone locale de l'application.
+ * Normalise les prix en €/kWh HTVA ; les horodatages sont stockés en UTC (comme
+ * toute la base) — l'affichage reconvertit ensuite vers le fuseau de l'utilisateur.
  */
 final class EntsoePriceParser
 {
@@ -33,7 +34,10 @@ final class EntsoePriceParser
             );
         }
 
-        $localTz = new DateTimeZone(date_default_timezone_get());
+        // Stockage en UTC (comme toute la base). Les instants ENTSO-E sont déjà en
+        // UTC : plus de repli d'heure murale possible (chaque instant est distinct),
+        // la dédup ci-dessous ne sert donc plus que de garde-fou inoffensif.
+        $storageTz = new DateTimeZone('UTC');
         $prices  = [];
 
         foreach ($xml->TimeSeries as $series) {
@@ -78,7 +82,7 @@ final class EntsoePriceParser
 
                     $periodStart = $start
                         ->modify(sprintf('+%d seconds', ($position - 1) * $stepSeconds))
-                        ->setTimezone($localTz);
+                        ->setTimezone($storageTz);
 
                     // Repli d'heure (DST automne) : deux instants UTC distincts
                     // retombent sur la même heure murale locale (ex. 02:00 CEST puis

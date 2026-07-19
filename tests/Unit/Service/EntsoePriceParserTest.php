@@ -18,7 +18,8 @@ final class EntsoePriceParserTest extends TestCase
 
     protected function setUp(): void
     {
-        // Le parser convertit l'UTC vers la timezone par défaut de l'app.
+        // On force volontairement un fuseau NON-UTC pour prouver que le parser
+        // stocke désormais en UTC indépendamment du fuseau PHP par défaut.
         $this->previousTz = date_default_timezone_get();
         date_default_timezone_set('Europe/Brussels');
     }
@@ -50,8 +51,8 @@ final class EntsoePriceParserTest extends TestCase
 
         self::assertCount(24, $prices);
 
-        // UTC 22:00Z → Bruxelles 00:00 (heure d'été, +2).
-        self::assertSame('2026-06-25 00:00', $prices[0]['period_start']->format('Y-m-d H:i'));
+        // Stockage en UTC : 22:00Z reste 22:00 (indépendant du fuseau PHP).
+        self::assertSame('2026-06-24 22:00', $prices[0]['period_start']->format('Y-m-d H:i'));
         self::assertSame(60, $prices[0]['resolution_min']);
 
         // €/MWh → €/kWh (÷ 1000).
@@ -86,7 +87,7 @@ final class EntsoePriceParserTest extends TestCase
 
         self::assertCount(4, $prices);
         self::assertSame(15, $prices[0]['resolution_min']);
-        self::assertSame('2026-06-25 00:15', $prices[1]['period_start']->format('Y-m-d H:i'));
+        self::assertSame('2026-06-24 22:15', $prices[1]['period_start']->format('Y-m-d H:i'));
         self::assertEqualsWithDelta(0.16, $prices[3]['price_eur_kwh'], 1e-9);
     }
 

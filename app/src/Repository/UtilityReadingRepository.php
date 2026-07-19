@@ -7,6 +7,7 @@ namespace App\Repository;
 use App\Repository\Contract\GasReadingRepositoryInterface;
 use App\Repository\Contract\MeterReadingRepositoryInterface;
 use App\Repository\Contract\UtilityIngestionInterface;
+use App\Support\Dates;
 use DateTimeImmutable;
 use InvalidArgumentException;
 use PDO;
@@ -37,7 +38,7 @@ final class UtilityReadingRepository implements GasReadingRepositoryInterface, M
         $stmt->execute([
             'uid'        => $this->userId,
             'etype'      => $this->energyType,
-            'reading_at' => $readingAt->format('Y-m-d H:i:s'),
+            'reading_at' => Dates::toDbString($readingAt),
             'counter_m3' => $counterM3,
         ]);
     }
@@ -66,7 +67,7 @@ final class UtilityReadingRepository implements GasReadingRepositoryInterface, M
         $stmt->execute([
             'uid'        => $this->userId,
             'etype'      => $this->energyType,
-            'reading_at' => $readingAt->format('Y-m-d H:i:s'),
+            'reading_at' => Dates::toDbString($readingAt),
             'counter_m3' => $counterM3,
         ]);
 
@@ -169,7 +170,7 @@ final class UtilityReadingRepository implements GasReadingRepositoryInterface, M
              WHERE user_id = :uid AND energy_type = :etype AND reading_at <= :ts
              ORDER BY reading_at DESC LIMIT 1'
         );
-        $stmt->execute(['uid' => $this->userId, 'etype' => $this->energyType, 'ts' => $ts->format('Y-m-d H:i:s')]);
+        $stmt->execute(['uid' => $this->userId, 'etype' => $this->energyType, 'ts' => Dates::toDbString($ts)]);
         $row = $stmt->fetch();
 
         return $row ?: null;
@@ -183,7 +184,7 @@ final class UtilityReadingRepository implements GasReadingRepositoryInterface, M
              WHERE user_id = :uid AND energy_type = :etype AND reading_at >= :ts
              ORDER BY reading_at ASC LIMIT 1'
         );
-        $stmt->execute(['uid' => $this->userId, 'etype' => $this->energyType, 'ts' => $ts->format('Y-m-d H:i:s')]);
+        $stmt->execute(['uid' => $this->userId, 'etype' => $this->energyType, 'ts' => Dates::toDbString($ts)]);
         $row = $stmt->fetch();
 
         return $row ?: null;
@@ -274,12 +275,12 @@ final class UtilityReadingRepository implements GasReadingRepositoryInterface, M
         $params = [
             'uid'   => $this->userId,
             'etype' => $this->energyType,
-            'to'    => $toInclusive->format('Y-m-d H:i:s'),
+            'to'    => Dates::toDbString($toInclusive),
         ];
 
         if ($fromExclusive !== null) {
             $sql           .= ' AND reading_at > :from';
-            $params['from'] = $fromExclusive->format('Y-m-d H:i:s');
+            $params['from'] = Dates::toDbString($fromExclusive);
         }
 
         $sql .= ' ORDER BY reading_at ASC';

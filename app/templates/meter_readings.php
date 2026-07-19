@@ -117,6 +117,11 @@ $now = date('H:i');
     // JSON. Un <script type="application/json"> n'est jamais exécuté → hors
     // script-src, donc compatible avec la CSP durcie (sans nonce). #98
     $meterData = [
+        // Fuseau d'affichage de l'utilisateur : les reading_at (UTC) sont
+        // reconvertis vers ce fuseau côté client, et la saisie locale y est
+        // interprétée avant conversion en UTC pour l'envoi.
+        'timezone' => $timezone ?? 'Europe/Brussels',
+        'locale'   => $this->locale(),
         'i18n' => [
             'invalidUtility' => $this->t('meter.invalid_utility'),
             'invalidElectricity' => $this->t('meter.invalid_electricity'),
@@ -138,6 +143,7 @@ $now = date('H:i');
     ];
 ?>
 <script type="application/json" id="meter-data"><?= json_encode($meterData, JSON_HEX_TAG | JSON_UNESCAPED_UNICODE) ?></script>
+<script defer src="<?= \App\Support\Assets::url('assets/js/tz.js') ?>"></script>
 <script defer src="<?= \App\Support\Assets::url('assets/js/confirm.js') ?>"></script>
 <script defer src="<?= \App\Support\Assets::url('assets/js/meter-readings.js') ?>"></script>
 </body>

@@ -70,7 +70,7 @@ $csrf = \App\Security\Csrf::field();
                 <?php if ($u['status'] === 'blocked'): ?><span class="pill blocked"><?= $this->te('admin.status_blocked') ?></span>
                 <?php else: ?><span class="pill active"><?= $this->te('admin.status_active') ?></span><?php endif; ?>
               </td>
-              <td class="muted"><?= $this->e($u['last_login_at'] ?? '—') ?></td>
+              <td class="muted"><?= $this->localDateTime($u['last_login_at'] ?? null, $timezone ?? 'UTC') ?></td>
               <td>
                 <?php if ($isSelf): ?>
                   <span class="self"><?= $this->te('admin.you') ?></span>

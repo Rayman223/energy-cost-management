@@ -107,4 +107,5 @@ echo $view->render('admin', [
     'users'     => $users->listAll(),
     'currentId' => $userId,
     'available' => Locale::available($config),
+    'timezone'  => (string) ($profile['timezone'] ?? 'Europe/Brussels'),
 ]);

@@ -106,5 +106,7 @@ return [
         'invite_url' => '', // ex. https://discord.gg/xxxxxxx (vide = lien masqué)
     ],
 
-    'timezone' => 'Europe/Brussels',
+    // Fuseau applicatif technique : stockage des dates en UTC. L'affichage est
+    // reconverti vers le fuseau de chaque utilisateur (user_profiles.timezone).
+    'timezone' => 'UTC',
 ];

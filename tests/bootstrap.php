@@ -11,3 +11,8 @@ declare(strict_types=1);
  * de données.
  */
 require __DIR__ . '/../vendor/autoload.php';
+
+// Fuseau déterministe pour les tests : l'application stocke et manipule les dates
+// en UTC (cf. App\Support\Dates). On fixe donc UTC ici pour ne pas dépendre du
+// date.timezone du php.ini de la machine qui exécute la suite.
+date_default_timezone_set('UTC');

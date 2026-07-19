@@ -3,7 +3,11 @@
 const METER_I18N = (() => {
   const el = document.getElementById('meter-data');
   if (!el) return {};
-  try { return JSON.parse(el.textContent).i18n || {}; } catch (e) { return {}; }
+  let d;
+  try { d = JSON.parse(el.textContent); } catch (e) { return {}; }
+  // Fuseau d'affichage/saisie de l'utilisateur, consommé par window.TZ (tz.js).
+  if (d && d.timezone) window.APP_TIMEZONE = d.timezone;
+  return (d && d.i18n) || {};
 })();
 const tr = (key, fallback) => METER_I18N[key] || fallback;
 
@@ -17,7 +21,11 @@ function setFeedback(id, text, cls = '') {
 function readingAt(prefix) {
   const date = document.getElementById(`${prefix}-date`)?.value || '';
   const time = document.getElementById(`${prefix}-time`)?.value || '00:00';
-  return { date, value: `${date} ${time}:00` };
+  // La saisie est une heure murale dans le fuseau de l'utilisateur ; on la
+  // convertit en UTC (fuseau de stockage) avant l'envoi à l'API. `date` reste
+  // en local pour la validation d'affichage.
+  const value = window.TZ ? window.TZ.localInputToDbUtc(date, time) : `${date} ${time}:00`;
+  return { date, value };
 }
 
 // Formate un index de compteur (m³ ou kWh) : 3 décimales, séparateur de milliers.
@@ -42,7 +50,7 @@ function renderReadings(tbodyId, rows, emptyLabel) {
     return;
   }
   tbody.innerHTML = rows.map(r =>
-    `<tr><td>${r.reading_at.slice(0, 16)}</td><td>${fmtIndex(r.counter_m3)}</td><td class="td-delta">${r.delta_m3 !== null ? '+' + fmtIndex(r.delta_m3) + ' m³' : '—'}</td>${delButton('data-id', r.id)}</tr>`
+    `<tr><td>${window.TZ ? window.TZ.formatReadingAt(r.reading_at) : r.reading_at.slice(0, 16)}</td><td>${fmtIndex(r.counter_m3)}</td><td class="td-delta">${r.delta_m3 !== null ? '+' + fmtIndex(r.delta_m3) + ' m³' : '—'}</td>${delButton('data-id', r.id)}</tr>`
   ).join('');
 }
 
@@ -64,7 +72,7 @@ function renderElectricityReadings(tbodyId, rows, emptyLabel) {
   }
   const cell = (v) => (v === null || v === undefined) ? '—' : fmtIndex(v);
   tbody.innerHTML = rows.map(r =>
-    `<tr><td>${r.reading_at.slice(0, 16)}</td>${ELEC_KEYS.map(k => `<td>${cell(r[k])}</td>`).join('')}${delButton('data-at', r.reading_at)}</tr>`
+    `<tr><td>${window.TZ ? window.TZ.formatReadingAt(r.reading_at) : r.reading_at.slice(0, 16)}</td>${ELEC_KEYS.map(k => `<td>${cell(r[k])}</td>`).join('')}${delButton('data-at', r.reading_at)}</tr>`
   ).join('');
 }
 

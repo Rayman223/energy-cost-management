@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Service;
 
+use App\Support\Dates;
 use DateTimeImmutable;
 
 /**
@@ -97,8 +98,9 @@ final class MonthlyConsumptionInterpolator
         $nextYear  = $month === 12 ? $year + 1 : $year;
         $nextMonth = $month === 12 ? 1         : $month + 1;
 
-        $monthStartDt = new DateTimeImmutable(sprintf('%04d-%02d-01 00:00:00', $year,     $month));
-        $monthEndDt   = new DateTimeImmutable(sprintf('%04d-%02d-01 00:00:00', $nextYear, $nextMonth));
+        // Bornes de mois en UTC (fuseau de stockage), indépendantes du fuseau PHP.
+        $monthStartDt = new DateTimeImmutable(sprintf('%04d-%02d-01 00:00:00', $year,     $month),     Dates::utc());
+        $monthEndDt   = new DateTimeImmutable(sprintf('%04d-%02d-01 00:00:00', $nextYear, $nextMonth), Dates::utc());
 
         $monthStartTs = $monthStartDt->getTimestamp();
         $monthEndTs   = $monthEndDt->getTimestamp();

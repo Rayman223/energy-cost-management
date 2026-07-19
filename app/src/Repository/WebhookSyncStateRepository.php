@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Repository;
 
 use DateTimeImmutable;
+use DateTimeZone;
 use PDO;
 
 /**
@@ -27,7 +28,8 @@ final class WebhookSyncStateRepository
         $stmt->execute(['uid' => $this->userId, 'source' => $source]);
         $value = $stmt->fetchColumn();
 
-        return $value ? new DateTimeImmutable((string) $value) : null;
+        // last_sent_at est stocké en UTC : on l'interprète explicitement en UTC.
+        return $value ? new DateTimeImmutable((string) $value, new DateTimeZone('UTC')) : null;
     }
 
     /**
@@ -49,7 +51,7 @@ final class WebhookSyncStateRepository
         $stmt->execute([
             'uid'    => $this->userId,
             'source' => $source,
-            'to'     => $to->format('Y-m-d H:i:s'),
+            'to'     => $to->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d H:i:s'),
         ]);
     }
 
@@ -65,7 +67,7 @@ final class WebhookSyncStateRepository
         $stmt->execute([
             'uid'          => $this->userId,
             'source'       => $source,
-            'last_sent_at' => $lastSentAt->format('Y-m-d H:i:s'),
+            'last_sent_at' => $lastSentAt->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d H:i:s'),
         ]);
     }
 }

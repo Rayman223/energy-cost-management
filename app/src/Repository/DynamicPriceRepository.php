@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace App\Repository;
 
 use App\Repository\Contract\DynamicPriceRepositoryInterface;
+use App\Support\Dates;
 use DateTimeImmutable;
+use DateTimeZone;
 use PDO;
 
 /**
@@ -80,14 +82,14 @@ final class DynamicPriceRepository implements DynamicPriceRepositoryInterface
                 // Purge d'abord toute ligne d'une autre résolution au même horodatage.
                 $deleteStmt->execute([
                     'zone'           => $this->biddingZone,
-                    'period_start'   => $start->format('Y-m-d H:i:s'),
+                    'period_start'   => Dates::toDbString($start),
                     'resolution_min' => $price['resolution_min'],
                 ]);
 
                 $stmt->execute([
                     'zone'           => $this->biddingZone,
-                    'period_start'   => $start->format('Y-m-d H:i:s'),
-                    'period_end'     => $end->format('Y-m-d H:i:s'),
+                    'period_start'   => Dates::toDbString($start),
+                    'period_end'     => Dates::toDbString($end),
                     'resolution_min' => $price['resolution_min'],
                     'price_eur_kwh'  => $price['price_eur_kwh'],
                     'source'         => $source,
@@ -125,8 +127,8 @@ final class DynamicPriceRepository implements DynamicPriceRepositoryInterface
         );
         $stmt->execute([
             'zone' => $this->biddingZone,
-            'from' => $from->format('Y-m-d H:i:s'),
-            'to'   => $to->format('Y-m-d H:i:s'),
+            'from' => Dates::toDbString($from),
+            'to'   => Dates::toDbString($to),
         ]);
 
         $map = [];
@@ -159,8 +161,8 @@ final class DynamicPriceRepository implements DynamicPriceRepositoryInterface
         );
         $stmt->execute([
             'zone' => $this->biddingZone,
-            'from' => $from->format('Y-m-d H:i:s'),
-            'to'   => $to->format('Y-m-d H:i:s'),
+            'from' => Dates::toDbString($from),
+            'to'   => Dates::toDbString($to),
         ]);
 
         $map = [];
@@ -179,6 +181,7 @@ final class DynamicPriceRepository implements DynamicPriceRepositoryInterface
         $stmt->execute(['zone' => $this->biddingZone]);
         $value = $stmt->fetchColumn();
 
-        return is_string($value) ? new DateTimeImmutable($value) : null;
+        // period_end est stocké en UTC : on l'interprète explicitement en UTC.
+        return is_string($value) ? new DateTimeImmutable($value, new DateTimeZone('UTC')) : null;
     }
 }

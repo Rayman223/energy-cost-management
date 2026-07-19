@@ -9,6 +9,7 @@ use App\Repository\ElectricityReadingRepository;
 use App\Repository\UtilityReadingRepository;
 use App\Repository\WebhookSyncStateRepository;
 use DateTimeImmutable;
+use DateTimeZone;
 
 final class DailyLegacyWebhookSyncService
 {
@@ -107,7 +108,7 @@ final class DailyLegacyWebhookSyncService
         $result = $this->postWithRetry($session, $elec->points, 'elec');
 
         if ($result['ok']) {
-            $lastTs = new DateTimeImmutable($elec->lastTimestamp);
+            $lastTs = new DateTimeImmutable($elec->lastTimestamp, new DateTimeZone('UTC'));
 
             foreach (SyncStateKeys::ELEC as $stateKey) {
                 $this->syncState->saveLastSentAt($stateKey, $lastTs);
@@ -170,7 +171,7 @@ final class DailyLegacyWebhookSyncService
         $result = $this->postWithRetry($session, $points, 'gas');
 
         if ($result['ok']) {
-            $lastTs = new DateTimeImmutable($rows[array_key_last($rows)]['timestamp']);
+            $lastTs = new DateTimeImmutable($rows[array_key_last($rows)]['timestamp'], new DateTimeZone('UTC'));
             $this->syncState->saveLastSentAt(SyncStateKeys::GAS, $lastTs);
 
             $this->log(sprintf(
@@ -231,7 +232,7 @@ final class DailyLegacyWebhookSyncService
         $result = $this->postWithRetry($session, $points, 'water');
 
         if ($result['ok']) {
-            $lastTs = new DateTimeImmutable($rows[array_key_last($rows)]['timestamp']);
+            $lastTs = new DateTimeImmutable($rows[array_key_last($rows)]['timestamp'], new DateTimeZone('UTC'));
             $this->syncState->saveLastSentAt(SyncStateKeys::WATER, $lastTs);
 
             $this->log(sprintf(
@@ -266,7 +267,7 @@ final class DailyLegacyWebhookSyncService
             $lastSentAt = $this->syncState->getLastSentAt($stateKey);
 
             if ($lastSentAt === null) {
-                return new DateTimeImmutable('1970-01-01 00:00:00');
+                return new DateTimeImmutable('1970-01-01 00:00:00', new DateTimeZone('UTC'));
             }
 
             if ($earliest === null || $lastSentAt < $earliest) {
@@ -274,7 +275,7 @@ final class DailyLegacyWebhookSyncService
             }
         }
 
-        return $earliest ?? new DateTimeImmutable('1970-01-01 00:00:00');
+        return $earliest ?? new DateTimeImmutable('1970-01-01 00:00:00', new DateTimeZone('UTC'));
     }
 
     /**

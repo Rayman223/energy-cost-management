@@ -11,6 +11,7 @@ use App\Http\ValidationException;
 use App\Repository\Contract\ElectricityIngestionInterface;
 use App\Repository\Contract\MeterReadingRepositoryInterface;
 use App\Repository\WebhookSyncStateRepository;
+use App\Support\Dates;
 use DateTimeImmutable;
 use PDOException;
 
@@ -110,7 +111,9 @@ final class MeterEntryController
 
         $before = $repo->getReadingBefore($ts);
         $after  = $repo->getReadingAfter($ts);
-        $tsStr  = $ts->format('Y-m-d H:i:s');
+        // Normalisé en UTC pour comparer à reading_at (stocké en UTC), quel que
+        // soit l'offset porté par $ts (saisie client possiblement horodatée).
+        $tsStr  = Dates::toDbString($ts);
 
         if (($before && $before['reading_at'] === $tsStr) || ($after && $after['reading_at'] === $tsStr)) {
             throw new ValidationException('A reading already exists at this date (' . $tsStr . ')');

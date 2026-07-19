@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Integration\EnergyId;
 
 use DateTimeImmutable;
+use DateTimeZone;
 
 final class EnergyIdPayloadFactory
 {
@@ -25,9 +26,9 @@ final class EnergyIdPayloadFactory
 
     public function unixTs(string $timestamp): int
     {
-        // Le timestamp (issu de la base, heure murale locale) est interprété dans
-        // le fuseau applicatif imposé par app/bootstrap.php (date_default_timezone_set
-        // depuis la config). Ne pas exécuter ce code hors de ce bootstrap (#130 B6).
-        return (new DateTimeImmutable($timestamp))->getTimestamp();
+        // Le timestamp est issu de la base, où les dates sont stockées en UTC. On
+        // l'interprète donc explicitement en UTC (indépendamment du fuseau PHP par
+        // défaut) avant conversion en epoch, pour un instant absolu déterministe.
+        return (new DateTimeImmutable($timestamp, new DateTimeZone('UTC')))->getTimestamp();
     }
 }
