@@ -32,7 +32,7 @@ use App\Service\Import\ImportRunner;
 use App\Service\Import\RowSource;
 use App\Support\CliArguments;
 
-require_once __DIR__ . '/../autoload.php';
+require_once __DIR__ . '/../../vendor/autoload.php';
 
 $cliArgs = $argv ?? [];
 

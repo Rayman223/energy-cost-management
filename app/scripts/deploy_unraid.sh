@@ -10,7 +10,9 @@
 # Étapes :
 #   1. Git    — fetch + reset --hard sur le tag/main demandé (clean SANS -x,
 #               donc app/config/config.php et /vendor/ sont préservés).
-#   2. Deps   — composer install --no-dev dans le container SWAG.
+#   2. Deps   — composer install --no-dev --optimize-autoloader dans le container
+#               SWAG : installe les dépendances ET régénère l'autoloader PSR-4
+#               (obligatoire, `App\` n'a plus d'autoloader maison de repli).
 #   3. Schéma — applique app/sql/schema.sql (CREATE TABLE IF NOT EXISTS) sur
 #               le container MariaDB.
 #   4. Migr.  — applique les migrations versionnées (app/sql/migrations/) via
@@ -85,7 +87,7 @@ if [[ "$REPO_URL" == git@* || "$REPO_URL" == ssh://* ]]; then
 fi
 
 # ── Étape 1 : Git ────────────────────────────────────────────────────────────
-log "=== Étape 1/4 — Git (cible : ${TAG:-main}) ==="
+log "=== Étape 1/5 — Git (cible : ${TAG:-main}) ==="
 mkdir -p "$APP_DIR"
 cd "$APP_DIR"
 
@@ -119,8 +121,16 @@ git checkout -f
 log "Clean des fichiers non suivis (config.php et vendor/ préservés)"
 git clean -fd
 
-# ── Étape 2 : Dépendances ────────────────────────────────────────────────────
-log "=== Étape 2/4 — composer install (--no-dev) ==="
+# ── Étape 2 : Dépendances + autoloader ───────────────────────────────────────
+log "=== Étape 2/5 — composer install (--no-dev) ==="
+# ÉTAPE CRITIQUE : depuis le passage en PSR-4 Composer, le namespace applicatif
+# `App\` n'est plus chargé par un autoloader maison mais par le classmap généré
+# ici. `composer install` régénère systématiquement vendor/autoload.php (même si
+# aucune dépendance ne change) à partir de la section `autoload` de composer.json,
+# et `--optimize-autoloader` construit le classmap optimisé de `App\`. Sans cette
+# étape, l'application ne peut plus résoudre aucune classe App\ → 500. `set -e`
+# garantit qu'un échec composer interrompt le déploiement (fail loud).
+#
 # Le code est cloné par l'hôte Unraid (UID nobody/users) mais git tourne sous un
 # autre utilisateur dans le container → « dubious ownership ». On déclare le
 # dossier sûr en config SYSTÈME (/etc/gitconfig) : honorée par git quel que soit
@@ -134,7 +144,7 @@ docker exec -w "$CONTAINER_APP_DIR" "$CONTAINER" \
     composer install --no-dev --optimize-autoloader --no-interaction --no-progress
 
 # ── Étape 3 : Schéma DB ──────────────────────────────────────────────────────
-log "=== Étape 3/4 — Application de schema.sql ==="
+log "=== Étape 3/5 — Application de schema.sql ==="
 # Credentials lus depuis config.php (source de vérité unique) via le PHP du
 # container SWAG, pour ne rien coder en dur dans ce script.
 mapfile -t DB_CFG < <(docker exec -w "$CONTAINER_APP_DIR" "$CONTAINER" php -r \
@@ -155,7 +165,7 @@ docker exec -i "$DB_CONTAINER" "$DB_CLIENT" -u"$DB_USER" -p"$DB_PASS" "$DB_NAME"
     < "$APP_DIR/app/sql/schema.sql"
 
 # ── Étape 4 : Migrations versionnées ─────────────────────────────────────────
-log "=== Étape 4/4 — Migrations versionnées (migrate.php) ==="
+log "=== Étape 4/5 — Migrations versionnées (migrate.php) ==="
 docker exec -w "$CONTAINER_APP_DIR" "$CONTAINER" php app/scripts/migrate.php
 
 # ── Étape 5 : Contrôle de configuration (OIDC) ───────────────────────────────

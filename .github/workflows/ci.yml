@@ -29,6 +29,9 @@ jobs:
           php-version: ${{ matrix.php }}
           coverage: none
 
+      - name: Install dependencies
+        run: composer install --no-progress --prefer-dist --no-interaction --no-dev
+
       - name: Lint every PHP file (php -l)
         run: |
           find app -name '*.php' -print0 \

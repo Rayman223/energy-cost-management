@@ -18,7 +18,7 @@ declare(strict_types=1);
  * Colonnes : « Timestamp » (Y-m-d H:i:s) et « Gaz naturel » (m³ ≥ 0).
  */
 
-require_once __DIR__ . '/../autoload.php';
+require_once __DIR__ . '/../../vendor/autoload.php';
 require __DIR__ . '/import_utility_runner.php';
 
 $dryRun  = !in_array('--execute', $argv ?? [], true);

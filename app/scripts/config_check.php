@@ -24,7 +24,7 @@ use App\Config\ConfigIssue;
 use App\Config\ConfigSchema;
 use App\Config\ConfigValidator;
 
-require_once __DIR__ . '/../autoload.php';
+require_once __DIR__ . '/../../vendor/autoload.php';
 
 $args        = $argv ?? [];
 $schemaOnly  = in_array('--schema-only', $args, true);

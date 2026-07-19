@@ -39,7 +39,7 @@ $gasInitMonth = (int) date('n');
 $waterInitYear  = (int) date('Y');
 $waterInitMonth = (int) date('n');
 
-require_once __DIR__ . '/../autoload.php';
+require_once __DIR__ . '/../../vendor/autoload.php';
 
 SecurityHeaders::send();
 
