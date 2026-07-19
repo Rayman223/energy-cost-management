@@ -143,12 +143,22 @@ jobs:
         run: |
           echo "<?php declare(strict_types=1); return ['database' => ['host' => '127.0.0.1', 'port' => 3306, 'name' => 'energy_test', 'user' => 'energy_user', 'password' => 'energy_pass', 'charset' => 'utf8mb4']];" > app/config/config.php
 
-      - name: Vérifier que schema.sql et les migrations sont synchronisés (anti-récidive C1)
+      - name: Vérifier que les migrations rejouables sont idempotentes et convergent (garde C1)
         run: |
+          # Contrat « baseline gelée » : schema.sql ne baseline QUE les migrations
+          # non-idempotentes ; les migrations idempotentes sont appliquées par
+          # migrate.php sur toute base qui ne les a pas encore enregistrées, une
+          # seule fois (répare les bases existantes). Sur le schéma complet
+          # fraîchement importé, cette application doit :
+          #   1. réussir sans erreur  → chaque migration hors-seed est bien idempotente ;
+          #   2. converger au 2e passage → plus aucune migration en attente.
+          echo "→ 1er passage : rejeu des migrations idempotentes sur le schéma complet"
+          php app/scripts/migrate.php
+          echo "→ 2e passage : doit converger"
           OUT=$(php app/scripts/migrate.php --dry-run)
           echo "$OUT"
           if ! echo "$OUT" | grep -q "Aucune migration en attente"; then
-            echo "::error::schema.sql importé mais des migrations restent en attente — le seed schema_migrations de schema.sql est désynchronisé (cf. Issue #130 C1)."
+            echo "::error::migrate.php ne converge pas après import de schema.sql — une migration hors-seed n'est pas idempotente ou le seed est désynchronisé (cf. Issue #130 C1)."
             exit 1
           fi
 

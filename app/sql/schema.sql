@@ -249,22 +249,33 @@ CREATE TABLE IF NOT EXISTS schema_migrations (
     applied_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
--- Baseline : toute migration déjà reflétée dans ce schema.sql est marquée
--- appliquée pour ne pas être rejouée sur une base fraîche (certaines ne sont
--- pas idempotentes, ex. DROP INDEX / ALTER). À maintenir à chaque migration.
+-- Baseline « gelée » — ne baseline QUE les migrations NON rejouables.
+-- ------------------------------------------------------------------------
+-- Seules les migrations NON-idempotentes (sans garde IF [NOT] EXISTS : DROP
+-- INDEX / ADD COLUMN nus) sont marquées appliquées ici : les rejouer
+-- échouerait, on les fige donc au niveau de schema.sql (qui reflète leur
+-- résultat final).
+--
+-- Les migrations IDEMPOTENTES (IF NOT EXISTS / IF EXISTS / MODIFY) ne sont
+-- VOLONTAIREMENT PAS listées ici : migrate.php les applique sur toute base qui
+-- ne les a pas encore enregistrées — UNE SEULE FOIS par base, puis elles sont
+-- tracées dans schema_migrations et jamais rejouées. C'est ce qui répare les
+-- bases existantes dont une table précède la migration (cas que schema.sql,
+-- CREATE TABLE IF NOT EXISTS, ne couvre pas seul). Sur une base fraîche,
+-- l'application est un no-op (schema.sql a déjà créé la structure finale).
+--
+-- ATTENTION migrations de DONNÉES (INSERT … SELECT de backfill) : elles restent
+-- idempotentes mais NE DOIVENT PAS être purgées de schema_migrations puis
+-- rejouées, car un rejeu ressuscite des lignes supprimées entre-temps. Ne jamais
+-- faire de « DELETE FROM schema_migrations » en bloc pour les réappliquer :
+-- réappliquer plutôt le fichier DDL précis en direct (ADD COLUMN IF NOT EXISTS).
+--
+-- Règle à tenir : toute NOUVELLE migration doit être idempotente et rester
+-- HORS de ce seed. N'ajouter ici que des migrations historiques non gardées.
+-- La garde CI C1 vérifie que l'application converge (cf. .github/workflows/ci.yml).
 INSERT IGNORE INTO schema_migrations (version) VALUES
     ('2026-06-26_drop_redundant_reading_indexes.sql'),
-    ('2026-06-27_dynamic_prices.sql'),
-    ('2026-06-30_users.sql'),
-    ('2026-07-01_multitenant_index_tables.sql'),
     ('2026-07-02_webhook_sync_state_user.sql'),
     ('2026-07-03_tariffs_eu.sql'),
-    ('2026-07-04_api_tokens.sql'),
     ('2026-07-05_account_energyid.sql'),
-    ('2026-07-06_tariff_templates_water.sql'),
-    ('2026-07-07_tariff_template_usage.sql'),
-    ('2026-07-10_tariff_line_category.sql'),
-    ('2026-07-11_pricing_mode_and_native_hourly.sql'),
-    ('2026-07-14_user_identities.sql'),
-    ('2026-07-17_user_dynamic_pricing.sql'),
-    ('2026-07-18_user_integrations.sql');
+    ('2026-07-06_tariff_templates_water.sql');
