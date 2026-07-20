@@ -9,6 +9,7 @@
         "jumbojett/openid-connect-php": "^1.0"
     },
     "require-dev": {
+        "phpstan/phpstan": "^2.2.2",
         "phpunit/phpunit": "^13.2"
     },
     "suggest": {
@@ -28,6 +29,7 @@
         "sort-packages": true
     },
     "scripts": {
-        "test": "phpunit"
+        "test": "phpunit",
+        "stan": "phpstan analyse --configuration=phpstan.dist.neon"
     }
 }
