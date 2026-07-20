@@ -38,6 +38,11 @@ final class CostCalculationService
      *        que tariff_grids.vat_rate — cf. #153, unification d'unité.
      * @param float $supplierMarkupPerKwh Marge fournisseur €/kWh ajoutée au prix
      *        spot TTC, par utilisateur (user_profiles.supplier_markup_per_kwh).
+     * @param string $tariffTimezone Fuseau (IANA) du contrat servant à borner la
+     *        bascule tarifaire jour/nuit (T1/T2). Les clés horaires étant stockées
+     *        en UTC (cf. App\Support\Dates), on reconvertit vers ce fuseau avant de
+     *        classer une heure. Par utilisateur (user_profiles.timezone) ; défaut
+     *        Europe/Brussels. Sépare la facturation (fuseau contrat) de l'affichage.
      */
     public function __construct(
         private readonly LegacyDailyRepositoryInterface $legacyRepo,
@@ -51,6 +56,7 @@ final class CostCalculationService
         private readonly string $pricingMode = 'fixed',
         private readonly float $vatRatePercent = 21.0,
         private readonly float $supplierMarkupPerKwh = 0.0,
+        private readonly string $tariffTimezone = 'Europe/Brussels',
     ) {
     }
 
@@ -527,7 +533,13 @@ final class CostCalculationService
      */
     private function classicEnergyRateForHour(string $hour, array $tariff): float
     {
-        $h     = (int) substr($hour, 11, 2);
+        // $hour est une clé horaire stockée en UTC (reading_at ; cf. App\Support\Dates).
+        // La bascule jour/nuit T1/T2 est définie en heure locale du contrat : on
+        // reconvertit vers ce fuseau avant d'extraire l'heure, sinon un relevé de
+        // 07h30 belge (05h30 UTC l'été) serait classé à tort en tarif nuit.
+        $h = (int) (new DateTimeImmutable($hour, new DateTimeZone('UTC')))
+            ->setTimezone(new DateTimeZone($this->tariffTimezone))
+            ->format('G');
         $isDay = $h >= 7 && $h < 23;
 
         // Repli monohoraire (energy_simple/energy_flat) pour les grilles sans T1/T2.

@@ -205,6 +205,7 @@ final class CostCalculationServiceTest extends TestCase
         bool $enabled = true,
         float $vatRatePercent = 21.0,
         float $supplierMarkupPerKwh = 0.0,
+        string $tariffTimezone = 'Europe/Brussels',
     ): CostCalculationService {
         return new CostCalculationService(
             legacyRepo: $legacy,
@@ -215,6 +216,7 @@ final class CostCalculationServiceTest extends TestCase
             dynamicEnabled: $enabled,
             vatRatePercent: $vatRatePercent,
             supplierMarkupPerKwh: $supplierMarkupPerKwh,
+            tariffTimezone: $tariffTimezone,
         );
     }
 
@@ -326,6 +328,35 @@ final class CostCalculationServiceTest extends TestCase
         $r = $svc->estimateMonthElectricityDynamic(2026, 6);
 
         self::assertFalse($r['available']);
+    }
+
+    /**
+     * Repli tarif classique : la bascule jour/nuit T1/T2 doit être évaluée dans le
+     * fuseau du contrat, pas sur l'heure UTC stockée. 05:00 UTC = 07:00 Europe/Brussels
+     * (été, UTC+2) → JOUR (T1 0.10). Une lecture brute de l'heure UTC (05) classerait
+     * à tort en NUIT (T2 0.08).
+     */
+    public function testDynamicFallbackClassifiesDayNightInContractTimezone(): void
+    {
+        $legacy = new FakeLegacyDailyRepository(
+            monthlyDeltasForMonth: $this->electricityDeltas(),
+            hourlyImportDeltas: [
+                ['hour' => '2026-06-10 12:00:00', 'import_kwh' => 1.0],   // couverte par un prix
+                ['hour' => '2026-06-10 05:00:00', 'import_kwh' => 10.0],  // sans prix → repli classique
+            ],
+        );
+        $dynamic = new FakeDynamicPriceRepository(pricesByHour: ['2026-06-10 12:00:00' => 0.20]);
+
+        // Fuseau contrat (défaut Europe/Brussels) : 05:00 UTC = 07:00 local → T1 (0.10).
+        // 1 × (0.20 × 1.21) + 10 × 0.10 = 0.242 + 1.0 = 1.242.
+        $local = $this->makeDynamicService($legacy, new FakeTariffRepository(grid: $this->electricityGrid()), $dynamic)
+            ->estimateMonthElectricityDynamic(2026, 6);
+        self::assertEqualsWithDelta(1.24, $local['energy_dynamic'], 0.001);
+
+        // Contre-preuve : borné en UTC brut, 05:00 → T2 (0.08) → 0.242 + 0.8 = 1.042.
+        $utc = $this->makeDynamicService($legacy, new FakeTariffRepository(grid: $this->electricityGrid()), $dynamic, tariffTimezone: 'UTC')
+            ->estimateMonthElectricityDynamic(2026, 6);
+        self::assertEqualsWithDelta(1.04, $utc['energy_dynamic'], 0.001);
     }
 
     public function testDynamicUnavailableWhenDisabled(): void
