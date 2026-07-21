@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Repository\Contract;
 
+use App\Domain\ReadingGranularity;
 use DateTimeImmutable;
 
 /**
@@ -43,4 +44,18 @@ interface ElectricityIngestionInterface
      * @return array<string, array{min: float|null, max: float|null, exists: bool}>
      */
     public function readingBounds(DateTimeImmutable $timestamp, array $registerKeys): array;
+
+    /**
+     * Indique, par registre, si un relevé existe déjà dans le **créneau aligné**
+     * ($granularity : jour ou quart d'heure) contenant $timestamp — calculé dans le
+     * fuseau $timezone — à un instant **différent** de $timestamp. Sert à plafonner
+     * l'ingestion à un index par registre et par créneau (issue #165) : un index par
+     * jour en tarif fixe, un index par tranche de 15 min en tarif dynamique.
+     * L'instant exact est exclu pour préserver l'idempotence : re-pousser le même
+     * relevé reste un no-op (INSERT IGNORE) et n'est pas un « autre » relevé du créneau.
+     *
+     * @param list<string> $registerKeys
+     * @return array<string, bool> register_key => un autre relevé existe dans ce créneau
+     */
+    public function readingsPresentInBucket(DateTimeImmutable $timestamp, string $timezone, ReadingGranularity $granularity, array $registerKeys): array;
 }

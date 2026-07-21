@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace Tests\Fake;
 
+use App\Domain\ReadingGranularity;
 use App\Repository\Contract\ElectricityIngestionInterface;
 use DateTimeImmutable;
+use DateTimeZone;
 
 final class FakeElectricityIngestion implements ElectricityIngestionInterface
 {
@@ -57,5 +59,34 @@ final class FakeElectricityIngestion implements ElectricityIngestionInterface
         }
 
         return $out;
+    }
+
+    /**
+     * @param list<string> $registerKeys
+     * @return array<string, bool>
+     */
+    public function readingsPresentInBucket(DateTimeImmutable $timestamp, string $timezone, ReadingGranularity $granularity, array $registerKeys): array
+    {
+        $tz = new DateTimeZone($timezone);
+        [$bucketStart, $bucketEnd] = $granularity->bucket($timestamp, $tz);
+        $exact = $timestamp->format('Y-m-d H:i:s');
+
+        $present = [];
+        foreach ($registerKeys as $key) {
+            $present[$key] = false;
+            foreach (array_keys($this->seen) as $seenKey) {
+                [$seenTs, $seenReg] = explode('|', $seenKey, 2);
+                if ($seenReg !== $key || $seenTs === $exact) {
+                    continue; // registre différent, ou instant exact (idempotence)
+                }
+                $seenMoment = new DateTimeImmutable($seenTs, new DateTimeZone('UTC'));
+                if ($seenMoment >= $bucketStart && $seenMoment < $bucketEnd) {
+                    $present[$key] = true;
+                    break;
+                }
+            }
+        }
+
+        return $present;
     }
 }

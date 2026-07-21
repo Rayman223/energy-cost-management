@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Integration;
 
+use App\Domain\ReadingGranularity;
 use App\Infrastructure\MeterTopology;
 use App\Repository\ElectricityReadingRepository;
 use App\Repository\UserRepository;
@@ -193,6 +194,63 @@ final class ElectricityReadingRepositoryDbTest extends TestCase
         $after = $this->repo()->readingBounds(new \DateTimeImmutable('2027-01-01 00:00:00'), ['import_t1']);
         self::assertEqualsWithDelta(350.0, $after['import_t1']['min'], 0.001);
         self::assertNull($after['import_t1']['max']);
+    }
+
+    public function testReadingsPresentInDayBucketDetectsSameRegisterDifferentInstant(): void
+    {
+        $repo = $this->repo();
+        // import_t1 possède un relevé seedé le 2026-07-10 à 12:00:00.
+        $day = ReadingGranularity::Day;
+
+        // Même registre, même jour, autre heure → présent.
+        $onDay = $repo->readingsPresentInBucket(new \DateTimeImmutable('2026-07-10 18:00:00'), 'UTC', $day, ['import_t1', 'production']);
+        self::assertTrue($onDay['import_t1']);
+        self::assertFalse($onDay['production'], 'production non seedé → aucun relevé ce jour');
+
+        // Instant exact exclu (idempotence) : pas d'« autre » relevé ce jour-là.
+        $exact = $repo->readingsPresentInBucket(new \DateTimeImmutable('2026-07-10 12:00:00'), 'UTC', $day, ['import_t1']);
+        self::assertFalse($exact['import_t1']);
+
+        // Jour suivant → aucun relevé import_t1.
+        $nextDay = $repo->readingsPresentInBucket(new \DateTimeImmutable('2026-07-11 08:00:00'), 'UTC', $day, ['import_t1']);
+        self::assertFalse($nextDay['import_t1']);
+    }
+
+    public function testReadingsPresentInDayBucketUsesUserTimezone(): void
+    {
+        $repo = $this->repo();
+        $day  = ReadingGranularity::Day;
+        // Relevé solaire à 23:30 UTC le 10/07 → 01:30 le 11/07 en Europe/Brussels (+02).
+        $repo->insertIndexes(new \DateTimeImmutable('2026-07-10 23:30:00', new \DateTimeZone('UTC')), ['production' => 12.0]);
+
+        // Vu depuis Bruxelles, ce relevé tombe le 11/07 : un relevé à 07:00 local le
+        // 11/07 le trouve donc comme « déjà présent ce jour-là ».
+        $brussels = $repo->readingsPresentInBucket(new \DateTimeImmutable('2026-07-11 07:00:00', new \DateTimeZone('UTC')), 'Europe/Brussels', $day, ['production']);
+        self::assertTrue($brussels['production']);
+
+        // En UTC, le relevé reste le 10/07 : le jour 11/07 est vide pour production.
+        $utc = $repo->readingsPresentInBucket(new \DateTimeImmutable('2026-07-11 07:00:00', new \DateTimeZone('UTC')), 'UTC', $day, ['production']);
+        self::assertFalse($utc['production']);
+    }
+
+    public function testReadingsPresentInQuarterHourBucketAlignsToClock(): void
+    {
+        $repo = $this->repo();
+        $quarter = ReadingGranularity::QuarterHour;
+        // Relevé solaire seedé à 07:02 → créneau aligné [07:00–07:15).
+        $repo->insertIndexes(new \DateTimeImmutable('2026-07-12 07:02:00', new \DateTimeZone('UTC')), ['production' => 5.0]);
+
+        // Autre instant du même créneau → présent.
+        $sameSlot = $repo->readingsPresentInBucket(new \DateTimeImmutable('2026-07-12 07:12:00', new \DateTimeZone('UTC')), 'UTC', $quarter, ['production']);
+        self::assertTrue($sameSlot['production']);
+
+        // Créneau suivant [07:15–07:30) → absent.
+        $nextSlot = $repo->readingsPresentInBucket(new \DateTimeImmutable('2026-07-12 07:20:00', new \DateTimeZone('UTC')), 'UTC', $quarter, ['production']);
+        self::assertFalse($nextSlot['production']);
+
+        // Instant exact exclu (idempotence).
+        $exact = $repo->readingsPresentInBucket(new \DateTimeImmutable('2026-07-12 07:02:00', new \DateTimeZone('UTC')), 'UTC', $quarter, ['production']);
+        self::assertFalse($exact['production']);
     }
 
     public function testGetHistoryIncludesReadingsOlderThan30Days(): void

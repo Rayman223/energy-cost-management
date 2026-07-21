@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Domain\ReadingGranularity;
 use App\Http\Controller\CostController;
 use App\Http\Controller\IngestController;
 use App\Http\Controller\MeterEntryController;
@@ -130,12 +131,18 @@ try {
     exit;
 }
 
+// Plafonnement des index élec par registre et par créneau aligné (issue #165) :
+// un par jour en tarif fixe, un par tranche de 15 min en tarif dynamique. Fuseau
+// de l'utilisateur pour délimiter le créneau (défaut Europe/Brussels).
+$elecThrottle = DynamicPricing::isEnabled($config) ? ReadingGranularity::QuarterHour : ReadingGranularity::Day;
+$userTimezone = $profile->timezone ?? 'Europe/Brussels';
+
 $readings = new ReadingsController($elecRepo, $gasRepo, $waterRepo);
 $cost     = new CostController($costSvc, DynamicPricing::isEnabled($config));
 $tariffs  = new TariffController($tariffRepo);
-$entries  = new MeterEntryController($gasRepo, $waterRepo, $elecRepo, $syncState);
+$entries  = new MeterEntryController($gasRepo, $waterRepo, $elecRepo, $syncState, $elecThrottle, $userTimezone);
 $deletion = new ReadingDeletionController($gasRepo, $waterRepo, $elecRepo);
-$ingest   = new IngestController($elecRepo, $gasRepo, $waterRepo);
+$ingest   = new IngestController($elecRepo, $gasRepo, $waterRepo, $elecThrottle, $userTimezone);
 
 $router = new Router();
 

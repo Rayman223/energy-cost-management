@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Service;
 
+use App\Domain\ReadingGranularity;
 use App\Repository\Contract\ElectricityIngestionInterface;
 use App\Repository\Contract\UtilityIngestionInterface;
 use App\Service\Import\ImportMapping;
@@ -33,8 +34,12 @@ final class BulkImportService
      *        l'orchestrateur de pré-créer le rapport (cap/troncature partagés).
      * @param bool $replace Ré-import « écraser » : les valeurs déjà présentes au
      *        même horodatage sont mises à jour au lieu d'être ignorées.
+     * @param ReadingGranularity|null $throttle Plafond par registre et par créneau
+     *        aligné (Day en tarif fixe, QuarterHour en tarif dynamique) : les registres
+     *        déjà relevés dans le créneau (fuseau $timezone) sont ignorés en silence et
+     *        comptés comme doublons. null = aucun plafond.
      */
-    public function importElectricity(iterable $rows, ImportMapping $mapping, ElectricityIngestionInterface $sink, ?ImportReport $report = null, bool $replace = false): ImportReport
+    public function importElectricity(iterable $rows, ImportMapping $mapping, ElectricityIngestionInterface $sink, ?ImportReport $report = null, bool $replace = false, ?ReadingGranularity $throttle = null, string $timezone = 'UTC'): ImportReport
     {
         $report ??= new ImportReport();
 
@@ -67,6 +72,23 @@ final class BulkImportService
             if ($indexes === []) {
                 $report->addError(sprintf('Ligne %d : aucun registre renseigné.', $lineNo));
                 continue;
+            }
+
+            // Plafond par registre et par créneau : retirer les registres déjà
+            // relevés dans le créneau (comptés comme doublons), importer le reste. La
+            // transaction englobante rend visibles les lignes déjà insérées du même
+            // créneau aux lignes suivantes.
+            if ($throttle !== null) {
+                $inBucket = $sink->readingsPresentInBucket($ts, $timezone, $throttle, array_keys($indexes));
+                foreach ($inBucket as $key => $present) {
+                    if ($present && isset($indexes[$key])) {
+                        unset($indexes[$key]);
+                        $report->addDuplicate();
+                    }
+                }
+                if ($indexes === []) {
+                    continue;
+                }
             }
 
             try {

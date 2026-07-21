@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controller;
 
+use App\Domain\ReadingGranularity;
 use App\Domain\SyncStateKeys;
 use App\Http\JsonResponse;
 use App\Http\Request;
@@ -27,6 +28,12 @@ final class MeterEntryController
         private readonly MeterReadingRepositoryInterface $waterRepo,
         private readonly ElectricityIngestionInterface $electricityRepo,
         private readonly ?WebhookSyncStateRepository $syncState = null,
+        // Plafonnement des index élec à un par registre et par créneau aligné
+        // (issue #165) : Day en tarif fixe, QuarterHour en tarif dynamique. null =
+        // aucun plafond. Fuseau de l'utilisateur pour délimiter le créneau. Défauts
+        // rétro-compatibles : seule api.php les renseigne.
+        private readonly ?ReadingGranularity $electricityThrottle = null,
+        private readonly string $timezone = 'UTC',
     ) {
     }
 
@@ -73,6 +80,20 @@ final class MeterEntryController
                 throw new ValidationException('A reading already exists at this date for ' . $key . ' (' . $ts->format('Y-m-d H:i:s') . ')');
             }
             $this->assertWithinBounds($key, $value, $bound['min'], $bound['max']);
+        }
+
+        // Plafond « un index par registre et par créneau » : au premier registre
+        // déjà relevé dans le créneau, on refuse toute la soumission.
+        if ($this->electricityThrottle !== null) {
+            $inBucket = $this->electricityRepo->readingsPresentInBucket($ts, $this->timezone, $this->electricityThrottle, array_keys($indexes));
+            foreach (array_keys($indexes) as $key) {
+                if ($inBucket[$key] ?? false) {
+                    $bucket = $this->electricityThrottle->formatBucketFr($ts, new \DateTimeZone($this->timezone));
+                    throw new ValidationException(
+                        $key . ' : ' . $this->electricityThrottle->limitLabelFr() . ' est autorisé (' . $bucket . ').'
+                    );
+                }
+            }
         }
 
         $inserted = $this->electricityRepo->insertIndexes($ts, $indexes);

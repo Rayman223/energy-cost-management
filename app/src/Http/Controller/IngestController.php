@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Http\Controller;
 
+use App\Domain\ReadingGranularity;
 use App\Http\JsonResponse;
 use App\Http\Request;
 use App\Http\ValidationException;
@@ -29,6 +30,12 @@ final class IngestController
         private readonly ElectricityIngestionInterface $electricity,
         private readonly UtilityIngestionInterface $gas,
         private readonly UtilityIngestionInterface $water,
+        // Plafonnement des index élec à un par registre et par créneau aligné
+        // (issue #165) : Day en tarif fixe, QuarterHour en tarif dynamique. null =
+        // aucun plafond. Les registres déjà relevés dans le créneau sont ignorés en
+        // silence (comme un doublon), sans casser le batch. Fuseau utilisateur.
+        private readonly ?ReadingGranularity $electricityThrottle = null,
+        private readonly string $timezone = 'UTC',
     ) {
     }
 
@@ -61,7 +68,18 @@ final class IngestController
             }
 
             $received += count($indexes);
-            $inserted += $this->electricity->insertIndexes($ts, $indexes);
+
+            // Plafond par registre et par créneau : retirer les registres déjà
+            // relevés dans le créneau (skip silencieux = doublon), insérer les
+            // registres libres de la même lecture.
+            if ($this->electricityThrottle !== null) {
+                $inBucket = $this->electricity->readingsPresentInBucket($ts, $this->timezone, $this->electricityThrottle, array_keys($indexes));
+                $indexes = array_filter($indexes, static fn (string $k): bool => !($inBucket[$k] ?? false), ARRAY_FILTER_USE_KEY);
+            }
+
+            if ($indexes !== []) {
+                $inserted += $this->electricity->insertIndexes($ts, $indexes);
+            }
         }
 
         return JsonResponse::ok(['ok' => true, 'received' => $received, 'inserted' => $inserted]);

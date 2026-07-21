@@ -4,11 +4,13 @@ declare(strict_types=1);
 
 namespace App\Repository;
 
+use App\Domain\ReadingGranularity;
 use App\Infrastructure\MeterTopology;
 use App\Repository\Contract\ElectricityIngestionInterface;
 use App\Repository\Contract\LegacyDailyRepositoryInterface;
 use App\Support\Dates;
 use DateTimeImmutable;
+use DateTimeZone;
 use PDO;
 
 /**
@@ -246,6 +248,50 @@ final class ElectricityReadingRepository implements LegacyDailyRepositoryInterfa
         }
 
         return $bounds;
+    }
+
+    /**
+     * @param list<string> $registerKeys
+     * @return array<string, bool>
+     */
+    public function readingsPresentInBucket(DateTimeImmutable $timestamp, string $timezone, ReadingGranularity $granularity, array $registerKeys): array
+    {
+        // Bornes du créneau LOCAL de l'utilisateur, ramenées en UTC (colonnes UTC,
+        // session MariaDB forcée +00:00 — pas de CONVERT_TZ). Le calcul du créneau
+        // (jour ou quart d'heure aligné) et la gestion DST vivent dans l'enum.
+        [$bucketStart, $bucketEnd] = $granularity->bucket($timestamp, new DateTimeZone($timezone));
+
+        $start = Dates::toDbString($bucketStart);
+        $end   = Dates::toDbString($bucketEnd);
+        $at    = Dates::toDbString($timestamp);
+
+        // Un relevé de CE registre existe-t-il déjà dans ce créneau à un autre
+        // instant ? L'exclusion de l'instant exact (reading_at <> :at) préserve
+        // l'idempotence.
+        $stmt = $this->pdo->prepare(
+            'SELECT EXISTS(
+                SELECT 1 FROM meter_readings
+                WHERE register_id = :rid
+                  AND reading_at >= :start AND reading_at < :end
+                  AND reading_at <> :at
+             ) AS present'
+        );
+
+        $present = [];
+        foreach ($registerKeys as $key) {
+            $rid = $this->registerId($key);
+            if ($rid === null) {
+                $present[$key] = false;
+                continue;
+            }
+
+            $stmt->execute(['rid' => $rid, 'start' => $start, 'end' => $end, 'at' => $at]);
+            /** @var int|string $flag */
+            $flag = $stmt->fetchColumn();
+            $present[$key] = (bool) $flag;
+        }
+
+        return $present;
     }
 
     // -------------------------------------------------------------------------

@@ -7,6 +7,7 @@ declare(strict_types=1);
  * (opt-in par module, ex. EnergyID), et RGPD (export + suppression). Session uniquement.
  */
 
+use App\Domain\ReadingGranularity;
 use App\Domain\Timezones;
 use App\Domain\UserProfile;
 use App\Http\SecurityHeaders;
@@ -199,7 +200,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } elseif ($action === 'import') {
             // Import self-service : la cible est TOUJOURS l'utilisateur courant
             // (aucun champ « utilisateur cible » — l'import ne concerne que soi).
-            $importReport = (new ImportRunner())->runFromRequest($pdo, $userId, $_POST, $_FILES);
+            // Plafonnement des index élec par registre et par créneau aligné
+            // (issue #165) : un par jour en tarif fixe, un par tranche de 15 min en
+            // tarif dynamique. Délimité dans le fuseau de l'utilisateur.
+            $importReport = (new ImportRunner())->runFromRequest(
+                $pdo,
+                $userId,
+                $_POST,
+                $_FILES,
+                DynamicPricing::isEnabled($config) ? ReadingGranularity::QuarterHour : ReadingGranularity::Day,
+                $profileForLocale->timezone ?? 'Europe/Brussels',
+            );
             // Import tronqué (plafond atteint, données perdues) : pas de bannière
             // « terminé » trompeuse — l'avertissement du rapport tient lieu de signal.
             if ($importReport->truncated() === false) {

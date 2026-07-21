@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Unit\Service;
 
+use App\Domain\ReadingGranularity;
 use App\Repository\Contract\UtilityIngestionInterface;
 use App\Service\BulkImportService;
 use App\Service\Import\ImportMapping;
@@ -157,6 +158,75 @@ final class BulkImportServiceTest extends TestCase
         self::assertSame(3, $report->imported());
         self::assertSame(3, $report->duplicates());
         self::assertSame(1, $report->errors());
+    }
+
+    public function testDailyLimitSkipsSameRegisterSameDayAsDuplicate(): void
+    {
+        // Tarif fixe (Day) : deux relevés du même registre le même jour à des heures
+        // différentes → le 2e est compté en doublon (skip silencieux).
+        $rows = [
+            2 => ['timestamp' => '2026-01-01 07:00:00', 'import_t1' => '1000'],
+            3 => ['timestamp' => '2026-01-01 18:00:00', 'import_t1' => '1010'],
+        ];
+
+        $report = $this->service->importElectricity(
+            $rows,
+            ImportMapping::preset('electricity'),
+            new FakeElectricityIngestion(),
+            null,
+            false,
+            ReadingGranularity::Day,
+            'UTC',
+        );
+
+        self::assertSame(1, $report->imported());
+        self::assertSame(1, $report->duplicates());
+    }
+
+    public function testDailyLimitKeepsDistinctRegistersSameDay(): void
+    {
+        // import_t1 le matin, production le soir : registres indépendants → tout importé.
+        $rows = [
+            2 => ['timestamp' => '2026-01-01 07:00:00', 'import_t1' => '1000'],
+            3 => ['timestamp' => '2026-01-01 18:00:00', 'production' => '200'],
+        ];
+
+        $report = $this->service->importElectricity(
+            $rows,
+            ImportMapping::preset('electricity'),
+            new FakeElectricityIngestion(),
+            null,
+            false,
+            ReadingGranularity::Day,
+            'UTC',
+        );
+
+        self::assertSame(2, $report->imported());
+        self::assertSame(0, $report->duplicates());
+    }
+
+    public function testQuarterHourLimitKeepsOnePerAlignedSlot(): void
+    {
+        // Tarif dynamique (QuarterHour) : dans un même quart d'heure aligné, un seul
+        // index par registre ; le créneau suivant repasse.
+        $rows = [
+            2 => ['timestamp' => '2026-01-01 07:02:00', 'import_t1' => '1000'], // [07:00–07:15)
+            3 => ['timestamp' => '2026-01-01 07:12:00', 'import_t1' => '1001'], // même créneau → doublon
+            4 => ['timestamp' => '2026-01-01 07:20:00', 'import_t1' => '1002'], // [07:15–07:30) → importé
+        ];
+
+        $report = $this->service->importElectricity(
+            $rows,
+            ImportMapping::preset('electricity'),
+            new FakeElectricityIngestion(),
+            null,
+            false,
+            ReadingGranularity::QuarterHour,
+            'UTC',
+        );
+
+        self::assertSame(2, $report->imported());
+        self::assertSame(1, $report->duplicates());
     }
 
     public function testElectricityImportRequiresAtLeastOneRegister(): void

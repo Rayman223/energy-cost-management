@@ -24,13 +24,16 @@ declare(strict_types=1);
  *   php import_readings.php --type=electricity --file=elec.csv --user=2 --execute
  */
 
+use App\Domain\ReadingGranularity;
 use App\Infrastructure\Database;
+use App\Repository\UserRepository;
 use App\Security\UserContext;
 use App\Service\Import\ImportMapping;
 use App\Service\Import\ImportReport;
 use App\Service\Import\ImportRunner;
 use App\Service\Import\RowSource;
 use App\Support\CliArguments;
+use App\Support\DynamicPricing;
 
 require_once __DIR__ . '/../../vendor/autoload.php';
 
@@ -92,6 +95,12 @@ try {
     exit(1);
 }
 
+// Plafonnement des index élec par créneau, comme la voie web (issue #165) : un par
+// jour en tarif fixe, un par tranche de 15 min en tarif dynamique. Sans effet sur
+// gaz/eau. Créneau délimité dans le fuseau du profil de l'utilisateur cible.
+$throttle = DynamicPricing::isEnabled($config) ? ReadingGranularity::QuarterHour : ReadingGranularity::Day;
+$timezone = (new UserRepository($pdo))->getProfile($userId)->timezone ?? 'Europe/Brussels';
+
 fwrite(STDOUT, sprintf(
     "[IMPORT] type=%s user=#%d fichier=%s mode=%s%s",
     $type,
@@ -116,7 +125,7 @@ try {
     }
 
     // Orchestration transaction/dry-run/plafond partagée avec l'UI web.
-    $report = (new ImportRunner())->run($pdo, $mapping, $rows, $userId, $type, $dryRun);
+    $report = (new ImportRunner())->run($pdo, $mapping, $rows, $userId, $type, $dryRun, false, $throttle, $timezone);
 } catch (\Throwable $e) {
     fwrite(STDERR, '[FATAL] ' . $e->getMessage() . PHP_EOL);
     exit(1);

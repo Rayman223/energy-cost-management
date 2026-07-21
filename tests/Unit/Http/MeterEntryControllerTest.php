@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Unit\Http;
 
+use App\Domain\ReadingGranularity;
 use App\Http\Controller\MeterEntryController;
 use App\Http\Request;
 use App\Http\ValidationException;
@@ -210,5 +211,108 @@ final class MeterEntryControllerTest extends TestCase
         $this->expectExceptionMessage('already exists at this date for import_t1');
         $this->controller(new FakeMeterReadingRepository(), new FakeMeterReadingRepository(), $elec)
             ->electricity($this->elecPost(['reading_at' => '2026-06-25 10:00:00', 'import_t1' => 200.0]));
+    }
+
+    private function throttledController(FakeElectricityIngestion $elec, ReadingGranularity $throttle): MeterEntryController
+    {
+        // Plafond activé (Day = tarif fixe, QuarterHour = tarif dynamique), fuseau UTC.
+        return new MeterEntryController(
+            new FakeMeterReadingRepository(),
+            new FakeMeterReadingRepository(),
+            $elec,
+            null,
+            $throttle,
+            'UTC',
+        );
+    }
+
+    private function dailyLimitController(FakeElectricityIngestion $elec): MeterEntryController
+    {
+        return $this->throttledController($elec, ReadingGranularity::Day);
+    }
+
+    public function testDailyLimitRejectsSameRegisterSameDayAtAnotherTime(): void
+    {
+        $elec = new FakeElectricityIngestion();
+        // Un import_t1 existe déjà le 25/06 à 07:00.
+        $elec->insertIndexes(new \DateTimeImmutable('2026-06-25 07:00:00', new \DateTimeZone('UTC')), ['import_t1' => 1000.0]);
+
+        $this->expectException(ValidationException::class);
+        $this->expectExceptionMessage('import_t1 : un seul index par jour est autorisé');
+        $this->dailyLimitController($elec)
+            ->electricity($this->elecPost(['reading_at' => '2026-06-25 18:00:00', 'import_t1' => 1100.0]));
+    }
+
+    public function testDailyLimitAllowsDifferentRegisterSameDay(): void
+    {
+        $elec = new FakeElectricityIngestion();
+        // import_t1 relevé le matin ; le solaire (production) le soir doit passer.
+        $elec->insertIndexes(new \DateTimeImmutable('2026-06-25 07:00:00', new \DateTimeZone('UTC')), ['import_t1' => 1000.0]);
+
+        $res = $this->dailyLimitController($elec)
+            ->electricity($this->elecPost(['reading_at' => '2026-06-25 18:00:00', 'production' => 55.0]));
+
+        self::assertSame(200, $res->status);
+        self::assertIsArray($res->data);
+        self::assertSame(1, $res->data['inserted']);
+        // 2 appels au sink : le seed + l'insertion du soir.
+        self::assertCount(2, $elec->calls);
+        self::assertSame(['production' => 55.0], $elec->calls[1]['indexes']);
+    }
+
+    public function testDailyLimitAllowsSameRegisterOnNextDay(): void
+    {
+        $elec = new FakeElectricityIngestion();
+        $elec->insertIndexes(new \DateTimeImmutable('2026-06-25 07:00:00', new \DateTimeZone('UTC')), ['import_t1' => 1000.0]);
+
+        $res = $this->dailyLimitController($elec)
+            ->electricity($this->elecPost(['reading_at' => '2026-06-26 07:00:00', 'import_t1' => 1100.0]));
+
+        self::assertSame(200, $res->status);
+        self::assertIsArray($res->data);
+        self::assertSame(1, $res->data['inserted']);
+    }
+
+    public function testDailyLimitOffKeepsMultiplePerDay(): void
+    {
+        $elec = new FakeElectricityIngestion();
+        $elec->insertIndexes(new \DateTimeImmutable('2026-06-25 07:00:00', new \DateTimeZone('UTC')), ['import_t1' => 1000.0]);
+
+        // Limite désactivée (contrôleur par défaut) : un 2e index le même jour passe.
+        $res = $this->controller(new FakeMeterReadingRepository(), new FakeMeterReadingRepository(), $elec)
+            ->electricity($this->elecPost(['reading_at' => '2026-06-25 18:00:00', 'import_t1' => 1100.0]));
+
+        self::assertSame(200, $res->status);
+        self::assertIsArray($res->data);
+        self::assertSame(1, $res->data['inserted']);
+    }
+
+    public function testQuarterHourLimitRejectsSameRegisterSameSlot(): void
+    {
+        // Tarif dynamique : deux index du même registre dans le même quart d'heure
+        // aligné [07:00–07:15) → le 2e est refusé.
+        $elec = new FakeElectricityIngestion();
+        $elec->insertIndexes(new \DateTimeImmutable('2026-06-25 07:02:00', new \DateTimeZone('UTC')), ['import_t1' => 1000.0]);
+
+        // Le message affiche le DÉBUT du créneau aligné (07:00), pas l'heure de la
+        // tentative (07:12).
+        $this->expectException(ValidationException::class);
+        $this->expectExceptionMessage('import_t1 : un seul index par tranche de 15 minutes est autorisé (25/06/2026 07:00).');
+        $this->throttledController($elec, ReadingGranularity::QuarterHour)
+            ->electricity($this->elecPost(['reading_at' => '2026-06-25 07:12:00', 'import_t1' => 1005.0]));
+    }
+
+    public function testQuarterHourLimitAllowsNextSlot(): void
+    {
+        // 07:14 puis 07:16 : créneaux [07:00–07:15) et [07:15–07:30) distincts → OK.
+        $elec = new FakeElectricityIngestion();
+        $elec->insertIndexes(new \DateTimeImmutable('2026-06-25 07:14:00', new \DateTimeZone('UTC')), ['import_t1' => 1000.0]);
+
+        $res = $this->throttledController($elec, ReadingGranularity::QuarterHour)
+            ->electricity($this->elecPost(['reading_at' => '2026-06-25 07:16:00', 'import_t1' => 1005.0]));
+
+        self::assertSame(200, $res->status);
+        self::assertIsArray($res->data);
+        self::assertSame(1, $res->data['inserted']);
     }
 }
