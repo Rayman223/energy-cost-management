@@ -98,7 +98,7 @@ try {
         ? $zone
         : (string) ($config['dynamic_prices']['bidding_zone'] ?? DynamicPriceRepository::DEFAULT_ZONE);
 
-    $elecRepo   = new ElectricityReadingRepository($pdo, $userId);
+    $elecRepo   = new ElectricityReadingRepository($pdo, $userId, $timezone);
     $gasRepo    = new UtilityReadingRepository($pdo, $userId, 'gas');
     $waterRepo  = new UtilityReadingRepository($pdo, $userId, 'water');
     $tariffRepo = new TariffRepository($pdo, $userId, $isAdmin);

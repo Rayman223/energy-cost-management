@@ -8,6 +8,7 @@ use App\Domain\ReadingGranularity;
 use App\Infrastructure\MeterTopology;
 use App\Repository\ElectricityReadingRepository;
 use App\Repository\UserRepository;
+use App\Support\Dates;
 use PDO;
 use PHPUnit\Framework\TestCase;
 
@@ -251,6 +252,76 @@ final class ElectricityReadingRepositoryDbTest extends TestCase
         // Instant exact exclu (idempotence).
         $exact = $repo->readingsPresentInBucket(new \DateTimeImmutable('2026-07-12 07:02:00', new \DateTimeZone('UTC')), 'UTC', $quarter, ['production']);
         self::assertFalse($exact['production']);
+    }
+
+    public function testDailyChartGroupsByUserLocalDay(): void
+    {
+        // Utilisateur isolé (le seed 2025/2026 de la classe ne doit pas interférer :
+        // la fenêtre du graphe est relative à « maintenant »).
+        $otherId = (new UserRepository($this->pdo()))->create('https://iss.test', 'chart-tz', 'test', 'Chart TZ')->id;
+        $utc     = new \DateTimeZone('UTC');
+        $tz      = new \DateTimeZone('Europe/Brussels');
+
+        // Trois relevés à 23:30 UTC sur des jours récents consécutifs. En Europe/
+        // Brussels (+01/+02), 23:30 UTC tombe le JOUR LOCAL SUIVANT (00:30 ou 01:30)
+        // → le jour local diffère du jour UTC, ce qui distingue les deux regroupements.
+        $r1 = (new \DateTimeImmutable('now', $utc))->modify('-6 days')->setTime(23, 30, 0);
+        $r2 = (new \DateTimeImmutable('now', $utc))->modify('-5 days')->setTime(23, 30, 0);
+        $r3 = (new \DateTimeImmutable('now', $utc))->modify('-4 days')->setTime(23, 30, 0);
+
+        $repo = new ElectricityReadingRepository($this->pdo(), $otherId, 'Europe/Brussels');
+        $repo->insertIndexes($r1, ['import_t1' => 100.0]);
+        $repo->insertIndexes($r2, ['import_t1' => 130.0]);
+        $repo->insertIndexes($r3, ['import_t1' => 175.0]);
+
+        // Jours LOCAUX attendus (calculés avec le même fuseau → robuste au DST).
+        $localDay2 = $r2->setTimezone($tz)->format('Y-m-d');
+        $localDay3 = $r3->setTimezone($tz)->format('Y-m-d');
+        self::assertNotSame($r2->format('Y-m-d'), $localDay2, 'pré-condition : jour UTC ≠ jour local');
+
+        $byDay = array_column($repo->getDailyDeltasForChart(30), null, 'day');
+
+        // Deltas rattachés au jour LOCAL du relevé le plus récent de la paire.
+        self::assertArrayHasKey($localDay2, $byDay);
+        self::assertEqualsWithDelta(30.0, $byDay[$localDay2]['import_t1'], 0.001);  // 130 - 100
+        self::assertArrayHasKey($localDay3, $byDay);
+        self::assertEqualsWithDelta(45.0, $byDay[$localDay3]['import_t1'], 0.001);  // 175 - 130
+        // Le jour UTC de r2 (la veille du jour local) n'est PAS une clé → regroupement local.
+        self::assertArrayNotHasKey($r2->format('Y-m-d'), $byDay);
+
+        // Contraste : le même relevé, vu par un repo en UTC, se regroupe sur le jour UTC.
+        $utcRepo  = new ElectricityReadingRepository($this->pdo(), $otherId, 'UTC');
+        $utcByDay = array_column($utcRepo->getDailyDeltasForChart(30), null, 'day');
+        self::assertArrayHasKey($r2->format('Y-m-d'), $utcByDay);
+        self::assertArrayNotHasKey($localDay3, $utcByDay);
+    }
+
+    public function testTodayIndexUsesUserLocalDay(): void
+    {
+        // Utilisateur isolé pour ne pas mélanger avec le seed 2025/2026 de la classe.
+        $otherId = (new UserRepository($this->pdo()))->create('https://iss.test', 'today-tz', 'test', 'Today TZ')->id;
+        $utc     = new \DateTimeZone('UTC');
+
+        // Relevé pris juste après minuit LOCAL (Europe/Brussels) : en UTC il tombe la
+        // veille (+01/+02). Il doit être vu comme « relevé du jour » côté fuseau local.
+        $justAfterLocalMidnight = (new \DateTimeImmutable('now', new \DateTimeZone('Europe/Brussels')))
+            ->setTime(0, 30, 0)
+            ->setTimezone($utc);
+        self::assertNotSame(
+            (new \DateTimeImmutable('now', new \DateTimeZone('Europe/Brussels')))->format('Y-m-d'),
+            $justAfterLocalMidnight->format('Y-m-d'),
+            'pré-condition : le relevé est la veille en UTC',
+        );
+
+        $repo = new ElectricityReadingRepository($this->pdo(), $otherId, 'Europe/Brussels');
+        $repo->insertIndexes($justAfterLocalMidnight, ['import_t1' => 123.0]);
+
+        // Le relevé est capté par la fenêtre du jour LOCAL (et non rejeté comme « pas
+        // aujourd'hui » ) : getTodayIndexValues expose son index.
+        $today = $repo->getTodayIndexValues();
+        self::assertNotNull($today['dries']);
+        self::assertEqualsWithDelta(123.0, $today['dries']['Prelev_jour'], 0.001);
+        self::assertSame(Dates::toDbString($justAfterLocalMidnight), $today['dries']['timestamp']);
     }
 
     public function testGetHistoryIncludesReadingsOlderThan30Days(): void

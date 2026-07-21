@@ -52,9 +52,18 @@ final class ElectricityReadingRepository implements LegacyDailyRepositoryInterfa
     /** @var array<string, array<string, mixed>> Cache requête-scopé des deltas par mois donné (clé "Y-n"). */
     private array $monthlyDeltasForMonthCache = [];
 
+    /**
+     * @param string $timezone Fuseau IANA de l'utilisateur (user_profiles.timezone).
+     *        Sert à délimiter les « jours locaux » des lectures dashboard
+     *        (index du jour, séries journalières). Défaut 'UTC' : les chemins
+     *        d'ingestion (import, EnergyId), insensibles au fuseau, gardent le
+     *        comportement historique. Cf. {@see self::latestReadingToday()} et
+     *        {@see self::dailyFirstValuesSince()}.
+     */
     public function __construct(
         private readonly PDO $pdo,
         private readonly int $userId,
+        private readonly string $timezone = 'UTC',
     ) {
     }
 
@@ -523,16 +532,30 @@ final class ElectricityReadingRepository implements LegacyDailyRepositoryInterfa
      */
     public function getDailyDeltasForChart(int $days = 30): array
     {
-        $series = [];
-        foreach (['import_t1', 'import_t2', 'export_t1', 'export_t2', 'production'] as $key) {
+        $keys = ['import_t1', 'import_t2', 'export_t1', 'export_t2', 'production'];
+
+        // rid par clé + liste des rid présents : les premiers relevés journaliers des
+        // 5 registres sont résolus en UNE requête (au lieu de 5) — cf.
+        // dailyFirstValuesByRegisterSince.
+        $ridByKey = [];
+        foreach ($keys as $key) {
             $rid = $this->registerId($key);
-            $series[$key] = $rid === null ? [] : $this->dailyFirstValuesSince($rid, $days + 1);
+            if ($rid !== null) {
+                $ridByKey[$key] = $rid;
+            }
+        }
+        $firstByRid = $this->dailyFirstValuesByRegisterSince(array_values($ridByKey), $days + 1);
+
+        $series = [];
+        foreach ($keys as $key) {
+            $rid = $ridByKey[$key] ?? null;
+            $series[$key] = $rid === null ? [] : ($firstByRid[$rid] ?? []);
         }
 
         $deltas = [];
         $rows = $series['import_t1'];
         for ($i = 1, $iMax = count($rows); $i < $iMax; $i++) {
-            $day = substr($rows[$i]['reading_at'], 0, 10);
+            $day = $rows[$i]['day'];
             $deltas[$day] = [
                 'day'       => $day,
                 'import_t1' => self::consecutiveDelta($rows, $i),
@@ -546,7 +569,7 @@ final class ElectricityReadingRepository implements LegacyDailyRepositoryInterfa
         foreach (['import_t2', 'export_t1', 'export_t2'] as $key) {
             $rows = $series[$key];
             for ($i = 1, $iMax = count($rows); $i < $iMax; $i++) {
-                $day = substr($rows[$i]['reading_at'], 0, 10);
+                $day = $rows[$i]['day'];
                 if (isset($deltas[$day])) {
                     $deltas[$day][$key] = self::consecutiveDelta($rows, $i);
                 }
@@ -555,7 +578,7 @@ final class ElectricityReadingRepository implements LegacyDailyRepositoryInterfa
 
         $rows = $series['production'];
         for ($i = 1, $iMax = count($rows); $i < $iMax; $i++) {
-            $day = substr($rows[$i]['reading_at'], 0, 10);
+            $day = $rows[$i]['day'];
             if (isset($deltas[$day])) {
                 $deltas[$day]['solar'] = self::consecutiveDelta($rows, $i);
             }
@@ -684,21 +707,28 @@ final class ElectricityReadingRepository implements LegacyDailyRepositoryInterfa
             return null;
         }
 
-        // « Aujourd'hui » = jour UTC (la session MariaDB est forcée en +00:00, cf.
-        // Database.php). Limite connue : pour un utilisateur dont le fuseau diffère
-        // de l'UTC, un relevé pris juste après minuit local peut tomber la veille en
-        // UTC. Impact borné (fenêtre de quelques heures autour de minuit) ; le second
-        // SELECT retombe de toute façon sur le dernier relevé global. Passer à un jour
-        // « local par utilisateur » supposerait de propager son fuseau ici (CONVERT_TZ).
+        // « Aujourd'hui » = jour LOCAL de l'utilisateur (#171). Les colonnes sont en
+        // UTC (session MariaDB forcée +00:00, cf. Database.php) : on calcule les
+        // bornes [minuit local, minuit local +1 jour) en PHP puis on les ramène en
+        // UTC — même motif DST-safe que readingsPresentInBucket, sans CONVERT_TZ.
+        // Le second SELECT retombe sur le dernier relevé global si le jour est vide.
+        [$dayStart, $dayEnd] = ReadingGranularity::Day->bucket(
+            new DateTimeImmutable('now'),
+            new DateTimeZone($this->timezone),
+        );
+
+        $todaySql = 'SELECT reading_at, index_value FROM meter_readings
+             WHERE register_id = :rid AND reading_at >= :start AND reading_at < :end
+             ORDER BY reading_at DESC LIMIT 1';
+        $latestSql = 'SELECT reading_at, index_value FROM meter_readings
+             WHERE register_id = :rid ORDER BY reading_at DESC LIMIT 1';
+
         foreach ([
-            'SELECT reading_at, index_value FROM meter_readings
-             WHERE register_id = :rid AND reading_at >= CURDATE() AND reading_at < CURDATE() + INTERVAL 1 DAY
-             ORDER BY reading_at DESC LIMIT 1',
-            'SELECT reading_at, index_value FROM meter_readings
-             WHERE register_id = :rid ORDER BY reading_at DESC LIMIT 1',
-        ] as $sql) {
+            [$todaySql, ['rid' => $rid, 'start' => Dates::toDbString($dayStart), 'end' => Dates::toDbString($dayEnd)]],
+            [$latestSql, ['rid' => $rid]],
+        ] as [$sql, $params]) {
             $stmt = $this->pdo->prepare($sql);
-            $stmt->execute(['rid' => $rid]);
+            $stmt->execute($params);
             $row = $stmt->fetch();
             if (is_array($row)) {
                 return ['reading_at' => (string) $row['reading_at'], 'index_value' => (float) $row['index_value']];
@@ -833,40 +863,59 @@ final class ElectricityReadingRepository implements LegacyDailyRepositoryInterfa
     }
 
     /**
-     * Premier relevé de chaque jour sur les N derniers jours, ASC.
+     * Premier relevé de chaque jour LOCAL sur les N derniers jours, par registre,
+     * en UNE requête (tous les registres du graphe résolus ensemble : 1 aller-retour
+     * au lieu de 5).
      *
-     * @return list<array{reading_at: string, index_value: float}>
+     * Le regroupement est fait en PHP dans le fuseau de l'utilisateur (#171) : le
+     * `GROUP BY DATE(reading_at)` SQL raisonne en UTC (session MariaDB +00:00) et ne
+     * peut exprimer un jour local sans CONVERT_TZ (tables IANA requises, imparfait
+     * autour d'une transition DST). On balaie donc les lignes de la fenêtre triées
+     * ASC (index (register_id, reading_at) — pas de filesort) et on retient la
+     * première de chaque jour local, DST-safe via DateTimeZone.
+     *
+     * @param list<int> $registerIds
+     * @return array<int, list<array{day: string, index_value: float}>> register_id => premiers relevés par jour local
      */
-    private function dailyFirstValuesSince(int $registerId, int $days): array
+    private function dailyFirstValuesByRegisterSince(array $registerIds, int $days): array
     {
-        // Regroupement par jour UTC (session MariaDB forcée en +00:00, cf.
-        // Database.php). Limite connue : les frontières de jour du graphe suivent
-        // l'UTC et non le fuseau de l'utilisateur — un relevé de nuit peut basculer
-        // au jour adjacent. Un « jour local » exigerait un CONVERT_TZ paramétré par
-        // le fuseau de l'utilisateur (imparfait autour d'une transition d'heure).
-        $stmt = $this->pdo->prepare(
-            'SELECT r.reading_at, r.index_value
-             FROM meter_readings r
-             INNER JOIN (
-                 SELECT MIN(reading_at) AS min_at
-                 FROM meter_readings
-                 WHERE register_id = :rid AND reading_at >= DATE_SUB(CURDATE(), INTERVAL :days DAY)
-                 GROUP BY DATE(reading_at)
-             ) f ON f.min_at = r.reading_at
-             WHERE r.register_id = :rid2
-             ORDER BY r.reading_at ASC'
-        );
-        $stmt->execute(['rid' => $registerId, 'days' => $days, 'rid2' => $registerId]);
+        if ($registerIds === []) {
+            return [];
+        }
 
-        $out = [];
+        $tz = new DateTimeZone($this->timezone);
+
+        // Borne basse : minuit local il y a $days jours (helper DST-safe partagé avec
+        // latestReadingToday), ramené en UTC pour filtrer les colonnes UTC.
+        [$todayStart] = ReadingGranularity::Day->bucket(new DateTimeImmutable('now'), $tz);
+        $since        = $todayStart->modify("-{$days} days");
+
+        $placeholders = implode(', ', array_fill(0, count($registerIds), '?'));
+        $stmt = $this->pdo->prepare(
+            "SELECT register_id, reading_at, index_value
+             FROM meter_readings
+             WHERE register_id IN ($placeholders) AND reading_at >= ?
+             ORDER BY register_id ASC, reading_at ASC"
+        );
+        $stmt->execute([...$registerIds, Dates::toDbString($since)]);
+
+        /** @var array<int, list<array{day: string, index_value: float}>> $out */
+        $out  = [];
+        $seen = [];
         foreach ($stmt->fetchAll() as $row) {
-            $out[] = ['reading_at' => (string) $row['reading_at'], 'index_value' => (float) $row['index_value']];
+            $rid = (int) $row['register_id'];
+            $day = Dates::fromDbString((string) $row['reading_at'])->setTimezone($tz)->format('Y-m-d');
+            if (isset($seen[$rid][$day])) {
+                continue; // Tri ASC : la première ligne vue est le premier relevé du jour local.
+            }
+            $seen[$rid][$day] = true;
+            $out[$rid][]      = ['day' => $day, 'index_value' => (float) $row['index_value']];
         }
 
         return $out;
     }
 
-    /** @param list<array{reading_at: string, index_value: float}> $rows */
+    /** @param list<array{day: string, index_value: float}> $rows */
     private static function consecutiveDelta(array $rows, int $i): float
     {
         return max(0.0, round($rows[$i]['index_value'] - $rows[$i - 1]['index_value'], 3));
