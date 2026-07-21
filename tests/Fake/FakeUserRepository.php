@@ -5,12 +5,17 @@ declare(strict_types=1);
 namespace Tests\Fake;
 
 use App\Domain\User;
+use App\Domain\UserProfile;
 use App\Repository\Contract\UserRepositoryInterface;
 
 final class FakeUserRepository implements UserRepositoryInterface
 {
     /** @var array<int, User> */
     public array $users = [];
+
+    /** Profils explicitement écrits (par updateProfile), indexés par userId. */
+    /** @var array<int, UserProfile> */
+    public array $profiles = [];
 
     /** @var list<int> */
     public array $loginTouches = [];
@@ -94,21 +99,17 @@ final class FakeUserRepository implements UserRepositoryInterface
         $this->loginTouches[] = $userId;
     }
 
-    public function getProfile(int $userId): ?array
+    public function getProfile(int $userId): ?UserProfile
     {
         if (!isset($this->users[$userId])) {
             return null;
         }
 
-        return [
-            'country' => null,
-            'timezone' => 'Europe/Brussels',
-            'currency' => 'EUR',
-            'bidding_zone' => null,
-            'pricing_mode' => 'fixed',
-            'vat_rate' => 21.0,
-            'supplier_markup_per_kwh' => 0.0,
-            'locale' => 'fr',
-        ];
+        return $this->profiles[$userId] ?? UserProfile::defaults();
+    }
+
+    public function updateProfile(int $userId, UserProfile $profile): void
+    {
+        $this->profiles[$userId] = $profile;
     }
 }

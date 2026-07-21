@@ -84,16 +84,16 @@ try {
     $users      = new UserRepository($pdo);
     $isAdmin    = ($users->findById($userId)?->isAdmin()) ?? false;
     $profile    = $users->getProfile($userId);
-    $currency   = (string) ($profile['currency'] ?? 'EUR');
+    $currency   = $profile->currency ?? 'EUR';
     // Fuseau d'affichage propre à l'utilisateur : les dates (stockées en UTC)
     // sont reconverties vers ce fuseau côté client (window.APP_TIMEZONE).
-    $timezone   = (string) ($profile['timezone'] ?? 'Europe/Brussels');
+    $timezone   = $profile->timezone ?? 'Europe/Brussels';
 
     // Locale (profil, surchargée par ?lang persisté) → View configurée.
-    $view = LocaleContext::viewFor($config, $users, $userId, $profile['locale'] ?? null, __DIR__ . '/../templates');
+    $view = LocaleContext::viewFor($config, $users, $userId, $profile?->locale, __DIR__ . '/../templates');
 
     // Zone de marché ENTSO-E de l'utilisateur (profil), sinon celle de la config.
-    $zone = $profile['bidding_zone'] ?? null;
+    $zone = $profile?->biddingZone;
     $zone = ($zone !== null && $zone !== '')
         ? $zone
         : (string) ($config['dynamic_prices']['bidding_zone'] ?? DynamicPriceRepository::DEFAULT_ZONE);
@@ -103,7 +103,7 @@ try {
     $waterRepo  = new UtilityReadingRepository($pdo, $userId, 'water');
     $tariffRepo = new TariffRepository($pdo, $userId, $isAdmin);
     $dynPriceRepo = new DynamicPriceRepository($pdo, $zone);
-    $pricingMode  = (string) ($profile['pricing_mode'] ?? 'fixed');
+    $pricingMode  = $profile->pricingMode ?? 'fixed';
     $costSvc    = new CostCalculationService(
         legacyRepo: $elecRepo,
         tariffRepo: $tariffRepo,
@@ -113,8 +113,8 @@ try {
         dynamicEnabled: DynamicPricing::isEnabled($config),
         waterRepo: $waterRepo,
         pricingMode: $pricingMode,
-        vatRatePercent: (float) ($profile['vat_rate'] ?? 21.0),
-        supplierMarkupPerKwh: (float) ($profile['supplier_markup_per_kwh'] ?? 0.0),
+        vatRatePercent: $profile->vatRate ?? 21.0,
+        supplierMarkupPerKwh: $profile->supplierMarkupPerKwh ?? 0.0,
         tariffTimezone: $timezone,
     );
 

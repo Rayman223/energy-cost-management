@@ -100,7 +100,7 @@ try {
     $profile    = $users->getProfile($userId);
 
     // Zone de marché ENTSO-E de l'utilisateur (profil), sinon celle de la config.
-    $zone = $profile['bidding_zone'] ?? null;
+    $zone = $profile?->biddingZone;
     $zone = ($zone !== null && $zone !== '')
         ? $zone
         : (string) ($config['dynamic_prices']['bidding_zone'] ?? DynamicPriceRepository::DEFAULT_ZONE);
@@ -111,7 +111,7 @@ try {
     $syncState  = new WebhookSyncStateRepository($pdo, $userId);
     $tariffRepo = new TariffRepository($pdo, $userId, $isAdmin);
     $dynPriceRepo = new DynamicPriceRepository($pdo, $zone);
-    $pricingMode  = (string) ($profile['pricing_mode'] ?? 'fixed');
+    $pricingMode  = $profile->pricingMode ?? 'fixed';
     $costSvc    = new CostCalculationService(
         legacyRepo: $elecRepo,
         tariffRepo: $tariffRepo,
@@ -121,9 +121,9 @@ try {
         dynamicEnabled: DynamicPricing::isEnabled($config),
         waterRepo: $waterRepo,
         pricingMode: $pricingMode,
-        vatRatePercent: (float) ($profile['vat_rate'] ?? 21.0),
-        supplierMarkupPerKwh: (float) ($profile['supplier_markup_per_kwh'] ?? 0.0),
-        tariffTimezone: (string) ($profile['timezone'] ?? 'Europe/Brussels'),
+        vatRatePercent: $profile->vatRate ?? 21.0,
+        supplierMarkupPerKwh: $profile->supplierMarkupPerKwh ?? 0.0,
+        tariffTimezone: $profile->timezone ?? 'Europe/Brussels',
     );
 } catch (\Throwable $e) {
     JsonResponse::error('Bootstrap failed: ' . $e->getMessage(), 503)->send();

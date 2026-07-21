@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Repository;
 
 use App\Domain\User;
+use App\Domain\UserProfile;
 use App\Repository\Contract\UserRepositoryInterface;
 use PDO;
 use RuntimeException;
@@ -160,41 +161,24 @@ final class UserRepository implements UserRepositoryInterface
 
     /**
      * Met à jour le profil de l'utilisateur (crée la ligne si absente).
-     */
-    /**
-     * Modes de tarification électricité valides (colonne user_profiles.pricing_mode).
      *
-     * @var list<string>
+     * NOTE d'asymétrie assumée : la normalisation de `pricingMode` (liste blanche
+     * `UserProfile::PRICING_MODES`) et le bornage de `vatRate`/`supplierMarkupPerKwh`
+     * vivent ici, côté écriture — dernière ligne de défense avant l'INSERT. Le DTO
+     * `UserProfile` reste un simple porteur de données, et `getProfile` ne borne
+     * PAS vat/markup en lecture : déplacer ce garde dans le constructeur changerait
+     * le comportement de lecture.
      */
-    public const PRICING_MODES = ['fixed', 'dynamic_hourly', 'dynamic_quarter'];
-
-    /**
-     * NOTE : signature volontairement longue (9 paramètres positionnels), assumée
-     * transitoire — `updateProfile` n'est pas dans l'interface et n'a qu'un seul
-     * appelant (routes/account.php). Un DTO `App\Domain\UserProfile` couvrant
-     * lecture et écriture est prévu (issue de suivi #160). Les 2 nouveaux `float`
-     * sont type-distincts des `string` qui précèdent : pas de risque d'inversion.
-     */
-    public function updateProfile(
-        int $userId,
-        ?string $country,
-        string $timezone,
-        string $currency,
-        ?string $biddingZone,
-        string $locale,
-        string $pricingMode = 'fixed',
-        float $vatRate = 21.0,
-        float $supplierMarkupPerKwh = 0.0,
-    ): void {
-        if (!in_array($pricingMode, self::PRICING_MODES, true)) {
-            $pricingMode = 'fixed';
-        }
-        // Bornage côté repository (dernière ligne de défense, comme PRICING_MODES
-        // ci-dessus) : TVA en % ∈ [0,100] (unité de tariff_grids.vat_rate), marge
-        // ∈ [-1,1] €/kWh (négatif = remise). Garde symétrique aux deux champs pour
-        // qu'aucun appelant ne puisse déborder DECIMAL(5,2) / DECIMAL(12,7).
-        $vatRate              = max(0.0, min(100.0, $vatRate));
-        $supplierMarkupPerKwh = max(-1.0, min(1.0, $supplierMarkupPerKwh));
+    public function updateProfile(int $userId, UserProfile $profile): void
+    {
+        $pricingMode = in_array($profile->pricingMode, UserProfile::PRICING_MODES, true)
+            ? $profile->pricingMode
+            : 'fixed';
+        // Bornage côté repository : TVA en % ∈ [0,100] (unité de tariff_grids.vat_rate),
+        // marge ∈ [-1,1] €/kWh (négatif = remise). Garde symétrique aux deux champs
+        // pour qu'aucun appelant ne puisse déborder DECIMAL(5,2) / DECIMAL(12,7).
+        $vatRate              = max(0.0, min(100.0, $profile->vatRate));
+        $supplierMarkupPerKwh = max(-1.0, min(1.0, $profile->supplierMarkupPerKwh));
 
         $stmt = $this->pdo->prepare(
             'INSERT INTO user_profiles (user_id, country, timezone, currency, bidding_zone, pricing_mode, vat_rate, supplier_markup_per_kwh, locale)
@@ -207,14 +191,14 @@ final class UserRepository implements UserRepositoryInterface
         );
         $stmt->execute([
             'uid'          => $userId,
-            'country'      => $country,
-            'tz'           => $timezone,
-            'currency'     => $currency,
-            'zone'         => $biddingZone,
+            'country'      => $profile->country,
+            'tz'           => $profile->timezone,
+            'currency'     => $profile->currency,
+            'zone'         => $profile->biddingZone,
             'pricing_mode' => $pricingMode,
             'vat'          => $vatRate,
             'markup'       => $supplierMarkupPerKwh,
-            'locale'       => $locale,
+            'locale'       => $profile->locale,
         ]);
     }
 
@@ -288,7 +272,7 @@ final class UserRepository implements UserRepositoryInterface
         return $stmt->rowCount() > 0;
     }
 
-    public function getProfile(int $userId): ?array
+    public function getProfile(int $userId): ?UserProfile
     {
         $stmt = $this->pdo->prepare(
             'SELECT country, timezone, currency, bidding_zone, pricing_mode, vat_rate, supplier_markup_per_kwh, locale
@@ -302,20 +286,20 @@ final class UserRepository implements UserRepositoryInterface
         }
 
         $pricingMode = (string) ($row['pricing_mode'] ?? 'fixed');
-        if (!in_array($pricingMode, self::PRICING_MODES, true)) {
+        if (!in_array($pricingMode, UserProfile::PRICING_MODES, true)) {
             $pricingMode = 'fixed';
         }
 
-        return [
-            'country' => $row['country'] !== null ? (string) $row['country'] : null,
-            'timezone' => (string) $row['timezone'],
-            'currency' => (string) $row['currency'],
-            'bidding_zone' => $row['bidding_zone'] !== null ? (string) $row['bidding_zone'] : null,
-            'pricing_mode' => $pricingMode,
-            'vat_rate' => (float) ($row['vat_rate'] ?? 21.0),
-            'supplier_markup_per_kwh' => (float) ($row['supplier_markup_per_kwh'] ?? 0.0),
-            'locale' => (string) $row['locale'],
-        ];
+        return new UserProfile(
+            country: $row['country'] !== null ? (string) $row['country'] : null,
+            timezone: (string) $row['timezone'],
+            currency: (string) $row['currency'],
+            biddingZone: $row['bidding_zone'] !== null ? (string) $row['bidding_zone'] : null,
+            pricingMode: $pricingMode,
+            vatRate: (float) ($row['vat_rate'] ?? 21.0),
+            supplierMarkupPerKwh: (float) ($row['supplier_markup_per_kwh'] ?? 0.0),
+            locale: (string) $row['locale'],
+        );
     }
 
     /**

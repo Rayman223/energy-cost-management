@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Repository\Contract;
 
 use App\Domain\User;
+use App\Domain\UserProfile;
 
 interface UserRepositoryInterface
 {
@@ -31,8 +32,9 @@ interface UserRepositoryInterface
 
     public function touchLastLogin(int $userId): void;
 
-    /**
-     * @return array{country: ?string, timezone: string, currency: string, bidding_zone: ?string, pricing_mode: string, vat_rate: float, supplier_markup_per_kwh: float, locale: string}|null
-     */
-    public function getProfile(int $userId): ?array;
+    /** Renvoie le profil de préférences de l'utilisateur, ou null s'il n'en a aucun. */
+    public function getProfile(int $userId): ?UserProfile;
+
+    /** Persiste le profil de l'utilisateur (crée la ligne si absente). */
+    public function updateProfile(int $userId, UserProfile $profile): void;
 }

@@ -45,7 +45,7 @@ $users       = new UserRepository($pdo);
 $isAdmin     = ($users->findById($userId)?->isAdmin()) ?? false;
 
 $profile     = $users->getProfile($userId);
-$view        = LocaleContext::viewFor($config, $users, $userId, $profile['locale'] ?? null, __DIR__ . '/../templates');
+$view        = LocaleContext::viewFor($config, $users, $userId, $profile?->locale, __DIR__ . '/../templates');
 
 $tariffRepo   = new TariffRepository($pdo, $userId, $isAdmin);
 $templateRepo = new TariffTemplateRepository($pdo, $userId);
@@ -302,8 +302,8 @@ if ($editGrid !== null) {
     $formCurrency = $editGrid->currency;
     $formVat      = $editGrid->vatRate;
 } else {
-    $formCountry  = $profile['country']  ?? null;
-    $formCurrency = $profile['currency'] ?? 'EUR';
+    $formCountry  = $profile?->country;
+    $formCurrency = $profile->currency ?? 'EUR';
     $formVat      = ($formCountry !== null ? EuropeanCountries::vatRate($formCountry) : null) ?? 21.0;
 }
 
@@ -408,7 +408,7 @@ $today = date('Y-m-d');
 // côté serveur (sinon le calcul retombe en fixe : griser induirait en erreur).
 $isDynamic = $energy === 'electricity'
     && DynamicPricing::isEnabled($config)
-    && ($profile['pricing_mode'] ?? 'fixed') !== 'fixed';
+    && ($profile->pricingMode ?? 'fixed') !== 'fixed';
 
 echo $view->render('tariffs', [
     'oidcEnabled'      => AuthGuard::isOidcEnabled($config),

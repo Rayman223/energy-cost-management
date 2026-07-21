@@ -8,6 +8,7 @@ declare(strict_types=1);
  */
 
 use App\Domain\Timezones;
+use App\Domain\UserProfile;
 use App\Http\SecurityHeaders;
 use App\Http\UploadLimits;
 use App\I18n\Locale;
@@ -58,7 +59,7 @@ $identityRepo    = new UserIdentityRepository($pdo);
 
 // Locale = celle du profil (surchargée par ?lang) → View configurée.
 $profileForLocale = $users->getProfile($userId);
-$view   = LocaleContext::viewFor($config, $users, $userId, $profileForLocale['locale'] ?? null, __DIR__ . '/../templates');
+$view   = LocaleContext::viewFor($config, $users, $userId, $profileForLocale?->locale, __DIR__ . '/../templates');
 
 $error        = null;
 $success      = null;
@@ -108,7 +109,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
 
             // updateProfile valide et normalise pricing_mode (liste blanche unique côté repository).
-            $storedProfile = $profileForLocale ?? [];
+            // Fallback sur les défauts (profil absent) pour reconduire des valeurs sûres.
+            $storedProfile = $profileForLocale ?? UserProfile::defaults();
             if (DynamicPricing::isEnabled($config)) {
                 $zone        = trim((string) ($_POST['bidding_zone'] ?? '')) ?: null;
                 $pricingMode = (string) ($_POST['pricing_mode'] ?? 'fixed');
@@ -118,13 +120,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 // absent ou vide RECONDUIT la valeur stockée (pas de reset silencieux
                 // à 21.0/0.0) ; une valeur effectivement fournie hors bornes est rejetée.
                 $vatRaw  = $_POST['vat_rate'] ?? null;
-                $vatRate = is_numeric($vatRaw) ? (float) $vatRaw : (float) ($storedProfile['vat_rate'] ?? 21.0);
+                $vatRate = is_numeric($vatRaw) ? (float) $vatRaw : $storedProfile->vatRate;
                 if ($vatRate < 0.0 || $vatRate > 100.0) {
                     throw new \InvalidArgumentException($view->t('account.invalid_vat_rate'));
                 }
 
                 $markupRaw = $_POST['supplier_markup_per_kwh'] ?? null;
-                $markup    = is_numeric($markupRaw) ? (float) $markupRaw : (float) ($storedProfile['supplier_markup_per_kwh'] ?? 0.0);
+                $markup    = is_numeric($markupRaw) ? (float) $markupRaw : $storedProfile->supplierMarkupPerKwh;
                 if ($markup < -1.0 || $markup > 1.0) {
                     throw new \InvalidArgumentException($view->t('account.invalid_markup'));
                 }
@@ -134,14 +136,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 // lire du POST : relire les effacerait (champs absents du formulaire), alors
                 // qu'un pricing_mode/bidding_zone dynamique doit être préservé le temps que le
                 // flag revienne. Neutralise aussi tout POST forgé (ni modif, ni activation).
-                $storedZone    = $storedProfile['bidding_zone'] ?? null;
+                $storedZone    = $storedProfile->biddingZone;
                 $zone          = (is_string($storedZone) && $storedZone !== '') ? $storedZone : null;
-                $pricingMode   = (string) ($storedProfile['pricing_mode'] ?? 'fixed');
-                $vatRate       = (float) ($storedProfile['vat_rate'] ?? 21.0);
-                $markup        = (float) ($storedProfile['supplier_markup_per_kwh'] ?? 0.0);
+                $pricingMode   = $storedProfile->pricingMode;
+                $vatRate       = $storedProfile->vatRate;
+                $markup        = $storedProfile->supplierMarkupPerKwh;
             }
 
-            $users->updateProfile($userId, $country, $timezone, $currency, $zone, $chosenLocale, $pricingMode, $vatRate, $markup);
+            $users->updateProfile($userId, new UserProfile(
+                country: $country,
+                timezone: $timezone,
+                currency: $currency,
+                biddingZone: $zone,
+                pricingMode: $pricingMode,
+                vatRate: $vatRate,
+                supplierMarkupPerKwh: $markup,
+                locale: $chosenLocale,
+            ));
             $success = $view->t('account.profile_saved');
         } elseif ($action === 'token_create') {
             $name = trim((string) ($_POST['token_name'] ?? ''));
@@ -254,9 +265,7 @@ foreach ($providerLabels as $pKey => $label) {
     $linkableProviders[] = ['key' => $pKey, 'label' => $label];
 }
 
-$profile  = $users->getProfile($userId) ?? [
-    'country' => null, 'timezone' => 'Europe/Brussels', 'currency' => 'EUR', 'bidding_zone' => null, 'pricing_mode' => 'fixed', 'vat_rate' => 21.0, 'supplier_markup_per_kwh' => 0.0, 'locale' => 'fr',
-];
+$profile  = $users->getProfile($userId) ?? UserProfile::defaults();
 $tokens   = $tokensRepo->listForUser($userId);
 
 // Connecteurs d'export (opt-in) : une carte par module du registre.
@@ -273,7 +282,7 @@ foreach (ModuleRegistry::all($config) as $module) {
 // Garantit que le fuseau courant du profil reste sélectionnable même s'il n'est
 // plus listé par la timezone database installée (sinon le <select> retomberait
 // silencieusement sur la 1re option au prochain enregistrement).
-$timezoneOptions = Timezones::options($profile['timezone']);
+$timezoneOptions = Timezones::options($profile->timezone);
 
 echo $view->render('account', [
     'oidcEnabled' => AuthGuard::isOidcEnabled($config),

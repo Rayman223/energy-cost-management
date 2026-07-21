@@ -63,8 +63,8 @@ $csrf = \App\Security\Csrf::field();
       <?= $csrf ?>
       <input type="hidden" name="action" value="save_profile">
       <div class="row">
-        <div><label><?= $this->te('account.country') ?></label><input type="text" name="country" maxlength="2" value="<?= $this->e($profile['country'] ?? '') ?>" placeholder="BE"></div>
-        <div><label><?= $this->te('account.currency') ?></label><input type="text" name="currency" maxlength="3" value="<?= $this->e($profile['currency']) ?>" placeholder="EUR"></div>
+        <div><label><?= $this->te('account.country') ?></label><input type="text" name="country" maxlength="2" value="<?= $this->e($profile->country ?? '') ?>" placeholder="BE"></div>
+        <div><label><?= $this->te('account.currency') ?></label><input type="text" name="currency" maxlength="3" value="<?= $this->e($profile->currency) ?>" placeholder="EUR"></div>
       </div>
       <div class="row">
         <div>
@@ -72,7 +72,7 @@ $csrf = \App\Security\Csrf::field();
           <select name="timezone">
             <?php foreach ($timezoneOptions as $timezoneOption): ?>
               <?php $tzId = $timezoneOption['id']; ?>
-              <option value="<?= $this->e($tzId) ?>"<?= $tzId === $profile['timezone'] ? ' selected' : '' ?>><?= $this->e($timezoneOption['label']) ?></option>
+              <option value="<?= $this->e($tzId) ?>"<?= $tzId === $profile->timezone ? ' selected' : '' ?>><?= $this->e($timezoneOption['label']) ?></option>
             <?php endforeach; ?>
           </select>
         </div>
@@ -83,21 +83,21 @@ $csrf = \App\Security\Csrf::field();
           // n'est plus dans la liste disponible, sinon le <select> retomberait
           // silencieusement sur la 1re option au prochain enregistrement.
           $localeOptions = $available;
-          if (!in_array($profile['locale'], $localeOptions, true)) {
-              $localeOptions[] = $profile['locale'];
+          if (!in_array($profile->locale, $localeOptions, true)) {
+              $localeOptions[] = $profile->locale;
           }
           ?>
           <select name="locale">
             <?php foreach ($localeOptions as $loc): ?>
-              <option value="<?= $this->e($loc) ?>"<?= $loc === $profile['locale'] ? ' selected' : '' ?>><?= $this->e(\App\I18n\Locale::displayName($loc)) ?></option>
+              <option value="<?= $this->e($loc) ?>"<?= $loc === $profile->locale ? ' selected' : '' ?>><?= $this->e(\App\I18n\Locale::displayName($loc)) ?></option>
             <?php endforeach; ?>
           </select>
         </div>
       </div>
       <?php if (!empty($dynamicEnabled)): ?>
       <label><?= $this->te('account.bidding_zone') ?></label>
-      <input type="text" name="bidding_zone" value="<?= $this->e($profile['bidding_zone'] ?? '') ?>" placeholder="10YBE----------2">
-      <?php $pricingMode = $profile['pricing_mode'] ?? 'fixed'; ?>
+      <input type="text" name="bidding_zone" value="<?= $this->e($profile->biddingZone ?? '') ?>" placeholder="10YBE----------2">
+      <?php $pricingMode = $profile->pricingMode; ?>
       <label><?= $this->te('account.pricing_mode') ?></label>
       <select name="pricing_mode">
         <option value="fixed"<?= $pricingMode === 'fixed' ? ' selected' : '' ?>><?= $this->te('account.pricing_mode_fixed') ?></option>
@@ -112,10 +112,10 @@ $csrf = \App\Security\Csrf::field();
         $num = static fn (float $v, int $d): string => rtrim(rtrim(number_format($v, $d, '.', ''), '0'), '.');
       ?>
       <label><?= $this->te('account.vat_rate') ?></label>
-      <input type="number" name="vat_rate" step="0.01" min="0" max="100" value="<?= $this->e($num((float) ($profile['vat_rate'] ?? 21.0), 2)) ?>">
+      <input type="number" name="vat_rate" step="0.01" min="0" max="100" value="<?= $this->e($num($profile->vatRate, 2)) ?>">
       <p class="hint"><?= $this->te('account.vat_rate_hint') ?></p>
       <label><?= $this->te('account.supplier_markup') ?></label>
-      <input type="number" name="supplier_markup_per_kwh" step="0.0000001" min="-1" max="1" value="<?= $this->e($num((float) ($profile['supplier_markup_per_kwh'] ?? 0.0), 7)) ?>">
+      <input type="number" name="supplier_markup_per_kwh" step="0.0000001" min="-1" max="1" value="<?= $this->e($num($profile->supplierMarkupPerKwh, 7)) ?>">
       <p class="hint"><?= $this->te('account.supplier_markup_hint') ?></p>
       <?php else: ?>
       <?php // Zone de marché et mode tarifaire masqués et non soumis : la route reconduit
@@ -138,7 +138,7 @@ $csrf = \App\Security\Csrf::field();
       <?php foreach ($identities as $idn): ?>
       <tr>
         <td><?= $this->partial('oidc-provider-icon', ['key' => $idn['provider']]) ?> <?= $this->e($idn['label']) ?><?= $idn['is_primary'] ? ' <span class="identity-primary">· ' . $this->te('account.identity_primary') . '</span>' : '' ?></td>
-        <td class="muted"><?= $this->localDateTime($idn['created_at'] ?? null, $profile['timezone'] ?? 'UTC') ?></td>
+        <td class="muted"><?= $this->localDateTime($idn['created_at'] ?? null, $profile->timezone) ?></td>
         <td><?php if (count($identities) > 1): ?>
           <form method="post" class="inline" data-confirm="<?= $this->e($this->t('account.identity_unlink_confirm', ['provider' => $idn['label']])) ?>" data-confirm-ok="<?= $this->e($this->t('account.identity_unlink')) ?>" data-confirm-danger>
             <?= $csrf ?>
@@ -175,7 +175,7 @@ $csrf = \App\Security\Csrf::field();
         <tr>
           <td><?= $this->e($t['name']) ?></td>
           <td><code><?= $this->e($t['prefix']) ?>…</code></td>
-          <td class="muted"><?= $this->localDateTime($t['last_used_at'] ?? null, $profile['timezone'] ?? 'UTC') ?></td>
+          <td class="muted"><?= $this->localDateTime($t['last_used_at'] ?? null, $profile->timezone) ?></td>
           <td><?= $t['revoked_at'] !== null ? '<span class="muted">' . $this->te('account.token_revoked') . '</span>' : $this->te('account.token_active') ?></td>
           <td><?php if ($t['revoked_at'] === null): ?>
             <form method="post" class="inline" data-confirm="<?= $this->e($this->t('account.token_revoke_confirm')) ?>" data-confirm-ok="<?= $this->e($this->t('account.token_revoke')) ?>" data-confirm-danger>

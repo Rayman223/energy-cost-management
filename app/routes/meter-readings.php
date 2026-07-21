@@ -34,8 +34,8 @@ try {
     $userId = UserContext::currentWebUserId($pdo, $config);
     $users  = new UserRepository($pdo);
     $profile = $users->getProfile($userId);
-    $timezone = (string) ($profile['timezone'] ?? 'Europe/Brussels');
-    $view   = LocaleContext::viewFor($config, $users, $userId, $profile['locale'] ?? null, __DIR__ . '/../templates');
+    $timezone = $profile->timezone ?? 'Europe/Brussels';
+    $view   = LocaleContext::viewFor($config, $users, $userId, $profile?->locale, __DIR__ . '/../templates');
 
     $gasRepo = new UtilityReadingRepository($pdo, $userId, 'gas');
     $waterRepo = new UtilityReadingRepository($pdo, $userId, 'water');

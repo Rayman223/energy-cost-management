@@ -45,7 +45,7 @@ $users = new UserRepository($pdo);
 
 // Locale (profil, surchargée par ?lang valide) → View configurée.
 $profile = $users->getProfile($userId);
-$view = LocaleContext::viewFor($config, $users, $userId, $profile['locale'] ?? null, __DIR__ . '/../templates');
+$view = LocaleContext::viewFor($config, $users, $userId, $profile?->locale, __DIR__ . '/../templates');
 
 // ── Garde admin : seuls les administrateurs accèdent à cette page ────────────
 $me = $users->findById($userId);
@@ -107,5 +107,5 @@ echo $view->render('admin', [
     'users'     => $users->listAll(),
     'currentId' => $userId,
     'available' => Locale::available($config),
-    'timezone'  => (string) ($profile['timezone'] ?? 'Europe/Brussels'),
+    'timezone'  => $profile->timezone ?? 'Europe/Brussels',
 ]);
