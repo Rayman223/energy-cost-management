@@ -58,7 +58,7 @@ final class UserIntegrationRepositoryDbTest extends TestCase
 
     private function clean(): void
     {
-        foreach (['user_integrations', 'energyid_integrations', 'user_profiles', 'users'] as $table) {
+        foreach (['user_integrations', 'user_profiles', 'users'] as $table) {
             $this->pdo()->exec('DELETE FROM ' . $table);
         }
     }
@@ -100,44 +100,6 @@ final class UserIntegrationRepositoryDbTest extends TestCase
         self::assertNotNull($disabled);
         self::assertFalse($disabled['enabled']);
         self::assertSame([], $repo->listEnabledUsers('energyid'));
-    }
-
-    /**
-     * Reprise des données energyid_integrations → user_integrations (idempotente).
-     */
-    public function testMigrationFromLegacyTableIsIdempotent(): void
-    {
-        $this->pdo()->prepare(
-            'INSERT INTO energyid_integrations (user_id, enabled, device_id, claimed_at)
-             VALUES (:uid, 1, :dev, :claimed)'
-        )->execute(['uid' => $this->userId, 'dev' => 'legacy-u' . $this->userId, 'claimed' => '2026-07-01 00:00:00']);
-
-        $migrate = static fn (PDO $pdo): int => (int) $pdo->exec(
-            "INSERT INTO user_integrations (user_id, module_key, enabled, settings, created_at, updated_at)
-             SELECT user_id, 'energyid', enabled,
-                    JSON_OBJECT('device_id', device_id, 'claimed_at', claimed_at),
-                    updated_at, updated_at
-             FROM energyid_integrations
-             ON DUPLICATE KEY UPDATE user_id = user_integrations.user_id"
-        );
-
-        $migrate($this->pdo());
-        $migrate($this->pdo()); // 2e passage : idempotent, pas d'erreur ni de doublon.
-
-        $repo = new UserIntegrationRepository($this->pdo());
-        $state = $repo->get($this->userId, 'energyid');
-        self::assertNotNull($state);
-        self::assertTrue($state['enabled']);
-        self::assertSame('legacy-u' . $this->userId, $state['settings']['device_id']);
-        self::assertSame('2026-07-01 00:00:00', $state['settings']['claimed_at']);
-
-        $rows = $this->pdo()->query(
-            'SELECT COUNT(*) AS c FROM user_integrations WHERE user_id = ' . $this->userId
-        );
-        self::assertNotFalse($rows);
-        $count = $rows->fetch();
-        self::assertIsArray($count);
-        self::assertSame(1, (int) $count['c']);
     }
 
     private function pdo(): PDO

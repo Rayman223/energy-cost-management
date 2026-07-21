@@ -71,7 +71,7 @@ final class AccountRgpdDbTest extends TestCase
         foreach ([
             'meter_readings', 'meter_registers', 'meters', 'utility_readings',
             'tariff_grid_lines', 'tariff_grids', 'api_tokens', 'user_integrations',
-            'energyid_integrations', 'webhook_sync_state', 'tariff_template_usages', 'tariff_template_fields',
+            'webhook_sync_state', 'tariff_template_usages', 'tariff_template_fields',
             'tariff_templates', 'user_profiles', 'users',
         ] as $table) {
             $this->pdo()->exec('DELETE FROM ' . $table);

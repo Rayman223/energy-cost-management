@@ -175,7 +175,7 @@ The full schema is in `app/sql/schema.sql`; incremental changes live in
 | `tariff_grids` / `tariff_grid_lines` | tariff catalog (`user_id NULL` = shared community grid, set = personal override) |
 | `dynamic_prices` | day-ahead spot prices per bidding zone |
 | `api_tokens` | per-user ingestion tokens (hashed, rate-limited, revocable) |
-| `energyid_integrations` / `webhook_sync_state` | per-user EnergyID opt-in and sync state |
+| `user_integrations` / `webhook_sync_state` | per-user export-connector opt-in (EnergyID, …) and sync state |
 | `schema_migrations` | applied migration versions |
 
 ---

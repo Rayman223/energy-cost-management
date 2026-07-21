@@ -183,22 +183,11 @@ CREATE TABLE IF NOT EXISTS utility_readings (
     CONSTRAINT fk_utility_readings_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
--- ── Intégration EnergyID par utilisateur (opt-in, BE/NL) ─────────────────
--- GELÉE (#70) : plus lue ni écrite par le code, remplacée par user_integrations.
--- Conservée pour rollback ; DROP prévu dans une migration ultérieure.
-CREATE TABLE IF NOT EXISTS energyid_integrations (
-    user_id    BIGINT UNSIGNED NOT NULL PRIMARY KEY,
-    enabled    TINYINT(1) NOT NULL DEFAULT 0,
-    device_id  VARCHAR(120) NOT NULL,
-    claimed_at DATETIME NULL,
-    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    CONSTRAINT fk_energyid_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-
 -- ── Intégrations d'export par utilisateur (opt-in, générique #70) ────────
 -- Système de modules « connecteurs d'export » : chaque module (energyid, ...)
 -- range son opt-in et ses réglages propres dans `settings` (JSON). Remplace
--- energyid_integrations : device_id/claimed_at deviennent des clés du JSON.
+-- l'ancienne table energyid_integrations (gelée par #70, supprimée par #166) :
+-- device_id/claimed_at deviennent des clés du JSON.
 CREATE TABLE IF NOT EXISTS user_integrations (
     user_id    BIGINT UNSIGNED NOT NULL,
     module_key VARCHAR(60) NOT NULL COMMENT 'Clé du module (energyid, ...)',
@@ -271,11 +260,22 @@ CREATE TABLE IF NOT EXISTS schema_migrations (
 -- réappliquer plutôt le fichier DDL précis en direct (ADD COLUMN IF NOT EXISTS).
 --
 -- Règle à tenir : toute NOUVELLE migration doit être idempotente et rester
--- HORS de ce seed. N'ajouter ici que des migrations historiques non gardées.
+-- HORS de ce seed. N'ajouter ici que : (a) des migrations historiques non
+-- gardées (non-idempotentes), ou (b) EXCEPTION — une migration idempotente
+-- dont une dépendance (table/colonne lue) est ensuite SUPPRIMÉE par une
+-- migration ultérieure : la baseliner devient obligatoire, sinon migrate.php
+-- la rejouerait sur base fraîche et échouerait (objet source absent). Une
+-- telle entrée DOIT porter un commentaire justifiant l'exception (cf.
+-- 2026-07-18 ci-dessous). Ne jamais la « nettoyer » sans rétablir l'objet.
 -- La garde CI C1 vérifie que l'application converge (cf. .github/workflows/ci.yml).
 INSERT IGNORE INTO schema_migrations (version) VALUES
     ('2026-06-26_drop_redundant_reading_indexes.sql'),
     ('2026-07-02_webhook_sync_state_user.sql'),
     ('2026-07-03_tariffs_eu.sql'),
     ('2026-07-05_account_energyid.sql'),
-    ('2026-07-06_tariff_templates_water.sql');
+    ('2026-07-06_tariff_templates_water.sql'),
+    -- Exception à la règle « idempotentes hors seed » : le backfill lit
+    -- FROM energyid_integrations, table supprimée par #166. Déjà appliquée sur
+    -- toutes les bases existantes (release #70) ; baselinée ici pour que
+    -- migrate.php ne la rejoue plus sur base fraîche (sinon « table absente »).
+    ('2026-07-18_user_integrations.sql');
