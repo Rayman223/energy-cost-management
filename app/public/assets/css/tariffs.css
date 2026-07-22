@@ -124,6 +124,8 @@
   /* Tarif dynamique : ligne d'énergie fournisseur ignorée au calcul (prix ENTSO-E). */
   .line-item.is-dynamic-ignored { opacity:.55; }
   .dynamic-ignored-hint { margin:4px 0 0; font-size:.75rem; color:var(--muted); font-style:italic; }
+  /* Légende du sélecteur « type de composante » (issue #179). */
+  .kind-legend { margin:8px 0 0; font-size:.8rem; color:var(--muted); }
   .line-remove { padding:5px 11px; font-size:1rem; line-height:1; }
   .add-field-row { margin-top:6px; }
 

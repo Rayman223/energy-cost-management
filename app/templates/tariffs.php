@@ -24,7 +24,8 @@ use App\Domain\TariffLineCatalog;
  * @var list<string>                                                         $groupOrder
  * @var list<string>                                                         $relevantCategories  catégories affichées même vides pour l'énergie active
  * @var array<string,string>                                                 $categoryOptions  value catégorie => libellé
- * @var array<string,string>                                                 $kindOptions
+ * @var array<string,array<string,string>>                                   $kindOptions  groupe => (value kind => libellé), rendu en <optgroup>
+
  * @var string                                                               $today
  * @var bool                                                                 $isAdmin
  * @var bool                                                                 $isDynamic  Tarif dynamique actif → lignes d'énergie fournisseur ignorées
@@ -331,8 +332,12 @@ $energyLabels = [
                 <input type="text" name="lines[<?= $i ?>][label]" class="form-input line-label-input" placeholder="<?= $this->e($this->t('tariffs.field_label')) ?>" value="<?= $this->e($f['label']) ?>">
               </label>
               <select name="lines[<?= $i ?>][kind]" class="form-select line-kind-select">
-                <?php foreach ($kindOptions as $kv => $klabel): ?>
-                <option value="<?= $this->e($kv) ?>" <?= $f['kind'] === $kv ? 'selected' : '' ?>><?= $this->e($klabel) ?></option>
+                <?php foreach ($kindOptions as $groupKey => $groupOpts): ?>
+                <optgroup label="<?= $this->e($this->t('tariffs.kind_group.' . $groupKey)) ?>">
+                  <?php foreach ($groupOpts as $kv => $klabel): ?>
+                  <option value="<?= $this->e($kv) ?>" <?= $f['kind'] === $kv ? 'selected' : '' ?>><?= $this->e($klabel) ?></option>
+                  <?php endforeach; ?>
+                </optgroup>
                 <?php endforeach; ?>
               </select>
               <?php else: ?>
@@ -358,6 +363,9 @@ $energyLabels = [
         </div>
       <?php endforeach; ?>
     </div>
+
+    <!-- Légende du sélecteur « type de composante » (issue #179) -->
+    <p class="kind-legend"><?= $this->te('tariffs.kind_legend') ?></p>
 
     <!-- Sauvegarde comme template -->
     <div class="save-tpl-row">
@@ -391,8 +399,12 @@ $energyLabels = [
       <input type="text" name="lines[__IDX__][label]" class="form-input line-label-input" placeholder="<?= $this->e($this->t('tariffs.field_label')) ?>">
     </label>
     <select name="lines[__IDX__][kind]" class="form-select line-kind-select">
-      <?php foreach ($kindOptions as $kv => $klabel): ?>
-      <option value="<?= $this->e($kv) ?>"><?= $this->e($klabel) ?></option>
+      <?php foreach ($kindOptions as $groupKey => $groupOpts): ?>
+      <optgroup label="<?= $this->e($this->t('tariffs.kind_group.' . $groupKey)) ?>">
+        <?php foreach ($groupOpts as $kv => $klabel): ?>
+        <option value="<?= $this->e($kv) ?>"><?= $this->e($klabel) ?></option>
+        <?php endforeach; ?>
+      </optgroup>
       <?php endforeach; ?>
     </select>
     <select name="lines[__IDX__][category]" class="form-select line-category-select" aria-label="<?= $this->e($this->t('tariffs.category')) ?>">

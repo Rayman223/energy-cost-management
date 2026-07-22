@@ -395,9 +395,13 @@ $categoryOptions = [];
 foreach (TariffCategory::cases() as $c) {
     $categoryOptions[$c->value] = $view->t('tariffs.group_' . $c->value);
 }
+// Options du sélecteur de type de composante, regroupées par famille (energy /
+// taxes / fixed / injection) pour être rendues en <optgroup> : réduit la
+// confusion des 11 choix techniques (issue #179). L'ordre des groupes suit
+// celui des cases() de l'enum.
 $kindOptions = [];
 foreach (ComponentKind::cases() as $k) {
-    $kindOptions[$k->value] = $view->t('tariffs.kind.' . $k->value);
+    $kindOptions[$k->group()][$k->value] = $view->t('tariffs.kind.' . $k->value);
 }
 
 $today = date('Y-m-d');
