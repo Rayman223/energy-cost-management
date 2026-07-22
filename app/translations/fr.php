@@ -308,6 +308,7 @@ return [
     'apiguide.response_desc' => 'En cas de succès, l’API renvoie le nombre de relevés reçus et réellement insérés :',
     'apiguide.batch_desc' => 'Vous pouvez envoyer plusieurs relevés en une seule requête via un tableau « readings » :',
     'apiguide.notes_title' => 'Bon à savoir',
+    'apiguide.note_timezone' => 'Le fuseau est obligatoire : fournissez un horodatage ISO 8601 avec offset (ex. 2026-07-16T10:00:00+02:00) ou en UTC (…Z). Un horodatage sans fuseau est refusé.',
     'apiguide.note_idempotent' => 'Idempotent : renvoyer un relevé déjà transmis ne crée pas de doublon.',
     'apiguide.note_batch_limit' => 'Jusqu’à 1000 relevés par requête.',
     'apiguide.note_rate_limit' => 'Limite d’appels : {limit} requêtes par heure et par jeton (réponse 429 au-delà).',

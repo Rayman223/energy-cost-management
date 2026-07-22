@@ -298,6 +298,7 @@ return [
     'apiguide.response_desc' => 'On success, the API returns how many readings were received and actually inserted:',
     'apiguide.batch_desc' => 'You can send several readings in a single request via a “readings” array:',
     'apiguide.notes_title' => 'Good to know',
+    'apiguide.note_timezone' => 'Time zone is mandatory: provide an ISO 8601 timestamp with an offset (e.g. 2026-07-16T10:00:00+02:00) or in UTC (…Z). A timestamp without a time zone is rejected.',
     'apiguide.note_idempotent' => 'Idempotent: resending an already-sent reading does not create a duplicate.',
     'apiguide.note_batch_limit' => 'Up to 1000 readings per request.',
     'apiguide.note_rate_limit' => 'Rate limit: {limit} requests per hour per token (429 response beyond that).',

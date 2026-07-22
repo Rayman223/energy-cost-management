@@ -297,6 +297,7 @@ return [
     'apiguide.response_desc' => 'Bij succes geeft de API terug hoeveel metingen zijn ontvangen en daadwerkelijk toegevoegd:',
     'apiguide.batch_desc' => 'U kunt meerdere metingen in één verzoek versturen via een „readings”-array:',
     'apiguide.notes_title' => 'Goed om te weten',
+    'apiguide.note_timezone' => 'Tijdzone is verplicht: geef een ISO 8601-tijdstempel met offset (bijv. 2026-07-16T10:00:00+02:00) of in UTC (…Z). Een tijdstempel zonder tijdzone wordt geweigerd.',
     'apiguide.note_idempotent' => 'Idempotent: een reeds verzonden meting opnieuw sturen maakt geen duplicaat.',
     'apiguide.note_batch_limit' => 'Tot 1000 metingen per verzoek.',
     'apiguide.note_rate_limit' => 'Snelheidslimiet: {limit} verzoeken per uur per token (daarna antwoord 429).',

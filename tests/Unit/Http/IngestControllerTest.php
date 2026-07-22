@@ -52,8 +52,8 @@ final class IngestControllerTest extends TestCase
     public function testElectricityBatchIsIngested(): void
     {
         $res = $this->controller()->electricity($this->post(['readings' => [
-            ['timestamp' => '2026-07-02 14:00:00', 'import_t1' => 100.5, 'import_t2' => 50.2],
-            ['timestamp' => '2026-07-02 15:00:00', 'import_t1' => 101.0, 'production' => 200.0],
+            ['timestamp' => '2026-07-02T14:00:00Z', 'import_t1' => 100.5, 'import_t2' => 50.2],
+            ['timestamp' => '2026-07-02T15:00:00Z', 'import_t1' => 101.0, 'production' => 200.0],
         ]]));
 
         self::assertSame(200, $res->status);
@@ -66,7 +66,7 @@ final class IngestControllerTest extends TestCase
     public function testElectricitySingleReadingAtRoot(): void
     {
         $res = $this->controller()->electricity($this->post([
-            'timestamp' => '2026-07-02 14:00:00',
+            'timestamp' => '2026-07-02T14:00:00Z',
             'export_t1' => 12.5,
         ]));
 
@@ -76,7 +76,7 @@ final class IngestControllerTest extends TestCase
 
     public function testElectricityResendIsIdempotent(): void
     {
-        $body = ['readings' => [['timestamp' => '2026-07-02 14:00:00', 'import_t1' => 100.0]]];
+        $body = ['readings' => [['timestamp' => '2026-07-02T14:00:00Z', 'import_t1' => 100.0]]];
 
         $this->controller()->electricity($this->post($body));
         $res = $this->controller()->electricity($this->post($body)); // renvoi
@@ -91,7 +91,7 @@ final class IngestControllerTest extends TestCase
         $this->expectExceptionMessageMatches('/au moins un registre/');
 
         $this->controller()->electricity($this->post(['readings' => [
-            ['timestamp' => '2026-07-02 14:00:00'],
+            ['timestamp' => '2026-07-02T14:00:00Z'],
         ]]));
     }
 
@@ -100,7 +100,7 @@ final class IngestControllerTest extends TestCase
         $this->expectException(ValidationException::class);
 
         $this->controller()->electricity($this->post(['readings' => [
-            ['timestamp' => '2026-07-02 14:00:00', 'import_t1' => -5],
+            ['timestamp' => '2026-07-02T14:00:00Z', 'import_t1' => -5],
         ]]));
     }
 
@@ -113,13 +113,25 @@ final class IngestControllerTest extends TestCase
         ]]));
     }
 
+    public function testElectricityRejectsTimestampWithoutOffset(): void
+    {
+        // Horodatage nu (sans fuseau) : refusé explicitement (#175) plutôt que
+        // supposé UTC en silence.
+        $this->expectException(ValidationException::class);
+        $this->expectExceptionMessageMatches('/fuseau requis/');
+
+        $this->controller()->electricity($this->post(['readings' => [
+            ['timestamp' => '2026-07-02 14:00:00', 'import_t1' => 1],
+        ]]));
+    }
+
     public function testDailyLimitSkipsSameRegisterSameDay(): void
     {
         // Deux lectures du même registre le même jour à des heures différentes :
         // la 1re est insérée, la 2de est ignorée en silence (comme un doublon).
         $res = $this->dailyLimitController()->electricity($this->post(['readings' => [
-            ['timestamp' => '2026-07-02 07:00:00', 'import_t1' => 100.0],
-            ['timestamp' => '2026-07-02 18:00:00', 'import_t1' => 110.0],
+            ['timestamp' => '2026-07-02T07:00:00Z', 'import_t1' => 100.0],
+            ['timestamp' => '2026-07-02T18:00:00Z', 'import_t1' => 110.0],
         ]]));
 
         self::assertSame(2, $res->data['received']); // les 2 sont reçues
@@ -131,8 +143,8 @@ final class IngestControllerTest extends TestCase
     {
         // import_t1 le matin, production le soir : registres indépendants, tout passe.
         $res = $this->dailyLimitController()->electricity($this->post(['readings' => [
-            ['timestamp' => '2026-07-02 07:00:00', 'import_t1' => 100.0],
-            ['timestamp' => '2026-07-02 18:00:00', 'production' => 200.0],
+            ['timestamp' => '2026-07-02T07:00:00Z', 'import_t1' => 100.0],
+            ['timestamp' => '2026-07-02T18:00:00Z', 'production' => 200.0],
         ]]));
 
         self::assertSame(2, $res->data['received']);
@@ -143,13 +155,13 @@ final class IngestControllerTest extends TestCase
     {
         // Pré-remplir import_t1 le 02/07 à 07:00.
         $this->dailyLimitController()->electricity($this->post([
-            'timestamp' => '2026-07-02 07:00:00', 'import_t1' => 100.0,
+            'timestamp' => '2026-07-02T07:00:00Z', 'import_t1' => 100.0,
         ]));
         $this->elec->calls = []; // repartir propre pour l'assertion
 
         // Lecture mêlant un registre déjà présent (import_t1) et un libre (import_t2).
         $res = $this->dailyLimitController()->electricity($this->post([
-            'timestamp' => '2026-07-02 18:00:00', 'import_t1' => 110.0, 'import_t2' => 50.0,
+            'timestamp' => '2026-07-02T18:00:00Z', 'import_t1' => 110.0, 'import_t2' => 50.0,
         ]));
 
         self::assertSame(2, $res->data['received']);
@@ -161,8 +173,8 @@ final class IngestControllerTest extends TestCase
     {
         // Sans plafond, les lectures horaires sont conservées.
         $res = $this->controller()->electricity($this->post(['readings' => [
-            ['timestamp' => '2026-07-02 07:00:00', 'import_t1' => 100.0],
-            ['timestamp' => '2026-07-02 18:00:00', 'import_t1' => 110.0],
+            ['timestamp' => '2026-07-02T07:00:00Z', 'import_t1' => 100.0],
+            ['timestamp' => '2026-07-02T18:00:00Z', 'import_t1' => 110.0],
         ]]));
 
         self::assertSame(2, $res->data['received']);
@@ -174,9 +186,9 @@ final class IngestControllerTest extends TestCase
         // Tarif dynamique : dans le même quart d'heure aligné, un seul index par
         // registre ; le créneau suivant repasse.
         $res = $this->throttledController(ReadingGranularity::QuarterHour)->electricity($this->post(['readings' => [
-            ['timestamp' => '2026-07-02 07:02:00', 'import_t1' => 100.0], // créneau [07:00–07:15)
-            ['timestamp' => '2026-07-02 07:12:00', 'import_t1' => 101.0], // même créneau → ignoré
-            ['timestamp' => '2026-07-02 07:20:00', 'import_t1' => 102.0], // créneau [07:15–07:30) → inséré
+            ['timestamp' => '2026-07-02T07:02:00Z', 'import_t1' => 100.0], // créneau [07:00–07:15)
+            ['timestamp' => '2026-07-02T07:12:00Z', 'import_t1' => 101.0], // même créneau → ignoré
+            ['timestamp' => '2026-07-02T07:20:00Z', 'import_t1' => 102.0], // créneau [07:15–07:30) → inséré
         ]]));
 
         self::assertSame(3, $res->data['received']);
@@ -187,8 +199,8 @@ final class IngestControllerTest extends TestCase
     public function testGasBatchAndIdempotence(): void
     {
         $res = $this->controller()->gas($this->post(['readings' => [
-            ['reading_at' => '2026-07-01 08:00:00', 'counter_m3' => 1234.5],
-            ['reading_at' => '2026-07-01 08:00:00', 'counter_m3' => 1234.5], // doublon dans le batch
+            ['reading_at' => '2026-07-01T08:00:00Z', 'counter_m3' => 1234.5],
+            ['reading_at' => '2026-07-01T08:00:00Z', 'counter_m3' => 1234.5], // doublon dans le batch
         ]]));
 
         self::assertSame(2, $res->data['received']);
@@ -199,7 +211,7 @@ final class IngestControllerTest extends TestCase
     public function testWaterAcceptsZeroCounter(): void
     {
         // 0 m³ = mise en service du compteur (cf. import eau).
-        $res = $this->controller()->water($this->post(['reading_at' => '2026-07-01 08:00:00', 'counter_m3' => 0]));
+        $res = $this->controller()->water($this->post(['reading_at' => '2026-07-01T08:00:00Z', 'counter_m3' => 0]));
 
         self::assertSame(1, $res->data['inserted']);
     }
@@ -208,7 +220,7 @@ final class IngestControllerTest extends TestCase
     {
         $this->expectException(ValidationException::class);
 
-        $this->controller()->gas($this->post(['reading_at' => '2026-07-01 08:00:00', 'counter_m3' => -1]));
+        $this->controller()->gas($this->post(['reading_at' => '2026-07-01T08:00:00Z', 'counter_m3' => -1]));
     }
 
     public function testRejectsMissingBody(): void
@@ -222,7 +234,7 @@ final class IngestControllerTest extends TestCase
     {
         $readings = [];
         for ($i = 0; $i < 1001; $i++) {
-            $readings[] = ['reading_at' => '2026-07-01 08:00:00', 'counter_m3' => 1.0];
+            $readings[] = ['reading_at' => '2026-07-01T08:00:00Z', 'counter_m3' => 1.0];
         }
 
         $this->expectException(ValidationException::class);

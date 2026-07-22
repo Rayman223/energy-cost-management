@@ -297,6 +297,7 @@ return [
     'apiguide.response_desc' => 'Bei Erfolg gibt die API zurück, wie viele Messwerte empfangen und tatsächlich eingefügt wurden:',
     'apiguide.batch_desc' => 'Sie können mehrere Messwerte in einer einzigen Anfrage über ein „readings“-Array senden:',
     'apiguide.notes_title' => 'Gut zu wissen',
+    'apiguide.note_timezone' => 'Zeitzone ist erforderlich: Geben Sie einen ISO-8601-Zeitstempel mit Offset (z. B. 2026-07-16T10:00:00+02:00) oder in UTC (…Z) an. Ein Zeitstempel ohne Zeitzone wird abgelehnt.',
     'apiguide.note_idempotent' => 'Idempotent: Das erneute Senden eines bereits übermittelten Messwerts erzeugt kein Duplikat.',
     'apiguide.note_batch_limit' => 'Bis zu 1000 Messwerte pro Anfrage.',
     'apiguide.note_rate_limit' => 'Ratenbegrenzung: {limit} Anfragen pro Stunde und Token (danach Antwort 429).',

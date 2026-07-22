@@ -172,14 +172,20 @@ final class IngestController
             throw new ValidationException(sprintf('readings[%d].%s requis', $index, $field));
         }
 
-        // Divergence assumée avec l'import en masse (ReadingParser::parseTimestampStrict,
-        // strict) : l'API accepte des formats plus larges (ISO 8601 avec fuseau…)
-        // poussés par des agents variés. Le durcir ici casserait des intégrations.
-        try {
-            return new DateTimeImmutable($raw);
-        } catch (\Exception) {
-            throw new ValidationException(sprintf('readings[%d].%s invalide : %s', $index, $field, $raw));
+        // Fuseau obligatoire (#175) : on exige un ISO 8601 avec offset explicite,
+        // via le prédicat partagé avec l'import en masse. Un horodatage nu serait
+        // supposé UTC en silence et piégerait l'intégrateur (index décalé).
+        $ts = ReadingParser::parseTimestampWithZone($raw);
+        if ($ts === null) {
+            throw new ValidationException(sprintf(
+                'readings[%d].%s : fuseau requis — utilisez un ISO 8601 avec offset (ex. 2026-07-15T00:00:00+02:00 ou ...Z) : %s',
+                $index,
+                $field,
+                $raw
+            ));
         }
+
+        return $ts;
     }
 
     private static function parseIndexValue(mixed $raw, string $key, int $index): float

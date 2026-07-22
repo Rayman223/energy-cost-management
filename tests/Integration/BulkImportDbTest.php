@@ -67,8 +67,8 @@ final class BulkImportDbTest extends TestCase
         $sink   = new UtilityReadingRepository($this->pdo(), $userId, 'gas');
 
         $rows = [
-            2 => ['timestamp' => '2026-01-01 08:00:00', 'value' =>'100.5'],
-            3 => ['timestamp' => '2026-01-02 08:00:00', 'value' =>'101.0'],
+            2 => ['timestamp' => '2026-01-01T08:00:00Z', 'value' =>'100.5'],
+            3 => ['timestamp' => '2026-01-02T08:00:00Z', 'value' =>'101.0'],
             4 => ['timestamp' => 'oops',                'value' =>'5'], // erreur rapportée
         ];
 
@@ -91,8 +91,8 @@ final class BulkImportDbTest extends TestCase
         $sink   = new ElectricityReadingRepository($this->pdo(), $userId);
 
         $rows = [
-            2 => ['timestamp' => '2026-01-01 00:00:00', 'import_t1' => '1000', 'import_t2' => '2000'],
-            3 => ['timestamp' => '2026-01-02 00:00:00', 'import_t1' => '1010', 'import_t2' => '2020'],
+            2 => ['timestamp' => '2026-01-01T00:00:00Z', 'import_t1' => '1000', 'import_t2' => '2000'],
+            3 => ['timestamp' => '2026-01-02T00:00:00Z', 'import_t1' => '1010', 'import_t2' => '2020'],
         ];
 
         $report = $this->service->importElectricity($rows, ImportMapping::preset('electricity'), $sink);

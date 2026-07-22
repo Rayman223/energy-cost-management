@@ -72,7 +72,7 @@ final class ImportRunnerDbTest extends TestCase
 
         $rows = [];
         for ($day = 1; $day <= 5; $day++) {
-            $rows[$day + 1] = ['timestamp' => sprintf('2026-01-%02d 08:00:00', $day), 'value' =>(string) (100 + $day)];
+            $rows[$day + 1] = ['timestamp' => sprintf('2026-01-%02dT08:00:00Z', $day), 'value' =>(string) (100 + $day)];
         }
 
         // Plafond volontairement bas (2 lignes) → tronqué mais N premières gardées.
@@ -89,8 +89,8 @@ final class ImportRunnerDbTest extends TestCase
         $userId = (new UserRepository($this->pdo()))->create('https://iss.example', 'dry-owner', 'example', 'Dry')->id;
 
         $rows = [
-            2 => ['timestamp' => '2026-02-01 08:00:00', 'value' =>'10'],
-            3 => ['timestamp' => '2026-02-02 08:00:00', 'value' =>'11'],
+            2 => ['timestamp' => '2026-02-01T08:00:00Z', 'value' =>'10'],
+            3 => ['timestamp' => '2026-02-02T08:00:00Z', 'value' =>'11'],
         ];
 
         $report = (new ImportRunner())->run($this->pdo(), ImportMapping::preset('gas'), $rows, $userId, 'gas', true);
@@ -111,8 +111,8 @@ final class ImportRunnerDbTest extends TestCase
 
         $path = $this->tempCsv(
             "Date;HP_Jour;HP_Nuit;Inj_Jour\n"
-            . "2026-03-01 08:00:00;1000;2000;50\n"
-            . "2026-03-02 08:00:00;1010;2020;55\n"
+            . "2026-03-01T08:00:00Z;1000;2000;50\n"
+            . "2026-03-02T08:00:00Z;1010;2020;55\n"
         );
 
         $post = [
@@ -138,7 +138,7 @@ final class ImportRunnerDbTest extends TestCase
 
         // Idempotence : le même POST rejoué ne crée aucun doublon.
         $again = (new ImportRunner())->runFromRequest($this->pdo(), $userId, $post, $this->uploadedFile($this->tempCsv(
-            "Date;HP_Jour;HP_Nuit;Inj_Jour\n2026-03-01 08:00:00;1000;2000;50\n"
+            "Date;HP_Jour;HP_Nuit;Inj_Jour\n2026-03-01T08:00:00Z;1000;2000;50\n"
         )));
         self::assertSame(0, $again->imported());
         self::assertSame(3, $again->duplicates());
@@ -153,20 +153,20 @@ final class ImportRunnerDbTest extends TestCase
     {
         $userId = (new UserRepository($this->pdo()))->create('https://iss.example', 'ovr-owner', 'example', 'Ovr')->id;
 
-        $wrong = $this->tempCsv("timestamp,value\n2026-05-01 08:00:00,1500\n2026-05-02 08:00:00,1600\n");
+        $wrong = $this->tempCsv("timestamp,value\n2026-05-01T08:00:00Z,1500\n2026-05-02T08:00:00Z,1600\n");
         $first = (new ImportRunner())->runFromRequest($this->pdo(), $userId, ['energy_type' => 'water', 'dry_run' => '0'], $this->uploadedFile($wrong));
         self::assertSame(2, $first->imported());
         self::assertSame(1500.0, $this->waterValue($userId, '2026-05-01 08:00:00'));
 
         // Ré-import corrigé SANS overwrite : ignoré (doublons).
-        $noOverwrite = $this->tempCsv("timestamp,value\n2026-05-01 08:00:00,1.5\n");
+        $noOverwrite = $this->tempCsv("timestamp,value\n2026-05-01T08:00:00Z,1.5\n");
         $ignored = (new ImportRunner())->runFromRequest($this->pdo(), $userId, ['energy_type' => 'water', 'dry_run' => '0'], $this->uploadedFile($noOverwrite));
         self::assertSame(0, $ignored->imported());
         self::assertSame(1, $ignored->duplicates());
         self::assertSame(1500.0, $this->waterValue($userId, '2026-05-01 08:00:00'), 'valeur inchangée');
 
         // Ré-import corrigé AVEC overwrite : valeurs écrasées.
-        $fixed = $this->tempCsv("timestamp,value\n2026-05-01 08:00:00,1.5\n2026-05-02 08:00:00,1.6\n");
+        $fixed = $this->tempCsv("timestamp,value\n2026-05-01T08:00:00Z,1.5\n2026-05-02T08:00:00Z,1.6\n");
         $report = (new ImportRunner())->runFromRequest($this->pdo(), $userId, ['energy_type' => 'water', 'dry_run' => '0', 'overwrite' => '1'], $this->uploadedFile($fixed));
         self::assertSame(2, $report->imported());
         self::assertSame(1.5, $this->waterValue($userId, '2026-05-01 08:00:00'));

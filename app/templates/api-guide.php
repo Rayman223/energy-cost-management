@@ -44,7 +44,7 @@ $url   = $this->e($apiUrl);
 <pre><code>curl -X POST "<?= $url ?>?action=ingest_electricity" \
   -H "Authorization: Bearer mec_votre_jeton" \
   -H "Content-Type: application/json" \
-  -d '{"readings":[{"timestamp":"2026-07-16 10:00:00","import_t1":1234.5,"import_t2":678.9,"export_t1":12.3,"export_t2":4.5,"production":89.0}]}'</code></pre>
+  -d '{"readings":[{"timestamp":"2026-07-16T10:00:00+02:00","import_t1":1234.5,"import_t2":678.9,"export_t1":12.3,"export_t2":4.5,"production":89.0}]}'</code></pre>
   <p class="muted"><?= $this->te('apiguide.elec_registers') ?></p>
 
   <!-- ── Gaz ──────────────────────────────────────────────────────────────── -->
@@ -53,7 +53,7 @@ $url   = $this->e($apiUrl);
 <pre><code>curl -X POST "<?= $url ?>?action=ingest_gas" \
   -H "Authorization: Bearer mec_votre_jeton" \
   -H "Content-Type: application/json" \
-  -d '{"readings":[{"reading_at":"2026-07-16 10:00:00","counter_m3":45.678}]}'</code></pre>
+  -d '{"readings":[{"reading_at":"2026-07-16T10:00:00+02:00","counter_m3":45.678}]}'</code></pre>
 
   <!-- ── Eau ──────────────────────────────────────────────────────────────── -->
   <h2><?= $this->te('apiguide.water_title') ?></h2>
@@ -61,7 +61,7 @@ $url   = $this->e($apiUrl);
 <pre><code>curl -X POST "<?= $url ?>?action=ingest_water" \
   -H "Authorization: Bearer mec_votre_jeton" \
   -H "Content-Type: application/json" \
-  -d '{"readings":[{"reading_at":"2026-07-16 10:00:00","counter_m3":123.456}]}'</code></pre>
+  -d '{"readings":[{"reading_at":"2026-07-16T10:00:00+02:00","counter_m3":123.456}]}'</code></pre>
 
   <!-- ── Réponse & envoi en lot ───────────────────────────────────────────── -->
   <h2><?= $this->te('apiguide.response_title') ?></h2>
@@ -69,13 +69,14 @@ $url   = $this->e($apiUrl);
 <pre><code>{"ok":true,"received":1,"inserted":1}</code></pre>
   <p><?= $this->te('apiguide.batch_desc') ?></p>
 <pre><code>{"readings":[
-  {"timestamp":"2026-07-16 10:00:00","import_t1":1234.5},
-  {"timestamp":"2026-07-16 11:00:00","import_t1":1240.1}
+  {"timestamp":"2026-07-16T10:00:00+02:00","import_t1":1234.5},
+  {"timestamp":"2026-07-16T11:00:00+02:00","import_t1":1240.1}
 ]}</code></pre>
 
   <!-- ── Bon à savoir ─────────────────────────────────────────────────────── -->
   <h2><?= $this->te('apiguide.notes_title') ?></h2>
   <ul>
+    <li><?= $this->te('apiguide.note_timezone') ?></li>
     <li><?= $this->te('apiguide.note_idempotent') ?></li>
     <li><?= $this->te('apiguide.note_batch_limit') ?></li>
     <li><?= $this->te('apiguide.note_rate_limit', ['limit' => $rateLimit]) ?></li>

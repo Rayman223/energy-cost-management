@@ -25,12 +25,12 @@ final class BulkImportServiceTest extends TestCase
     public function testUtilityImportCountsImportedDuplicatesAndErrors(): void
     {
         $rows = [
-            2 => ['timestamp' => '2026-01-01 08:00:00', 'value' =>'100.5'],
-            3 => ['timestamp' => '2026-01-02 08:00:00', 'value' =>'101.25'],
-            4 => ['timestamp' => '2026-01-02 08:00:00', 'value' =>'101.25'], // doublon
+            2 => ['timestamp' => '2026-01-01T08:00:00Z', 'value' =>'100.5'],
+            3 => ['timestamp' => '2026-01-02T08:00:00Z', 'value' =>'101.25'],
+            4 => ['timestamp' => '2026-01-02T08:00:00Z', 'value' =>'101.25'], // doublon
             5 => ['timestamp' => 'bad-date',            'value' =>'50'],     // horodatage KO
-            6 => ['timestamp' => '2026-01-03 08:00:00', 'value' =>'-3'],     // valeur KO
-            7 => ['timestamp' => '2026-01-04 08:00:00', 'value' =>''],       // valeur absente
+            6 => ['timestamp' => '2026-01-03T08:00:00Z', 'value' =>'-3'],     // valeur KO
+            7 => ['timestamp' => '2026-01-04T08:00:00Z', 'value' =>''],       // valeur absente
         ];
 
         $report = $this->service->importUtility($rows, ImportMapping::preset('gas'), new FakeUtilityIngestion());
@@ -44,8 +44,8 @@ final class BulkImportServiceTest extends TestCase
     public function testUtilityImportIsIdempotentOnReimport(): void
     {
         $rows = [
-            2 => ['timestamp' => '2026-01-01 08:00:00', 'value' =>'10'],
-            3 => ['timestamp' => '2026-01-02 08:00:00', 'value' =>'11'],
+            2 => ['timestamp' => '2026-01-01T08:00:00Z', 'value' =>'10'],
+            3 => ['timestamp' => '2026-01-02T08:00:00Z', 'value' =>'11'],
         ];
         $sink = new FakeUtilityIngestion();
 
@@ -64,11 +64,11 @@ final class BulkImportServiceTest extends TestCase
         // horodatage avec « écraser » → la valeur est mise à jour, pas ignorée.
         $sink = new FakeUtilityIngestion();
 
-        $wrong = [2 => ['timestamp' => '2026-01-01 08:00:00', 'value' => '100']];
+        $wrong = [2 => ['timestamp' => '2026-01-01T08:00:00Z', 'value' => '100']];
         $this->service->importUtility($wrong, ImportMapping::preset('water'), $sink);
         self::assertSame(100.0, $sink->saved['2026-01-01 08:00:00']);
 
-        $fixed  = [2 => ['timestamp' => '2026-01-01 08:00:00', 'value' => '10']];
+        $fixed  = [2 => ['timestamp' => '2026-01-01T08:00:00Z', 'value' => '10']];
         $report = $this->service->importUtility($fixed, ImportMapping::preset('water'), $sink, null, true);
 
         self::assertSame(10.0, $sink->saved['2026-01-01 08:00:00'], 'la valeur doit être écrasée');
@@ -81,7 +81,7 @@ final class BulkImportServiceTest extends TestCase
         // Réécrire la même valeur ne « touche » aucune ligne (ON DUPLICATE KEY
         // UPDATE renvoie 0) → comptée comme doublon, pas comme import.
         $sink = new FakeUtilityIngestion();
-        $rows = [2 => ['timestamp' => '2026-01-01 08:00:00', 'value' => '42']];
+        $rows = [2 => ['timestamp' => '2026-01-01T08:00:00Z', 'value' => '42']];
 
         $this->service->importUtility($rows, ImportMapping::preset('gas'), $sink);
         $report = $this->service->importUtility($rows, ImportMapping::preset('gas'), $sink, null, true);
@@ -93,7 +93,7 @@ final class BulkImportServiceTest extends TestCase
     public function testElectricityReimportWithReplaceOverwritesExistingIndexes(): void
     {
         $sink = new FakeElectricityIngestion();
-        $rows = [2 => ['timestamp' => '2026-01-01 00:00:00', 'import_t1' => '1000', 'import_t2' => '2000']];
+        $rows = [2 => ['timestamp' => '2026-01-01T00:00:00Z', 'import_t1' => '1000', 'import_t2' => '2000']];
 
         $first = $this->service->importElectricity($rows, ImportMapping::preset('electricity'), $sink);
         self::assertSame(2, $first->imported());
@@ -111,7 +111,7 @@ final class BulkImportServiceTest extends TestCase
 
     public function testUtilityImportHonoursValueColumnOverride(): void
     {
-        $rows = [2 => ['timestamp' => '2026-01-01 08:00:00', 'gaz naturel' => '42.0']];
+        $rows = [2 => ['timestamp' => '2026-01-01T08:00:00Z', 'gaz naturel' => '42.0']];
 
         $report = $this->service->importUtility(
             $rows,
@@ -126,7 +126,7 @@ final class BulkImportServiceTest extends TestCase
     public function testUtilityImportConvertsLitresToCubicMetres(): void
     {
         // Compteur d'eau exporté en litres : 1500 L doivent être stockés en m³.
-        $rows = [2 => ['timestamp' => '2026-01-01 08:00:00', 'value' =>'1500']];
+        $rows = [2 => ['timestamp' => '2026-01-01T08:00:00Z', 'value' =>'1500']];
         $sink = new FakeUtilityIngestion();
 
         $report = $this->service->importUtility($rows, ImportMapping::preset('water', ['unit' => 'l']), $sink);
@@ -137,7 +137,7 @@ final class BulkImportServiceTest extends TestCase
 
     public function testElectricityImportConvertsWattHoursToKilowattHours(): void
     {
-        $rows = [2 => ['timestamp' => '2026-01-01 00:00:00', 'import_t1' => '2000000']];
+        $rows = [2 => ['timestamp' => '2026-01-01T00:00:00Z', 'import_t1' => '2000000']];
         $sink = new FakeElectricityIngestion();
 
         $this->service->importElectricity($rows, ImportMapping::preset('electricity', ['unit' => 'wh']), $sink);
@@ -148,9 +148,9 @@ final class BulkImportServiceTest extends TestCase
     public function testElectricityImportCountsPerRegisterAndDedups(): void
     {
         $rows = [
-            2 => ['timestamp' => '2026-01-01 00:00:00', 'import_t1' => '1000', 'import_t2' => '2000', 'export_t1' => '50'],
-            3 => ['timestamp' => '2026-01-01 00:00:00', 'import_t1' => '1000', 'import_t2' => '2000', 'export_t1' => '50'], // doublons
-            4 => ['timestamp' => '2026-01-02 00:00:00', 'import_t1' => 'abc'], // invalide → ligne en erreur
+            2 => ['timestamp' => '2026-01-01T00:00:00Z', 'import_t1' => '1000', 'import_t2' => '2000', 'export_t1' => '50'],
+            3 => ['timestamp' => '2026-01-01T00:00:00Z', 'import_t1' => '1000', 'import_t2' => '2000', 'export_t1' => '50'], // doublons
+            4 => ['timestamp' => '2026-01-02T00:00:00Z', 'import_t1' => 'abc'], // invalide → ligne en erreur
         ];
 
         $report = $this->service->importElectricity($rows, ImportMapping::preset('electricity'), new FakeElectricityIngestion());
@@ -165,8 +165,8 @@ final class BulkImportServiceTest extends TestCase
         // Tarif fixe (Day) : deux relevés du même registre le même jour à des heures
         // différentes → le 2e est compté en doublon (skip silencieux).
         $rows = [
-            2 => ['timestamp' => '2026-01-01 07:00:00', 'import_t1' => '1000'],
-            3 => ['timestamp' => '2026-01-01 18:00:00', 'import_t1' => '1010'],
+            2 => ['timestamp' => '2026-01-01T07:00:00Z', 'import_t1' => '1000'],
+            3 => ['timestamp' => '2026-01-01T18:00:00Z', 'import_t1' => '1010'],
         ];
 
         $report = $this->service->importElectricity(
@@ -187,8 +187,8 @@ final class BulkImportServiceTest extends TestCase
     {
         // import_t1 le matin, production le soir : registres indépendants → tout importé.
         $rows = [
-            2 => ['timestamp' => '2026-01-01 07:00:00', 'import_t1' => '1000'],
-            3 => ['timestamp' => '2026-01-01 18:00:00', 'production' => '200'],
+            2 => ['timestamp' => '2026-01-01T07:00:00Z', 'import_t1' => '1000'],
+            3 => ['timestamp' => '2026-01-01T18:00:00Z', 'production' => '200'],
         ];
 
         $report = $this->service->importElectricity(
@@ -210,9 +210,9 @@ final class BulkImportServiceTest extends TestCase
         // Tarif dynamique (QuarterHour) : dans un même quart d'heure aligné, un seul
         // index par registre ; le créneau suivant repasse.
         $rows = [
-            2 => ['timestamp' => '2026-01-01 07:02:00', 'import_t1' => '1000'], // [07:00–07:15)
-            3 => ['timestamp' => '2026-01-01 07:12:00', 'import_t1' => '1001'], // même créneau → doublon
-            4 => ['timestamp' => '2026-01-01 07:20:00', 'import_t1' => '1002'], // [07:15–07:30) → importé
+            2 => ['timestamp' => '2026-01-01T07:02:00Z', 'import_t1' => '1000'], // [07:00–07:15)
+            3 => ['timestamp' => '2026-01-01T07:12:00Z', 'import_t1' => '1001'], // même créneau → doublon
+            4 => ['timestamp' => '2026-01-01T07:20:00Z', 'import_t1' => '1002'], // [07:15–07:30) → importé
         ];
 
         $report = $this->service->importElectricity(
@@ -231,7 +231,7 @@ final class BulkImportServiceTest extends TestCase
 
     public function testElectricityImportRequiresAtLeastOneRegister(): void
     {
-        $rows = [2 => ['timestamp' => '2026-01-01 00:00:00']]; // aucun registre
+        $rows = [2 => ['timestamp' => '2026-01-01T00:00:00Z']]; // aucun registre
 
         $report = $this->service->importElectricity($rows, ImportMapping::preset('electricity'), new FakeElectricityIngestion());
 
@@ -239,22 +239,24 @@ final class BulkImportServiceTest extends TestCase
         self::assertSame(1, $report->errors());
     }
 
-    public function testLenientRelativeDatesAreRejected(): void
+    public function testTimestampsWithoutOffsetAreRejected(): void
     {
-        // « now », « 2026 », « +1 day » seraient datés à l'instant de l'import et
-        // casseraient l'idempotence → doivent être rejetés (bug #1).
+        // Fuseau obligatoire (#175) : les horodatages nus (sans offset), le
+        // date-only et les valeurs souples (« now », « +1 day »…) sont refusés.
+        // Seul un ISO 8601 avec offset explicite passe.
         $rows = [
-            2 => ['timestamp' => 'now',                 'value' =>'10'],
-            3 => ['timestamp' => '2026',                'value' =>'10'],
-            4 => ['timestamp' => '+1 day',              'value' =>'10'],
-            5 => ['timestamp' => '2026-01-01 08:00:00', 'value' =>'10'], // OK
-            6 => ['timestamp' => '2026-01-02',          'value' =>'10'], // OK (date seule → minuit)
+            2 => ['timestamp' => 'now',                       'value' =>'10'],
+            3 => ['timestamp' => '+1 day',                    'value' =>'10'],
+            4 => ['timestamp' => '2026-01-01 08:00:00',       'value' =>'10'], // nu → refusé
+            5 => ['timestamp' => '2026-01-02',                'value' =>'10'], // date seule → refusée
+            6 => ['timestamp' => '2026-01-01T08:00:00+02:00', 'value' =>'10'], // OK
+            7 => ['timestamp' => '2026-01-02T08:00:00Z',      'value' =>'10'], // OK
         ];
 
         $report = $this->service->importUtility($rows, ImportMapping::preset('gas'), new FakeUtilityIngestion());
 
         self::assertSame(2, $report->imported());
-        self::assertSame(3, $report->errors());
+        self::assertSame(4, $report->errors());
     }
 
     public function testDbErrorOnOneRowDoesNotAbortTheOthers(): void
@@ -273,9 +275,9 @@ final class BulkImportServiceTest extends TestCase
         };
 
         $rows = [
-            2 => ['timestamp' => '2026-01-01 00:00:00', 'value' =>'1'],
-            3 => ['timestamp' => '2026-01-02 00:00:00', 'value' =>'999'], // lève
-            4 => ['timestamp' => '2026-01-03 00:00:00', 'value' =>'2'],
+            2 => ['timestamp' => '2026-01-01T00:00:00Z', 'value' =>'1'],
+            3 => ['timestamp' => '2026-01-02T00:00:00Z', 'value' =>'999'], // lève
+            4 => ['timestamp' => '2026-01-03T00:00:00Z', 'value' =>'2'],
         ];
 
         $report = $this->service->importUtility($rows, ImportMapping::preset('gas'), $sink);
@@ -294,8 +296,8 @@ final class BulkImportServiceTest extends TestCase
         // dans errors() mais PAS dans writeErrors() → le process CLI sort en 0.
         $rows = [
             2 => ['timestamp' => 'bad-date',            'value' =>'10'],
-            3 => ['timestamp' => '2026-01-01 08:00:00', 'value' =>'-5'],
-            4 => ['timestamp' => '2026-01-02 08:00:00', 'value' =>'12'], // OK
+            3 => ['timestamp' => '2026-01-01T08:00:00Z', 'value' =>'-5'],
+            4 => ['timestamp' => '2026-01-02T08:00:00Z', 'value' =>'12'], // OK
         ];
 
         $report = $this->service->importUtility($rows, ImportMapping::preset('gas'), new FakeUtilityIngestion());

@@ -173,9 +173,13 @@ final class BulkImportService
             return null;
         }
 
-        $dt = ReadingParser::parseTimestampStrict($raw);
+        $dt = ReadingParser::parseTimestampWithZone($raw);
         if ($dt === null) {
-            $report->addError(sprintf('Ligne %d : horodatage invalide (%s) — format attendu Y-m-d H:i:s.', $lineNo, $raw));
+            $report->addError(sprintf(
+                'Ligne %d : horodatage invalide (%s) — ISO 8601 avec offset attendu (ex. 2026-07-15T00:00:00+02:00 ou ...Z).',
+                $lineNo,
+                $raw
+            ));
         }
 
         return $dt;
