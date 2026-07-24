@@ -552,37 +552,42 @@ final class ElectricityReadingRepository implements LegacyDailyRepositoryInterfa
             $series[$key] = $rid === null ? [] : ($firstByRid[$rid] ?? []);
         }
 
+        // L'axe des jours est l'UNION des jours de toutes les séries : chaque registre
+        // est relevé indépendamment et peut tomber des jours différents (#180). Bâtir
+        // le squelette sur les seuls jours d'import_t1 tronquait toute série désalignée
+        // (notamment la production solaire → courbe PV coupée).
+        /** @var array<string, array{day:string, import_t1:float, import_t2:float, export_t1:float, export_t2:float, solar:float|null}> $deltas */
         $deltas = [];
-        $rows = $series['import_t1'];
-        for ($i = 1, $iMax = count($rows); $i < $iMax; $i++) {
-            $day = $rows[$i]['day'];
-            $deltas[$day] = [
-                'day'       => $day,
-                'import_t1' => self::consecutiveDelta($rows, $i),
-                'import_t2' => 0.0,
-                'export_t1' => 0.0,
-                'export_t2' => 0.0,
-                'solar'     => null,
-            ];
-        }
+        $ensureDay = static function (string $day) use (&$deltas): void {
+            if (!isset($deltas[$day])) {
+                $deltas[$day] = [
+                    'day'       => $day,
+                    'import_t1' => 0.0,
+                    'import_t2' => 0.0,
+                    'export_t1' => 0.0,
+                    'export_t2' => 0.0,
+                    'solar'     => null,
+                ];
+            }
+        };
 
-        foreach (['import_t2', 'export_t1', 'export_t2'] as $key) {
+        foreach (['import_t1', 'import_t2', 'export_t1', 'export_t2'] as $key) {
             $rows = $series[$key];
             for ($i = 1, $iMax = count($rows); $i < $iMax; $i++) {
                 $day = $rows[$i]['day'];
-                if (isset($deltas[$day])) {
-                    $deltas[$day][$key] = self::consecutiveDelta($rows, $i);
-                }
+                $ensureDay($day);
+                $deltas[$day][$key] = self::consecutiveDelta($rows, $i);
             }
         }
 
         $rows = $series['production'];
         for ($i = 1, $iMax = count($rows); $i < $iMax; $i++) {
             $day = $rows[$i]['day'];
-            if (isset($deltas[$day])) {
-                $deltas[$day]['solar'] = self::consecutiveDelta($rows, $i);
-            }
+            $ensureDay($day);
+            $deltas[$day]['solar'] = self::consecutiveDelta($rows, $i);
         }
+
+        ksort($deltas); // clés 'Y-m-d' : tri lexicographique == chronologique.
 
         return array_values($deltas);
     }

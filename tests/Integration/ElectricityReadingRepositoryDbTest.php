@@ -296,6 +296,52 @@ final class ElectricityReadingRepositoryDbTest extends TestCase
         self::assertArrayNotHasKey($localDay3, $utcByDay);
     }
 
+    public function testDailyChartKeepsSolarOnDaysWithoutImportReadings(): void
+    {
+        // Régression #180 : la production solaire relevée des jours DIFFÉRENTS des index
+        // de consommation ne doit plus être tronquée. Avant le fix, l'axe des jours était
+        // bâti sur les seuls jours d'import_t1 → les jours solaires disjoints disparaissaient.
+        $otherId = (new UserRepository($this->pdo()))->create('https://iss.test', 'chart-solar', 'test', 'Chart Solar')->id;
+        $utc     = new \DateTimeZone('UTC');
+
+        // import_t1 relevé sur J-6 et J-5 ; production sur J-4 et J-3 (jours disjoints).
+        // Instants à midi UTC pour éviter tout basculement de jour local (Europe/Brussels).
+        $imp1 = (new \DateTimeImmutable('now', $utc))->modify('-6 days')->setTime(12, 0, 0);
+        $imp2 = (new \DateTimeImmutable('now', $utc))->modify('-5 days')->setTime(12, 0, 0);
+        $sol1 = (new \DateTimeImmutable('now', $utc))->modify('-4 days')->setTime(12, 0, 0);
+        $sol2 = (new \DateTimeImmutable('now', $utc))->modify('-3 days')->setTime(12, 0, 0);
+
+        $repo = new ElectricityReadingRepository($this->pdo(), $otherId, 'Europe/Brussels');
+        $repo->insertIndexes($imp1, ['import_t1' => 100.0]);
+        $repo->insertIndexes($imp2, ['import_t1' => 130.0]);
+        $repo->insertIndexes($sol1, ['production' => 40.0]);
+        $repo->insertIndexes($sol2, ['production' => 55.0]);
+
+        $tz       = new \DateTimeZone('Europe/Brussels');
+        $impDay   = $imp2->setTimezone($tz)->format('Y-m-d'); // delta import rattaché à J-5
+        $solDay   = $sol2->setTimezone($tz)->format('Y-m-d'); // delta solaire rattaché à J-3
+
+        $chart = $repo->getDailyDeltasForChart(30);
+        $byDay = array_column($chart, null, 'day');
+
+        // Jour import : delta import présent, solaire null (aucun relevé PV ce jour-là).
+        self::assertArrayHasKey($impDay, $byDay);
+        self::assertEqualsWithDelta(30.0, $byDay[$impDay]['import_t1'], 0.001); // 130 - 100
+        self::assertNull($byDay[$impDay]['solar']);
+
+        // Jour solaire (fix #180) : conservé bien qu'aucun import ne le couvre.
+        self::assertArrayHasKey($solDay, $byDay);
+        self::assertEqualsWithDelta(15.0, $byDay[$solDay]['solar'], 0.001); // 55 - 40
+        self::assertEqualsWithDelta(0.0, $byDay[$solDay]['import_t1'], 0.001);
+
+        // Les jours restent triés chronologiquement (import avant solaire).
+        $days   = array_column($chart, 'day');
+        $sorted = $days;
+        sort($sorted);
+        self::assertSame($sorted, $days);
+        self::assertSame([$impDay, $solDay], $days);
+    }
+
     public function testTodayIndexUsesUserLocalDay(): void
     {
         // Utilisateur isolé pour ne pas mélanger avec le seed 2025/2026 de la classe.
