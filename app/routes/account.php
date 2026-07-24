@@ -7,6 +7,7 @@ declare(strict_types=1);
  * (opt-in par module, ex. EnergyID), et RGPD (export + suppression). Session uniquement.
  */
 
+use App\Domain\EuropeanCountries;
 use App\Domain\ReadingGranularity;
 use App\Domain\Timezones;
 use App\Domain\UserProfile;
@@ -90,11 +91,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $action = (string) ($_POST['action'] ?? '');
 
         if ($action === 'save_profile') {
+            $currentProfile = $profileForLocale ?? UserProfile::defaults();
+
             $country = strtoupper(trim((string) ($_POST['country'] ?? '')));
-            $country = preg_match('/^[A-Z]{2}$/', $country) === 1 ? $country : null;
+            // Liste blanche pays. Non-cassant : on tolère le pays déjà stocké
+            // même s'il n'est pas (ou plus) dans le référentiel (ancien code
+            // libre) ; le <select> le conserve comme option via la même garde
+            // côté template. Sinon → null (« Aucun »).
+            $storedCountry = $country !== '' ? strtoupper((string) ($currentProfile->country ?? '')) : '';
+            $countryOk     = EuropeanCountries::isValid($country) || $country === $storedCountry;
+            $country       = ($country !== '' && $countryOk) ? $country : null;
 
             $currency = strtoupper(trim((string) ($_POST['currency'] ?? 'EUR')));
-            if (preg_match('/^[A-Z]{3}$/', $currency) !== 1) {
+            // Liste blanche des devises du référentiel. Non-cassant : on tolère la
+            // devise déjà stockée même si elle n'y figure plus (le <select> la
+            // conserve comme option via la même garde côté template).
+            $allowedCurrencies = EuropeanCountries::currencies();
+            $storedCurrency    = $currentProfile->currency;
+            if ($storedCurrency !== '' && !in_array($storedCurrency, $allowedCurrencies, true)) {
+                $allowedCurrencies[] = $storedCurrency;
+            }
+            if (!in_array($currency, $allowedCurrencies, true)) {
                 throw new \InvalidArgumentException($view->t('account.invalid_currency'));
             }
 
@@ -311,4 +328,6 @@ echo $view->render('account', [
     'available'  => Locale::available($config),
     'importReport' => $importReport,
     'timezoneOptions' => $timezoneOptions,
+    'countries'  => EuropeanCountries::sortedForLocale($view->locale()),
+    'currencies' => EuropeanCountries::currencies(),
 ]);

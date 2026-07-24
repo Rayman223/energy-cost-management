@@ -26,3 +26,31 @@
   const exists = Array.prototype.some.call(sel.options, (o) => o.value === tz);
   if (exists) sel.value = tz;
 })();
+
+// ── Pays → préremplit la devise (page compte, #188) ──────────────────────────
+// Aligné sur le formulaire tarifs : sélectionner un pays met à jour la devise
+// (ajoutée comme option si absente). La devise reste modifiable ensuite. Le champ
+// TVA n'existe pas dans ce formulaire → garde défensive sur `[data-vat-input]`.
+(function countryToCurrency() {
+  'use strict';
+
+  const countrySelect = document.querySelector('[data-country-select]');
+  if (!countrySelect) return;
+
+  countrySelect.addEventListener('change', function () {
+    const opt = countrySelect.options[countrySelect.selectedIndex];
+    if (!opt) return;
+
+    const vat = opt.dataset.vat;
+    const vatInput = document.querySelector('[data-vat-input]');
+    if (vat && vatInput) vatInput.value = vat;
+
+    const cur = opt.dataset.currency;
+    const curSelect = document.querySelector('[data-currency-select]');
+    if (cur && curSelect) {
+      const found = Array.prototype.some.call(curSelect.options, (o) => o.value === cur);
+      if (!found) curSelect.add(new Option(cur, cur));
+      curSelect.value = cur;
+    }
+  });
+})();

@@ -17,6 +17,8 @@ use App\Domain\User;
  * @var list<string> $available
  * @var \App\Service\Import\ImportReport|null $importReport
  * @var list<array{id:string,label:string}> $timezoneOptions
+ * @var array<string,string> $countries
+ * @var list<string> $currencies
  * @var ?string $discordUrl
  */
 $csrf = \App\Security\Csrf::field();
@@ -58,9 +60,43 @@ $csrf = \App\Security\Csrf::field();
     <form method="post">
       <?= $csrf ?>
       <input type="hidden" name="action" value="save_profile">
+      <?php
+      // Devise stockée hors référentiel → on la conserve comme option pour ne
+      // pas la perdre silencieusement au prochain enregistrement.
+      $currencyOptions = $currencies;
+      if ($profile->currency !== '' && !in_array($profile->currency, $currencyOptions, true)) {
+          array_unshift($currencyOptions, $profile->currency);
+      }
+      // Idem pour un pays stocké hors référentiel (ex. ancien code libre) : on
+      // l'ajoute comme option pour qu'il reste sélectionné, sinon le <select>
+      // retomberait sur « Aucun » et l'effacerait au prochain save.
+      $storedCountry = $profile->country ?? '';
+      $countryIsListed = $storedCountry !== '' && array_key_exists($storedCountry, $countries);
+      ?>
       <div class="row">
-        <div><label><?= $this->te('account.country') ?></label><input type="text" name="country" maxlength="2" value="<?= $this->e($profile->country ?? '') ?>" placeholder="BE"></div>
-        <div><label><?= $this->te('account.currency') ?></label><input type="text" name="currency" maxlength="3" value="<?= $this->e($profile->currency) ?>" placeholder="EUR"></div>
+        <div>
+          <label><?= $this->te('account.country') ?></label>
+          <select name="country" data-country-select>
+            <option value=""><?= $this->te('account.country_none') ?></option>
+            <?php if ($storedCountry !== '' && !$countryIsListed): ?>
+              <option value="<?= $this->e($storedCountry) ?>" selected><?= $this->e($storedCountry) ?></option>
+            <?php endif; ?>
+            <?php foreach ($countries as $iso => $cname): ?>
+              <option value="<?= $this->e($iso) ?>"
+                      data-vat="<?= $this->e((string) (\App\Domain\EuropeanCountries::vatRate($iso) ?? '')) ?>"
+                      data-currency="<?= $this->e((string) (\App\Domain\EuropeanCountries::currencyOf($iso) ?? '')) ?>"
+                      <?= $profile->country === $iso ? 'selected' : '' ?>><?= $this->e($cname) ?></option>
+            <?php endforeach; ?>
+          </select>
+        </div>
+        <div>
+          <label><?= $this->te('account.currency') ?></label>
+          <select name="currency" data-currency-select>
+            <?php foreach ($currencyOptions as $cur): ?>
+              <option value="<?= $this->e($cur) ?>"<?= $profile->currency === $cur ? ' selected' : '' ?>><?= $this->e($cur) ?></option>
+            <?php endforeach; ?>
+          </select>
+        </div>
       </div>
       <div class="row">
         <div>
