@@ -581,15 +581,6 @@ function costVatRows(c, row) {
   // Init
   updateGasNav();
   renderGasCostContent(window.__INIT_GAS_COST__ ?? { available: false, reason: 'Données non chargées' });
-
-  // Refresh after a new gas reading is saved
-  document.addEventListener('gas-entry-saved', async function () {
-    try {
-      const data = await (await fetch(`api?action=gas_month_cost&year=${gasNavYear}&month=${gasNavMonth}`)).json();
-      delete gasYearCache[`${gasNavYear}-${gasNavMonth}`];
-      renderGasCostContent(data);
-    } catch { /* silent */ }
-  });
 })();
 
 // ── Water consumption navigation (volume m³, sans coût) ────────────────────
@@ -792,15 +783,6 @@ function costVatRows(c, row) {
   // Init
   updateWaterNav();
   renderWaterContent(window.__INIT_WATER_COST__ ?? { available: false, reason: 'Données non chargées' });
-
-  // Refresh after a new water reading is saved
-  document.addEventListener('water-entry-saved', async function () {
-    try {
-      const data = await (await fetch(`api?action=water_month_cost&year=${wNavYear}&month=${wNavMonth}`)).json();
-      delete waterYearCache[`${wNavYear}-${wNavMonth}`];
-      renderWaterContent(data);
-    } catch { /* silent */ }
-  });
 })();
 
 // ── Horloge ─────────────────────────────────────────────────────────────────
@@ -873,8 +855,6 @@ function renderChart(data) {
 // compteurs sur le LAN des membres. Les index arrivent par push (agent → API).
 
 loadChart(30);
-loadGasHistory();
-loadWaterHistory();
 
 // ── Câblage des interactions (ex-handlers inline, retirés pour la CSP enforced) ──
 // Les attributs onclick ont été remplacés par des data-attributes + addEventListener
@@ -887,144 +867,7 @@ document.querySelectorAll('[data-water-nav-mode]').forEach(el =>
   el.addEventListener('click', () => setWaterNavMode(el.dataset.waterNavMode)));
 document.querySelectorAll('[data-chart-days]').forEach(el =>
   el.addEventListener('click', () => loadChart(parseInt(el.dataset.chartDays, 10))));
-document.getElementById('gas-btn')?.addEventListener('click', submitGas);
-document.getElementById('water-btn')?.addEventListener('click', submitWater);
 
-// ── Meter reading tables (gas / water) ───────────────────────────────────────
-// Rendu désormais piloté par l'API (api?action=gas_history|water_history) au
-// chargement et après chaque saisie : un seul chemin de rendu, plus de duplication
-// avec le serveur, et la page ne dépend plus de la BDD pour ces tables.
-function fmtM3(v) {
-  // Aligné sur number_format($x, 3, '.', ' ') côté serveur :
-  // décimale point, séparateur de milliers espace (8523.456 -> "8 523.456").
-  const parts = parseFloat(v).toFixed(3).split('.');
-  return parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ' ') + '.' + parts[1];
-}
-
-function renderReadings(tbodyId, rows, emptyLabel) {
-  const tbody = document.getElementById(tbodyId);
-  if (!tbody) return;
-  if (!Array.isArray(rows) || rows.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="3" class="td-empty">${emptyLabel}</td></tr>`;
-    return;
-  }
-  tbody.innerHTML = rows.map(r =>
-    `<tr>
-      <td>${window.TZ ? window.TZ.formatReadingAt(r.reading_at) : r.reading_at.slice(0, 16)}</td>
-      <td>${fmtM3(r.counter_m3)}</td>
-      <td class="td-delta">${r.delta_m3 !== null ? '+' + fmtM3(r.delta_m3) + ' m³' : '—'}</td>
-    </tr>`
-  ).join('');
-}
-
-async function loadGasHistory() {
-  try {
-    const res = await fetch('api?action=gas_history');
-    renderReadings('gas-tbody', await res.json(), 'Aucune entrée gaz enregistrée.');
-  } catch (e) { /* la table reste vide en cas d'erreur réseau */ }
-}
-
-async function loadWaterHistory() {
-  try {
-    const res = await fetch('api?action=water_history');
-    renderReadings('water-tbody', await res.json(), 'Aucune entrée eau enregistrée.');
-  } catch (e) { /* idem */ }
-}
-
-// ── Gas entry ──────────────────────────────────────────────────────────────
-async function submitGas() {
-  const btn      = document.getElementById('gas-btn');
-  const feedback = document.getElementById('gas-feedback');
-  const date     = document.getElementById('gas-date').value;
-  const time     = document.getElementById('gas-time').value || '00:00';
-  const value    = parseFloat(document.getElementById('gas-value').value);
-
-  feedback.textContent = '';
-  feedback.className   = 'form-feedback';
-
-  if (!date || isNaN(value) || value <= 0) {
-    feedback.textContent = '⚠ Renseigne une date et une valeur valide.';
-    feedback.className   = 'form-feedback err';
-    return;
-  }
-
-  btn.disabled    = true;
-  btn.textContent = 'Envoi…';
-
-  try {
-    const res  = await fetch('api?action=gas_entry', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ counter_m3: value, reading_at: window.TZ ? window.TZ.localInputToDbUtc(date, time) : `${date} ${time}:00` }),
-    });
-    const data = await res.json();
-
-    if (data.ok) {
-      feedback.textContent = `✓ Enregistré — ${data.counter_m3} m³ le ${window.TZ ? window.TZ.formatReadingAt(data.saved_at).slice(0, 10) : data.saved_at.slice(0, 10)}`;
-      feedback.className   = 'form-feedback ok';
-      document.getElementById('gas-value').value = '';
-      // Reload gas table
-      await loadGasHistory();
-      // Refresh gas cost block
-      document.dispatchEvent(new Event('gas-entry-saved'));
-    } else {
-      feedback.textContent = '✗ ' + (data.error || 'Erreur inconnue.');
-      feedback.className   = 'form-feedback err';
-    }
-  } catch (e) {
-    feedback.textContent = '✗ Erreur réseau.';
-    feedback.className   = 'form-feedback err';
-  } finally {
-    btn.disabled    = false;
-    btn.textContent = 'Enregistrer';
-  }
-}
-
-// ── Water entry ────────────────────────────────────────────────────────────
-async function submitWater() {
-  const btn      = document.getElementById('water-btn');
-  const feedback = document.getElementById('water-feedback');
-  const date     = document.getElementById('water-date').value;
-  const time     = document.getElementById('water-time').value || '00:00';
-  const value    = parseFloat(document.getElementById('water-value').value);
-
-  feedback.textContent = '';
-  feedback.className   = 'form-feedback';
-
-  if (!date || isNaN(value) || value <= 0) {
-    feedback.textContent = '⚠ Renseigne une date et une valeur valide.';
-    feedback.className   = 'form-feedback err';
-    return;
-  }
-
-  btn.disabled    = true;
-  btn.textContent = 'Envoi…';
-
-  try {
-    const res  = await fetch('api?action=water_entry', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ counter_m3: value, reading_at: window.TZ ? window.TZ.localInputToDbUtc(date, time) : `${date} ${time}:00` }),
-    });
-    const data = await res.json();
-
-    if (data.ok) {
-      feedback.textContent = `✓ Enregistré — ${data.counter_m3} m³ le ${window.TZ ? window.TZ.formatReadingAt(data.saved_at).slice(0, 10) : data.saved_at.slice(0, 10)}`;
-      feedback.className   = 'form-feedback ok';
-      document.getElementById('water-value').value = '';
-      // Reload water table
-      await loadWaterHistory();
-      // Refresh water consumption block
-      document.dispatchEvent(new Event('water-entry-saved'));
-    } else {
-      feedback.textContent = '✗ ' + (data.error || 'Erreur inconnue.');
-      feedback.className   = 'form-feedback err';
-    }
-  } catch (e) {
-    feedback.textContent = '✗ Erreur réseau.';
-    feedback.className   = 'form-feedback err';
-  } finally {
-    btn.disabled    = false;
-    btn.textContent = 'Enregistrer';
-  }
-}
+// ── Relevés d'index gaz / eau ────────────────────────────────────────────────
+// Retirés du dashboard (#194) : les index bruts sont consultables et éditables
+// sur la page meter-readings. Le dashboard ne conserve que les blocs de coûts.

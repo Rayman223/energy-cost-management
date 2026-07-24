@@ -177,24 +177,6 @@ $fmt = function (mixed $v, int $dec = 3, string $unit = 'kWh'): string {
     <canvas id="energyChart"></canvas>
   </div>
 
-  <!-- ── Gas + Sync ────────────────────────────────────────────────────── -->
-  <div class="section-header">
-    <span class="section-title"><?= $this->te('dash.gas') ?></span>
-    <span class="section-line"></span>
-  </div>
-
-  <div class="gas-grid gas-grid-history-only">
-    <div class="gas-history">
-      <table>
-        <thead><tr><th>Date &amp; heure</th><th>Index (m³)</th><th>Delta</th></tr></thead>
-        <tbody id="gas-tbody">
-          <!-- Rempli via api.php?action=gas_history (dashboard.js) au chargement -->
-          <tr><td colspan="3" class="td-empty">Chargement…</td></tr>
-        </tbody>
-      </table>
-    </div>
-  </div>
-
   <!-- ── Estimation coûts gaz ─────────────────────────────────────────── -->
   <div class="section-header">
     <span class="section-title">Estimation coûts gaz</span>
@@ -218,24 +200,6 @@ $fmt = function (mixed $v, int $dec = 3, string $unit = 'kWh'): string {
   <!-- Dynamic gas cost content -->
   <div id="gas-cost-content">
     <div class="async-note">Chargement…</div>
-  </div>
-
-  <!-- ── Eau ──────────────────────────────────────────────────────────── -->
-  <div class="section-header">
-    <span class="section-title"><?= $this->te('dash.water') ?></span>
-    <span class="section-line"></span>
-  </div>
-
-  <div class="gas-grid gas-grid-history-only">
-    <div class="gas-history">
-      <table>
-        <thead><tr><th>Date &amp; heure</th><th>Index (m³)</th><th>Delta</th></tr></thead>
-        <tbody id="water-tbody">
-          <!-- Rempli via api.php?action=water_history (dashboard.js) au chargement -->
-          <tr><td colspan="3" class="td-empty">Chargement…</td></tr>
-        </tbody>
-      </table>
-    </div>
   </div>
 
   <!-- ── Consommation eau ─────────────────────────────────────────────── -->
