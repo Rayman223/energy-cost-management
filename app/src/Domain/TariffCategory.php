@@ -54,6 +54,21 @@ enum TariffCategory: string
     }
 
     /**
+     * Catégorie par défaut d'une ligne sans catégorie explicite, avec un correctif
+     * par clé : la fourniture d'eau (water_supply) est la consommation elle-même,
+     * à ranger dans « Énergie » et non dans les taxes — son kind per_m3, partagé
+     * avec les taxes d'assainissement, ne permet pas de l'en distinguer.
+     */
+    public static function defaultForLine(string $key, ComponentKind $kind): self
+    {
+        if ($key === 'water_supply') {
+            return self::Energy;
+        }
+
+        return self::defaultForKind($kind);
+    }
+
+    /**
      * Catégories pertinentes pour un type d'énergie : affichées même vides (pour y
      * ranger un champ). L'injection ne concerne que l'électricité ; les autres
      * s'appliquent à toutes les énergies. Une catégorie non pertinente mais portant

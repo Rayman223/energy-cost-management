@@ -45,6 +45,18 @@ final class TariffCategoryTest extends TestCase
         }
     }
 
+    public function testDefaultForLineClassesWaterSupplyAsEnergy(): void
+    {
+        // La fourniture d'eau (per_m3) est la consommation → catégorie Énergie,
+        // là où son kind seul la classerait dans les taxes.
+        self::assertSame(TariffCategory::Energy, TariffCategory::defaultForLine('water_supply', ComponentKind::PerM3));
+        // Les autres lignes per_m3 (assainissement, fonds social) restent en taxes.
+        self::assertSame(TariffCategory::Taxes, TariffCategory::defaultForLine('sanitation_communal', ComponentKind::PerM3));
+        self::assertSame(TariffCategory::Taxes, TariffCategory::defaultForLine('social_fund', ComponentKind::PerM3));
+        // Hors cas spécial, defaultForLine reproduit defaultForKind.
+        self::assertSame(TariffCategory::Fixed, TariffCategory::defaultForLine('subscription', ComponentKind::FixedMonthly));
+    }
+
     public function testRelevantForExcludesInjectionOutsideElectricity(): void
     {
         self::assertSame(TariffCategory::values(), TariffCategory::relevantFor('electricity'));

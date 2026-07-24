@@ -42,6 +42,25 @@ enum ComponentKind: string
         return array_map(static fn (self $k): string => $k->value, self::cases());
     }
 
+    /**
+     * Kinds proposables dans le formulaire pour un type d'énergie (issue #191).
+     * Ne restreint PAS la validation à la soumission : des grilles existantes
+     * peuvent porter des kinds hors liste (ex. per_kwh sur une grille eau).
+     *
+     * @return list<self>
+     */
+    public static function forEnergy(string $energyType): array
+    {
+        return match ($energyType) {
+            'gas'   => [self::EnergyFlat, self::PerKwh, self::FixedMonthly, self::FixedAnnual],
+            'water' => [self::PerM3, self::FixedMonthly, self::FixedAnnual],
+            default => array_values(array_filter(
+                self::cases(),
+                static fn (self $k): bool => $k !== self::PerM3,
+            )),
+        };
+    }
+
     /** Repli sûr : une valeur inconnue devient une taxe €/kWh. */
     public static function fromStringOrDefault(string $value): self
     {

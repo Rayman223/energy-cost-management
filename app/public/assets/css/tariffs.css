@@ -62,6 +62,9 @@
               padding:14px 20px; border-top:1px solid var(--border); gap:16px; }
   .grid-row:first-child { border:none; }
   .grid-row:hover { background:var(--surface2); }
+  /* Mise en évidence de la grille active / grisage des expirées (issue #192). */
+  .grid-row--active  { box-shadow:inset 3px 0 0 var(--green); }
+  .grid-row--expired { opacity:.55; }
   .grid-name  { font-weight:700; font-size:.95rem; color:var(--text-strong); }
   .grid-dates { font-family:var(--mono); font-size:.78rem; color:var(--muted); margin-top:3px; }
   .grid-active { display:inline-block; padding:2px 8px; border-radius:4px; font-size:.74rem; font-weight:700; }
@@ -113,17 +116,35 @@
   /* ── Lignes tarifaires groupées ──────────────────────────────────────── */
   .lines-wrap { margin-top:20px; }
   .line-group { margin-top:22px; }
-  .line-group-title { font-size:.76rem; font-weight:700; letter-spacing:.15em; text-transform:uppercase;
-                      color:var(--muted); margin-bottom:12px; padding-bottom:8px; border-bottom:1px solid var(--border); }
+  /* En-tête de catégorie repliable + compteur « rempli/total » (issue #192). */
+  .line-group-title { display:flex; align-items:center; gap:10px; width:100%; text-align:left; cursor:pointer;
+                      background:transparent; border:none; border-bottom:1px solid var(--border);
+                      font-family:inherit; font-size:.76rem; font-weight:700; letter-spacing:.15em; text-transform:uppercase;
+                      color:var(--muted); margin-bottom:12px; padding:0 0 8px; }
+  .line-group-title::before { content:'▾'; font-size:.7rem; letter-spacing:0; transition:transform .15s; }
+  .line-group.is-collapsed .line-group-title::before { transform:rotate(-90deg); }
+  .line-group.is-collapsed .line-group-body { display:none; }
+  .line-group-count { margin-left:auto; font-family:var(--mono); font-size:.72rem; font-weight:400;
+                      text-transform:none; letter-spacing:0; color:var(--muted);
+                      border:1px solid var(--border2); border-radius:10px; padding:1px 8px; }
   .line-group-body { grid-template-columns:1fr 1fr; }
   .line-item.is-custom { gap:8px; }
   .line-kind-select { margin-top:2px; }
   .line-category-select { margin-top:2px; }
   .line-amount-row { display:flex; gap:8px; align-items:center; }
   .line-amount-row .form-input { flex:1; }
+  /* Libellé / type / catégorie affichés en texte hors édition (issue #192) ;
+     le montant, lui, reste toujours un input. */
+  .line-field-display { display:flex; align-items:center; gap:8px; width:100%; text-align:left; cursor:pointer;
+                        background:transparent; border:1px dashed var(--border2); border-radius:6px; padding:9px 12px;
+                        color:var(--text); font-family:var(--mono); font-size:.9rem; }
+  .line-field-display:hover { border-color:var(--amber); }
+  .line-field-pencil { color:var(--muted); font-size:.85rem; flex-shrink:0; }
   /* Tarif dynamique : ligne d'énergie fournisseur ignorée au calcul (prix ENTSO-E). */
   .line-item.is-dynamic-ignored { opacity:.55; }
   .dynamic-ignored-hint { margin:4px 0 0; font-size:.75rem; color:var(--muted); font-style:italic; }
+  /* Aide sur la sémantique des dates de validité (issue #190). */
+  .dates-hint { margin:0; font-size:.75rem; color:var(--muted); font-style:italic; }
   /* Légende du sélecteur « type de composante » (issue #179). */
   .kind-legend { margin:8px 0 0; font-size:.8rem; color:var(--muted); }
   .line-remove { padding:5px 11px; font-size:1rem; line-height:1; }

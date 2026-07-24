@@ -105,8 +105,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($name === '')      throw new \InvalidArgumentException($view->t('tariffs.name_required'));
             if ($validFrom === '') throw new \InvalidArgumentException($view->t('tariffs.from_required'));
 
-            $catalogKeys = TariffLineCatalog::keysFor($energyType);
-
             // Lignes dynamiques : lines[N][key|kind|label|amount].
             $lines    = [];
             $usedKeys = [];
@@ -133,8 +131,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     throw new \InvalidArgumentException($view->t('tariffs.invalid_value', ['key' => $key]));
                 }
 
-                $isCustom = !in_array($key, $catalogKeys, true);
-                if ($isCustom && $label === '') throw new \InvalidArgumentException($view->t('tariffs.label_required'));
+                // Toute ligne est éditable : un libellé est requis (les lignes du
+                // catalogue arrivent avec leur libellé pré-rempli).
+                if ($label === '') throw new \InvalidArgumentException($view->t('tariffs.label_required'));
 
                 // Déduplication : la persistance et fetchLines indexent par line_key ;
                 // deux champs custom au même libellé (donc même clé) perdraient une ligne.
@@ -148,15 +147,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
                 $usedKeys[$key] = true;
 
-                // Catégorie d'affichage choisie ; valeur inconnue/vide → défaut dérivé du kind.
+                // Catégorie d'affichage choisie ; valeur inconnue/vide → défaut dérivé de la clé/kind.
                 $category = TariffCategory::tryFrom(strtolower(trim((string) ($row['category'] ?? ''))))
-                    ?? TariffCategory::defaultForKind($kind);
+                    ?? TariffCategory::defaultForLine($key, $kind);
 
                 $lines[] = [
                     'key'      => $key,
                     'amount'   => $val,
                     'kind'     => $kind->value,
-                    'label'    => $isCustom ? $label : null,
+                    'label'    => $label,
                     'category' => $category->value,
                 ];
             }
@@ -295,33 +294,32 @@ $sourceTemplate = ($editGrid === null && $_SERVER['REQUEST_METHOD'] === 'POST')
 
 // ── Résolution de la structure du formulaire ────────────────────────────────
 // Priorité : grille éditée > template importé > dernière grille > template défaut.
-/** @var list<array{key:string,kind:string,label:string,amount:string,custom:bool}> $formFields */
+/** @var list<array{key:string,kind:string,label:string,amount:string,category:string}> $formFields */
 $formFields = [];
 if ($editGrid !== null) {
     $formCountry  = $editGrid->country;
     $formCurrency = $editGrid->currency;
     $formVat      = $editGrid->vatRate;
 } else {
-    $formCountry  = $profile?->country;
+    // #189 : continuité avec la reprise de structure/montants depuis $latest — le
+    // pays de la dernière grille prime, le profil ne sert qu'à la toute première.
+    $formCountry  = $latest !== null ? $latest->country : $profile?->country;
     $formCurrency = $profile->currency ?? 'EUR';
     $formVat      = ($formCountry !== null ? EuropeanCountries::vatRate($formCountry) : null) ?? 21.0;
 }
 
 $buildFieldsFromSpecs = static function (array $specs, array $amounts, string $energy) use ($fieldLabel): array {
-    $catalogKeys = TariffLineCatalog::keysFor($energy);
     $out = [];
     foreach ($specs as $spec) {
         $key    = $spec['key'];
-        $custom = !in_array($key, $catalogKeys, true);
         $kind   = ComponentKind::fromStringOrDefault((string) $spec['kind']);
-        // Catégorie stockée si valide, sinon défaut dérivé du kind (legacy / template fourni).
-        $category = TariffCategory::tryFrom((string) ($spec['category'] ?? '')) ?? TariffCategory::defaultForKind($kind);
+        // Catégorie stockée si valide, sinon défaut dérivé de la clé/kind (legacy / template fourni).
+        $category = TariffCategory::tryFrom((string) ($spec['category'] ?? '')) ?? TariffCategory::defaultForLine($key, $kind);
         $out[] = [
             'key'      => $key,
             'kind'     => $spec['kind'],
             'label'    => $fieldLabel($energy, $key, $spec['label'] ?? null),
             'amount'   => isset($amounts[$key]) ? rtrim(rtrim(number_format($amounts[$key], 7, '.', ''), '0'), '.') : '',
-            'custom'   => $custom,
             'category' => $category->value,
         ];
     }
@@ -398,9 +396,10 @@ foreach (TariffCategory::cases() as $c) {
 // Options du sélecteur de type de composante, regroupées par famille (energy /
 // taxes / fixed / injection) pour être rendues en <optgroup> : réduit la
 // confusion des 11 choix techniques (issue #179). L'ordre des groupes suit
-// celui des cases() de l'enum.
+// celui des cases() de l'enum. Filtrées par énergie (issue #191) : ni per_m3 en
+// électricité, ni kWh/injection en eau, gaz réduit à l'énergie simple + fixes.
 $kindOptions = [];
-foreach (ComponentKind::cases() as $k) {
+foreach (ComponentKind::forEnergy($energy) as $k) {
     $kindOptions[$k->group()][$k->value] = $view->t('tariffs.kind.' . $k->value);
 }
 

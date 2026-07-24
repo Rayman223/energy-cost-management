@@ -11,8 +11,8 @@ namespace App\Domain;
  * $label NULL = libellé du catalogue déduit de $key (TariffLineCatalog / i18n).
  * $label renseigné = champ personnalisé ajouté par l'utilisateur.
  *
- * $category NULL = catégorie d'affichage dérivée du kind (rétro-compat des lignes
- * créées avant les catégories) ; renseignée = rangement choisi par l'utilisateur.
+ * $category NULL = catégorie d'affichage dérivée de la clé/kind (rétro-compat des
+ * lignes créées avant les catégories) ; renseignée = rangement choisi par l'utilisateur.
  */
 final class TariffLine
 {
@@ -26,9 +26,9 @@ final class TariffLine
     ) {
     }
 
-    /** Catégorie effective : celle choisie, sinon le défaut dérivé du kind. */
+    /** Catégorie effective : celle choisie, sinon le défaut dérivé de la clé/kind. */
     public function category(): TariffCategory
     {
-        return $this->category ?? TariffCategory::defaultForKind($this->kind);
+        return $this->category ?? TariffCategory::defaultForLine($this->key, $this->kind);
     }
 }

@@ -13,7 +13,7 @@ use App\Domain\TariffLineCatalog;
  * @var list<string>                                                         $energyTypes
  * @var TariffGrid[]                                                         $grids       Grilles de l'énergie active
  * @var TariffGrid|null                                                      $editGrid
- * @var list<array{key:string,kind:string,label:string,amount:string,custom:bool,category:string}> $formFields
+ * @var list<array{key:string,kind:string,label:string,amount:string,category:string}> $formFields
  * @var string|null                                                          $formCountry
  * @var string                                                               $formCurrency
  * @var float                                                                $formVat
@@ -107,11 +107,13 @@ $energyLabels = [
 <?php if (empty($grids)): ?>
   <div class="empty"><?= $this->te('tariffs.none') ?></div>
 <?php else: foreach ($grids as $g):
-  $active = $g->isActiveOn(new \DateTimeImmutable('today'));
-  $rowId  = 'lines-' . $g->id;
+  $today0  = new \DateTimeImmutable('today');
+  $active  = $g->isActiveOn($today0);
+  $expired = $g->validTo !== null && $g->validTo < $today0;
+  $rowId   = 'lines-' . $g->id;
   $catalog = TariffLineCatalog::forType($g->energyType);
 ?>
-  <div class="grid-row">
+  <div class="grid-row<?= $active ? ' grid-row--active' : '' ?><?= $expired ? ' grid-row--expired' : '' ?>">
     <div>
       <div class="grid-name"><?= $this->e($g->name) ?></div>
       <div class="grid-dates">
@@ -275,6 +277,9 @@ $energyLabels = [
         <input type="date" name="valid_to" class="form-input"
                value="<?= $this->e($editGrid?->validTo?->format('Y-m-d') ?? '') ?>">
       </div>
+      <div class="form-row full">
+        <p class="dates-hint"><?= $this->te('tariffs.dates_hint') ?></p>
+      </div>
       <div class="form-row">
         <label class="form-label"><?= $this->te('tariffs.country') ?></label>
         <select name="country" class="form-select" data-country-select>
@@ -311,12 +316,31 @@ $energyLabels = [
     </div>
 
     <!-- Lignes tarifaires groupées par catégorie (choisie par l'utilisateur) -->
-    <div class="lines-wrap">
+    <?php
+      // #192 : compteur « rempli/total » par groupe (une seule passe) ; $anyFilled
+      // en découle. Garde-fou du repli : si AUCUNE ligne n'est remplie (nouvelle
+      // grille depuis template), on n'auto-replie rien pour ne pas cacher un
+      // formulaire vide.
+      $filledByGroup = [];
+      foreach ($grouped as $gk => $gRows) {
+          $filledByGroup[$gk] = count(array_filter($gRows, static fn (array $r): bool => $r['amount'] !== ''));
+      }
+      $anyFilled = array_sum($filledByGroup) > 0;
+    ?>
+    <div class="lines-wrap" data-edit-field="<?= $this->e($this->t('tariffs.edit_field')) ?>">
       <?php foreach ($groupOrder as $group): ?>
         <?php // Catégorie vide et non pertinente pour cette énergie (ex. Injection en gaz/eau) : masquée.
               if (empty($grouped[$group]) && !in_array($group, $relevantCategories, true)) continue; ?>
-        <div class="line-group" data-group="<?= $this->e($group) ?>">
-          <div class="line-group-title"><?= $this->te('tariffs.group_' . $group) ?></div>
+        <?php
+          $total    = count($grouped[$group] ?? []);
+          $filled   = $filledByGroup[$group] ?? 0;
+          $collapse = $anyFilled && $filled === 0;
+        ?>
+        <div class="line-group<?= $collapse ? ' is-collapsed' : '' ?>" data-group="<?= $this->e($group) ?>">
+          <button type="button" class="line-group-title" data-toggle-group aria-expanded="<?= $collapse ? 'false' : 'true' ?>">
+            <?= $this->te('tariffs.group_' . $group) ?>
+            <span class="line-group-count" data-group-count title="<?= $this->e($this->t('tariffs.group_filled', ['filled' => (string) $filled, 'total' => (string) $total])) ?>"><?= $filled ?>/<?= $total ?></span>
+          </button>
           <div class="form-grid line-group-body">
             <?php foreach (($grouped[$group] ?? []) as $f):
               $i = $f['i'];
@@ -325,25 +349,33 @@ $energyLabels = [
               // (valeurs toujours postées) pour rebasculer en fixe sans re-saisie.
               $ignoredInDynamic = $isDynamic && ComponentKind::fromStringOrDefault($f['kind'])->isSupplierEnergy();
             ?>
-            <div class="form-row line-item <?= $f['custom'] ? 'is-custom' : '' ?><?= $ignoredInDynamic ? ' is-dynamic-ignored' : '' ?>">
+            <?php
+              // Toute ligne est pleinement éditable (libellé, type, catégorie,
+              // montant) et supprimable — plus de distinction catalogue/custom.
+              // Une ligne peut porter un kind hors liste pour cette énergie (ex.
+              // grille eau importée avec per_kwh) : on réinjecte alors l'option
+              // courante, sinon la soumission remplacerait silencieusement son kind.
+              $currentKind = ComponentKind::fromStringOrDefault($f['kind']);
+              $kindListed  = false;
+              foreach ($kindOptions as $groupOpts) { if (isset($groupOpts[$currentKind->value])) { $kindListed = true; break; } }
+            ?>
+            <div class="form-row line-item is-custom<?= $ignoredInDynamic ? ' is-dynamic-ignored' : '' ?>">
               <input type="hidden" name="lines[<?= $i ?>][key]" value="<?= $this->e($f['key']) ?>">
-              <?php if ($f['custom']): ?>
               <label class="form-label">
                 <input type="text" name="lines[<?= $i ?>][label]" class="form-input line-label-input" placeholder="<?= $this->e($this->t('tariffs.field_label')) ?>" value="<?= $this->e($f['label']) ?>">
               </label>
               <select name="lines[<?= $i ?>][kind]" class="form-select line-kind-select">
+                <?php if (!$kindListed): ?>
+                <option value="<?= $this->e($currentKind->value) ?>" selected><?= $this->e($this->t('tariffs.kind.' . $currentKind->value)) ?></option>
+                <?php endif; ?>
                 <?php foreach ($kindOptions as $groupKey => $groupOpts): ?>
                 <optgroup label="<?= $this->e($this->t('tariffs.kind_group.' . $groupKey)) ?>">
                   <?php foreach ($groupOpts as $kv => $klabel): ?>
-                  <option value="<?= $this->e($kv) ?>" <?= $f['kind'] === $kv ? 'selected' : '' ?>><?= $this->e($klabel) ?></option>
+                  <option value="<?= $this->e($kv) ?>" <?= $currentKind->value === $kv ? 'selected' : '' ?>><?= $this->e($klabel) ?></option>
                   <?php endforeach; ?>
                 </optgroup>
                 <?php endforeach; ?>
               </select>
-              <?php else: ?>
-              <label class="form-label"><?= $this->e($f['label']) ?> <span class="unit"><?= $this->e(ComponentKind::fromStringOrDefault($f['kind'])->unit($energy)) ?></span></label>
-              <input type="hidden" name="lines[<?= $i ?>][kind]" value="<?= $this->e($f['kind']) ?>">
-              <?php endif; ?>
               <select name="lines[<?= $i ?>][category]" class="form-select line-category-select" aria-label="<?= $this->e($this->t('tariffs.category')) ?>">
                 <?php foreach ($categoryOptions as $cv => $clabel): ?>
                 <option value="<?= $this->e($cv) ?>" <?= $f['category'] === $cv ? 'selected' : '' ?>><?= $this->e($clabel) ?></option>
@@ -351,7 +383,7 @@ $energyLabels = [
               </select>
               <div class="line-amount-row">
                 <input type="number" name="lines[<?= $i ?>][amount]" step="0.0000001" class="form-input" placeholder="0.0000000" value="<?= $this->e($f['amount']) ?>">
-                <?php if ($f['custom']): ?><button type="button" class="btn btn-ghost btn-sm line-remove" data-remove-line aria-label="<?= $this->e($this->t('tariffs.remove_field')) ?>">×</button><?php endif; ?>
+                <button type="button" class="btn btn-ghost btn-sm line-remove" data-remove-line aria-label="<?= $this->e($this->t('tariffs.remove_field')) ?>">×</button>
               </div>
               <?php if ($ignoredInDynamic): ?><p class="dynamic-ignored-hint"><?= $this->te('tariffs.energy_ignored_dynamic') ?></p><?php endif; ?>
             </div>
@@ -364,8 +396,11 @@ $energyLabels = [
       <?php endforeach; ?>
     </div>
 
-    <!-- Légende du sélecteur « type de composante » (issue #179) -->
+    <!-- Légende du sélecteur « type de composante » (issue #179) : concepts propres
+         à l'électricité (T1/T2 jour-nuit, injection) → masquée pour gaz et eau. -->
+    <?php if ($energy === 'electricity'): ?>
     <p class="kind-legend"><?= $this->te('tariffs.kind_legend') ?></p>
+    <?php endif; ?>
 
     <!-- Sauvegarde comme template -->
     <div class="save-tpl-row">

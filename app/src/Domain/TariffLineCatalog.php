@@ -56,10 +56,10 @@ final class TariffLineCatalog
     public static function water(): array
     {
         return [
-            'water_supply'         => ['label' => 'Fourniture (distribution)',   'unit' => '€/m³'],
+            'water_supply'         => ['label' => 'Consommation — fourniture',   'unit' => '€/m³'],
             'sanitation_communal'  => ['label' => 'Assainissement communal',     'unit' => '€/m³'],
-            'sanitation_regional'  => ['label' => 'Assainissement régional (CVA)', 'unit' => '€/m³'],
-            'social_fund'          => ['label' => 'Fonds social de l\'eau',       'unit' => '€/m³'],
+            'sanitation_regional'  => ['label' => 'Assainissement régional',     'unit' => '€/m³'],
+            'social_fund'          => ['label' => 'Fonds social de l\'eau',      'unit' => '€/m³'],
             'meter_rental_annual'  => ['label' => 'Redevance compteur',          'unit' => '€/an'],
         ];
     }

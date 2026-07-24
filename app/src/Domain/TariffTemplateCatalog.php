@@ -23,47 +23,20 @@ final class TariffTemplateCatalog
 {
     /** Clés (dans TariffLineCatalog) composant chaque template builtin. */
     private const DEFINITIONS = [
-        'be_electricity' => [
-            'energy_type' => 'electricity',
-            'country'     => 'BE',
-            'keys'        => [
-                'energy_t1', 'energy_t2', 'subscription', 'distribution_t1', 'distribution_t2',
-                'transport', 'management_annual', 'prosumer_annual', 'excise_duty',
-                'energy_contribution', 'green_contribution', 'public_service_annual',
-                'injection_t1', 'injection_t2',
-            ],
-        ],
-        'be_gas' => [
-            'energy_type' => 'gas',
-            'country'     => 'BE',
-            'keys'        => [
-                'energy', 'subscription', 'energy_contribution', 'federal_excise',
-                'distribution', 'distribution_fixed', 'transport', 'meter_reading_annual',
-                'connection_fee_kwh', 'public_service_annual',
-            ],
-        ],
-        'be_water' => [
-            'energy_type' => 'water',
-            'country'     => 'BE',
-            'keys'        => [
-                'water_supply', 'sanitation_communal', 'sanitation_regional',
-                'social_fund', 'meter_rental_annual',
-            ],
-        ],
         'generic_electricity' => [
             'energy_type' => 'electricity',
             'country'     => null,
-            'keys'        => ['energy_simple', 'subscription', 'transport', 'excise_duty'],
+            'keys'        => ['energy_t1', 'energy_t2', 'distribution_t1', 'distribution_t2', 'subscription', 'transport'],
         ],
         'generic_gas' => [
             'energy_type' => 'gas',
             'country'     => null,
-            'keys'        => ['energy', 'subscription', 'distribution', 'federal_excise'],
+            'keys'        => ['energy', 'subscription', 'distribution', 'transport', 'federal_excise'],
         ],
         'generic_water' => [
             'energy_type' => 'water',
             'country'     => null,
-            'keys'        => ['water_supply', 'sanitation_communal', 'meter_rental_annual'],
+            'keys'        => ['water_supply'],
         ],
     ];
 
@@ -116,15 +89,14 @@ final class TariffTemplateCatalog
     }
 
     /**
-     * Template par défaut pour une énergie et un pays : la variante belge si le
-     * pays est BE, sinon la variante générique.
+     * Template par défaut pour une énergie : la variante générique (il n'existe
+     * plus de template builtin spécifique à un pays ; ceux-ci sont désormais
+     * créés par les utilisateurs). Le pays n'influe plus sur la structure.
      *
      * @return Template
      */
     public static function defaultFor(string $energyType, ?string $country): array
     {
-        $prefix = strtoupper((string) $country) === 'BE' ? 'be_' : 'generic_';
-
-        return self::build($prefix . $energyType);
+        return self::build('generic_' . $energyType);
     }
 }

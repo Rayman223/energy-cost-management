@@ -63,5 +63,9 @@ final class TariffLineCatalogTest extends TestCase
         $gas = TariffLineCatalog::gas();
         self::assertSame('Énergie fournisseur', $gas['energy']['label']);
         self::assertSame('€/mois', $gas['subscription']['unit']);
+
+        $water = TariffLineCatalog::water();
+        self::assertSame('Consommation — fourniture', $water['water_supply']['label']);
+        self::assertSame('€/m³', $water['water_supply']['unit']);
     }
 }
