@@ -118,7 +118,7 @@ async function submitUtility(prefix, action) {
   const feedbackId = `${prefix}-feedback`;
 
   setFeedback(feedbackId, '');
-  if (!date || isNaN(value) || value <= 0) {
+  if (!date || isNaN(value) || value < 0) {
     setFeedback(feedbackId, tr('invalidUtility', '⚠ Enter a date and a valid value.'), 'err');
     return;
   }
