@@ -21,6 +21,12 @@ $preconnects = $preconnects ?? [];
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title><?= $this->e($title) ?></title>
+<!-- Favicon (#195) : .ico multi-résolution (16/32/48), apple-touch pour iOS, manifest PWA.
+     Chemins relatifs (comme le reste du partial) pour rester corrects en déploiement sous-répertoire. -->
+<link rel="icon" href="<?= \App\Support\Assets::url('favicon.ico') ?>" sizes="16x16 32x32 48x48">
+<link rel="apple-touch-icon" href="<?= \App\Support\Assets::url('apple-touch-icon.png') ?>">
+<link rel="manifest" href="<?= \App\Support\Assets::url('site.webmanifest') ?>">
+<meta name="theme-color" content="#b8650a"><?php /* aligne le chrome navigateur sur theme_color du manifest */ ?>
 <!-- Anti-FOUC : pose le thème avant le 1er rendu. Bloquant volontairement (pas de defer). -->
 <script src="<?= \App\Support\Assets::url('assets/js/theme-init.js') ?>"></script>
 <?php foreach ($preconnects as $origin): ?>
