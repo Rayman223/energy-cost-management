@@ -793,7 +793,7 @@ function costVatRows(c, row) {
 let chart = null;
 
 async function loadChart(days = 30) {
-  ['btn-30','btn-60','btn-90'].forEach(id => {
+  ['btn-30','btn-365'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.style.color = '';
   });
@@ -807,6 +807,30 @@ async function loadChart(days = 30) {
   } catch (e) {
     console.warn('Chart load failed:', e);
   }
+}
+
+// Options Chart.js communes (thème sombre, typo Space Mono). Seuls l'unité
+// affichée (kWh / m³), le nombre de décimales du tooltip et l'empilement de
+// l'axe X varient d'un graphe à l'autre — factorisés ici pour éviter la
+// divergence de thème entre le graphe électricité et les graphes volume.
+function chartOptions({ unit, decimals, stackedX = false }) {
+  return {
+    responsive: true,
+    maintainAspectRatio: false,
+    interaction: { mode: 'index', intersect: false },
+    plugins: {
+      legend: { labels: { color: '#556070', font: { family: "'Space Mono'", size: 11 }, boxWidth: 12 } },
+      tooltip: {
+        backgroundColor: '#111318', borderColor: '#1f2530', borderWidth: 1,
+        titleColor: '#c8d0dc', bodyColor: '#8899a8',
+        callbacks: { label: ctx => ` ${ctx.dataset.label}: ${(ctx.raw || 0).toFixed(decimals)} ${unit}` },
+      },
+    },
+    scales: {
+      x: { stacked: stackedX, grid: { color: '#1a1f28' }, ticks: { color: '#556070', font: { family: "'Space Mono'", size: 10 }, maxRotation: 45 } },
+      y: { stacked: false, grid: { color: '#1a1f28' }, ticks: { color: '#556070', font: { family: "'Space Mono'", size: 10 }, callback: v => v + ' ' + unit } },
+    },
+  };
 }
 
 function renderChart(data) {
@@ -830,25 +854,86 @@ function renderChart(data) {
         { label: 'Production PV', data: solar, type: 'line', borderColor: 'rgba(47,213,142,.8)', backgroundColor: 'rgba(47,213,142,.08)', fill: true, tension: .3, pointRadius: 2, borderWidth: 2 },
       ],
     },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      interaction: { mode: 'index', intersect: false },
-      plugins: {
-        legend: { labels: { color: '#556070', font: { family: "'Space Mono'", size: 11 }, boxWidth: 12 } },
-        tooltip: {
-          backgroundColor: '#111318', borderColor: '#1f2530', borderWidth: 1,
-          titleColor: '#c8d0dc', bodyColor: '#8899a8',
-          callbacks: { label: ctx => ` ${ctx.dataset.label}: ${(ctx.raw || 0).toFixed(2)} kWh` },
-        },
-      },
-      scales: {
-        x: { stacked: true, grid: { color: '#1a1f28' }, ticks: { color: '#556070', font: { family: "'Space Mono'", size: 10 }, maxRotation: 45 } },
-        y: { stacked: false, grid: { color: '#1a1f28' }, ticks: { color: '#556070', font: { family: "'Space Mono'", size: 10 }, callback: v => v + ' kWh' } },
-      },
-    },
+    options: chartOptions({ unit: 'kWh', decimals: 2, stackedX: true }),
   });
 }
+
+// ── Charts volume (gaz / eau) ───────────────────────────────────────────────
+// Même principe que le graphe électricité, mais une barre PAR RELEVÉ (les relevés
+// gaz/eau sont manuels et clairsemés : un bucket journalier serait quasi vide).
+// La valeur est le delta_m3 déjà calculé par getAllReadings ; la plage 30j/1an se
+// fait par filtrage client de la série (fetch unique, peu de points).
+const utilCharts = { gas: null, water: null };
+const utilData   = { gas: null, water: null };
+
+function renderVolumeChart(canvasId, kind, rows, label, color) {
+  const labels = rows.map(r => (window.TZ ? window.TZ.formatReadingAt(r.reading_at).slice(0, 10) : String(r.reading_at).slice(0, 10)));
+  const values = rows.map(r => Math.max(0, r.delta_m3 || 0));
+
+  const ctx = document.getElementById(canvasId).getContext('2d');
+  if (utilCharts[kind]) utilCharts[kind].destroy();
+
+  utilCharts[kind] = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [
+        { label, data: values, backgroundColor: color.fill, borderColor: color.line, borderWidth: 1 },
+      ],
+    },
+    options: chartOptions({ unit: 'm³', decimals: 3 }),
+  });
+}
+
+const UTIL_META = {
+  gas:   { action: 'gas_history',   canvas: 'gasChart',   label: 'Conso gaz (m³)',  color: { fill: 'rgba(245,166,35,.55)', line: 'rgba(245,166,35,.8)' }, btnPrefix: 'gas-btn-' },
+  water: { action: 'water_history', canvas: 'waterChart', label: 'Conso eau (m³)',  color: { fill: 'rgba(65,179,245,.55)', line: 'rgba(65,179,245,.8)' }, btnPrefix: 'water-btn-' },
+};
+
+function filterAndRenderUtil(kind, days) {
+  const meta = UTIL_META[kind];
+  ['30','365'].forEach(d => {
+    const el = document.getElementById(meta.btnPrefix + d);
+    if (el) el.style.color = '';
+  });
+  const btn = document.getElementById(meta.btnPrefix + days);
+  if (btn) btn.style.color = 'var(--amber)';
+
+  const rows   = utilData[kind] || [];
+  const cutoff = Date.now() - days * 86400000;
+  const kept   = rows
+    // Le relevé le plus ancien a delta_m3 === null (aucune conso à afficher) :
+    // l'écarter évite une barre à 0 avec un label d'axe inutile.
+    .filter(r => r.delta_m3 != null)
+    .filter(r => {
+      const d = window.TZ ? window.TZ.dateFromDbUtc(r.reading_at) : new Date(r.reading_at);
+      return !isNaN(d.getTime()) && d.getTime() >= cutoff;
+    })
+    .sort((a, b) => String(a.reading_at).localeCompare(String(b.reading_at)));
+
+  renderVolumeChart(meta.canvas, kind, kept, meta.label, meta.color);
+}
+
+async function loadUtilChart(kind, days = 365) {
+  const meta = UTIL_META[kind];
+  if (utilData[kind] === null) {
+    try {
+      const res = await fetch(`api?action=${meta.action}`);
+      utilData[kind] = await res.json();
+    } catch (e) {
+      // On NE met PAS l'échec en cache (utilData reste null) : un clic ultérieur
+      // sur 30j/1an retentera le fetch. Sinon un incident réseau au chargement
+      // figerait le graphe vide jusqu'au rechargement complet de la page.
+      console.warn(`Chart ${kind} load failed:`, e);
+    }
+  }
+  filterAndRenderUtil(kind, days);
+}
+
+// Défaut « 1 an » pour gaz/eau : les relevés sont clairsemés (souvent mensuels),
+// une fenêtre 30j par défaut afficherait fréquemment un graphe vide.
+loadUtilChart('gas', 365);
+loadUtilChart('water', 365);
 
 // ── Live dongle polling ────────────────────────────────────────────────────
 // Retiré (P4, #47) : le serveur communautaire ne peut pas atteindre les
@@ -867,6 +952,10 @@ document.querySelectorAll('[data-water-nav-mode]').forEach(el =>
   el.addEventListener('click', () => setWaterNavMode(el.dataset.waterNavMode)));
 document.querySelectorAll('[data-chart-days]').forEach(el =>
   el.addEventListener('click', () => loadChart(parseInt(el.dataset.chartDays, 10))));
+document.querySelectorAll('[data-gas-chart-days]').forEach(el =>
+  el.addEventListener('click', () => loadUtilChart('gas', parseInt(el.dataset.gasChartDays, 10))));
+document.querySelectorAll('[data-water-chart-days]').forEach(el =>
+  el.addEventListener('click', () => loadUtilChart('water', parseInt(el.dataset.waterChartDays, 10))));
 
 // ── Relevés d'index gaz / eau ────────────────────────────────────────────────
 // Retirés du dashboard (#194) : les index bruts sont consultables et éditables

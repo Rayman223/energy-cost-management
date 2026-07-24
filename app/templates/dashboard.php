@@ -164,18 +164,30 @@ $fmt = function (mixed $v, int $dec = 3, string $unit = 'kWh'): string {
   ?>
   <script type="application/json" id="dashboard-data"><?= json_encode($dashboardData, JSON_HEX_TAG | JSON_UNESCAPED_UNICODE) ?></script>
 
-  <!-- ── Chart ─────────────────────────────────────────────────────────── -->
+  <!-- ── Chart électricité ─────────────────────────────────────────────── -->
   <div class="section-header">
-    <span class="section-title">Historique 30 jours</span>
+    <span class="section-title">Historique électricité</span>
     <span class="section-line"></span>
     <div class="btn-row">
       <button class="btn btn-ghost btn-xs" id="btn-30" data-chart-days="30">30j</button>
-      <button class="btn btn-ghost btn-xs" id="btn-60" data-chart-days="60">60j</button>
-      <button class="btn btn-ghost btn-xs" id="btn-90" data-chart-days="90">90j</button>
+      <button class="btn btn-ghost btn-xs" id="btn-365" data-chart-days="365">1 an</button>
     </div>
   </div>
   <div class="chart-card">
     <canvas id="energyChart"></canvas>
+  </div>
+
+  <!-- ── Chart gaz ─────────────────────────────────────────────────────── -->
+  <div class="section-header">
+    <span class="section-title">Historique gaz</span>
+    <span class="section-line"></span>
+    <div class="btn-row">
+      <button class="btn btn-ghost btn-xs" id="gas-btn-30" data-gas-chart-days="30">30j</button>
+      <button class="btn btn-ghost btn-xs" id="gas-btn-365" data-gas-chart-days="365">1 an</button>
+    </div>
+  </div>
+  <div class="chart-card">
+    <canvas id="gasChart"></canvas>
   </div>
 
   <!-- ── Estimation coûts gaz ─────────────────────────────────────────── -->
@@ -201,6 +213,19 @@ $fmt = function (mixed $v, int $dec = 3, string $unit = 'kWh'): string {
   <!-- Dynamic gas cost content -->
   <div id="gas-cost-content">
     <div class="async-note">Chargement…</div>
+  </div>
+
+  <!-- ── Chart eau ─────────────────────────────────────────────────────── -->
+  <div class="section-header">
+    <span class="section-title">Historique eau</span>
+    <span class="section-line"></span>
+    <div class="btn-row">
+      <button class="btn btn-ghost btn-xs" id="water-btn-30" data-water-chart-days="30">30j</button>
+      <button class="btn btn-ghost btn-xs" id="water-btn-365" data-water-chart-days="365">1 an</button>
+    </div>
+  </div>
+  <div class="chart-card">
+    <canvas id="waterChart"></canvas>
   </div>
 
   <!-- ── Consommation eau ─────────────────────────────────────────────── -->
