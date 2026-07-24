@@ -287,6 +287,7 @@ return [
 
     // API-verzendgids (#132)
     'apiguide.title' => 'API-verzendgids',
+    'apiguide.subtitle' => 'Documentatie',
     'apiguide.intro' => 'Deze pagina legt uit hoe u uw meterstanden (elektriciteit, gas, water) automatisch naar de app stuurt met een API-token. Maak eerst een token aan via „Mijn account” en gebruik het vervolgens in uw verzoeken zoals hieronder getoond.',
     'apiguide.auth_title' => 'Authenticatie',
     'apiguide.auth_desc' => 'Elk verzoek moet uw token bevatten in de HTTP-header Authorization (tokens beginnen met „mec_”):',

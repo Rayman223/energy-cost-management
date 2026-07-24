@@ -288,6 +288,7 @@ return [
 
     // API sending guide (#132)
     'apiguide.title' => 'API sending guide',
+    'apiguide.subtitle' => 'Documentation',
     'apiguide.intro' => 'This page explains how to automatically push your readings (electricity, gas, water) to the app using an API token. First create a token from “My account”, then use it in your requests as shown below.',
     'apiguide.auth_title' => 'Authentication',
     'apiguide.auth_desc' => 'Every request must carry your token in the HTTP Authorization header (tokens start with “mec_”):',

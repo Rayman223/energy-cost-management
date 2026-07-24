@@ -26,23 +26,18 @@ $csrf = \App\Security\Csrf::field();
 <head>
 <?= $this->partial('_head', [
     'title' => $this->t('account.title') . ' — ' . $this->t('app.title'),
-    'css'   => ['assets/css/confirm.css', 'assets/css/backoffice.css', 'assets/css/account.css'],
+    'css'   => ['assets/css/app-header.css', 'assets/css/confirm.css', 'assets/css/backoffice.css', 'assets/css/account.css'],
 ]) ?>
 </head>
 <body>
 <div class="wrap">
-  <header>
-    <div>
-      <div class="logo-text">⚡ <?= $this->te('account.title') ?></div>
-      <div class="logo-sub"><?= $this->e($user?->displayName ?? '') ?><?= $user?->isAdmin() ? ' · ' . $this->te('account.admin') : '' ?></div>
-    </div>
-    <div>
-      <?= $this->partial('discord-link', ['url' => $discordUrl ?? null]) ?>
-      <span class="langs"><?php foreach ($available as $loc): ?><a href="?lang=<?= $this->e($loc) ?>"<?= $loc === $this->locale() ? ' class="lang-active"' : '' ?>><?= $this->e(\App\I18n\Locale::displayName($loc)) ?></a><?php endforeach; ?></span>
-      &nbsp; <a href="<?= $this->url() ?>"><?= $this->te('nav.back_dashboard') ?></a>
-      <?php if (!empty($oidcEnabled)): ?>&nbsp; <form method="post" action="<?= $this->url('auth/logout') ?>" class="logout-form"><?= \App\Security\Csrf::field() ?><button type="submit" class="link-button"><?= $this->te('auth.sign_out') ?></button></form><?php endif; ?>
-    </div>
-  </header>
+  <?= $this->partial('_header', [
+      'subtitle'    => ($user?->displayName ?? '') . ($user?->isAdmin() ? ' · ' . $this->t('account.admin') : ''),
+      'current'     => 'account',
+      'isAdmin'     => $user?->isAdmin() ?? false,
+      'discordUrl'  => $discordUrl ?? null,
+      'available'   => $available,
+  ]) ?>
 
   <?php if ($success !== null): ?><div class="banner ok"><?= $this->e($success) ?></div><?php endif; ?>
   <?php if ($error !== null): ?><div class="banner err"><?= $this->e($error) ?></div><?php endif; ?>
@@ -307,6 +302,7 @@ foreach (\App\Service\Import\ImportMapping::UNITS as $type => $units) {
 }
 ?>
 <script type="application/json" id="import-units"><?= json_encode($unitOptions, JSON_HEX_TAG | JSON_UNESCAPED_UNICODE) ?></script>
+<script defer src="<?= \App\Support\Assets::url('assets/js/header.js') ?>"></script>
 <script defer src="<?= \App\Support\Assets::url('assets/js/import.js') ?>"></script>
 <script defer src="<?= \App\Support\Assets::url('assets/js/confirm.js') ?>"></script>
 </body>

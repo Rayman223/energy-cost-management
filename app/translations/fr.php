@@ -298,6 +298,7 @@ return [
 
     // Guide d'envoi API (#132)
     'apiguide.title' => 'Guide d’envoi API',
+    'apiguide.subtitle' => 'Documentation',
     'apiguide.intro' => 'Cette page explique comment pousser automatiquement vos relevés (électricité, gaz, eau) vers l’application à l’aide d’un jeton API. Créez d’abord un jeton depuis « Mon compte », puis utilisez-le dans vos requêtes comme ci-dessous.',
     'apiguide.auth_title' => 'Authentification',
     'apiguide.auth_desc' => 'Chaque requête doit porter votre jeton dans l’en-tête HTTP Authorization (les jetons commencent par « mec_ ») :',

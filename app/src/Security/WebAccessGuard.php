@@ -74,6 +74,18 @@ final class WebAccessGuard
     }
 
     /**
+     * Oublie l'authentification de session du mode Basic Auth (form-based) : retire
+     * le jeton `web_auth`. Symétrique de {@see self::authenticateForm()} ; permet
+     * une vraie déconnexion du compte unique même sans OIDC. Appelée par la route
+     * `auth/logout`.
+     */
+    public static function forgetSession(): void
+    {
+        self::startSession();
+        unset($_SESSION['web_auth']);
+    }
+
+    /**
      * Compare le couple fourni aux identifiants attendus, sans effet de bord (pas
      * de session). Les valeurs attendues comme fournies sont `trim`ées : un
      * espace/retour-ligne parasite (copier-coller depuis config.php) ne doit pas

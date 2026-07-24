@@ -4,9 +4,13 @@ declare(strict_types=1);
 
 use App\Http\SecurityHeaders;
 use App\I18n\Locale;
+use App\Infrastructure\Database;
+use App\Repository\UserRepository;
 use App\Security\AuthGuard;
 use App\Security\Session;
+use App\Security\UserContext;
 use App\Security\WebAccessGuard;
+use App\Support\DiscordLink;
 use App\View\ViewFactory;
 
 /**
@@ -62,8 +66,22 @@ if ($trustedHosts !== []) {
 }
 $apiUrl = $scheme . '://' . $host . WebAccessGuard::appRootPath() . '/api';
 
+// Statut admin pour l'en-tête commun (#193). Lecture DB défensive : cette page est
+// conçue pour rester lisible même sans base — un échec dégrade en `false` (icône
+// admin masquée) sans casser le guide.
+$isAdmin = false;
+try {
+    $pdo     = (new Database($config['database']))->pdo();
+    $users   = new UserRepository($pdo);
+    $isAdmin = $users->findById(UserContext::currentWebUserId($pdo, $config))?->isAdmin() ?? false;
+} catch (\Throwable) {
+    $isAdmin = false;
+}
+
 echo $view->render('api-guide', [
-    'apiUrl'    => $apiUrl,
-    'rateLimit' => (int) ($config['api']['rate_limit_per_hour'] ?? 600),
-    'available' => Locale::available($config),
+    'apiUrl'      => $apiUrl,
+    'rateLimit'   => (int) ($config['api']['rate_limit_per_hour'] ?? 600),
+    'available'   => Locale::available($config),
+    'isAdmin'     => $isAdmin,
+    'discordUrl'  => DiscordLink::inviteUrl($config),
 ]);

@@ -9,33 +9,8 @@
     background-size: 28px 28px;
   }
 
-  /* ── Layout ────────────────────────────────────────────────────────────── */
-  .wrap { max-width: 1280px; margin: 0 auto; padding: 0 24px 60px; }
-
-  /* ── Header ────────────────────────────────────────────────────────────── */
-  header {
-    display: flex; align-items: center; justify-content: space-between;
-    padding: 22px 0 18px;
-    border-bottom: 1px solid var(--border);
-    gap: 16px; flex-wrap: wrap;
-  }
-  .logo { display: flex; align-items: center; gap: 14px; }
-  .logo-icon {
-    width: 40px; height: 40px;
-    background: var(--amber);
-    border-radius: 8px;
-    display: grid; place-items: center;
-    font-size: 20px;
-    flex-shrink: 0;
-    box-shadow: 0 0 20px rgba(245,166,35,.35);
-  }
-  .logo-text { font-size: 1.15rem; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; color: var(--text-strong); }
-  .logo-sub  { font-family: var(--mono); font-size: .76rem; color: var(--muted); letter-spacing: .08em; margin-top: 1px; }
-
-  .header-right { display: flex; align-items: center; gap: 20px; flex-wrap: wrap; }
-  .clock { font-family: var(--mono); font-size: .8rem; color: var(--muted); text-align: right; }
-  .clock span { display: block; }
-  .clock .time { font-size: 1.05rem; color: var(--text); }
+  /* Layout (.wrap) et en-tête (header/.logo/.clock/.langs) mutualisés dans
+     app-header.css (#193). */
 
   /* ── Section titles ─────────────────────────────────────────────────────── */
   .section-header {
@@ -305,8 +280,7 @@
   .gas-grid-history-only { grid-template-columns: 1fr; }
 
   /* ── Résidus d'attributs style inline migrés en classes (#98) ────────────── */
-  .langs { font-size: .72rem; letter-spacing: .03em; }
-  .langs a { text-decoration: none; margin: 0 3px; }
+  /* .langs mutualisé dans app-header.css (#193). */
   .deltas-range { font-family: var(--mono); font-size: .76rem; color: var(--muted); }
   .dot--amber     { background: var(--amber); }
   .dot--amber-dim { background: var(--amber); opacity: .6; }

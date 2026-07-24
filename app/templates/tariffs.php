@@ -58,27 +58,19 @@ $energyLabels = [
 <head>
 <?= $this->partial('_head', [
     'title' => $this->t('tariffs.title') . ' — ' . $this->t('app.title'),
-    'css'   => ['assets/css/confirm.css', 'assets/css/tariffs.css'],
+    'css'   => ['assets/css/app-header.css', 'assets/css/confirm.css', 'assets/css/tariffs.css'],
 ]) ?>
 </head>
 <body>
 <div class="wrap">
 
-<header>
-  <div class="logo">
-    <div class="logo-icon">⚡</div>
-    <div>
-      <div class="logo-text">Manage Energy</div>
-      <div class="logo-sub"><?= $this->te('tariffs.subtitle') ?></div>
-    </div>
-  </div>
-  <div class="header-right">
-    <a href="<?= $this->url() ?>" class="back"><?= $this->te('nav.back_dashboard') ?></a>
-    <?= $this->partial('discord-link', ['url' => $discordUrl ?? null]) ?>
-    <?php if (!empty($oidcEnabled)): ?><form method="post" action="<?= $this->url('auth/logout') ?>" class="logout-form"><?= \App\Security\Csrf::field() ?><button type="submit" class="theme-toggle" title="<?= $this->te('auth.sign_out') ?>">🚪</button></form><?php endif; ?>
-    <button type="button" class="theme-toggle" id="theme-toggle" aria-label="<?= $this->e($this->t('common.theme')) ?>">🌙</button>
-  </div>
-</header>
+<?= $this->partial('_header', [
+    'subtitle'    => $this->t('tariffs.subtitle'),
+    'current'     => 'tariffs',
+    'isAdmin'     => $isAdmin ?? false,
+    'discordUrl'  => $discordUrl ?? null,
+    'available'   => $available,
+]) ?>
 
 <?php if ($success): ?>
 <div class="alert alert-ok alert--push">✓ <?= $this->e($success) ?></div>
@@ -460,6 +452,7 @@ $energyLabels = [
 
 </div>
 
+<script defer src="<?= \App\Support\Assets::url('assets/js/header.js') ?>"></script>
 <script defer src="<?= \App\Support\Assets::url('assets/js/confirm.js') ?>"></script>
 <script defer src="<?= \App\Support\Assets::url('assets/js/tariffs.js') ?>" data-next-index="<?= $nextIndex ?>"></script>
 </body>

@@ -34,7 +34,7 @@ $fmt = function (mixed $v, int $dec = 3, string $unit = 'kWh'): string {
 <head>
 <?= $this->partial('_head', [
     'title'       => 'Manage Energy',
-    'css'         => ['assets/css/dashboard.css'],
+    'css'         => ['assets/css/app-header.css', 'assets/css/dashboard.css'],
     'preconnects' => ['https://cdn.jsdelivr.net'],
 ]) ?>
 <!-- defer : ne bloque pas le parsing du HTML ; s'exécute avant dashboard.js (aussi defer, ordre du document préservé). -->
@@ -44,29 +44,13 @@ $fmt = function (mixed $v, int $dec = 3, string $unit = 'kWh'): string {
 <div class="wrap">
 
   <!-- ── Header ─────────────────────────────────────────────────────────── -->
-  <header>
-    <div class="logo">
-      <div class="logo-icon">⚡</div>
-      <div>
-        <div class="logo-text">Manage Energy</div>
-        <div class="logo-sub">Dashboard</div>
-      </div>
-    </div>
-    <div class="header-right">
-      <div class="clock">
-        <span class="time" id="clock-time">--:--:--</span>
-        <span id="clock-date">--- -- ----</span>
-      </div>
-      <a href="<?= $this->url('meter-readings') ?>" class="theme-toggle" title="<?= $this->te('nav.meter_readings') ?>">📝</a>
-      <?php if (!empty($isAdmin)): ?><a href="<?= $this->url('admin') ?>" class="theme-toggle" title="<?= $this->te('admin.title') ?>">🛡</a><?php endif; ?>
-      <a href="<?= $this->url('tariffs') ?>" class="theme-toggle" title="Tarifs">€</a>
-      <a href="<?= $this->url('account') ?>" class="theme-toggle" title="Mon compte">👤</a>
-      <?php if (!empty($oidcEnabled)): ?><form method="post" action="<?= $this->url('auth/logout') ?>" class="logout-form"><?= \App\Security\Csrf::field() ?><button type="submit" class="theme-toggle" title="<?= $this->te('auth.sign_out') ?>">🚪</button></form><?php endif; ?>
-      <?= $this->partial('discord-link', ['url' => $discordUrl ?? null]) ?>
-      <span class="langs"><?php foreach ($available as $loc): ?><a href="?lang=<?= $this->e($loc) ?>"<?= $loc === $this->locale() ? ' class="lang-active"' : '' ?>><?= $this->e(strtoupper($loc)) ?></a><?php endforeach; ?></span>
-      <button type="button" class="theme-toggle" id="theme-toggle" aria-label="Changer de thème">🌙</button>
-    </div>
-  </header>
+  <?= $this->partial('_header', [
+      'subtitle'    => 'Dashboard',
+      'current'     => 'dashboard',
+      'isAdmin'     => $isAdmin ?? false,
+      'discordUrl'  => $discordUrl ?? null,
+      'available'   => $available,
+  ]) ?>
 
   <?php if ($dbError): ?>
   <div class="error-banner">
@@ -285,6 +269,7 @@ $fmt = function (mixed $v, int $dec = 3, string $unit = 'kWh'): string {
 
 </div><!-- /wrap -->
 
+<script defer src="<?= \App\Support\Assets::url('assets/js/header.js') ?>"></script>
 <script defer src="<?= \App\Support\Assets::url('assets/js/tz.js') ?>"></script>
 <script defer src="<?= \App\Support\Assets::url('assets/js/dashboard.js') ?>"></script>
 </body>

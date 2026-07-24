@@ -32,6 +32,9 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST' || Csrf::validate($_POST[Csrf::FIELD] 
 }
 
 AuthSession::logout();
+// Mode Basic Auth (form-based, sans OIDC) : la déconnexion doit aussi retirer le
+// jeton de session `web_auth`, sinon AuthGuard::protect maintiendrait la session.
+WebAccessGuard::forgetSession();
 
 header('Location: ' . $home, true, 303);
 exit;

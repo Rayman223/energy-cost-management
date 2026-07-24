@@ -19,6 +19,7 @@ $dbError = null;
 $gasLatest = null;
 $waterLatest = null;
 $timezone = 'Europe/Brussels';
+$isAdmin = false;
 
 require_once __DIR__ . '/../../vendor/autoload.php';
 
@@ -34,6 +35,7 @@ try {
     $userId = UserContext::currentWebUserId($pdo, $config);
     $users  = new UserRepository($pdo);
     $profile = $users->getProfile($userId);
+    $isAdmin = $users->findById($userId)?->isAdmin() ?? false;
     $timezone = $profile->timezone ?? 'Europe/Brussels';
     $view   = LocaleContext::viewFor($config, $users, $userId, $profile?->locale, __DIR__ . '/../templates');
 
@@ -50,6 +52,7 @@ $view ??= ViewFactory::create(__DIR__ . '/../templates', Locale::resolve($config
 echo $view->render('meter_readings', [
     'oidcEnabled' => AuthGuard::isOidcEnabled($config),
     'discordUrl'  => DiscordLink::inviteUrl($config),
+    'isAdmin' => $isAdmin,
     'dbError' => $dbError,
     'gasLatest' => $gasLatest,
     'waterLatest' => $waterLatest,

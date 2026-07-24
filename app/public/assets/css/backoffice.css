@@ -2,9 +2,7 @@
    inline d'account.php / admin.php (#98). Chargé AVANT account.css / admin.css :
    ne contient que les règles identiques aux deux pages. */
 body { font-family: 'Syne', system-ui, sans-serif; background: var(--bg); color: var(--text); margin: 0; }
-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px; }
-.logo-text { font-weight: 800; font-size: 1.2rem; }
-.logo-sub { color: var(--muted); font-size: .78rem; }
+/* En-tête (header/.logo-text/.logo-sub/.langs) mutualisé dans app-header.css (#193). */
 a { color: var(--blue); }
 .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 20px; margin-bottom: 20px; }
 .card h2 { margin: 0 0 4px; font-size: 1.05rem; }
@@ -15,6 +13,5 @@ a { color: var(--blue); }
 .banner.warn { background: rgba(210,160,60,.15); color: var(--amber); }
 code { font-family: 'Space Mono', monospace; background: var(--bg); padding: 2px 6px; border-radius: 5px; }
 .muted { color: var(--muted); }
-.langs a { margin-left: 8px; font-size: .8rem; }
 .banner--tight { margin-bottom: 12px; }
 .import-errors { font-size: .82rem; margin: 0 0 12px; }

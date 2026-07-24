@@ -1,10 +1,11 @@
 /* « Mon compte » — règles spécifiques, complètent backoffice.css (#98). */
-.wrap { max-width: 860px; margin: 0 auto; padding: 24px 18px 64px; }
+/* Largeur (.wrap) mutualisée dans app-header.css (#193). */
 label { display: block; font-size: .82rem; color: var(--muted); margin: 10px 0 4px; }
 input[type=text], select { width: 100%; box-sizing: border-box; padding: 8px 10px; border-radius: 8px;
   border: 1px solid var(--border); background: var(--bg); color: var(--text); font-family: 'Space Mono', monospace; }
 .row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-button { cursor: pointer; padding: 9px 16px; border-radius: 8px; border: 1px solid var(--border);
+/* :not(.theme-toggle) : ne pas cibler les boutons du header commun (#193). */
+button:not(.theme-toggle) { cursor: pointer; padding: 9px 16px; border-radius: 8px; border: 1px solid var(--border);
   background: var(--blue); color: #fff; font-weight: 600; margin-top: 14px; }
 button.ghost { background: transparent; color: var(--text); }
 button.danger { background: var(--red, #d43); }

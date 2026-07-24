@@ -803,20 +803,9 @@ function costVatRows(c, row) {
   });
 })();
 
-// ── Clock ──────────────────────────────────────────────────────────────────
-(function clock() {
-  const timeEl = document.getElementById('clock-time');
-  const dateEl = document.getElementById('clock-date');
-  const DAYS   = ['Dim','Lun','Mar','Mer','Jeu','Ven','Sam'];
-  const MONTHS = ['jan','fév','mar','avr','mai','jun','jul','aoû','sep','oct','nov','déc'];
-  function tick() {
-    const now = new Date();
-    timeEl.textContent = now.toTimeString().slice(0, 8);
-    dateEl.textContent = `${DAYS[now.getDay()]} ${now.getDate()} ${MONTHS[now.getMonth()]} ${now.getFullYear()}`;
-  }
-  tick();
-  setInterval(tick, 1000);
-})();
+// ── Horloge ─────────────────────────────────────────────────────────────────
+// Déplacée dans assets/js/header.js (bandeau commun, #193), chargé sur toutes
+// les pages app.
 
 // ── Chart ──────────────────────────────────────────────────────────────────
 let chart = null;

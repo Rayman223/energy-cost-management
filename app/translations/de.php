@@ -287,6 +287,7 @@ return [
 
     // API-Sendeleitfaden (#132)
     'apiguide.title' => 'API-Sendeleitfaden',
+    'apiguide.subtitle' => 'Dokumentation',
     'apiguide.intro' => 'Diese Seite erklärt, wie Sie Ihre Messwerte (Strom, Gas, Wasser) mithilfe eines API-Tokens automatisch an die App senden. Erstellen Sie zunächst ein Token unter „Mein Konto“ und verwenden Sie es dann wie unten gezeigt in Ihren Anfragen.',
     'apiguide.auth_title' => 'Authentifizierung',
     'apiguide.auth_desc' => 'Jede Anfrage muss Ihr Token im HTTP-Header Authorization enthalten (Tokens beginnen mit „mec_“):',

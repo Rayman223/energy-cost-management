@@ -17,24 +17,18 @@ $csrf = \App\Security\Csrf::field();
 <head>
 <?= $this->partial('_head', [
     'title' => $this->t('admin.title') . ' — ' . $this->t('app.title'),
-    'css'   => ['assets/css/backoffice.css', 'assets/css/admin.css'],
+    'css'   => ['assets/css/app-header.css', 'assets/css/backoffice.css', 'assets/css/admin.css'],
 ]) ?>
 </head>
 <body>
 <div class="wrap">
-  <header>
-    <div>
-      <div class="logo-text">🛡 <?= $this->te('admin.title') ?></div>
-      <div class="logo-sub"><?= $this->te('admin.subtitle') ?></div>
-    </div>
-    <div>
-      <?= $this->partial('discord-link', ['url' => $discordUrl ?? null]) ?>
-      <span class="langs"><?php foreach ($available as $loc): ?><a href="?lang=<?= $this->e($loc) ?>"<?= $loc === $this->locale() ? ' class="lang-active"' : '' ?>><?= $this->e(strtoupper($loc)) ?></a><?php endforeach; ?></span>
-      &nbsp; <a href="<?= $this->url('tariffs') ?>"><?= $this->te('nav.tariffs') ?></a>
-      &nbsp; <a href="<?= $this->url() ?>"><?= $this->te('nav.back_dashboard') ?></a>
-      <?php if (!empty($oidcEnabled)): ?>&nbsp; <form method="post" action="<?= $this->url('auth/logout') ?>" class="logout-form"><?= \App\Security\Csrf::field() ?><button type="submit" class="link-button"><?= $this->te('auth.sign_out') ?></button></form><?php endif; ?>
-    </div>
-  </header>
+  <?= $this->partial('_header', [
+      'subtitle'    => $this->t('admin.subtitle'),
+      'current'     => 'admin',
+      'isAdmin'     => true, // route réservée aux admins (admin.php)
+      'discordUrl'  => $discordUrl ?? null,
+      'available'   => $available,
+  ]) ?>
 
   <?php if ($error !== null): ?><div class="banner err"><?= $this->e($error) ?></div><?php endif; ?>
   <?php if ($success !== null): ?><div class="banner ok"><?= $this->e($success) ?></div><?php endif; ?>
@@ -104,5 +98,6 @@ $csrf = \App\Security\Csrf::field();
     <p><a href="<?= $this->url('tariffs') ?>">→ <?= $this->te('nav.tariffs') ?></a></p>
   </div>
 </div>
+<script defer src="<?= \App\Support\Assets::url('assets/js/header.js') ?>"></script>
 </body>
 </html>

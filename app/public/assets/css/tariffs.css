@@ -1,17 +1,11 @@
   body { background: var(--bg); color: var(--text); font-family: var(--sans); min-height: 100vh;
          background-image: radial-gradient(circle, var(--dotgrid) 1px, transparent 1px); background-size: 28px 28px;
          transition: background-color .25s ease, color .25s ease; }
-  .wrap { max-width: 1000px; margin: 0 auto; padding: 0 24px 60px; }
-
-  header { display:flex; align-items:center; justify-content:space-between; padding:22px 0 18px; border-bottom:1px solid var(--border); }
-  .logo { display:flex; align-items:center; gap:14px; }
-  .logo-icon { width:36px; height:36px; background:var(--amber); border-radius:8px; display:grid; place-items:center; font-size:18px; box-shadow:0 0 16px rgba(245,166,35,.3); }
-  .logo-text { font-size:1.05rem; font-weight:800; letter-spacing:.04em; text-transform:uppercase; color:var(--text-strong); }
-  .logo-sub  { font-family:var(--mono); font-size:.76rem; color:var(--muted); }
+  /* Largeur (.wrap) et en-tête (header/.logo/.header-right/.langs) mutualisés
+     dans app-header.css (#193). */
+  /* .back : lien « annuler » utilisé dans le contenu de la page (conservé). */
   .back { color:var(--blue); text-decoration:none; font-size:.85rem; font-family:var(--mono); }
   .back:hover { text-decoration:underline; }
-
-  .header-right { display:flex; align-items:center; gap:14px; }
 
   .section-header { display:flex; align-items:baseline; gap:12px; margin:32px 0 16px; }
   .section-title  { font-size:.76rem; font-weight:700; letter-spacing:.15em; text-transform:uppercase; color:var(--muted); }

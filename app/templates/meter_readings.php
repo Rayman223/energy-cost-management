@@ -14,27 +14,18 @@ $now = date('H:i');
 <head>
 <?= $this->partial('_head', [
     'title' => $this->t('meter.title') . ' — Manage Energy',
-    'css'   => ['assets/css/dashboard.css', 'assets/css/confirm.css'],
+    'css'   => ['assets/css/app-header.css', 'assets/css/dashboard.css', 'assets/css/confirm.css'],
 ]) ?>
 </head>
 <body>
 <div class="wrap">
-  <header>
-    <div class="logo">
-      <div class="logo-icon">📝</div>
-      <div>
-        <div class="logo-text"><?= $this->te('meter.title') ?></div>
-        <div class="logo-sub"><?= $this->te('meter.subtitle') ?></div>
-      </div>
-    </div>
-    <div class="header-right">
-      <a href="<?= $this->url() ?>" class="tool-link"><?= $this->te('nav.back_dashboard') ?></a>
-      <?= $this->partial('discord-link', ['url' => $discordUrl ?? null]) ?>
-      <span class="langs"><?php foreach ($available as $loc): ?><a href="?lang=<?= $this->e($loc) ?>" style="text-decoration:none;margin:0 3px<?= $loc === $this->locale() ? ';font-weight:700' : '' ?>"><?= $this->e(strtoupper($loc)) ?></a><?php endforeach; ?></span>
-      <?php if (!empty($oidcEnabled)): ?><form method="post" action="<?= $this->url('auth/logout') ?>" class="logout-form"><?= \App\Security\Csrf::field() ?><button type="submit" class="theme-toggle" title="<?= $this->te('auth.sign_out') ?>">🚪</button></form><?php endif; ?>
-      <button type="button" class="theme-toggle" id="theme-toggle" aria-label="<?= $this->te('common.theme') ?>">🌙</button>
-    </div>
-  </header>
+  <?= $this->partial('_header', [
+      'subtitle'    => $this->t('meter.subtitle'),
+      'current'     => 'meter-readings',
+      'isAdmin'     => $isAdmin ?? false,
+      'discordUrl'  => $discordUrl ?? null,
+      'available'   => $available,
+  ]) ?>
 
   <?php if ($dbError): ?>
   <div class="error-banner"><strong>⚠ <?= $this->te('dash.db_offline') ?></strong><?= $this->e($dbError) ?></div>
@@ -143,6 +134,7 @@ $now = date('H:i');
     ];
 ?>
 <script type="application/json" id="meter-data"><?= json_encode($meterData, JSON_HEX_TAG | JSON_UNESCAPED_UNICODE) ?></script>
+<script defer src="<?= \App\Support\Assets::url('assets/js/header.js') ?>"></script>
 <script defer src="<?= \App\Support\Assets::url('assets/js/tz.js') ?>"></script>
 <script defer src="<?= \App\Support\Assets::url('assets/js/confirm.js') ?>"></script>
 <script defer src="<?= \App\Support\Assets::url('assets/js/meter-readings.js') ?>"></script>
