@@ -63,6 +63,28 @@ async function loadHistory(action, tbodyId, emptyLabel, render = renderReadings)
 
 const ELEC_KEYS = ['import_t1', 'import_t2', 'export_t1', 'export_t2', 'production'];
 
+// Calcule en une seule passe le delta de chaque registre par rapport au relevé
+// précédent (plus ancien). Les lignes arrivent triées du plus récent au plus
+// ancien : on les remonte du plus ancien vers le plus récent en mémorisant la
+// dernière valeur non nulle vue par registre. Renvoie un tableau parallèle à
+// `rows` où deltas[i][key] vaut le delta (arrondi à 3 déc.) ou null (pas de
+// précédent, ou valeur courante nulle). L'arrondi évite qu'un résidu flottant
+// affiche un « -0.000 » rouge trompeur.
+function elecDeltas(rows) {
+  const deltas = rows.map(() => ({}));
+  const lastSeen = {};
+  for (let i = rows.length - 1; i >= 0; i--) {
+    for (const key of ELEC_KEYS) {
+      const cur = rows[i][key];
+      if (cur === null || cur === undefined) { deltas[i][key] = null; continue; }
+      const curNum = parseFloat(cur);
+      deltas[i][key] = key in lastSeen ? Math.round((curNum - lastSeen[key]) * 1000) / 1000 : null;
+      lastSeen[key] = curNum;
+    }
+  }
+  return deltas;
+}
+
 function renderElectricityReadings(tbodyId, rows, emptyLabel) {
   const tbody = document.getElementById(tbodyId);
   if (!tbody) return;
@@ -70,9 +92,19 @@ function renderElectricityReadings(tbodyId, rows, emptyLabel) {
     tbody.innerHTML = `<tr><td colspan="7" class="td-empty">${emptyLabel}</td></tr>`;
     return;
   }
-  const cell = (v) => (v === null || v === undefined) ? '—' : fmtIndex(v);
-  tbody.innerHTML = rows.map(r =>
-    `<tr><td>${window.TZ ? window.TZ.formatReadingAt(r.reading_at) : r.reading_at.slice(0, 16)}</td>${ELEC_KEYS.map(k => `<td>${cell(r[k])}</td>`).join('')}${delButton('data-at', r.reading_at)}</tr>`
+  const deltas = elecDeltas(rows);
+  const fmtDelta = (d) => `${d >= 0 ? '+' : ''}${fmtIndex(d)} kWh`;
+  // Cellule = valeur d'index + delta « en petit dessous » (bleu, rouge si négatif).
+  const cell = (i, key) => {
+    const v = rows[i][key];
+    if (v === null || v === undefined) return '—';
+    const d = deltas[i][key];
+    const sub = d === null ? '' :
+      `<span class="td-sub ${d < 0 ? 'td-delta-neg' : 'td-delta'}">${fmtDelta(d)}</span>`;
+    return `${fmtIndex(v)}${sub}`;
+  };
+  tbody.innerHTML = rows.map((r, i) =>
+    `<tr><td>${window.TZ ? window.TZ.formatReadingAt(r.reading_at) : r.reading_at.slice(0, 16)}</td>${ELEC_KEYS.map(k => `<td>${cell(i, k)}</td>`).join('')}${delButton('data-at', r.reading_at)}</tr>`
   ).join('');
 }
 

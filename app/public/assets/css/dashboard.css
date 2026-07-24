@@ -169,6 +169,9 @@
   tbody tr:hover { background: var(--surface2); }
   tbody td { padding: 10px 16px; font-family: var(--mono); color: var(--text); font-size: .9rem; }
   .td-delta { color: var(--blue); }
+  /* Delta d'index électricité empilé « en petit » sous la valeur (#198). */
+  .td-sub { display: block; font-size: .72rem; font-weight: 400; margin-top: 3px; }
+  .td-delta-neg { color: var(--red); }
   .td-empty { padding: 24px 16px; color: var(--muted); font-style: italic; font-size: .88rem; }
   /* Feedback de suppression : aligné sur le retrait des cellules (16px) et
      décollé du bord bas de la carte, plutôt que collé au coin. */
