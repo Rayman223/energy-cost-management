@@ -106,7 +106,7 @@ try {
         ? $zone
         : (string) ($config['dynamic_prices']['bidding_zone'] ?? DynamicPriceRepository::DEFAULT_ZONE);
 
-    $elecRepo   = new ElectricityReadingRepository($pdo, $userId, $profile->timezone ?? 'Europe/Brussels');
+    $elecRepo   = new ElectricityReadingRepository($pdo, $userId, $profile->timezone ?? 'UTC');
     $gasRepo    = new UtilityReadingRepository($pdo, $userId, 'gas');
     $waterRepo  = new UtilityReadingRepository($pdo, $userId, 'water');
     $syncState  = new WebhookSyncStateRepository($pdo, $userId);
@@ -124,7 +124,7 @@ try {
         pricingMode: $pricingMode,
         vatRatePercent: $profile->vatRate ?? 21.0,
         supplierMarkupPerKwh: $profile->supplierMarkupPerKwh ?? 0.0,
-        tariffTimezone: $profile->timezone ?? 'Europe/Brussels',
+        tariffTimezone: $profile->timezone ?? 'UTC',
     );
 } catch (\Throwable $e) {
     JsonResponse::error('Bootstrap failed: ' . $e->getMessage(), 503)->send();
@@ -133,9 +133,9 @@ try {
 
 // Plafonnement des index élec par registre et par créneau aligné (issue #165) :
 // un par jour en tarif fixe, un par tranche de 15 min en tarif dynamique. Fuseau
-// de l'utilisateur pour délimiter le créneau (défaut Europe/Brussels).
+// de l'utilisateur pour délimiter le créneau (repli UTC neutre si pas de profil).
 $elecThrottle = DynamicPricing::isEnabled($config) ? ReadingGranularity::QuarterHour : ReadingGranularity::Day;
-$userTimezone = $profile->timezone ?? 'Europe/Brussels';
+$userTimezone = $profile->timezone ?? 'UTC';
 
 $readings = new ReadingsController($elecRepo, $gasRepo, $waterRepo);
 $cost     = new CostController($costSvc, DynamicPricing::isEnabled($config));

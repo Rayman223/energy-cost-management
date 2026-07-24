@@ -14,11 +14,15 @@
  * @var bool|null         $isAdmin     Affiche l'icône Admin (défaut false)
  * @var string|null       $discordUrl  URL d'invitation Discord (partial discord-link)
  * @var list<string>|null $available   Locales disponibles pour le sélecteur (défaut [])
+ * @var string|null       $timezone    Fuseau IANA du profil pour l'horloge ; null/vide ⇒
+ *                                      l'horloge suit le fuseau du navigateur (heure locale
+ *                                      du visiteur), plutôt qu'un défaut géographique arbitraire
  */
 
 $current   = $current ?? '';
 $isAdmin   = !empty($isAdmin);
 $available = $available ?? [];
+$timezone  = $timezone ?? '';
 
 /**
  * Rend un lien de navigation en icône, marqué actif sur la page courante.
@@ -40,7 +44,8 @@ $navlink = function (string $page, string $url, string $icon, string $title) use
     </div>
   </a>
   <div class="header-right">
-    <div class="clock">
+    <?php /* data-timezone vide ⇒ header.js retombe sur le fuseau du navigateur. */ ?>
+    <div class="clock" data-timezone="<?= $this->e($timezone) ?>">
       <span class="time" id="clock-time">--:--:--</span>
       <span id="clock-date">--- -- ----</span>
     </div>

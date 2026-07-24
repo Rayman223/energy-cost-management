@@ -440,4 +440,6 @@ echo $view->render('tariffs', [
     'isAdmin'          => $isAdmin,
     'isDynamic'        => $isDynamic,
     'available'        => Locale::available($config),
+    // Fuseau BRUT du profil pour l'horloge (null ⇒ repli navigateur).
+    'timezone'         => $profile->timezone ?? null,
 ]);

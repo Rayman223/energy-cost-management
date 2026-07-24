@@ -18,7 +18,7 @@ $view    = null;
 $dbError = null;
 $gasLatest = null;
 $waterLatest = null;
-$timezone = 'Europe/Brussels';
+$timezone = 'UTC';
 $isAdmin = false;
 
 require_once __DIR__ . '/../../vendor/autoload.php';
@@ -36,7 +36,7 @@ try {
     $users  = new UserRepository($pdo);
     $profile = $users->getProfile($userId);
     $isAdmin = $users->findById($userId)?->isAdmin() ?? false;
-    $timezone = $profile->timezone ?? 'Europe/Brussels';
+    $timezone = $profile->timezone ?? 'UTC'; // repli UTC neutre si pas de profil
     $view   = LocaleContext::viewFor($config, $users, $userId, $profile?->locale, __DIR__ . '/../templates');
 
     $gasRepo = new UtilityReadingRepository($pdo, $userId, 'gas');
@@ -58,4 +58,7 @@ echo $view->render('meter_readings', [
     'waterLatest' => $waterLatest,
     'available' => Locale::available($config),
     'timezone' => $timezone,
+    // Fuseau BRUT du profil pour l'horloge (null ⇒ repli navigateur) ; $timezone
+    // (défaut UTC) reste concret pour les dates du bloc meter-data.
+    'clockTimezone' => $profile->timezone ?? null,
 ]);

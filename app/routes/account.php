@@ -98,7 +98,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 throw new \InvalidArgumentException($view->t('account.invalid_currency'));
             }
 
-            $timezone = trim((string) ($_POST['timezone'] ?? 'Europe/Brussels'));
+            $timezone = trim((string) ($_POST['timezone'] ?? 'UTC'));
             if (!in_array($timezone, \DateTimeZone::listIdentifiers(), true)) {
                 throw new \InvalidArgumentException($view->t('account.invalid_timezone'));
             }
@@ -209,7 +209,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $_POST,
                 $_FILES,
                 DynamicPricing::isEnabled($config) ? ReadingGranularity::QuarterHour : ReadingGranularity::Day,
-                $profileForLocale->timezone ?? 'Europe/Brussels',
+                $profileForLocale->timezone ?? 'UTC',
             );
             // Import tronqué (plafond atteint, données perdues) : pas de bannière
             // « terminé » trompeuse — l'avertissement du rapport tient lieu de signal.

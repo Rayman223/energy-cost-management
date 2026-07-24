@@ -37,7 +37,9 @@ final class UserProfileTest extends TestCase
         $profile = UserProfile::defaults();
 
         self::assertNull($profile->country);
-        self::assertSame('Europe/Brussels', $profile->timezone);
+        // Défaut neutre depuis #200 (ex-'Europe/Brussels') : l'UI pré-remplit le
+        // fuseau du navigateur, UTC ne restant que par repli.
+        self::assertSame('UTC', $profile->timezone);
         self::assertSame('EUR', $profile->currency);
         self::assertNull($profile->biddingZone);
         self::assertSame('fixed', $profile->pricingMode);

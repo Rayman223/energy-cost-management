@@ -27,7 +27,7 @@ $view         = null;
 $isAdmin      = false;
 $oidcEnabled  = false;
 $currency     = 'EUR';
-$timezone     = 'Europe/Brussels';
+$timezone     = 'UTC';
 $dbError      = null;
 $deltas       = null;
 $cost         = null;
@@ -86,8 +86,9 @@ try {
     $profile    = $users->getProfile($userId);
     $currency   = $profile->currency ?? 'EUR';
     // Fuseau d'affichage propre à l'utilisateur : les dates (stockées en UTC)
-    // sont reconverties vers ce fuseau côté client (window.APP_TIMEZONE).
-    $timezone   = $profile->timezone ?? 'Europe/Brussels';
+    // sont reconverties vers ce fuseau côté client (window.APP_TIMEZONE). Repli
+    // UTC (neutre, cohérent avec le stockage) si l'utilisateur n'a pas de profil.
+    $timezone   = $profile->timezone ?? 'UTC';
 
     // Locale (profil, surchargée par ?lang persisté) → View configurée.
     $view = LocaleContext::viewFor($config, $users, $userId, $profile?->locale, __DIR__ . '/../templates');
@@ -165,4 +166,8 @@ echo $view->render('dashboard', [
     'discordUrl'   => DiscordLink::inviteUrl($config),
     'currency'     => $currency,
     'timezone'     => $timezone,
+    // Fuseau BRUT du profil pour l'horloge (null si aucun profil) : l'horloge
+    // retombe alors sur le navigateur, tandis que $timezone (défaut UTC) reste
+    // concret pour le calcul des dates côté client/serveur.
+    'clockTimezone' => $profile->timezone ?? null,
 ]);

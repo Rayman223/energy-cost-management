@@ -37,6 +37,7 @@ $csrf = \App\Security\Csrf::field();
       'isAdmin'     => $user?->isAdmin() ?? false,
       'discordUrl'  => $discordUrl ?? null,
       'available'   => $available,
+      'timezone'    => $profile?->timezone ?? null,
   ]) ?>
 
   <?php if ($success !== null): ?><div class="banner ok"><?= $this->e($success) ?></div><?php endif; ?>
@@ -305,5 +306,6 @@ foreach (\App\Service\Import\ImportMapping::UNITS as $type => $units) {
 <script defer src="<?= \App\Support\Assets::url('assets/js/header.js') ?>"></script>
 <script defer src="<?= \App\Support\Assets::url('assets/js/import.js') ?>"></script>
 <script defer src="<?= \App\Support\Assets::url('assets/js/confirm.js') ?>"></script>
+<script defer src="<?= \App\Support\Assets::url('assets/js/account.js') ?>"></script>
 </body>
 </html>

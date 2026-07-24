@@ -80,7 +80,7 @@ final class UserRepositoryDbTest extends TestCase
         self::assertNotNull($profile);
         self::assertSame('EUR', $profile->currency);
         self::assertSame('fr', $profile->locale);
-        self::assertSame('Europe/Brussels', $profile->timezone);
+        self::assertSame('UTC', $profile->timezone);
         // Défauts des colonnes TVA/marge par utilisateur (#153).
         self::assertSame(21.0, $profile->vatRate);
         self::assertSame(0.0, $profile->supplierMarkupPerKwh);

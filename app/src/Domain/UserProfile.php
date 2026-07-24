@@ -43,7 +43,7 @@ final class UserProfile
     {
         return new self(
             country: null,
-            timezone: 'Europe/Brussels',
+            timezone: 'UTC',
             currency: 'EUR',
             biddingZone: null,
             pricingMode: 'fixed',

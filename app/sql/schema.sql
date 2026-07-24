@@ -131,7 +131,7 @@ CREATE TABLE IF NOT EXISTS user_identities (
 CREATE TABLE IF NOT EXISTS user_profiles (
     user_id      BIGINT UNSIGNED NOT NULL PRIMARY KEY,
     country      VARCHAR(2)  NULL COMMENT 'Code pays ISO 3166-1 alpha-2',
-    timezone     VARCHAR(64) NOT NULL DEFAULT 'Europe/Brussels',
+    timezone     VARCHAR(64) NOT NULL DEFAULT 'UTC' COMMENT 'Préférence d''affichage (IANA) ; UI pré-remplit le fuseau navigateur (#200)',
     currency     CHAR(3)     NOT NULL DEFAULT 'EUR' COMMENT 'Devise ISO 4217',
     bidding_zone VARCHAR(32) NULL COMMENT 'Zone de marché ENTSO-E',
     pricing_mode ENUM('fixed', 'dynamic_hourly', 'dynamic_quarter') NOT NULL DEFAULT 'fixed' COMMENT 'Type de tarification électricité (fixe / dynamique 1h / dynamique 15min)',

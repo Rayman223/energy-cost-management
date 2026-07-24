@@ -70,6 +70,7 @@ $energyLabels = [
     'isAdmin'     => $isAdmin ?? false,
     'discordUrl'  => $discordUrl ?? null,
     'available'   => $available,
+    'timezone'    => $timezone ?? null,
 ]) ?>
 
 <?php if ($success): ?>

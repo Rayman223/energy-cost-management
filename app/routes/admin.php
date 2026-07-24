@@ -107,5 +107,6 @@ echo $view->render('admin', [
     'users'     => $users->listAll(),
     'currentId' => $userId,
     'available' => Locale::available($config),
-    'timezone'  => $profile->timezone ?? 'Europe/Brussels',
+    // Fuseau BRUT du profil pour l'horloge (null ⇒ repli navigateur).
+    'timezone'  => $profile->timezone ?? null,
 ]);

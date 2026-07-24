@@ -50,6 +50,7 @@ $fmt = function (mixed $v, int $dec = 3, string $unit = 'kWh'): string {
       'isAdmin'     => $isAdmin ?? false,
       'discordUrl'  => $discordUrl ?? null,
       'available'   => $available,
+      'timezone'    => $clockTimezone ?? null,
   ]) ?>
 
   <?php if ($dbError): ?>
@@ -147,7 +148,7 @@ $fmt = function (mixed $v, int $dec = 3, string $unit = 'kWh'): string {
     $dashboardData = [
         'locale'            => $this->locale(),
         'currency'          => $currency ?? 'EUR',
-        'timezone'          => $timezone ?? 'Europe/Brussels',
+        'timezone'          => $timezone ?? 'UTC',
         'initCost'          => $cost ?? ['available' => false, 'reason' => 'No data'],
         'initYear'          => (int) $initYear,
         'initMonth'         => (int) $initMonth,

@@ -31,6 +31,7 @@ $url   = $this->e($apiUrl);
       'isAdmin'     => $isAdmin ?? false,
       'discordUrl'  => $discordUrl ?? null,
       'available'   => $available,
+      'timezone'    => $timezone ?? null,
   ]) ?>
   <h1><?= $this->e($title) ?></h1>
   <p><?= $this->te('apiguide.intro') ?></p>

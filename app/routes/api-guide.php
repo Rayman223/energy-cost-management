@@ -69,11 +69,17 @@ $apiUrl = $scheme . '://' . $host . WebAccessGuard::appRootPath() . '/api';
 // Statut admin pour l'en-tête commun (#193). Lecture DB défensive : cette page est
 // conçue pour rester lisible même sans base — un échec dégrade en `false` (icône
 // admin masquée) sans casser le guide.
-$isAdmin = false;
+// Fuseau du profil pour l'horloge du header (#200) : lu au passage, même repli
+// défensif que $isAdmin. Reste null si le profil est absent ou la base
+// injoignable → l'horloge retombe alors sur le fuseau du navigateur.
+$isAdmin  = false;
+$timezone = null;
 try {
-    $pdo     = (new Database($config['database']))->pdo();
-    $users   = new UserRepository($pdo);
-    $isAdmin = $users->findById(UserContext::currentWebUserId($pdo, $config))?->isAdmin() ?? false;
+    $pdo      = (new Database($config['database']))->pdo();
+    $users    = new UserRepository($pdo);
+    $userId   = UserContext::currentWebUserId($pdo, $config);
+    $isAdmin  = $users->findById($userId)?->isAdmin() ?? false;
+    $timezone = $users->getProfile($userId)?->timezone;
 } catch (\Throwable) {
     $isAdmin = false;
 }
@@ -84,4 +90,5 @@ echo $view->render('api-guide', [
     'available'   => Locale::available($config),
     'isAdmin'     => $isAdmin,
     'discordUrl'  => DiscordLink::inviteUrl($config),
+    'timezone'    => $timezone,
 ]);

@@ -25,6 +25,7 @@ $now = date('H:i');
       'isAdmin'     => $isAdmin ?? false,
       'discordUrl'  => $discordUrl ?? null,
       'available'   => $available,
+      'timezone'    => $clockTimezone ?? null,
   ]) ?>
 
   <?php if ($dbError): ?>
@@ -111,7 +112,7 @@ $now = date('H:i');
         // Fuseau d'affichage de l'utilisateur : les reading_at (UTC) sont
         // reconvertis vers ce fuseau côté client, et la saisie locale y est
         // interprétée avant conversion en UTC pour l'envoi.
-        'timezone' => $timezone ?? 'Europe/Brussels',
+        'timezone' => $timezone ?? 'UTC',
         'locale'   => $this->locale(),
         'i18n' => [
             'invalidUtility' => $this->t('meter.invalid_utility'),

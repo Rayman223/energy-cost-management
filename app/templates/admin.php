@@ -28,6 +28,7 @@ $csrf = \App\Security\Csrf::field();
       'isAdmin'     => true, // route réservée aux admins (admin.php)
       'discordUrl'  => $discordUrl ?? null,
       'available'   => $available,
+      'timezone'    => $timezone ?? null,
   ]) ?>
 
   <?php if ($error !== null): ?><div class="banner err"><?= $this->e($error) ?></div><?php endif; ?>

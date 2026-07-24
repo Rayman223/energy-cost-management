@@ -99,7 +99,7 @@ try {
 // jour en tarif fixe, un par tranche de 15 min en tarif dynamique. Sans effet sur
 // gaz/eau. Créneau délimité dans le fuseau du profil de l'utilisateur cible.
 $throttle = DynamicPricing::isEnabled($config) ? ReadingGranularity::QuarterHour : ReadingGranularity::Day;
-$timezone = (new UserRepository($pdo))->getProfile($userId)->timezone ?? 'Europe/Brussels';
+$timezone = (new UserRepository($pdo))->getProfile($userId)->timezone ?? 'UTC';
 
 fwrite(STDOUT, sprintf(
     "[IMPORT] type=%s user=#%d fichier=%s mode=%s%s",
