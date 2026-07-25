@@ -219,7 +219,10 @@ Set at least `database`, then choose the authentication mode:
 - **Community mode (recommended)** — set `oidc.enabled = true` and fill
   `issuer` / `client_id` / `client_secret`; leave `redirect_uri` empty to derive it
   from the `/auth/login` route. Multi-user accounts, no password/e-mail stored.
-  For Google, follow the step-by-step guide [oidc-google.md](oidc-google.md).
+  Step-by-step guides: [oidc-google.md](oidc-google.md) (Google),
+  [oidc-microsoft.md](oidc-microsoft.md) (Microsoft / Entra ID),
+  [oidc-authentik.md](oidc-authentik.md) (authentik, *in French*) and
+  [oidc-generic.md](oidc-generic.md) (Keycloak, Zitadel, any other OIDC IdP).
 - **Legacy single-tenant mode** — keep `oidc.enabled = false`; the historic HTTP
   Basic Auth (`web_security.basic_auth`) protects everything and a single implicit
   owner account is used.

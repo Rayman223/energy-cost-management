@@ -60,13 +60,18 @@ providers without a dedicated logo). Set `label` for the button text.
 
 ---
 
-## Authentik
+## authentik
 
-- Create an **OAuth2/OpenID Provider**, then an **Application** bound to it.
-- **Client type**: Confidential. **Redirect URI**: `https://<host><base>/auth/login`.
-- Issuer = the provider's URL, typically
-  `https://<authentik-host>/application/o/<app-slug>/`.
-- Config: same shape as Keycloak, with `'label' => 'Authentik'`.
+authentik has its own **step-by-step guide**, including the self-hosting
+prerequisites and the exact provider screens:
+**[oidc-authentik.md](oidc-authentik.md)** *(written in French)*.
+
+In short: create an **Application** with an **OAuth2/OpenID Provider** (client type
+**Confidential**, redirect URI `https://<host><base>/auth/login` in **Strict** mode,
+a **Signing Key** selected), then use the provider's *OpenID Configuration Issuer* —
+typically `https://<authentik-host>/application/o/<app-slug>/`, trailing slash
+included — as `issuer`. Config: same shape as Keycloak, with
+`'label' => 'Authentik'`.
 
 ## Zitadel
 
@@ -86,5 +91,6 @@ providers without a dedicated logo). Set `label` for the button text.
 | Callback arrives as `http://` and is rejected | Reverse proxy not forwarding `X-Forwarded-Proto`; set `redirect_uri` explicitly, or fix the proxy header. |
 | `invalid_client` | Wrong client secret, or the client is public instead of confidential. |
 
-> **The same person via two different IdPs = two distinct accounts.** Identity is
-> the `issuer` + `subject` pair; there is no cross-provider account linking.
+> **One identity = one `issuer` + `subject` pair.** A first sign-in through a new IdP
+> creates a **separate account**; to use several IdPs with the *same* account, link
+> the extra identity from **My account → Sign-in providers** while signed in.

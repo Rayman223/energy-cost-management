@@ -162,9 +162,10 @@ Setting `enabled => true` switches the app to multi-user OIDC mode. Leaving it
 The app supports several providers side by side — one button per configured IdP:
 
 - **Microsoft / Entra ID** — [oidc-microsoft.md](oidc-microsoft.md).
-- **Self-hosted OIDC** (Keycloak, Authentik, Zitadel) — [oidc-generic.md](oidc-generic.md).
+- **authentik** — [oidc-authentik.md](oidc-authentik.md) *(written in French)*.
+- **Self-hosted OIDC** (Keycloak, Zitadel, …) — [oidc-generic.md](oidc-generic.md).
 
-> **The same person via two different IdPs = two distinct accounts.** Identity is
-> the `issuer` + `subject` pair; there is no cross-provider account linking. A user
-> who signs in with Google and later with Microsoft ends up with two separate
-> accounts.
+> **One identity = one `issuer` + `subject` pair.** A user who signs in with Google
+> and later with Microsoft ends up with two separate accounts — unless they link the
+> second identity to the first account from **My account → Sign-in providers** while
+> signed in.

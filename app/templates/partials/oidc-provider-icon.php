@@ -3,7 +3,7 @@
  * Icône du bouton de connexion, choisie par la clé de fournisseur. Un IdP
  * inconnu retombe sur une icône « clé » neutre (couleur du texte courant).
  *
- * @var string $key Clé du fournisseur (google, microsoft, keycloak…).
+ * @var string $key Clé du fournisseur (google, microsoft, authentik…).
  */
 ?>
 <?php if ($key === 'google'): ?>
@@ -20,6 +20,13 @@
   <rect x="9.5" width="8.5" height="8.5" fill="#7FBA00"/>
   <rect y="9.5" width="8.5" height="8.5" fill="#00A4EF"/>
   <rect x="9.5" y="9.5" width="8.5" height="8.5" fill="#FFB900"/>
+</svg>
+<?php elseif ($key === 'authentik'): ?>
+<?php // Badge aux couleurs de marque authentik : pas de logo SVG officiel réutilisable. ?>
+<svg class="btn-provider-icon" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+  <rect width="24" height="24" rx="5" fill="#FD4B2D"/>
+  <path fill="#fff" transform="translate(12 12) scale(.7) translate(-12 -12)"
+        d="M14 2a6 6 0 0 0-5.83 7.42L2 15.59V20h4v-2h2v-2h2l1.59-1.59A6 6 0 1 0 14 2zm2.5 5.5a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3z"/>
 </svg>
 <?php else: ?>
 <svg class="btn-provider-icon" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" focusable="false">

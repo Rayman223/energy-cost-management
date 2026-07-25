@@ -15,7 +15,7 @@ return [
     'energyid' => [
         // Kill-switch global du push EnergyID (lu par cron_daily_webhook.php).
         // Absent ⇒ activé par défaut. Mettre à false pour couper l'export.
-        'enabled'             => true,
+        'enabled'             => false,
         'provisioning_key'    => 'change_me',
         'provisioning_secret' => 'change_me',
         'timeout'             => 15,
@@ -33,7 +33,7 @@ return [
     // Le marché (prix spot, token, zone) est global au site ; l'économique
     // (TVA, marge fournisseur) est passé PAR UTILISATEUR dans /account (#153).
     'dynamic_prices' => [
-        'enabled'                 => true,
+        'enabled'                 => false,
         'provider'                => 'entsoe',
         'api_url'                 => 'https://web-api.tp.entsoe.eu/api',
         'security_token'          => 'change_me',       // token ENTSO-E (inscription gratuite)
@@ -74,9 +74,10 @@ return [
     'oidc' => [
         'enabled'   => false,
         'providers' => [
-            // La clé (google, microsoft, keycloak…) choisit l'icône du bouton et
-            // la valeur stockée en base (users.provider). Une même personne via
-            // deux IdP différents = deux comptes distincts (identité = iss+sub).
+            // La clé (google, microsoft, authentik…) choisit l'icône du bouton et
+            // la valeur stockée en base (users.provider). Une identité = un couple
+            // iss+sub : une première connexion via un nouvel IdP crée un compte
+            // distinct, sauf à lier l'identité depuis « Mon compte » (#137).
             'google' => [
                 'issuer'        => 'https://accounts.google.com',
                 'client_id'     => 'change_me',
@@ -85,8 +86,39 @@ return [
                 'scopes'        => ['openid', 'profile'], // pas d'e-mail : openid + profile
                 // 'label'      => 'Google',            // libellé bouton (défaut : clé capitalisée)
             ],
-            // 'microsoft' => [ 'issuer' => 'https://login.microsoftonline.com/<tenant-id>/v2.0', … ], // cf. app/docs/oidc-microsoft.md
-            // 'keycloak'  => [ 'issuer' => 'https://auth.example.com/realms/mon-realm', …, 'label' => 'Keycloak' ], // cf. app/docs/oidc-generic.md
+            // Autres fournisseurs : décommenter le bloc voulu tel quel, puis
+            // remplacer les valeurs. Les blocs ci-dessous sont du PHP valide.
+            //
+            // cf. app/docs/oidc-microsoft.md
+            // 'microsoft' => [
+            //     'issuer'        => 'https://login.microsoftonline.com/<tenant-id>/v2.0',
+            //     'client_id'     => 'change_me',
+            //     'client_secret' => 'change_me',
+            //     'redirect_uri'  => '',
+            //     'scopes'        => ['openid', 'profile'],
+            //     'label'         => 'Microsoft',
+            // ],
+            //
+            // cf. app/docs/oidc-authentik.md — l'issuer est l'« OpenID Configuration
+            // Issuer » du provider, à recopier avec son slash final.
+            // 'authentik' => [
+            //     'issuer'        => 'https://sso.example.com/application/o/mon-app/',
+            //     'client_id'     => 'change_me',
+            //     'client_secret' => 'change_me',
+            //     'redirect_uri'  => '',
+            //     'scopes'        => ['openid', 'profile'],
+            //     'label'         => 'Authentik',
+            // ],
+            //
+            // cf. app/docs/oidc-generic.md
+            // 'keycloak' => [
+            //     'issuer'        => 'https://auth.example.com/realms/mon-realm',
+            //     'client_id'     => 'change_me',
+            //     'client_secret' => 'change_me',
+            //     'redirect_uri'  => '',
+            //     'scopes'        => ['openid', 'profile'],
+            //     'label'         => 'Keycloak',
+            // ],
         ],
     ],
 
