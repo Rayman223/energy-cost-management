@@ -21,6 +21,8 @@ app/config/config.php
 /.idea
 /.vscode
 
-# Harness Claude Code (config locale, non déployée)
-/.claude/
+# Harness Claude Code — settings.json partagé ; le reste (local) hors dépôt
+/.claude/*
+!/.claude/settings.json
+!/.claude/skills/
 /.mcp.json
