@@ -11,7 +11,8 @@
       "Bash(php -l *)",
       "Bash(git cherry-pick *)",
       "Bash(rm -f .git/config.lock)",
-      "Edit(/.claude/skills/fix-issue/**)"
+      "Edit(/.claude/skills/fix-issue/**)",
+      "Bash(php -r ' *)"
     ],
     "deny": [],
     "ask": [],
