@@ -284,6 +284,13 @@ return [
     'dash.gas'             => 'Gas',
     'dash.water'           => 'Water',
     'dash.db_offline'      => 'DB offline',
+    'dash.card.import_t1'  => 'Δ Afname T1',
+    'dash.card.import_t2'  => 'Δ Afname T2',
+    'dash.card.export_t1'  => 'Δ Injectie T1',
+    'dash.card.export_t2'  => 'Δ Injectie T2',
+    'dash.card.solar'      => 'Δ PV-productie',
+    'dash.card.vs_prev'    => 'vs vorige maand',
+    'dash.card.new'        => 'nieuw deze maand',
 
     // Juridische pagina's (#185) — /privacy, /terms, /cookies, /legal-notice.
     // Geen enkele waarde mag HTML bevatten: de templates escapen alles.

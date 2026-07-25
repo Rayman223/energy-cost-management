@@ -266,6 +266,40 @@ final class CostCalculationService
     }
 
     /**
+     * Volume gaz (m³) d'un mois calendaire, SANS exiger de grille tarifaire.
+     *
+     * {@see estimateMonthGas()} renvoie `available => false` quand aucun tarif
+     * gaz n'est configuré ; la card « Gaz » du dashboard n'a besoin que du
+     * volume. On isole donc ici l'interpolation (même moteur, mêmes bornes à
+     * minuit), sans résolution tarifaire — symétrique du volet « volume seul »
+     * de {@see estimateMonthWater()}.
+     *
+     * @return array<string, mixed>
+     */
+    public function monthGasVolume(int $year, int $month): array
+    {
+        $interp = $this->interpolator->interpolateMonth(
+            $this->toSeries($this->gasRepo->getReadingsForInterpolation($year, $month)),
+            $year,
+            $month,
+        );
+
+        if (!$interp->available) {
+            return ['available' => false, 'reason' => $interp->reason];
+        }
+
+        return [
+            'available'     => true,
+            'period_from'   => $interp->monthStart,
+            'period_to'     => $interp->monthEnd,
+            'days'          => $interp->days,
+            'calendar_days' => $interp->calendarDays,
+            'is_projection' => $interp->isProjection,
+            'delta_m3'      => round($interp->monthlyDelta, 3),
+        ];
+    }
+
+    /**
      * Estimate water cost/consumption for a calendar month, using the same
      * midnight interpolation as gas. Si une grille tarifaire « eau » est active,
      * on ajoute le coût (cost / tariff_name / currency) ; sinon on renvoie le

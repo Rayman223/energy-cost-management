@@ -10,6 +10,7 @@ use App\Repository\UserRepository;
 use App\Repository\UtilityReadingRepository;
 use App\Security\UserContext;
 use App\Service\CostCalculationService;
+use App\Service\DashboardCardsService;
 use App\Service\TariffCalculatorService;
 use App\Http\SecurityHeaders;
 use App\I18n\Locale;
@@ -31,6 +32,7 @@ $currency     = 'EUR';
 $timezone     = 'UTC';
 $dbError      = null;
 $deltas       = null;
+$cards        = [];
 $cost         = null;
 $gasCostData  = null;
 $gasLatest    = null;
@@ -125,6 +127,10 @@ try {
     );
 
     $deltas      = $elecRepo->getMonthlyDeltas();
+    // Cards du haut (élec / solaire / gaz / eau) : $deltas est repassé au
+    // service pour ne pas refaire l'interpolation du mois en cours (#215).
+    $cards       = (new DashboardCardsService($elecRepo, $costSvc))
+        ->build($deltas, (int) date('Y'), (int) date('n'));
     $cost        = $costSvc->estimateCurrentMonthElectricity();
     // Tarif dynamique désactivé côté serveur ⇒ on n'expose pas la section (le JS
     // ne rend « ⚡ Tarif dynamique » que si data.dynamic est présent).
@@ -154,6 +160,7 @@ $view ??= ViewFactory::create(__DIR__ . '/../templates', Locale::resolve($config
 echo $view->render('dashboard', [
     'dbError'      => $dbError,
     'deltas'       => $deltas,
+    'cards'        => $cards,
     'cost'         => $cost,
     'gasCostData'  => $gasCostData,
     'gasLatest'    => $gasLatest,

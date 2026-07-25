@@ -31,6 +31,10 @@
   --blue-dim:  rgba(37,99,201,.10);
   --red:       #cf3d3d;
   --red-dim:   rgba(207,61,61,.09);
+  --orange:     #c2560e;            /* gaz */
+  --orange-dim: rgba(194,86,14,.10);
+  --cyan:       #0e7490;            /* eau */
+  --cyan-dim:   rgba(14,116,144,.10);
 
   --mono: 'Space Mono', monospace;
   --sans: 'Syne', sans-serif;
@@ -59,6 +63,10 @@
   --blue-dim:  rgba(65,179,245,.10);
   --red:       #f56565;
   --red-dim:   rgba(245,101,101,.10);
+  --orange:     #f97316;            /* gaz */
+  --orange-dim: rgba(249,115,22,.10);
+  --cyan:       #38bdf8;            /* eau */
+  --cyan-dim:   rgba(56,189,248,.10);
 }
 
 /* Bascule douce du fond/texte lors du changement de thème. */

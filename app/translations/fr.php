@@ -294,6 +294,13 @@ return [
     'dash.gas'             => 'Gaz',
     'dash.water'           => 'Eau',
     'dash.db_offline'      => 'DB hors-ligne',
+    'dash.card.import_t1'  => 'Δ Import T1',
+    'dash.card.import_t2'  => 'Δ Import T2',
+    'dash.card.export_t1'  => 'Δ Export T1',
+    'dash.card.export_t2'  => 'Δ Export T2',
+    'dash.card.solar'      => 'Δ Production PV',
+    'dash.card.vs_prev'    => 'vs mois préc.',
+    'dash.card.new'        => 'nouveau ce mois-ci',
 
     // Pages légales (#185) — /privacy, /terms, /cookies, /legal-notice.
     // Aucune valeur ne doit contenir de HTML : les templates échappent tout.

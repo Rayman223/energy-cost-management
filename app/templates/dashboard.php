@@ -4,6 +4,7 @@
  *
  * @var string|null              $dbError
  * @var array<string,mixed>|null $deltas
+ * @var list<array<string,mixed>> $cards
  * @var array<string,mixed>|null $cost
  * @var array<string,mixed>|null $gasCostData
  * @var array<string,mixed>|null $gasLatest
@@ -27,7 +28,36 @@ $fmt = function (mixed $v, int $dec = 3, string $unit = 'kWh'): string {
     if ($v === null || $v === false) {
         return '<span class="nd">—</span>';
     }
-    return '<span class="val">' . $this->num((float) $v, $dec) . '</span> <span class="unit">' . $unit . '</span>';
+    return '<span class="val">' . $this->num((float) $v, $dec) . '</span> <span class="unit">' . $this->e($unit) . '</span>';
+};
+
+// Badge de variation vs mois précédent (#215). Le sens « favorable » dépend de
+// la nature de la card : baisse = bien pour une consommation, mal pour une
+// production/injection.
+$deltaBadge = function (?float $pct, bool $lowerIsBetter, bool $isNew = false): string {
+    // Mois de référence connu mais à zéro : pas de pourcentage possible, on
+    // signale quand même le démarrage de la consommation.
+    if ($pct === null && $isNew) {
+        return '<div class="card-delta card-delta--' . ($lowerIsBetter ? 'bad' : 'good') . '">'
+            . '▲ <span class="card-delta-ref">' . $this->te('dash.card.new') . '</span></div>';
+    }
+    if ($pct === null) {
+        return '';
+    }
+    if ($pct > 0.0) {
+        $arrow = '▲';
+        $tone  = $lowerIsBetter ? 'bad' : 'good';
+    } elseif ($pct < 0.0) {
+        $arrow = '▼';
+        $tone  = $lowerIsBetter ? 'good' : 'bad';
+    } else {
+        $arrow = '=';
+        $tone  = 'flat';
+    }
+
+    return '<div class="card-delta card-delta--' . $tone . '">'
+        . $arrow . ' ' . ($pct > 0.0 ? '+' : '') . $this->num($pct, 1) . ' % '
+        . '<span class="card-delta-ref">' . $this->te('dash.card.vs_prev') . '</span></div>';
 };
 ?>
 <!DOCTYPE html>
@@ -79,27 +109,20 @@ $fmt = function (mixed $v, int $dec = 3, string $unit = 'kWh'): string {
     <?php endif; ?>
   </div>
 
-  <div class="cards cards-5">
-    <div class="card amber">
-      <div class="card-label"><span class="dot dot--amber"></span>Δ Import T1</div>
-      <div class="card-value"><?= $fmt($deltas['prelev_jour'] ?? null) ?></div>
+  <!-- Cards composées par DashboardCardsService : la card solaire est absente de
+       $cards (et non masquée en CSS) quand aucune production n'est disponible. -->
+  <div class="cards cards-auto">
+    <?php foreach ($cards as $card): ?>
+    <div class="card <?= $this->e((string) $card['tone']) ?>">
+      <div class="card-label"><span class="dot <?= $this->e((string) $card['dot']) ?>"></span><?= $this->te((string) $card['label_key']) ?></div>
+      <div class="card-value"><?= $fmt($card['value'], (int) $card['decimals'], (string) $card['unit']) ?></div>
+      <?= $deltaBadge(
+          $card['delta_pct'] === null ? null : (float) $card['delta_pct'],
+          (bool) $card['lower_is_better'],
+          (bool) $card['is_new'],
+      ) ?>
     </div>
-    <div class="card amber">
-      <div class="card-label"><span class="dot dot--amber-dim"></span>Δ Import T2</div>
-      <div class="card-value"><?= $fmt($deltas['prelev_nuit'] ?? null) ?></div>
-    </div>
-    <div class="card blue">
-      <div class="card-label"><span class="dot dot--blue"></span>Δ Export T1</div>
-      <div class="card-value"><?= $fmt($deltas['injec_jour'] ?? null) ?></div>
-    </div>
-    <div class="card blue">
-      <div class="card-label"><span class="dot dot--blue-dim"></span>Δ Export T2</div>
-      <div class="card-value"><?= $fmt($deltas['injec_nuit'] ?? null) ?></div>
-    </div>
-    <div class="card green">
-      <div class="card-label"><span class="dot dot--green"></span>Δ Production PV</div>
-      <div class="card-value"><?= $fmt($deltas['solar'] ?? null) ?></div>
-    </div>
+    <?php endforeach; ?>
   </div>
 
   <!-- ── Cost estimate ─────────────────────────────────────────────────── -->

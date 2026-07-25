@@ -25,6 +25,9 @@
 
   /* ── Cards ──────────────────────────────────────────────────────────────── */
   .cards { display: grid; gap: 12px; }
+  /* Nombre de cards variable (la card solaire disparaît sans production, #215) :
+     grille auto-fit plutôt qu'un nombre de colonnes figé. */
+  .cards-auto { grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); }
   .cards-5 { grid-template-columns: repeat(5, 1fr); }
   .cards-4 { grid-template-columns: repeat(4, 1fr); }
   .cards-3 { grid-template-columns: repeat(3, 1fr); }
@@ -70,11 +73,22 @@
     font-family: var(--mono); font-size: .95rem; color: var(--muted);
     margin-top: 8px;
   }
+  /* Variation vs mois précédent (#215) */
+  .card-delta {
+    font-family: var(--mono); font-size: .72rem; color: var(--muted);
+    margin-top: 8px; white-space: nowrap;
+  }
+  .card-delta--good { color: var(--green); }
+  .card-delta--bad  { color: var(--red); }
+  .card-delta--flat { color: var(--muted); }
+  .card-delta-ref   { color: var(--muted); }
 
-  .card.amber { border-color: rgba(245,166,35,.2); background: linear-gradient(135deg, var(--surface) 60%, var(--amber-dim)); }
-  .card.green { border-color: rgba(47,213,142,.2); background: linear-gradient(135deg, var(--surface) 60%, var(--green-dim)); }
-  .card.blue  { border-color: rgba(65,179,245,.2);  background: linear-gradient(135deg, var(--surface) 60%, var(--blue-dim)); }
-  .card.red   { border-color: rgba(245,101,101,.2); background: linear-gradient(135deg, var(--surface) 60%, var(--red-dim)); }
+  .card.amber  { border-color: rgba(245,166,35,.2); background: linear-gradient(135deg, var(--surface) 60%, var(--amber-dim)); }
+  .card.green  { border-color: rgba(47,213,142,.2); background: linear-gradient(135deg, var(--surface) 60%, var(--green-dim)); }
+  .card.blue   { border-color: rgba(65,179,245,.2);  background: linear-gradient(135deg, var(--surface) 60%, var(--blue-dim)); }
+  .card.red    { border-color: rgba(245,101,101,.2); background: linear-gradient(135deg, var(--surface) 60%, var(--red-dim)); }
+  .card.orange { border-color: rgba(249,115,22,.2);  background: linear-gradient(135deg, var(--surface) 60%, var(--orange-dim)); }
+  .card.cyan   { border-color: rgba(56,189,248,.2);  background: linear-gradient(135deg, var(--surface) 60%, var(--cyan-dim)); }
 
   /* ── Cost breakdown ────────────────────────────────────────────────────── */
   .cost-wrap { display: grid; grid-template-columns: 1fr 320px; gap: 12px; }
@@ -278,6 +292,8 @@
   }
   @media (max-width: 480px) {
     .cards-5, .cards-4, .cards-3, .cards-2 { grid-template-columns: 1fr; }
+    /* auto-fit tiendrait encore 2 colonnes ici : on force l'empilement. */
+    .cards-auto { grid-template-columns: 1fr; }
   }
 
   .gas-grid-history-only { grid-template-columns: 1fr; }
@@ -290,6 +306,8 @@
   .dot--blue      { background: var(--blue); }
   .dot--blue-dim  { background: var(--blue); opacity: .6; }
   .dot--green     { background: var(--green); }
+  .dot--orange    { background: var(--orange); }
+  .dot--cyan      { background: var(--cyan); }
   .btn-row { display: flex; gap: 6px; }
   .btn-xs  { padding: 5px 12px; font-size: .7rem; }
   .panel-title {
