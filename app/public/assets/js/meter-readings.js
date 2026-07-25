@@ -11,6 +11,11 @@ const METER_I18N = (() => {
 })();
 const tr = (key, fallback) => METER_I18N[key] || fallback;
 
+// Un index de compteur valide : nombre fini et non négatif. `Number.isFinite`
+// (et non `!isNaN`) rejette aussi Infinity — que `JSON.stringify` sérialiserait
+// silencieusement en `null` vers l'API. Partagé par les trois énergies.
+const isValidIndex = (v) => Number.isFinite(v) && v >= 0;
+
 function setFeedback(id, text, cls = '') {
   const feedback = document.getElementById(id);
   if (!feedback) return;
@@ -118,7 +123,7 @@ async function submitUtility(prefix, action) {
   const feedbackId = `${prefix}-feedback`;
 
   setFeedback(feedbackId, '');
-  if (!date || isNaN(value) || value < 0) {
+  if (!date || !isValidIndex(value)) {
     setFeedback(feedbackId, tr('invalidUtility', '⚠ Enter a date and a valid value.'), 'err');
     return;
   }
@@ -153,18 +158,26 @@ async function submitElectricity() {
   const { date, value: at } = readingAt('electricity');
   const payload = { reading_at: at };
   let hasValue = false;
+  let invalid = false;
 
   ELEC_KEYS.forEach((key) => {
     const raw = document.getElementById(`electricity-${key}`)?.value || '';
     if (raw === '') return;
     const value = parseFloat(raw);
-    if (!isNaN(value)) {
-      payload[key] = value;
-      hasValue = true;
-    }
+    // Symétrique à submitUtility (gaz/eau) : un index négatif ou non fini
+    // bloque l'envoi côté client plutôt que de laisser le back-end le rejeter.
+    if (!isValidIndex(value)) { invalid = true; return; }
+    payload[key] = value;
+    hasValue = true;
   });
 
   setFeedback('electricity-feedback', '');
+  // Une valeur saisie mais invalide (négative / non finie) a sa propre erreur,
+  // pour ne pas afficher « renseigne au moins un index » alors qu'il y en a un.
+  if (invalid) {
+    setFeedback('electricity-feedback', tr('invalidUtility', '⚠ Enter a date and a valid value.'), 'err');
+    return;
+  }
   if (!date || !hasValue) {
     setFeedback('electricity-feedback', tr('invalidElectricity', '⚠ Enter a date and at least one electricity index.'), 'err');
     return;
