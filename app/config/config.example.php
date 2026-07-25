@@ -106,6 +106,31 @@ return [
         'invite_url' => '', // ex. https://discord.gg/xxxxxxx (vide = lien masqué)
     ],
 
+    // Publicité Google AdSense (#185), au format « Auto ads » : un seul script
+    // dans le <head>, Google place les emplacements. Désactivée par défaut —
+    // sans identifiant valide, aucun script tiers n'est chargé et la CSP reste
+    // stricte (les origines Google ne sont autorisées que si enabled=true).
+    //
+    // AVANT D'ACTIVER en Europe : le consentement aux cookies publicitaires est
+    // délégué au CMP certifié IAB TCF de Google, à activer dans la console
+    // AdSense → « Confidentialité et messages ». Copier également
+    // app/public/ads.txt.example en app/public/ads.txt avec votre identifiant.
+    'adsense' => [
+        'enabled'   => false,
+        'client_id' => '', // ex. ca-pub-1234567890123456
+    ],
+
+    // Identité de l'éditeur : mentions légales (directive e-commerce) et
+    // responsable du traitement RGPD. Affichée sur /legal-notice et /privacy ;
+    // toute clé laissée vide est signalée comme manquante sur la page.
+    'legal' => [
+        'publisher'     => '', // raison sociale ou nom de l'éditeur
+        'address'       => '', // adresse postale de l'éditeur
+        'contact_email' => '', // contact RGPD (exercice des droits)
+        'host'          => '', // hébergeur : nom + pays
+        'jurisdiction'  => '', // droit applicable, ex. Belgique
+    ],
+
     // Fuseau applicatif technique : stockage des dates en UTC. L'affichage est
     // reconverti vers le fuseau de chaque utilisateur (user_profiles.timezone).
     'timezone' => 'UTC',

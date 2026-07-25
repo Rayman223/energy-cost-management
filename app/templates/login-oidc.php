@@ -41,6 +41,10 @@
       <a href="<?= $this->e($this->url('terms')) ?>"><?= $this->te('legal.terms') ?></a>
       &middot;
       <a href="<?= $this->e($this->url('privacy')) ?>"><?= $this->te('legal.privacy') ?></a>
+      &middot;
+      <a href="<?= $this->e($this->url('cookies')) ?>"><?= $this->te('legal.cookies') ?></a>
+      &middot;
+      <a href="<?= $this->e($this->url('legal-notice')) ?>"><?= $this->te('legal.notice') ?></a>
     </p>
 
     <p class="login-langs">

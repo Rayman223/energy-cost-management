@@ -28,6 +28,7 @@ use App\Security\UserContext;
 use App\Service\AccountDataExporter;
 use App\Service\AccountEraser;
 use App\Service\Import\ImportRunner;
+use App\Support\Adsense;
 use App\Support\DiscordLink;
 use App\Support\DynamicPricing;
 use App\Support\LocaleContext;
@@ -47,7 +48,7 @@ try {
     return;
 }
 
-SecurityHeaders::send();
+SecurityHeaders::send($config);
 AuthGuard::protect($config);
 
 $db     = new Database($config['database']);
@@ -316,6 +317,7 @@ echo $view->render('account', [
     'oidcEnabled' => AuthGuard::isOidcEnabled($config),
     'dynamicEnabled' => DynamicPricing::isEnabled($config),
     'discordUrl'  => DiscordLink::inviteUrl($config),
+    'adsenseClient' => Adsense::clientId($config),
     'error'      => $error,
     'success'    => $success,
     'freshToken' => $freshToken,

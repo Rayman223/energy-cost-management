@@ -22,4 +22,4 @@ try {
 
 SecurityHeaders::send($config);
 
-echo LegalPage::render($config, 'privacy');
+echo LegalPage::render($config, 'cookies');

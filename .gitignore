@@ -1,5 +1,8 @@
 app/config/config.php
 
+# Identifiant éditeur AdSense — propre à chaque déploiement (cf. ads.txt.example)
+/app/public/ads.txt
+
 # Sauvegardes SQL & fichiers d'exécution (backup_db.sh) — hors dépôt
 /backups/
 /var/

@@ -1,0 +1,14 @@
+# Authorized Digital Sellers (IAB Tech Lab) — modèle à copier en ads.txt (#185).
+#
+#   cp app/public/ads.txt.example app/public/ads.txt
+#
+# puis remplacer pub-XXXXXXXXXXXXXXXX par l'identifiant éditeur AdSense du
+# déploiement (celui de la clé `adsense.client_id` de config.php, sans le
+# préfixe « ca- »). Le fichier doit être servi à la racine du domaine
+# (https://exemple.tld/ads.txt) : le front controller ne réécrit pas les
+# fichiers réellement présents dans app/public/, il l'est donc tel quel.
+#
+# ads.txt reste hors dépôt (gitignoré) car l'identifiant est propre à chaque
+# déploiement. Sans lui, AdSense signale « Ads.txt manquant » et la valeur des
+# annonces baisse ; il n'est pas nécessaire tant que la publicité est désactivée.
+google.com, pub-XXXXXXXXXXXXXXXX, DIRECT, f08c47fec0942fa0

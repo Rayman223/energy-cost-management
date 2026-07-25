@@ -3,8 +3,7 @@
 declare(strict_types=1);
 
 use App\Http\SecurityHeaders;
-use App\I18n\Locale;
-use App\View\ViewFactory;
+use App\View\LegalPage;
 
 // Bootstrap isolé : une configuration injoignable (ex. config.php absent) dégrade
 // en 503 propre plutôt qu'en fatal exposant un stack trace (#130 C6). bootstrap.php
@@ -21,12 +20,6 @@ try {
     return;
 }
 
-SecurityHeaders::send();
+SecurityHeaders::send($config);
 
-$locale = Locale::resolve($config, null);
-$view = ViewFactory::create(__DIR__ . '/../templates', $locale, (string) ($config['i18n']['default_locale'] ?? 'fr'));
-
-echo $view->render('legal', [
-    'page'      => 'terms',
-    'available' => Locale::available($config),
-]);
+echo LegalPage::render($config, 'terms');

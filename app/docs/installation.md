@@ -227,6 +227,42 @@ Set at least `database`, then choose the authentication mode:
 Optionally set `dynamic_prices` (ENTSO-E token), `energyid`, `i18n`, and `api`.
 Set `discord.invite_url` to show a Discord link in the page header (empty = hidden).
 
+Fill in `legal` (publisher, address, contact e-mail, hosting provider,
+jurisdiction): those values feed `/legal-notice` and the "data controller"
+section of `/privacy`. Any field left empty is rendered as *not configured* on
+the public pages — visible on purpose, since both are legally required.
+
+### Advertising (Google AdSense, optional)
+
+Disabled by default. While `adsense.enabled` is `false`, no third-party script is
+loaded and the Content-Security-Policy stays strict — leave it that way unless
+you actually run ads.
+
+To enable it:
+
+1. **Activate the consent CMP first.** In the AdSense console, open *Privacy &
+   messaging* and publish a GDPR message. Google's CMP is IAB TCF certified and
+   handles consent for you: the application ships no cookie banner of its own,
+   and serving ads to EEA/UK visitors without it is not compliant.
+2. Set `adsense.enabled = true` and `adsense.client_id` to your publisher ID
+   (`ca-pub-…`, digits only after the prefix; a malformed value is ignored and
+   ads stay off).
+3. Publish `ads.txt` at the site root:
+
+   ```bash
+   cp app/public/ads.txt.example app/public/ads.txt   # then replace pub-XXXX… with your ID
+   ```
+
+The format is *Auto ads*: a single asynchronous script in `<head>`, Google picks
+the placements. Ads are served on the public and application pages, never on the
+error or sign-in pages (program policy: no ads on pages without content).
+
+Enabling advertising **widens the Content-Security-Policy**: Google's ad and
+consent origins are allowed, and `style-src` gains `'unsafe-inline'` because Auto
+ads and the CMP inject their own inline styles. `script-src` never allows inline
+code. Turning `adsense.enabled` back to `false` restores the strict policy — see
+`App\Http\SecurityHeaders`.
+
 ---
 
 ## 3. Create tables & apply migrations

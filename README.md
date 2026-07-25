@@ -248,7 +248,7 @@ shows a regulated-vs-dynamic comparison.
 | `/account.php` | Profile, API tokens, EnergyID opt-in, GDPR export/delete, self-service import |
 | `/admin.php` | Admin: members (role/status) + import on behalf of a user |
 | `/login.php`, `/auth/login.php`, `/auth/logout.php` | Authentication (Basic / OIDC) |
-| `/privacy.php`, `/terms.php` | Legal pages (localized) |
+| `/privacy`, `/terms`, `/cookies`, `/legal-notice` | Legal pages (localized): GDPR notice, terms, cookie policy, publisher identity |
 | `/api.php` | JSON API — ingestion (`ingest_*`) and read/cost endpoints. See [`app/docs/plan/api-ingestion.md`](app/docs/plan/api-ingestion.md) |
 
 ---

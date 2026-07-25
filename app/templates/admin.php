@@ -9,6 +9,7 @@
  * @var int          $currentId
  * @var list<string> $available
  * @var ?string      $discordUrl
+ * @var ?string      $adsenseClient Identifiant éditeur AdSense (#185), null si publicité désactivée.
  */
 $csrf = \App\Security\Csrf::field();
 ?>
@@ -18,6 +19,7 @@ $csrf = \App\Security\Csrf::field();
 <?= $this->partial('_head', [
     'title' => $this->t('admin.title') . ' — ' . $this->t('app.title'),
     'css'   => ['assets/css/app-header.css', 'assets/css/backoffice.css', 'assets/css/admin.css'],
+    'adsenseClient' => $adsenseClient ?? null,
 ]) ?>
 </head>
 <body>

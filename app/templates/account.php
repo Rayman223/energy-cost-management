@@ -20,6 +20,7 @@ use App\Domain\User;
  * @var array<string,string> $countries
  * @var list<string> $currencies
  * @var ?string $discordUrl
+ * @var ?string $adsenseClient Identifiant éditeur AdSense (#185), null si publicité désactivée.
  */
 $csrf = \App\Security\Csrf::field();
 ?>
@@ -29,6 +30,7 @@ $csrf = \App\Security\Csrf::field();
 <?= $this->partial('_head', [
     'title' => $this->t('account.title') . ' — ' . $this->t('app.title'),
     'css'   => ['assets/css/app-header.css', 'assets/css/confirm.css', 'assets/css/backoffice.css', 'assets/css/account.css'],
+    'adsenseClient' => $adsenseClient ?? null,
 ]) ?>
 </head>
 <body>
@@ -315,7 +317,7 @@ $csrf = \App\Security\Csrf::field();
   <div class="card">
     <h2><?= $this->te('account.rgpd') ?></h2>
     <p class="hint"><?= $this->te('account.rgpd_hint') ?>
-       (<a href="<?= $this->url('terms') ?>"><?= $this->te('legal.terms') ?></a> · <a href="<?= $this->url('privacy') ?>"><?= $this->te('legal.privacy') ?></a>)</p>
+       (<a href="<?= $this->url('terms') ?>"><?= $this->te('legal.terms') ?></a> · <a href="<?= $this->url('privacy') ?>"><?= $this->te('legal.privacy') ?></a> · <a href="<?= $this->url('cookies') ?>"><?= $this->te('legal.cookies') ?></a> · <a href="<?= $this->url('legal-notice') ?>"><?= $this->te('legal.notice') ?></a>)</p>
     <p><a href="<?= $this->url('account') ?>?export=1"><?= $this->te('account.export') ?></a></p>
     <form method="post" data-confirm="<?= $this->e($this->t('account.delete_js_confirm')) ?>" data-confirm-ok="<?= $this->e($this->t('account.delete')) ?>" data-confirm-danger>
       <?= $csrf ?>

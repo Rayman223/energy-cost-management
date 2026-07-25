@@ -16,6 +16,7 @@ use App\I18n\Locale;
 use App\Security\AuthGuard;
 use App\Security\AuthSession;
 use App\Security\WebAccessGuard;
+use App\Support\Adsense;
 use App\Support\DiscordLink;
 use App\Support\DynamicPricing;
 use App\Support\LocaleContext;
@@ -42,8 +43,6 @@ $waterInitMonth = (int) date('n');
 
 require_once __DIR__ . '/../../vendor/autoload.php';
 
-SecurityHeaders::send();
-
 // Bootstrap isolé : une configuration injoignable dégrade vers le dashboard en
 // erreur (bloc try ci-dessous) plutôt que de provoquer un fatal.
 try {
@@ -51,6 +50,11 @@ try {
 } catch (\Throwable $e) {
     $dbError = $e->getMessage();
 }
+
+// Après le bootstrap : la CSP dépend de la configuration (publicité #185 ⇒
+// origines Google autorisées). Config injoignable ⇒ $config vide ⇒ CSP stricte.
+// Toujours avant toute sortie, y compris le rendu de la page d'accueil publique.
+SecurityHeaders::send($config);
 
 // Visiteur anonyme en mode OIDC → page d'accueil publique (présentation +
 // invitation à se connecter) plutôt que de rebondir vers l'IdP. Délibérément
@@ -63,8 +67,9 @@ if ($dbError === null && AuthGuard::isOidcEnabled($config)) {
         $locale  = Locale::resolve($config, null);
         $landing = ViewFactory::create(__DIR__ . '/../templates', $locale, (string) ($config['i18n']['default_locale'] ?? 'fr'));
         echo $landing->render('welcome', [
-            'available'  => Locale::available($config),
-            'discordUrl' => DiscordLink::inviteUrl($config),
+            'available'     => Locale::available($config),
+            'discordUrl'    => DiscordLink::inviteUrl($config),
+            'adsenseClient' => Adsense::clientId($config),
         ]);
 
         return;
@@ -164,6 +169,7 @@ echo $view->render('dashboard', [
     'isAdmin'      => $isAdmin,
     'oidcEnabled'  => $oidcEnabled,
     'discordUrl'   => DiscordLink::inviteUrl($config),
+    'adsenseClient' => Adsense::clientId($config),
     'currency'     => $currency,
     'timezone'     => $timezone,
     // Fuseau BRUT du profil pour l'horloge (null si aucun profil) : l'horloge

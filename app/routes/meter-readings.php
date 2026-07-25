@@ -9,6 +9,7 @@ use App\Repository\UserRepository;
 use App\Repository\UtilityReadingRepository;
 use App\Security\AuthGuard;
 use App\Security\UserContext;
+use App\Support\Adsense;
 use App\Support\DiscordLink;
 use App\Support\LocaleContext;
 use App\View\ViewFactory;
@@ -23,10 +24,23 @@ $isAdmin = false;
 
 require_once __DIR__ . '/../../vendor/autoload.php';
 
-SecurityHeaders::send();
-
+// Bootstrap isolé : la CSP dépend de la configuration (publicité #185 ⇒ origines
+// Google autorisées), elle est donc posée dès que celle-ci est connue et avant
+// toute redirection d'AuthGuard. Config injoignable ⇒ $config vide ⇒ CSP stricte.
 try {
     $config = require __DIR__ . '/../bootstrap.php';
+} catch (\Throwable $e) {
+    $dbError = $e->getMessage();
+}
+
+SecurityHeaders::send($config);
+
+try {
+    if ($dbError !== null) {
+        // Configuration injoignable : on n'écrase pas le message d'origine par
+        // l'erreur en cascade qu'aurait produite l'accès à une config vide.
+        throw new \RuntimeException($dbError);
+    }
 
     AuthGuard::protect($config);
 
@@ -52,6 +66,7 @@ $view ??= ViewFactory::create(__DIR__ . '/../templates', Locale::resolve($config
 echo $view->render('meter_readings', [
     'oidcEnabled' => AuthGuard::isOidcEnabled($config),
     'discordUrl'  => DiscordLink::inviteUrl($config),
+    'adsenseClient' => Adsense::clientId($config),
     'isAdmin' => $isAdmin,
     'dbError' => $dbError,
     'gasLatest' => $gasLatest,

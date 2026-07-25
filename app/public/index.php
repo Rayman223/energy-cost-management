@@ -62,6 +62,8 @@ $routes = [
     '/login'          => 'login.php',
     '/privacy'        => 'privacy.php',
     '/terms'          => 'terms.php',
+    '/cookies'        => 'cookies.php',
+    '/legal-notice'   => 'legal-notice.php',
     '/auth/login'     => 'auth/login.php',
     '/auth/logout'    => 'auth/logout.php',
 ];

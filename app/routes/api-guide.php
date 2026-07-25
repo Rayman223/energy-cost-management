@@ -10,6 +10,7 @@ use App\Security\AuthGuard;
 use App\Security\Session;
 use App\Security\UserContext;
 use App\Security\WebAccessGuard;
+use App\Support\Adsense;
 use App\Support\DiscordLink;
 use App\View\ViewFactory;
 
@@ -37,7 +38,7 @@ try {
     return;
 }
 
-SecurityHeaders::send();
+SecurityHeaders::send($config);
 AuthGuard::protect($config);
 
 $locale = Locale::resolve($config, null);
@@ -90,5 +91,6 @@ echo $view->render('api-guide', [
     'available'   => Locale::available($config),
     'isAdmin'     => $isAdmin,
     'discordUrl'  => DiscordLink::inviteUrl($config),
+    'adsenseClient' => Adsense::clientId($config),
     'timezone'    => $timezone,
 ]);

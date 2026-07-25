@@ -34,6 +34,7 @@ use App\Domain\TariffLineCatalog;
  * @var bool                                                                 $isAdmin
  * @var bool                                                                 $isDynamic  Tarif dynamique actif → lignes d'énergie fournisseur ignorées
  * @var ?string                                                              $discordUrl
+ * @var ?string                                                              $adsenseClient Identifiant éditeur AdSense (#185)
  */
 
 // Regroupement des lignes du formulaire par catégorie choisie (défaut : dérivée du kind).
@@ -63,6 +64,7 @@ $energyLabels = [
 <?= $this->partial('_head', [
     'title' => $this->t('tariffs.title') . ' — ' . $this->t('app.title'),
     'css'   => ['assets/css/app-header.css', 'assets/css/confirm.css', 'assets/css/tariffs.css'],
+    'adsenseClient' => $adsenseClient ?? null,
 ]) ?>
 </head>
 <body>

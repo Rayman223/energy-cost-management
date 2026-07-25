@@ -16,6 +16,7 @@ use App\Repository\UserRepository;
 use App\Security\AuthGuard;
 use App\Security\Csrf;
 use App\Security\UserContext;
+use App\Support\Adsense;
 use App\Support\DiscordLink;
 use App\Support\LocaleContext;
 
@@ -34,7 +35,7 @@ try {
     return;
 }
 
-SecurityHeaders::send();
+SecurityHeaders::send($config);
 AuthGuard::protect($config);
 
 $db     = new Database($config['database']);
@@ -102,6 +103,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 echo $view->render('admin', [
     'oidcEnabled' => AuthGuard::isOidcEnabled($config),
     'discordUrl'  => DiscordLink::inviteUrl($config),
+    'adsenseClient' => Adsense::clientId($config),
     'error'     => $error,
     'success'   => $success,
     'users'     => $users->listAll(),

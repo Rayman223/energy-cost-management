@@ -146,6 +146,33 @@ final class ConfigSchema
                     ],
                 ],
 
+                'adsense' => [
+                    // Publicité Google AdSense (#185) : absent ⇒ off, aucun script
+                    // tiers chargé et CSP stricte préservée (App\Support\Adsense,
+                    // App\Http\SecurityHeaders). Le client_id n'est pas une
+                    // sentinelle : il est validé par format côté Adsense::clientId().
+                    'enabledDefault' => false,
+                    'absentHint'     => 'publicité désactivée',
+                    'children'       => [
+                        'enabled'   => [],
+                        'client_id' => [],
+                    ],
+                ],
+
+                'legal' => [
+                    // Identité de l'éditeur affichée par /legal-notice et /privacy
+                    // (App\Support\LegalIdentity). Propre à chaque déploiement :
+                    // une clé manquante est signalée sur la page, pas en config.
+                    'absentHint' => 'mentions légales incomplètes',
+                    'children'   => [
+                        'publisher'     => [],
+                        'address'       => [],
+                        'contact_email' => [],
+                        'host'          => [],
+                        'jurisdiction'  => [],
+                    ],
+                ],
+
                 'timezone' => [],
             ],
         ];

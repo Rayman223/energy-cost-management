@@ -8,15 +8,21 @@
  * anti-FOUC (theme-init.js, bloquant), polices Google, tokens.css, les CSS de
  * page et theme.js (defer). Voir #98.
  *
- * @var string            $title       Titre d'onglet complet, déjà traduit (échappé ici)
- * @var list<string>|null $css         Feuilles de page (ex. 'assets/css/dashboard.css'), après tokens.css
- * @var bool|null         $fonts       Polices Google Syne + Space Mono (défaut true ; false pour error)
- * @var list<string>|null $preconnects Origines supplémentaires à préconnecter (ex. https://cdn.jsdelivr.net)
+ * @var string            $title         Titre d'onglet complet, déjà traduit (échappé ici)
+ * @var list<string>|null $css           Feuilles de page (ex. 'assets/css/dashboard.css'), après tokens.css
+ * @var bool|null         $fonts         Polices Google Syne + Space Mono (défaut true ; false pour error)
+ * @var list<string>|null $preconnects   Origines supplémentaires à préconnecter (ex. https://cdn.jsdelivr.net)
+ * @var ?string           $adsenseClient Identifiant éditeur AdSense (#185), fourni par
+ *                                        {@see \App\Support\Adsense::clientId()} ; null ⇒ aucun
+ *                                        script publicitaire. Volontairement non transmis par les
+ *                                        pages d'erreur et de connexion (règles du programme :
+ *                                        pas d'annonces sur les pages sans contenu).
  */
 
-$css         = $css ?? [];
-$fonts       = $fonts ?? true;
-$preconnects = $preconnects ?? [];
+$css           = $css ?? [];
+$fonts         = $fonts ?? true;
+$preconnects   = $preconnects ?? [];
+$adsenseClient = $adsenseClient ?? null;
 ?>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -42,3 +48,11 @@ $preconnects = $preconnects ?? [];
 <link rel="stylesheet" href="<?= \App\Support\Assets::url($sheet) ?>">
 <?php endforeach; ?>
 <script defer src="<?= \App\Support\Assets::url('assets/js/theme.js') ?>"></script>
+<?php if ($adsenseClient !== null): ?>
+<!-- Google AdSense (#185), format « Auto ads » : Google choisit et place les
+     emplacements, aucun <script> inline n'est nécessaire (la CSP l'interdit).
+     Le consentement aux cookies publicitaires est recueilli par le CMP Google
+     (IAB TCF), activé côté console AdSense. Voir /cookies. -->
+<link rel="preconnect" href="https://pagead2.googlesyndication.com" crossorigin>
+<script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=<?= $this->e($adsenseClient) ?>" crossorigin="anonymous"></script>
+<?php endif; ?>

@@ -7,6 +7,7 @@
  *
  * @var list<string> $available Locales proposées dans le sélecteur de langue.
  * @var ?string      $discordUrl URL d'invitation Discord, ou null si non configurée.
+ * @var ?string      $adsenseClient Identifiant éditeur AdSense (#185), null si publicité désactivée.
  */
 ?>
 <!doctype html>
@@ -15,6 +16,7 @@
 <?= $this->partial('_head', [
     'title' => $this->t('app.title'),
     'css'   => ['assets/css/welcome.css'],
+    'adsenseClient' => $adsenseClient ?? null,
 ]) ?>
 </head>
 <body>
@@ -67,6 +69,10 @@
     <a href="<?= $this->e($this->url('terms')) ?>"><?= $this->te('legal.terms') ?></a>
     &middot;
     <a href="<?= $this->e($this->url('privacy')) ?>"><?= $this->te('legal.privacy') ?></a>
+    &middot;
+    <a href="<?= $this->e($this->url('cookies')) ?>"><?= $this->te('legal.cookies') ?></a>
+    &middot;
+    <a href="<?= $this->e($this->url('legal-notice')) ?>"><?= $this->te('legal.notice') ?></a>
   </footer>
 
 </div>

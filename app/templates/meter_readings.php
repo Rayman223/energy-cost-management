@@ -5,6 +5,7 @@
  * @var array<string,mixed>|null $waterLatest
  * @var list<string> $available
  * @var ?string $discordUrl
+ * @var ?string $adsenseClient Identifiant éditeur AdSense (#185), null si publicité désactivée.
  */
 $today = date('Y-m-d');
 $now = date('H:i');
@@ -15,6 +16,7 @@ $now = date('H:i');
 <?= $this->partial('_head', [
     'title' => $this->t('meter.title') . ' — Manage Energy',
     'css'   => ['assets/css/app-header.css', 'assets/css/dashboard.css', 'assets/css/confirm.css'],
+    'adsenseClient' => $adsenseClient ?? null,
 ]) ?>
 </head>
 <body>

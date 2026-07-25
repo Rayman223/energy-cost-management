@@ -18,6 +18,7 @@
  * @var list<string>             $available
  * @var bool                     $isAdmin
  * @var ?string                  $discordUrl
+ * @var ?string                  $adsenseClient Identifiant éditeur AdSense (#185), null si publicité désactivée.
  */
 
 // Helper de présentation : valeur numérique localisée via le Formatter (closure
@@ -36,6 +37,7 @@ $fmt = function (mixed $v, int $dec = 3, string $unit = 'kWh'): string {
     'title'       => 'Manage Energy',
     'css'         => ['assets/css/app-header.css', 'assets/css/dashboard.css'],
     'preconnects' => ['https://cdn.jsdelivr.net'],
+    'adsenseClient' => $adsenseClient ?? null,
 ]) ?>
 <!-- defer : ne bloque pas le parsing du HTML ; s'exécute avant dashboard.js (aussi defer, ordre du document préservé). -->
 <script defer src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>

@@ -11,6 +11,7 @@
  * @var string       $apiUrl    URL absolue de l'API (ex. https://exemple/api)
  * @var int          $rateLimit Plafond de requêtes/heure par jeton (config)
  * @var list<string> $available Locales disponibles
+ * @var ?string      $adsenseClient Identifiant éditeur AdSense (#185), null si publicité désactivée.
  */
 $title = $this->t('apiguide.title');
 $url   = $this->e($apiUrl);
@@ -21,6 +22,7 @@ $url   = $this->e($apiUrl);
 <?= $this->partial('_head', [
     'title' => $title . ' — ' . $this->t('app.title'),
     'css'   => ['assets/css/page-standalone.css', 'assets/css/app-header.css', 'assets/css/api-guide.css'],
+    'adsenseClient' => $adsenseClient ?? null,
 ]) ?>
 </head>
 <body>
