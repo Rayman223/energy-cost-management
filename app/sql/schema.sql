@@ -79,7 +79,7 @@ CREATE TABLE IF NOT EXISTS dynamic_prices (
     id             BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     energy_type    ENUM('electricity') NOT NULL DEFAULT 'electricity',
     bidding_zone   VARCHAR(32) NOT NULL DEFAULT '10YBE----------2' COMMENT 'Zone de marché ENTSO-E',
-    period_start   DATETIME NOT NULL COMMENT 'Début intervalle (timezone locale)',
+    period_start   DATETIME NOT NULL COMMENT 'Début intervalle (UTC)',
     period_end     DATETIME NOT NULL,
     resolution_min SMALLINT UNSIGNED NOT NULL COMMENT '15 ou 60',
     price_eur_kwh  DECIMAL(12,7) NOT NULL COMMENT 'Prix spot day-ahead €/kWh (HTVA, hors marge)',

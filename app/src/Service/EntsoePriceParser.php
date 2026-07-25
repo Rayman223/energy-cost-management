@@ -35,20 +35,14 @@ final class EntsoePriceParser
         }
 
         // Stockage en UTC (comme toute la base). Les instants ENTSO-E sont déjà en
-        // UTC : plus de repli d'heure murale possible (chaque instant est distinct),
-        // la dédup ci-dessous ne sert donc plus que de garde-fou inoffensif.
+        // UTC : le repli d'heure d'automne y donne deux instants DISTINCTS (ex.
+        // 00:00Z puis 01:00Z pour les deux « 02:00 » murales belges), tous deux
+        // conservés — chacun garde donc son propre prix (#173).
         $storageTz = new DateTimeZone('UTC');
         $prices  = [];
 
         foreach ($xml->TimeSeries as $series) {
             foreach ($series->Period as $period) {
-                // Anti-collision DST scopée au Period : le repli d'heure d'automne
-                // produit deux positions consécutives sur la même heure locale AU
-                // SEIN d'un même Period. Réinitialisée à chaque Period pour ne PAS
-                // supprimer des heures identiques provenant de séries/périodes qui
-                // se chevauchent (la dédup inter-séries reste résolue à l'upsert DB).
-                /** @var array<string, true> $seenLocalKeys */
-                $seenLocalKeys = [];
                 $resolutionMin = $this->resolutionToMinutes((string) $period->resolution);
                 if ($resolutionMin === 0) {
                     continue;
@@ -80,21 +74,14 @@ final class EntsoePriceParser
                         continue;
                     }
 
+                    // Chaque position est décalée linéairement depuis le début du
+                    // Period (offset fixe) : les horodatages produits sont uniques par
+                    // construction, y compris une nuit de changement d'heure. L'unicité
+                    // entre séries/périodes qui se chevauchent est, elle, résolue par la
+                    // clé UNIQUE de dynamic_prices à l'upsert.
                     $periodStart = $start
                         ->modify(sprintf('+%d seconds', ($position - 1) * $stepSeconds))
                         ->setTimezone($storageTz);
-
-                    // Repli d'heure (DST automne) : deux instants UTC distincts
-                    // retombent sur la même heure murale locale (ex. 02:00 CEST puis
-                    // 02:00 CET), qui est la clé de stockage aval (sans offset). On
-                    // conserve la PREMIÈRE position et on ignore la seconde plutôt
-                    // que de l'écraser silencieusement. Limite connue : la 2ᵉ heure
-                    // « répétée » n'est pas tarifée à part (stockage UTC = piste #130 B5).
-                    $localKey = $resolutionMin . '@' . $periodStart->format('Y-m-d H:i');
-                    if (isset($seenLocalKeys[$localKey])) {
-                        continue;
-                    }
-                    $seenLocalKeys[$localKey] = true;
 
                     $prices[] = [
                         'period_start'   => $periodStart,
