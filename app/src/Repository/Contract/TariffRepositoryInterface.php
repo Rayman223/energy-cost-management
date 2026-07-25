@@ -22,6 +22,20 @@ interface TariffRepositoryInterface
     public function findActiveGrid(string $energyType, ?DateTimeImmutable $on = null): ?TariffGrid;
 
     /**
+     * Toutes les grilles chevauchant l'intervalle [$from, $to] (bornes incluses),
+     * triées par priorité décroissante : surcharge personnelle d'abord, puis
+     * `valid_from` décroissant — même ordre que {@see findActiveGrid()}, de sorte
+     * que la première grille active un jour donné est celle qu'aurait retenue
+     * findActiveGrid() pour ce jour.
+     *
+     * Alimente le découpage d'une période de calcul en sous-périodes tarifaires
+     * ({@see \App\Service\TariffPeriodSplitter}).
+     *
+     * @return list<TariffGrid>
+     */
+    public function findActiveGridsBetween(string $energyType, DateTimeImmutable $from, DateTimeImmutable $to): array;
+
+    /**
      * Coefficient PCS le plus récent disponible pour un type d'énergie,
      * à ou avant une date de référence. Repli quand la grille active n'en définit pas.
      */

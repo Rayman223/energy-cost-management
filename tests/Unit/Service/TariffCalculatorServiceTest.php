@@ -293,6 +293,43 @@ final class TariffCalculatorServiceTest extends TestCase
         self::assertEqualsWithDelta(10.0, $r['m3'], self::DELTA);
     }
 
+    /**
+     * Proration multi-grilles (#196) : monthsOverride remplace le plancher entier
+     * de wholeMonths() par une quantité fractionnaire, pour qu'une période
+     * découpée en deux ne facture pas deux abonnements mensuels.
+     */
+    public function testMonthsOverrideProratesTheMonthlySubscription(): void
+    {
+        $tariff = $this->calcTariff($this->electricityTariff());
+
+        // Sans override : 15 jours → plancher de 1 mois entier (comportement historique).
+        $full = $this->calc->calculateElectricityCost(50.0, 25.0, 0.0, 0.0, 15, $tariff);
+        self::assertEqualsWithDelta(5.0, $this->lineAmount($full, 'subscription'), self::DELTA);
+
+        // Avec override : la moitié du mois de la période complète.
+        $half = $this->calc->calculateElectricityCost(50.0, 25.0, 0.0, 0.0, 15, $tariff, 0.0, 0.5);
+        self::assertEqualsWithDelta(2.5, $this->lineAmount($half, 'subscription'), self::DELTA);
+
+        // Deux demi-périodes = un seul abonnement.
+        self::assertEqualsWithDelta(5.0, 2 * $this->lineAmount($half, 'subscription'), self::DELTA);
+    }
+
+    public function testWholeMonthsIsTheSharedBillingRule(): void
+    {
+        self::assertSame(1, $this->calc->wholeMonths(1));
+        self::assertSame(1, $this->calc->wholeMonths(30));
+        self::assertSame(2, $this->calc->wholeMonths(61));
+    }
+
+    public function testMonthsOverrideAppliesToGasAndWater(): void
+    {
+        $gas   = $this->calc->calculateGasCost(500.0, 15, $this->calcTariff(['subscription' => 6.0], 'gas'), 0.5);
+        $water = $this->calc->calculateWaterCost(10.0, 15, $this->calcTariff(['subscription' => 8.0], 'water'), 0.25);
+
+        self::assertEqualsWithDelta(3.0, $this->lineAmount($gas, 'subscription'), self::DELTA);
+        self::assertEqualsWithDelta(2.0, $this->lineAmount($water, 'subscription'), self::DELTA);
+    }
+
     public function testM3ToKwhUsesDefaultPcs(): void
     {
         self::assertEqualsWithDelta(105.5, $this->calc->m3ToKwh(10.0), self::DELTA);

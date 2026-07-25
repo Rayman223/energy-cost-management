@@ -58,7 +58,9 @@ function costLineDetail(ln) {
   if (rate == null || Number(rate) === 0) return '';
   const q = Number(ln.quantity) || 0;
   if (ln.kind === 'fixed_annual')  return `${q} j × ${(Number(rate) / 365).toFixed(5)} €/j <span class="t-dim">(${Number(rate).toFixed(2)} €/an)</span>`;
-  if (ln.kind === 'fixed_monthly') return `${q} mois × ${Number(rate).toFixed(2)} €/mois`;
+  // La quantité de mois peut être fractionnaire quand la période est répartie
+  // entre plusieurs grilles successives (proration multi-grilles).
+  if (ln.kind === 'fixed_monthly') return `${Number.isInteger(q) ? q : q.toFixed(2)} mois × ${Number(rate).toFixed(2)} €/mois`;
   return `${q.toFixed(2)} × ${Number(rate).toFixed(7)} ${ln.unit || ''}`;
 }
 // Génère les lignes groupées à partir de cost.lines, avec la fonction `row` locale.
@@ -74,12 +76,36 @@ function costLinesHtml(c, row) {
   return html;
 }
 // Lignes Total / HTVA / TVA à partir du taux de la grille (cost.vat_rate).
+// vat_rate est null quand la période couvre plusieurs grilles de taux différents :
+// le détail HTVA reste la somme exacte des sous-périodes, mais aucun taux unique
+// n'est affichable.
 function costVatRows(c, row) {
-  const vr = (c.vat_rate != null) ? c.vat_rate : 21;
-  const factor = (1 + vr / 100).toFixed(2);
+  const mixedVat = (c.vat_rate == null);
+  const vr       = mixedVat ? null : c.vat_rate;
+  const factor   = mixedVat ? '' : `÷ ${(1 + vr / 100).toFixed(2)}`;
   return row('Total TTC', '', c.total, 'total')
-    + row('dont HTVA', `÷ ${factor}`, c.htva, 'vat')
-    + row(`dont TVA ${vr}% incluse`, `${formatMoney(Math.abs(c.total))} − ${formatMoney(Math.abs(c.htva))}`, c.vat_included, 'vat vat-highlight');
+    + row('dont HTVA', factor, c.htva, 'vat')
+    + row(mixedVat ? 'dont TVA incluse' : `dont TVA ${vr}% incluse`,
+          `${formatMoney(Math.abs(c.total))} − ${formatMoney(Math.abs(c.htva))}`,
+          c.vat_included, 'vat vat-highlight');
+}
+
+// Échappement HTML des valeurs interpolées dans les templates `innerHTML`.
+// Les noms de grilles sont saisis par l'utilisateur, et ceux du catalogue partagé
+// (user_id NULL) sont diffusés à tous les comptes : jamais injectés bruts.
+function escapeHtml(v) {
+  return String(v ?? '').replace(/[&<>"']/g, (ch) => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+  })[ch]);
+}
+
+// Lignes « meta » détaillant les sous-périodes tarifaires d'une période couverte
+// par plusieurs grilles successives. Vide quand une seule grille s'applique.
+function tariffSegmentsMeta(data) {
+  const segs = data.tariff_segments || [];
+  if (segs.length < 2) return '';
+  const _d = (iso) => String(iso).slice(8, 10) + '/' + String(iso).slice(5, 7);
+  return segs.map((s) => `<span>${escapeHtml(s.name)} — ${_d(s.from)}→${_d(s.to)} (${s.days} j) : ${formatMoney(s.total)}</span>`).join('');
 }
 
 // ── Electricity cost navigation ────────────────────────────────────────────
@@ -166,7 +192,8 @@ function costVatRows(c, row) {
           <div class="cost-total-amount">${formatMoney(c.total)}</div>
         </div>
         <div class="cost-total-meta">
-          <span>Tarif : ${data.tariff_name ?? '—'}</span>
+          <span>Tarif : ${escapeHtml(data.tariff_name ?? '—')}</span>
+          ${tariffSegmentsMeta(data)}
           <span>Import T1 : ${t1.toFixed(2)} kWh</span>
           <span>Import T2 : ${t2.toFixed(2)} kWh</span>
           <span>Export T1 : ${e1.toFixed(2)} kWh</span>
@@ -442,7 +469,8 @@ function costVatRows(c, row) {
           <div class="cost-total-amount">${fmtE(c.total)}</div>
         </div>
         <div class="cost-total-meta">
-          <span>Tarif : ${data.tariff_name ?? '—'}</span>
+          <span>Tarif : ${escapeHtml(data.tariff_name ?? '—')}</span>
+          ${tariffSegmentsMeta(data)}
           <span>${from} → ${to}</span>
           <span>${data.days} jour${data.days > 1 ? 's' : ''}</span>
           <span>${Number(data.delta_m3).toFixed(3)} m³ → ${Number(kwh).toFixed(1)} kWh</span>
@@ -651,7 +679,8 @@ function costVatRows(c, row) {
           <div class="cost-total-amount">${formatMoney(c.total)}</div>
         </div>
         <div class="cost-total-meta">
-          <span>Tarif : ${data.tariff_name ?? '—'}</span>
+          <span>Tarif : ${escapeHtml(data.tariff_name ?? '—')}</span>
+          ${tariffSegmentsMeta(data)}
           <span>${from} → ${to}${projNote}</span>
           <span>${data.days} jour${data.days > 1 ? 's' : ''}</span>
           <span>${Number(data.delta_m3).toFixed(3)} m³</span>

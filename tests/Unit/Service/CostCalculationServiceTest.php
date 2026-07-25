@@ -541,4 +541,331 @@ final class CostCalculationServiceTest extends TestCase
         self::assertSame(30, $r['days']);
         self::assertArrayNotHasKey('cost', $r); // pas de coût pour l'eau
     }
+
+    // ── Proration multi-grilles (#196) ───────────────────────────────────────
+
+    /** Grille électricité paramétrable, pour composer deux tarifs successifs. */
+    private function elecGrid(
+        int $id,
+        string $name,
+        string $validFrom,
+        ?string $validTo,
+        float $t1,
+        float $t2,
+        float $vatRate = 21.0,
+    ): TariffGrid {
+        return new TariffGrid(
+            id: $id,
+            energyType: 'electricity',
+            name: $name,
+            validFrom: new DateTimeImmutable($validFrom),
+            validTo: $validTo !== null ? new DateTimeImmutable($validTo) : null,
+            lines: [
+                'energy_t1'    => new TariffLine('energy_t1', $t1, ComponentKind::EnergyT1),
+                'energy_t2'    => new TariffLine('energy_t2', $t2, ComponentKind::EnergyT2),
+                'subscription' => new TariffLine('subscription', 5.0, ComponentKind::FixedMonthly),
+            ],
+            vatRate: $vatRate,
+        );
+    }
+
+    /** @return list<TariffGrid> Deux grilles élec successives, dans l'ordre de priorité du repository. */
+    private function twoElectricityGrids(float $vatRateB = 21.0): array
+    {
+        return [
+            $this->elecGrid(2, 'Elec B', '2026-01-16', null, 0.20, 0.16, $vatRateB),
+            $this->elecGrid(1, 'Elec A', '2026-01-01', '2026-01-15', 0.10, 0.08),
+        ];
+    }
+
+    /**
+     * Deux grilles sur le mois → chaque sous-période est facturée à son tarif,
+     * au prorata des jours (15 j + 15 j sur une période de 30 jours).
+     */
+    public function testMonthElectricitySplitsCostBetweenSuccessiveGrids(): void
+    {
+        $tariffs = new FakeTariffRepository();
+        $tariffs->gridsBetween = $this->twoElectricityGrids();
+
+        $svc = $this->makeService(
+            new FakeLegacyDailyRepository(monthlyDeltasForMonth: $this->electricityDeltasFor('2026-01-01 00:00:00', '2026-01-31 00:00:00')),
+            $tariffs,
+            new FakeGasReadingRepository(),
+        );
+
+        $r = $svc->estimateMonthElectricity(2026, 1);
+
+        self::assertTrue($r['available']);
+        self::assertSame(30, $r['days']);
+        self::assertSame('Elec A + Elec B', $r['tariff_name']);
+
+        // A : 50 kWh T1 × 0,10 + 25 kWh T2 × 0,08 = 7,00 €
+        // B : 50 kWh T1 × 0,20 + 25 kWh T2 × 0,16 = 14,00 €
+        // Abonnement : 1 mois sur la période, réparti 0,5 + 0,5 → 5,00 € une seule fois.
+        self::assertEqualsWithDelta(26.0, $r['cost']['total'], 0.01);
+    }
+
+    /** L'abonnement mensuel reste facturé UNE fois quand la période est découpée. */
+    public function testMonthlySubscriptionIsNotBilledTwiceAcrossGrids(): void
+    {
+        $tariffs = new FakeTariffRepository();
+        $tariffs->gridsBetween = $this->twoElectricityGrids();
+
+        $svc = $this->makeService(
+            new FakeLegacyDailyRepository(monthlyDeltasForMonth: $this->electricityDeltasFor('2026-01-01 00:00:00', '2026-01-31 00:00:00')),
+            $tariffs,
+            new FakeGasReadingRepository(),
+        );
+
+        $lines = $svc->estimateMonthElectricity(2026, 1)['cost']['lines'];
+        $subs  = array_values(array_filter($lines, static fn (array $l): bool => $l['key'] === 'subscription'));
+
+        self::assertCount(1, $subs);
+        self::assertEqualsWithDelta(1.0, $subs[0]['quantity'], 0.0001); // 0,5 + 0,5 mois
+        self::assertEqualsWithDelta(5.0, $subs[0]['amount'], 0.0001);
+    }
+
+    /** Le détail par sous-période est exposé au dashboard (dates, jours, sous-total). */
+    public function testMonthElectricityExposesTariffSegments(): void
+    {
+        $tariffs = new FakeTariffRepository();
+        $tariffs->gridsBetween = $this->twoElectricityGrids();
+
+        $svc = $this->makeService(
+            new FakeLegacyDailyRepository(monthlyDeltasForMonth: $this->electricityDeltasFor('2026-01-01 00:00:00', '2026-01-31 00:00:00')),
+            $tariffs,
+            new FakeGasReadingRepository(),
+        );
+
+        $segments = $svc->estimateMonthElectricity(2026, 1)['tariff_segments'];
+
+        self::assertCount(2, $segments);
+        self::assertSame('Elec A', $segments[0]['name']);
+        self::assertSame('2026-01-01', $segments[0]['from']);
+        self::assertSame('2026-01-15', $segments[0]['to']);
+        self::assertSame(15, $segments[0]['days']);
+        self::assertSame('Elec B', $segments[1]['name']);
+        self::assertSame('2026-01-16', $segments[1]['from']);
+        self::assertSame(15, $segments[1]['days']);
+        self::assertEqualsWithDelta(
+            $svc->estimateMonthElectricity(2026, 1)['cost']['total'],
+            $segments[0]['total'] + $segments[1]['total'],
+            0.02,
+        );
+    }
+
+    /** Grilles à taux de TVA différents : HTVA sommé, pas de taux unique affichable. */
+    public function testMixedVatRatesLeaveVatRateNull(): void
+    {
+        $tariffs = new FakeTariffRepository();
+        $tariffs->gridsBetween = $this->twoElectricityGrids(vatRateB: 6.0);
+
+        $svc = $this->makeService(
+            new FakeLegacyDailyRepository(monthlyDeltasForMonth: $this->electricityDeltasFor('2026-01-01 00:00:00', '2026-01-31 00:00:00')),
+            $tariffs,
+            new FakeGasReadingRepository(),
+        );
+
+        $cost = $svc->estimateMonthElectricity(2026, 1)['cost'];
+
+        self::assertNull($cost['vat_rate']);
+        self::assertEqualsWithDelta($cost['total'] - $cost['htva'], $cost['vat_included'], 0.01);
+        self::assertGreaterThan(0.0, $cost['htva']);
+    }
+
+    /** Une seule grille active → résultat strictement identique au calcul mono-grille. */
+    public function testSingleGridResultIsUnchanged(): void
+    {
+        $single = new FakeTariffRepository(grid: $this->electricityGrid());
+        $multi  = new FakeTariffRepository();
+        $multi->gridsBetween = [$this->electricityGrid()];
+
+        $deltas = $this->electricityDeltasFor('2026-01-01 00:00:00', '2026-01-31 00:00:00');
+
+        $a = $this->makeService(new FakeLegacyDailyRepository(monthlyDeltasForMonth: $deltas), $single, new FakeGasReadingRepository());
+        $b = $this->makeService(new FakeLegacyDailyRepository(monthlyDeltasForMonth: $deltas), $multi, new FakeGasReadingRepository());
+
+        $ra = $a->estimateMonthElectricity(2026, 1);
+        $rb = $b->estimateMonthElectricity(2026, 1);
+
+        self::assertSame($ra['cost'], $rb['cost']);
+        self::assertSame(21.0, $ra['cost']['vat_rate']);
+        self::assertCount(1, $ra['tariff_segments']);
+    }
+
+    /**
+     * Grille créée aujourd'hui (valid_from = borne de fin de la période) : aucune
+     * grille n'est active pendant les jours balayés, mais l'ancien calcul retombait
+     * sur `findActiveGrid($to)`. Le coût doit rester rendu, pas « aucun tarif ».
+     */
+    public function testGridStartingAtThePeriodEndStillCoversThePeriod(): void
+    {
+        $tariffs = new FakeTariffRepository();
+        $tariffs->gridsBetween = [$this->elecGrid(9, 'Nouvelle', '2026-01-31', null, 0.10, 0.08)];
+
+        $svc = $this->makeService(
+            new FakeLegacyDailyRepository(monthlyDeltasForMonth: $this->electricityDeltasFor('2026-01-01 00:00:00', '2026-01-31 00:00:00')),
+            $tariffs,
+            new FakeGasReadingRepository(),
+        );
+
+        $r = $svc->estimateMonthElectricity(2026, 1);
+
+        self::assertTrue($r['available']);
+        self::assertSame('Nouvelle', $r['tariff_name']);
+        self::assertSame(30, $r['tariff_segments'][0]['days']);
+        // 100 kWh × 0,10 + 50 × 0,08 + 5,00 € d'abonnement.
+        self::assertEqualsWithDelta(19.0, $r['cost']['total'], 0.01);
+    }
+
+    /** Gaz : le PCS exposé doit rester cohérent avec delta_m3 → kWh affichés. */
+    public function testGasEffectivePcsMatchesDisplayedKwh(): void
+    {
+        $tariffs = new FakeTariffRepository();
+        $tariffs->gridsBetween = [
+            new TariffGrid(
+                id: 4,
+                energyType: 'gas',
+                name: 'Gaz B',
+                validFrom: new DateTimeImmutable('2026-01-16'),
+                validTo: null,
+                lines: ['energy' => new TariffLine('energy', 0.10, ComponentKind::EnergyFlat)],
+                pcsCoefficient: 11.0,
+            ),
+            new TariffGrid(
+                id: 3,
+                energyType: 'gas',
+                name: 'Gaz A',
+                validFrom: new DateTimeImmutable('2026-01-01'),
+                validTo: new DateTimeImmutable('2026-01-15'),
+                lines: ['energy' => new TariffLine('energy', 0.05, ComponentKind::EnergyFlat)],
+                pcsCoefficient: 10.0,
+            ),
+        ];
+
+        $svc = $this->makeService(
+            new FakeLegacyDailyRepository(),
+            $tariffs,
+            new FakeGasReadingRepository(lastTwo: [
+                'from' => ['reading_at' => '2026-01-01 00:00:00', 'counter_m3' => 1000.0],
+                'to'   => ['reading_at' => '2026-01-31 00:00:00', 'counter_m3' => 1100.0],
+            ]),
+        );
+
+        $r = $svc->estimateLastGasPeriod();
+
+        // PCS effectif = 1050 kWh / 100 m³ = 10,5 (et non 10,0 ou 11,0).
+        self::assertEqualsWithDelta(10.5, $r['pcs_coefficient'], 0.0001);
+        self::assertEqualsWithDelta($r['delta_m3'] * $r['pcs_coefficient'], $r['kwh'], 0.01);
+    }
+
+    /**
+     * Tarif dynamique : chaque heure est rattachée à sa sous-période par sa date
+     * réelle (pas de prorata), et le repli des heures sans prix utilise le tarif
+     * de la grille applicable à CETTE heure.
+     */
+    public function testDynamicFallbackUsesTheGridOfTheHour(): void
+    {
+        $tariffs = new FakeTariffRepository();
+        $tariffs->gridsBetween = $this->twoElectricityGrids();
+
+        $legacy = new FakeLegacyDailyRepository(
+            monthlyDeltasForMonth: $this->electricityDeltasFor('2026-01-01 00:00:00', '2026-01-31 00:00:00'),
+            hourlyImportDeltas: [
+                ['hour' => '2026-01-10 10:00:00', 'import_kwh' => 10.0], // grille A, prix connu
+                ['hour' => '2026-01-20 10:00:00', 'import_kwh' => 10.0], // grille B, repli T1 = 0,20
+            ],
+        );
+        $dynamic = new FakeDynamicPriceRepository(pricesByHour: ['2026-01-10 10:00:00' => 0.20]);
+
+        $r = $this->makeDynamicService($legacy, $tariffs, $dynamic)->estimateMonthElectricityDynamic(2026, 1);
+
+        self::assertTrue($r['available']);
+        // 10 × (0,20 × 1,21) = 2,42 (prix spot) + 10 × 0,20 (repli grille B) = 4,42.
+        // Avec le repli de la grille A (0,10) on aurait obtenu 3,42.
+        self::assertEqualsWithDelta(4.42, $r['energy_dynamic'], 0.0001);
+        self::assertCount(2, $r['tariff_segments']);
+        self::assertSame('dynamic', $r['cost']['mode']);
+    }
+
+    /** Gaz : chaque sous-période convertit les m³ avec le PCS de SA grille. */
+    public function testLastGasPeriodSplitsAcrossGridsWithOwnPcs(): void
+    {
+        $tariffs = new FakeTariffRepository();
+        $tariffs->gridsBetween = [
+            new TariffGrid(
+                id: 4,
+                energyType: 'gas',
+                name: 'Gaz B',
+                validFrom: new DateTimeImmutable('2026-01-16'),
+                validTo: null,
+                lines: ['energy' => new TariffLine('energy', 0.10, ComponentKind::EnergyFlat)],
+                pcsCoefficient: 11.0,
+            ),
+            new TariffGrid(
+                id: 3,
+                energyType: 'gas',
+                name: 'Gaz A',
+                validFrom: new DateTimeImmutable('2026-01-01'),
+                validTo: new DateTimeImmutable('2026-01-15'),
+                lines: ['energy' => new TariffLine('energy', 0.05, ComponentKind::EnergyFlat)],
+                pcsCoefficient: 10.0,
+            ),
+        ];
+
+        $svc = $this->makeService(
+            new FakeLegacyDailyRepository(),
+            $tariffs,
+            new FakeGasReadingRepository(lastTwo: [
+                'from' => ['reading_at' => '2026-01-01 00:00:00', 'counter_m3' => 1000.0],
+                'to'   => ['reading_at' => '2026-01-31 00:00:00', 'counter_m3' => 1100.0],
+            ]),
+        );
+
+        $r = $svc->estimateLastGasPeriod();
+
+        self::assertTrue($r['available']);
+        self::assertSame('Gaz A + Gaz B', $r['tariff_name']);
+        // 50 m³ × 10,0 + 50 m³ × 11,0 = 1050 kWh
+        self::assertEqualsWithDelta(1050.0, $r['kwh'], 0.001);
+        // 500 kWh × 0,05 + 550 kWh × 0,10 = 80,00 €
+        self::assertEqualsWithDelta(80.0, $r['cost']['total'], 0.01);
+    }
+
+    /** Eau : volume réparti au prorata des jours entre les deux grilles. */
+    public function testMonthWaterSplitsAcrossGrids(): void
+    {
+        $waterGrid = static fn (int $id, string $name, string $from, ?string $to, float $rate): TariffGrid => new TariffGrid(
+            id: $id,
+            energyType: 'water',
+            name: $name,
+            validFrom: new DateTimeImmutable($from),
+            validTo: $to !== null ? new DateTimeImmutable($to) : null,
+            lines: ['water' => new TariffLine('water', $rate, ComponentKind::PerM3)],
+        );
+
+        $tariffs = new FakeTariffRepository();
+        $tariffs->gridsBetween = [
+            $waterGrid(6, 'Eau B', '2026-04-16', null, 4.0),
+            $waterGrid(5, 'Eau A', '2026-04-01', '2026-04-15', 2.0),
+        ];
+
+        $svc = $this->makeService(
+            new FakeLegacyDailyRepository(),
+            $tariffs,
+            new FakeGasReadingRepository(),
+            new FakeMeterReadingRepository(forInterpolation: [
+                ['reading_at' => '2026-04-01 00:00:00', 'counter_m3' => 100.0],
+                ['reading_at' => '2026-05-01 00:00:00', 'counter_m3' => 130.0],
+            ]),
+        );
+
+        $r = $svc->estimateMonthWater(2026, 4);
+
+        self::assertTrue($r['available']);
+        self::assertSame('Eau A + Eau B', $r['tariff_name']);
+        // 30 m³ sur 30 jours : 15 m³ × 2 € + 15 m³ × 4 € = 90,00 €
+        self::assertEqualsWithDelta(90.0, $r['cost']['total'], 0.01);
+        self::assertCount(2, $r['tariff_segments']);
+    }
 }

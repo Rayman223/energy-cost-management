@@ -58,6 +58,45 @@ final class TariffRepository implements TariffRepositoryInterface
         return $row ? $this->hydrate($row) : null;
     }
 
+    /**
+     * Grilles chevauchant [$from, $to] (bornes incluses), dans l'ordre de
+     * priorité de findActiveGrid() : surcharge personnelle d'abord, puis
+     * `valid_from` décroissant. Les lignes sont chargées en une requête (pas de N+1).
+     *
+     * @return list<TariffGrid>
+     */
+    public function findActiveGridsBetween(string $energyType, DateTimeImmutable $from, DateTimeImmutable $to): array
+    {
+        $stmt = $this->pdo->prepare(
+            'SELECT ' . self::COLUMNS . '
+             FROM tariff_grids
+             WHERE energy_type = :type
+               AND (user_id = :uid OR user_id IS NULL)
+               AND valid_from <= :to
+               AND (valid_to IS NULL OR valid_to >= :from)
+             ORDER BY (user_id IS NOT NULL) DESC, valid_from DESC'
+        );
+        $stmt->execute([
+            'type' => $energyType,
+            'uid'  => $this->userId,
+            'from' => $from->format('Y-m-d'),
+            'to'   => $to->format('Y-m-d'),
+        ]);
+        $rows = $stmt->fetchAll();
+
+        if ($rows === []) {
+            return [];
+        }
+
+        $ids      = array_map(static fn (array $r): int => (int) $r['id'], $rows);
+        $linesMap = $this->fetchLinesForIds($ids);
+
+        return array_values(array_map(
+            fn (array $row): TariffGrid => $this->hydrate($row, $linesMap[(int) $row['id']] ?? []),
+            $rows
+        ));
+    }
+
     public function findById(int $id): ?TariffGrid
     {
         $stmt = $this->pdo->prepare(

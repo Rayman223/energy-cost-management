@@ -41,6 +41,7 @@ final class TariffCalculatorService
      *
      * @param float $kwhSolar Production PV totale de la période (kWh), pour l'info
      *                        d'auto-consommation. 0.0 si pas de données solaires.
+     * @param float|null $monthsOverride Nombre de mois facturés imposé (cf. {@see computeLines()}).
      * @param array{vat_rate: float, lines: list<array{key: string, kind: string, amount: float, label: string|null}>} $tariff
      * @return array<string, mixed>
      */
@@ -52,6 +53,7 @@ final class TariffCalculatorService
         int   $days,
         array $tariff,
         float $kwhSolar = 0.0,
+        ?float $monthsOverride = null,
     ): array {
         $quantities = [
             'kwh_t1'        => $kwhT1,
@@ -60,7 +62,7 @@ final class TariffCalculatorService
             'kwh_export_t2' => $kwhExportT2,
         ];
 
-        $result = $this->computeLines($tariff, $quantities, $days);
+        $result = $this->computeLines($tariff, $quantities, $days, null, 'electricity', $monthsOverride);
         $solar  = $this->solarInfo($tariff, $kwhT1, $kwhT2, $kwhExportT1, $kwhExportT2, $kwhSolar);
 
         return array_merge($result, $solar);
@@ -83,6 +85,7 @@ final class TariffCalculatorService
         array $tariff,
         float $dynamicEnergyTtc,
         float $kwhSolar = 0.0,
+        ?float $monthsOverride = null,
     ): array {
         $quantities = [
             'kwh_t1'        => $kwhT1,
@@ -91,7 +94,7 @@ final class TariffCalculatorService
             'kwh_export_t2' => $kwhExportT2,
         ];
 
-        $result = $this->computeLines($tariff, $quantities, $days, $dynamicEnergyTtc);
+        $result = $this->computeLines($tariff, $quantities, $days, $dynamicEnergyTtc, 'electricity', $monthsOverride);
         $solar  = $this->solarInfo($tariff, $kwhT1, $kwhT2, $kwhExportT1, $kwhExportT2, $kwhSolar);
 
         return array_merge(['mode' => 'dynamic'], $result, $solar);
@@ -104,9 +107,9 @@ final class TariffCalculatorService
      * @param array{vat_rate: float, lines: list<array{key: string, kind: string, amount: float, label: string|null}>} $tariff
      * @return array<string, mixed>
      */
-    public function calculateGasCost(float $kwh, int $days, array $tariff): array
+    public function calculateGasCost(float $kwh, int $days, array $tariff, ?float $monthsOverride = null): array
     {
-        $result = $this->computeLines($tariff, ['kwh_t1' => $kwh], $days);
+        $result = $this->computeLines($tariff, ['kwh_t1' => $kwh], $days, null, 'electricity', $monthsOverride);
         $result['kwh'] = round($kwh, 3);
 
         return $result;
@@ -119,9 +122,9 @@ final class TariffCalculatorService
      * @param array{vat_rate: float, lines: list<array{key: string, kind: string, amount: float, label: string|null}>} $tariff
      * @return array<string, mixed>
      */
-    public function calculateWaterCost(float $m3, int $days, array $tariff): array
+    public function calculateWaterCost(float $m3, int $days, array $tariff, ?float $monthsOverride = null): array
     {
-        $result = $this->computeLines($tariff, ['m3' => $m3], $days, null, 'water');
+        $result = $this->computeLines($tariff, ['m3' => $m3], $days, null, 'water', $monthsOverride);
         $result['m3'] = round($m3, 3);
 
         return $result;
@@ -133,6 +136,10 @@ final class TariffCalculatorService
      * @param array{vat_rate?: float, lines?: list<array{key: string, kind: string, amount: float, label: string|null, category?: string|null}>} $tariff
      * @param array{kwh_t1?: float, kwh_t2?: float, kwh_export_t1?: float, kwh_export_t2?: float, m3?: float} $quantities
      * @param float|null $dynamicEnergyTtc  Coût énergie dynamique (mode dynamique) ; les kinds énergie fournisseur sont alors ignorés.
+     * @param float|null $monthsOverride    Nombre de mois facturés imposé (fractionnaire autorisé), au lieu du
+     *        plancher entier {@see wholeMonths()}. Utilisé par la proration multi-grilles (#196) : les mois de la
+     *        période ENTIÈRE sont répartis entre ses sous-périodes, sinon deux demi-mois factureraient deux
+     *        abonnements mensuels au lieu d'un.
      * @return array<string, mixed>
      */
     private function computeLines(
@@ -141,6 +148,7 @@ final class TariffCalculatorService
         int $days,
         ?float $dynamicEnergyTtc = null,
         string $energyType = 'electricity',
+        ?float $monthsOverride = null,
     ): array {
         $kwhT1    = (float) ($quantities['kwh_t1'] ?? 0.0);
         $kwhT2    = (float) ($quantities['kwh_t2'] ?? 0.0);
@@ -149,7 +157,7 @@ final class TariffCalculatorService
         $m3       = (float) ($quantities['m3'] ?? 0.0);
         $totalKwh = $kwhT1 + $kwhT2;
 
-        $wholeMonths = $this->wholeMonths($days);
+        $wholeMonths = $monthsOverride ?? (float) $this->wholeMonths($days);
         $isDynamic   = $dynamicEnergyTtc !== null;
 
         $lines       = [];
@@ -227,7 +235,7 @@ final class TariffCalculatorService
     /**
      * Quantité et montant (€) d'une ligne selon son kind.
      *
-     * @param array{kwh_t1: float, kwh_t2: float, total_kwh: float, export_t1: float, export_t2: float, m3: float, months: int, days: int} $ctx
+     * @param array{kwh_t1: float, kwh_t2: float, total_kwh: float, export_t1: float, export_t2: float, m3: float, months: float, days: int} $ctx
      * @return array{0: float, 1: float}  [quantité, montant]
      */
     private function applyKind(ComponentKind $kind, float $rate, array $ctx): array
@@ -237,7 +245,7 @@ final class TariffCalculatorService
             ComponentKind::EnergyT1, ComponentKind::PerKwhT1 => [$ctx['kwh_t1'], $ctx['kwh_t1'] * $rate],
             ComponentKind::EnergyT2, ComponentKind::PerKwhT2 => [$ctx['kwh_t2'], $ctx['kwh_t2'] * $rate],
             ComponentKind::PerM3        => [$ctx['m3'], $ctx['m3'] * $rate],
-            ComponentKind::FixedMonthly => [(float) $ctx['months'], $ctx['months'] * $rate],
+            ComponentKind::FixedMonthly => [$ctx['months'], $ctx['months'] * $rate],
             ComponentKind::FixedAnnual  => [(float) $ctx['days'], $this->prorateAnnual($rate, $ctx['days'])],
             ComponentKind::InjectionT1  => [$ctx['export_t1'], -($ctx['export_t1'] * $rate)],
             ComponentKind::InjectionT2  => [$ctx['export_t2'], -($ctx['export_t2'] * $rate)],
@@ -308,8 +316,11 @@ final class TariffCalculatorService
     /**
      * Nombre de mois entiers facturés pour une période (plancher à 1).
      * L'abonnement est un forfait mensuel fixe, indépendant du nombre de jours.
+     *
+     * Public car la proration multi-grilles (#196) répartit les mois de la période
+     * complète entre ses sous-périodes : la règle doit rester définie ici.
      */
-    private function wholeMonths(int $days): int
+    public function wholeMonths(int $days): int
     {
         return max(1, (int) round($days / 30.4375));
     }

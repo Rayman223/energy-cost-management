@@ -28,9 +28,22 @@ final class FakeTariffRepository implements TariffRepositoryInterface
     ) {
     }
 
+    /** @var list<TariffGrid> Grilles renvoyées par findActiveGridsBetween ; vide → repli sur $grid. */
+    public array $gridsBetween = [];
+
     public function findActiveGrid(string $energyType, ?DateTimeImmutable $on = null): ?TariffGrid
     {
         return $this->grid;
+    }
+
+    /** @return list<TariffGrid> */
+    public function findActiveGridsBetween(string $energyType, DateTimeImmutable $from, DateTimeImmutable $to): array
+    {
+        if ($this->gridsBetween !== []) {
+            return $this->gridsBetween;
+        }
+
+        return $this->grid !== null ? [$this->grid] : [];
     }
 
     public function findMostRecentPcs(string $energyType, DateTimeImmutable $before): ?float

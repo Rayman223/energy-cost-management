@@ -295,6 +295,39 @@ final class TariffRepositoryDbTest extends TestCase
         self::assertSame('taxes', $grid->lines['excise_duty']->category()->value);
     }
 
+    /**
+     * Proration multi-grilles (#196) : findActiveGridsBetween renvoie toutes les
+     * grilles chevauchant la période, dans l'ordre de priorité de findActiveGrid.
+     */
+    public function testFindActiveGridsBetweenReturnsOverlappingGridsByPriority(): void
+    {
+        $admin = new TariffRepository($this->pdo(), $this->adminId, true);
+        $user  = new TariffRepository($this->pdo(), $this->userId, false);
+
+        $user->saveGrid('electricity', 'A', new DateTimeImmutable('2026-01-01'), new DateTimeImmutable('2026-01-15'), $this->lines(['energy_t1' => 0.10]));
+        $user->saveGrid('electricity', 'B', new DateTimeImmutable('2026-01-16'), null, $this->lines(['energy_t1' => 0.20]));
+        // Hors période : ne doit pas ressortir.
+        $user->saveGrid('electricity', 'Ancienne', new DateTimeImmutable('2025-01-01'), new DateTimeImmutable('2025-12-31'), $this->lines(['energy_t1' => 0.05]));
+        // Catalogue partagé : visible, mais après la surcharge personnelle.
+        $admin->saveGrid('electricity', 'Catalogue', new DateTimeImmutable('2026-01-01'), null, $this->lines(['energy_t1' => 0.15]), null, 'BE', 'EUR', true);
+
+        $grids = $user->findActiveGridsBetween('electricity', new DateTimeImmutable('2026-01-01'), new DateTimeImmutable('2026-01-31'));
+
+        self::assertSame(['B', 'A', 'Catalogue'], array_map(static fn ($g): string => $g->name, $grids));
+        // Les lignes sont hydratées (chargement groupé).
+        self::assertSame(0.20, $grids[0]->getLine('energy_t1'));
+    }
+
+    public function testFindActiveGridsBetweenIsEmptyOutsideAnyValidity(): void
+    {
+        $user = new TariffRepository($this->pdo(), $this->userId, false);
+        $user->saveGrid('electricity', 'A', new DateTimeImmutable('2026-01-01'), new DateTimeImmutable('2026-01-15'), $this->lines(['energy_t1' => 0.10]));
+
+        $grids = $user->findActiveGridsBetween('electricity', new DateTimeImmutable('2026-03-01'), new DateTimeImmutable('2026-03-31'));
+
+        self::assertSame([], $grids);
+    }
+
     private function pdo(): PDO
     {
         if ($this->pdo === null) {
