@@ -32,7 +32,10 @@ final class TariffRepository implements TariffRepositoryInterface
     /**
      * Grille active pour un type d'énergie à une date : la surcharge
      * personnelle prime sur le catalogue partagé ; à priorité égale, la grille
-     * démarrée le plus récemment gagne.
+     * démarrée le plus récemment gagne, et à date de début identique la
+     * dernière enregistrée (id DESC). Sans ce dernier critère, dupliquer une
+     * grille le jour même laisse deux lignes ex æquo et MySQL peut rendre
+     * l'ancienne — le calcul resterait sur les prix d'avant.
      */
     public function findActiveGrid(string $energyType, ?DateTimeImmutable $on = null): ?TariffGrid
     {
@@ -46,7 +49,7 @@ final class TariffRepository implements TariffRepositoryInterface
                AND (user_id = :uid OR user_id IS NULL)
                AND valid_from <= :date
                AND (valid_to IS NULL OR valid_to >= :date)
-             ORDER BY (user_id IS NOT NULL) DESC, valid_from DESC
+             ORDER BY (user_id IS NOT NULL) DESC, valid_from DESC, id DESC
              LIMIT 1'
         );
         $stmt->execute(['type' => $energyType, 'uid' => $this->userId, 'date' => $date]);
@@ -75,7 +78,7 @@ final class TariffRepository implements TariffRepositoryInterface
             'SELECT ' . self::COLUMNS . '
              FROM tariff_grids
              WHERE energy_type = :type AND (user_id = :uid OR user_id IS NULL)
-             ORDER BY valid_from DESC'
+             ORDER BY valid_from DESC, id DESC'
         );
         $stmt->execute(['type' => $energyType, 'uid' => $this->userId]);
         $rows = $stmt->fetchAll();
@@ -247,7 +250,7 @@ final class TariffRepository implements TariffRepositoryInterface
                AND (user_id = :uid OR user_id IS NULL)
                AND pcs_coefficient IS NOT NULL
                AND valid_from      <= :date
-             ORDER BY (user_id IS NOT NULL) DESC, valid_from DESC
+             ORDER BY (user_id IS NOT NULL) DESC, valid_from DESC, id DESC
              LIMIT 1'
         );
         $stmt->execute([

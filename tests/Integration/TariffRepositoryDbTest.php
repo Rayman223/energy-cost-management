@@ -144,6 +144,91 @@ final class TariffRepositoryDbTest extends TestCase
         $admin->deleteGrid($gridId);
     }
 
+    /**
+     * #205 : un membre non-admin peut réutiliser une grille du catalogue partagé
+     * — la lire intégralement (montants inclus) via findById, puis en réécrire
+     * une copie personnelle qui prend le pas au calcul. C'est le chemin emprunté
+     * par « Dupliquer » (route /tariff : ?duplicate=<id> puis save).
+     */
+    public function testSharedGridCanBeDuplicatedAsPersonalGrid(): void
+    {
+        $admin = new TariffRepository($this->pdo(), $this->adminId, true);
+        $user  = new TariffRepository($this->pdo(), $this->userId, false);
+
+        $sharedId = $admin->saveGrid(
+            'electricity',
+            'Catalogue BE',
+            new DateTimeImmutable('2026-01-01'),
+            null,
+            $this->lines(['energy_t1' => 0.10, 'excise_duty' => 0.02]),
+            null,
+            'BE',
+            'EUR',
+            true,
+            6.0,
+        );
+
+        // Le membre voit la grille partagée avec ses montants (source de la copie).
+        $source = $user->findById($sharedId);
+        self::assertNotNull($source);
+        self::assertTrue($source->isShared());
+        self::assertSame(0.10, $source->lines['energy_t1']->amount);
+
+        // Copie : mêmes lignes/pays/devise/TVA, mais grille personnelle.
+        $copyLines = [];
+        foreach ($source->lines as $line) {
+            $copyLines[] = ['key' => $line->key, 'amount' => $line->amount, 'kind' => $line->kind->value, 'label' => $line->label];
+        }
+        $copyId = $user->saveGrid(
+            'electricity',
+            'Copie de Catalogue BE',
+            new DateTimeImmutable('2026-01-01'),
+            null,
+            $copyLines,
+            null,
+            $source->country,
+            $source->currency,
+            false,
+            $source->vatRate,
+        );
+
+        $copy = $user->findById($copyId);
+        self::assertNotNull($copy);
+        self::assertFalse($copy->isShared());
+        self::assertSame('BE', $copy->country);
+        self::assertSame(6.0, $copy->vatRate);
+        self::assertSame(0.10, $copy->lines['energy_t1']->amount);
+        self::assertSame(0.02, $copy->lines['excise_duty']->amount);
+
+        // Et la copie l'emporte sur le catalogue pour ce membre.
+        $active = $user->findActiveGrid('electricity', new DateTimeImmutable('2026-06-01'));
+        self::assertNotNull($active);
+        self::assertSame('Copie de Catalogue BE', $active->name);
+    }
+
+    /**
+     * Duplication de sa propre grille le jour même : les deux grilles partagent
+     * `valid_from`, seul `id DESC` départage. Sans lui, findActiveGrid pourrait
+     * rendre l'ancienne et le calcul resterait sur les prix d'avant.
+     */
+    public function testMostRecentGridWinsOnEqualValidFrom(): void
+    {
+        $user = new TariffRepository($this->pdo(), $this->userId, false);
+        $from = new DateTimeImmutable('2026-01-01');
+
+        $user->saveGrid('electricity', 'Origine', $from, null, $this->lines(['energy_t1' => 0.10]));
+        $user->saveGrid('electricity', 'Copie', $from, null, $this->lines(['energy_t1' => 0.14]));
+
+        $active = $user->findActiveGrid('electricity', new DateTimeImmutable('2026-06-01'));
+        self::assertNotNull($active);
+        self::assertSame('Copie', $active->name);
+        self::assertSame(0.14, $active->lines['energy_t1']->amount);
+
+        // findAll suit le même ordre : $latest (grids[0]) reprend bien la copie.
+        $all = $user->findAll('electricity');
+        self::assertSame('Copie', $all[0]->name);
+    }
+
     public function testCurrencyIsPersisted(): void
     {
         $user = new TariffRepository($this->pdo(), $this->userId, false);

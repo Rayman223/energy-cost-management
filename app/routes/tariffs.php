@@ -271,9 +271,38 @@ if (isset($_GET['edit'])) {
     }
 }
 
+// Duplication (#205) : reprise d'une grille existante — y compris une grille du
+// catalogue partagé — comme point de départ d'une grille personnelle. Purement
+// GET : rien n'est écrit tant que l'utilisateur n'a pas soumis le formulaire, et
+// la grille créée est la sienne (edit_id vide ⇒ saveGrid sans `shared`).
+// findById filtre déjà sur (user_id = :uid OR user_id IS NULL) : pas de fuite
+// cross-tenant. L'édition prime si les deux paramètres sont passés.
+//
+// Le formulaire poste sur l'URL courante, donc sur ?duplicate=<id> : la ref est
+// volontairement ignorée en POST. Sinon la page réaffichée après enregistrement
+// repartirait de la grille SOURCE — un second envoi (ou un F5) créerait une copie
+// de plus, et une erreur de validation écraserait la saisie. En POST on retombe
+// donc sur le parcours de création normal (reprise de $latest, c.-à-d. la copie
+// qui vient d'être enregistrée).
+$duplicateGrid = null;
+if ($editGrid === null && isset($_GET['duplicate']) && $_SERVER['REQUEST_METHOD'] !== 'POST') {
+    $dupId = filter_var($_GET['duplicate'], FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
+    if ($dupId === false) {
+        $error = $view->t('tariffs.invalid_id');
+    } else {
+        try {
+            $duplicateGrid = $tariffRepo->findById($dupId);
+            if ($duplicateGrid === null) $error = $view->t('tariffs.not_found');
+        } catch (\Throwable $e) {
+            $error = $e->getMessage();
+        }
+    }
+}
+
 $energy = $_GET['energy'] ?? 'electricity';
 if (!in_array($energy, $energyTypes, true)) $energy = 'electricity';
 if ($editGrid !== null) $energy = $editGrid->energyType; // l'édition force l'énergie de la grille
+if ($duplicateGrid !== null) $energy = $duplicateGrid->energyType; // idem pour la duplication
 
 // ── Grilles de l'énergie active ─────────────────────────────────────────────
 $grids  = $tariffRepo->findAll($energy);
@@ -292,14 +321,37 @@ $sourceTemplate = ($editGrid === null && $_SERVER['REQUEST_METHOD'] === 'POST')
     ? trim((string) ($_POST['source_template'] ?? ''))
     : '';
 
+$today = date('Y-m-d');
+
 // ── Résolution de la structure du formulaire ────────────────────────────────
-// Priorité : grille éditée > template importé > dernière grille > template défaut.
+// Priorité : grille éditée > grille dupliquée > template importé > dernière
+// grille > template défaut.
 /** @var list<array{key:string,kind:string,label:string,amount:string,category:string}> $formFields */
 $formFields = [];
+// En-tête du formulaire : l'édition rejoue la grille telle quelle, la
+// duplication la reprend sous un nouveau nom et sans date de fin héritée
+// (la copie repart d'aujourd'hui, la grille source restant intacte).
+$formName      = '';
+$formValidFrom = $today;
+$formValidTo   = null;
+$formPcs       = null;
 if ($editGrid !== null) {
     $formCountry  = $editGrid->country;
     $formCurrency = $editGrid->currency;
     $formVat      = $editGrid->vatRate;
+
+    $formName      = $editGrid->name;
+    $formValidFrom = $editGrid->validFrom->format('Y-m-d');
+    $formValidTo   = $editGrid->validTo?->format('Y-m-d');
+    $formPcs       = $editGrid->pcsCoefficient;
+} elseif ($duplicateGrid !== null) {
+    $formCountry  = $duplicateGrid->country;
+    $formCurrency = $duplicateGrid->currency;
+    $formVat      = $duplicateGrid->vatRate;
+
+    // Nom tronqué à la largeur de la colonne (tariff_grids.name VARCHAR(120)).
+    $formName = mb_substr($view->t('tariffs.duplicate_name', ['name' => $duplicateGrid->name]), 0, 120);
+    $formPcs  = $duplicateGrid->pcsCoefficient;
 } else {
     // #189 : continuité avec la reprise de structure/montants depuis $latest — le
     // pays de la dernière grille prime, le profil ne sert qu'à la toute première.
@@ -327,13 +379,26 @@ $buildFieldsFromSpecs = static function (array $specs, array $amounts, string $e
     return $out;
 };
 
-if ($editGrid !== null) {
+/**
+ * Champs de formulaire (structure + montants) repris d'une grille existante :
+ * édition, duplication (#205) et reprise de la dernière grille.
+ *
+ * @return list<array{key:string,kind:string,label:string,amount:string,category:string}>
+ */
+$fieldsFromGrid = static function (\App\Domain\TariffGrid $grid, string $energy) use ($buildFieldsFromSpecs): array {
     $specs = $amounts = [];
-    foreach ($editGrid->lines as $line) {
-        $specs[]            = ['key' => $line->key, 'kind' => $line->kind->value, 'label' => $line->label, 'category' => $line->category()->value];
+    foreach ($grid->lines as $line) {
+        $specs[]             = ['key' => $line->key, 'kind' => $line->kind->value, 'label' => $line->label, 'category' => $line->category()->value];
         $amounts[$line->key] = $line->amount;
     }
-    $formFields = $buildFieldsFromSpecs($specs, $amounts, $energy);
+
+    return $buildFieldsFromSpecs($specs, $amounts, $energy);
+};
+
+if ($editGrid !== null) {
+    $formFields = $fieldsFromGrid($editGrid, $energy);
+} elseif ($duplicateGrid !== null) {
+    $formFields = $fieldsFromGrid($duplicateGrid, $energy);
 } else {
     // Import d'un template : ?template=builtin:<code> | user:<id>
     $templateParam = (string) ($_GET['template'] ?? '');
@@ -367,12 +432,7 @@ if ($editGrid !== null) {
         $formFields = $buildFieldsFromSpecs($imported, [], $energy);
     } elseif ($latest !== null) {
         // Reprise de la dernière grille (structure + valeurs).
-        $specs = $amounts = [];
-        foreach ($latest->lines as $line) {
-            $specs[]            = ['key' => $line->key, 'kind' => $line->kind->value, 'label' => $line->label, 'category' => $line->category()->value];
-            $amounts[$line->key] = $line->amount;
-        }
-        $formFields = $buildFieldsFromSpecs($specs, $amounts, $energy);
+        $formFields = $fieldsFromGrid($latest, $energy);
     } else {
         // Template par défaut selon le pays du profil.
         $tpl = TariffTemplateCatalog::defaultFor($energy, $formCountry);
@@ -403,8 +463,6 @@ foreach (ComponentKind::forEnergy($energy) as $k) {
     $kindOptions[$k->group()][$k->value] = $view->t('tariffs.kind.' . $k->value);
 }
 
-$today = date('Y-m-d');
-
 // Tarif dynamique (profil) : les lignes d'énergie fournisseur de la grille sont
 // alors ignorées au calcul (prix ENTSO-E) → on les grise dans le formulaire.
 // Ne concerne que l'électricité, et seulement si le tarif dynamique est activé
@@ -422,10 +480,15 @@ echo $view->render('tariffs', [
     'energyTypes'      => $energyTypes,
     'grids'            => $grids,
     'editGrid'         => $editGrid,
+    'duplicateGrid'    => $duplicateGrid,
     'formFields'       => $formFields,
     'formCountry'      => $formCountry,
     'formCurrency'     => $formCurrency,
     'formVat'          => $formVat,
+    'formName'         => $formName,
+    'formValidFrom'    => $formValidFrom,
+    'formValidTo'      => $formValidTo,
+    'formPcs'          => $formPcs,
     'countries'        => EuropeanCountries::sortedForLocale($view->locale()),
     'currencies'       => EuropeanCountries::currencies(),
     'builtinTemplates' => $builtinTemplates,
@@ -436,7 +499,6 @@ echo $view->render('tariffs', [
     'relevantCategories'  => $relevantCategories,
     'categoryOptions'     => $categoryOptions,
     'kindOptions'         => $kindOptions,
-    'today'            => $today,
     'isAdmin'          => $isAdmin,
     'isDynamic'        => $isDynamic,
     'available'        => Locale::available($config),

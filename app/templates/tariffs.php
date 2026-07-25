@@ -13,10 +13,15 @@ use App\Domain\TariffLineCatalog;
  * @var list<string>                                                         $energyTypes
  * @var TariffGrid[]                                                         $grids       Grilles de l'énergie active
  * @var TariffGrid|null                                                      $editGrid
+ * @var TariffGrid|null                                                      $duplicateGrid  Grille reprise comme point de départ (#205)
  * @var list<array{key:string,kind:string,label:string,amount:string,category:string}> $formFields
  * @var string|null                                                          $formCountry
  * @var string                                                               $formCurrency
  * @var float                                                                $formVat
+ * @var string                                                               $formName
+ * @var string                                                               $formValidFrom
+ * @var string|null                                                          $formValidTo
+ * @var float|null                                                           $formPcs
  * @var array<string,string>                                                 $countries   ISO2 => nom localisé, trié
  * @var list<string>                                                         $currencies
  * @var list<array{code:string,energy_type:string,country:?string,name_key:string,fields:list<array{key:string,kind:ComponentKind,label:string}>}> $builtinTemplates
@@ -26,7 +31,6 @@ use App\Domain\TariffLineCatalog;
  * @var array<string,string>                                                 $categoryOptions  value catégorie => libellé
  * @var array<string,array<string,string>>                                   $kindOptions  groupe => (value kind => libellé), rendu en <optgroup>
 
- * @var string                                                               $today
  * @var bool                                                                 $isAdmin
  * @var bool                                                                 $isDynamic  Tarif dynamique actif → lignes d'énergie fournisseur ignorées
  * @var ?string                                                              $discordUrl
@@ -96,6 +100,8 @@ $energyLabels = [
   <span class="section-line"></span>
 </div>
 
+<p class="start-hint"><?= $this->te('tariffs.shared_hint') ?></p>
+
 <div class="grids-wrap">
 <?php if (empty($grids)): ?>
   <div class="empty"><?= $this->te('tariffs.none') ?></div>
@@ -122,6 +128,18 @@ $energyLabels = [
     <?php if ($g->isShared()): ?><span class="grid-active yes" title="<?= $this->e($this->t('tariffs.shared_grid')) ?>"><?= $this->te('tariffs.shared') ?></span><?php endif; ?>
     <button class="btn btn-ghost btn-sm" data-toggle-lines="<?= $this->e($rowId) ?>"><?= $this->te('tariffs.detail') ?></button>
     <div class="grid-actions">
+      <!-- #205 : reprise d'une grille (montants inclus) comme point de départ. Seul
+           moyen pour un non-admin de réutiliser une grille du catalogue partagé. -->
+      <!-- `energy` explicite : le formulaire poste sur cette URL, où la ref de
+           duplication est ignorée — l'onglet doit rester celui de la grille. -->
+      <a href="?energy=<?= $this->e($energy) ?>&amp;duplicate=<?= $g->id ?>#form" class="btn btn-ghost btn-sm"><?= $this->te('tariffs.duplicate') ?></a>
+      <?php
+        // Une grille du catalogue partagé n'est modifiable que par un admin
+        // (TariffRepository::assertCanModify) : on masque des actions qui
+        // échoueraient plutôt que d'afficher un faux droit.
+        $canModify = !$g->isShared() || $isAdmin;
+      ?>
+      <?php if ($canModify): ?>
       <a href="?edit=<?= $g->id ?>#form" class="btn btn-ghost btn-sm"><?= $this->te('tariffs.edit') ?></a>
       <form method="post" data-confirm="<?= $this->e($this->t('tariffs.delete_confirm')) ?>" data-confirm-ok="<?= $this->e($this->t('tariffs.delete')) ?>" data-confirm-danger>
         <input type="hidden" name="action"  value="delete">
@@ -129,6 +147,7 @@ $energyLabels = [
         <?= \App\Security\Csrf::field() ?>
         <button type="submit" class="btn btn-red btn-sm"><?= $this->te('tariffs.delete') ?></button>
       </form>
+      <?php endif; ?>
     </div>
   </div>
   <div class="lines-detail" id="<?= $rowId ?>">
@@ -232,9 +251,13 @@ $energyLabels = [
 
 <!-- ── Formulaire de grille ──────────────────────────────────────────────── -->
 <div class="section-header" id="form">
-  <span class="section-title"><?= $editGrid ? $this->te('tariffs.editing') : $this->te('tariffs.new') ?></span>
+  <span class="section-title"><?php
+    if ($editGrid)            { echo $this->te('tariffs.editing'); }
+    elseif ($duplicateGrid)   { echo $this->te('tariffs.duplicating'); }
+    else                      { echo $this->te('tariffs.new'); }
+  ?></span>
   <span class="section-line"></span>
-  <?php if ($editGrid): ?>
+  <?php if ($editGrid || $duplicateGrid): ?>
   <a href="?energy=<?= $this->e($energy) ?>" class="back"><?= $this->te('common.cancel') ?></a>
   <?php endif; ?>
 </div>
@@ -251,24 +274,24 @@ $energyLabels = [
       <div class="form-row">
         <label class="form-label"><?= $this->te('tariffs.name') ?></label>
         <input type="text" name="name" class="form-input" required placeholder="ex. Engie bihoraire fév. 2026"
-               value="<?= $this->e($editGrid?->name ?? '') ?>">
+               maxlength="120" value="<?= $this->e($formName) ?>">
       </div>
       <?php if ($energy === 'gas'): ?>
       <div class="form-row">
         <label class="form-label"><?= $this->te('tariffs.pcs') ?> <span class="unit"><?= $this->te('tariffs.pcs_unit') ?></span></label>
         <input type="number" name="pcs_coefficient" step="0.0001" class="form-input" placeholder="10.5500"
-               value="<?= $this->e($editGrid?->pcsCoefficient !== null ? number_format($editGrid->pcsCoefficient, 4, '.', '') : '') ?>">
+               value="<?= $this->e($formPcs !== null ? number_format($formPcs, 4, '.', '') : '') ?>">
       </div>
       <?php endif; ?>
       <div class="form-row">
         <label class="form-label"><?= $this->te('tariffs.valid_from') ?></label>
         <input type="date" name="valid_from" class="form-input" required
-               value="<?= $this->e($editGrid?->validFrom->format('Y-m-d') ?? $today) ?>">
+               value="<?= $this->e($formValidFrom) ?>">
       </div>
       <div class="form-row">
         <label class="form-label"><?= $this->te('tariffs.valid_to') ?> <span class="unit"><?= $this->te('common.optional') ?></span></label>
         <input type="date" name="valid_to" class="form-input"
-               value="<?= $this->e($editGrid?->validTo?->format('Y-m-d') ?? '') ?>">
+               value="<?= $this->e($formValidTo ?? '') ?>">
       </div>
       <div class="form-row full">
         <p class="dates-hint"><?= $this->te('tariffs.dates_hint') ?></p>
