@@ -27,6 +27,29 @@ final class ModuleRegistry
     }
 
     /**
+     * Modules dont le kill-switch de config est ON (#233). Source unique de la
+     * liste des cartes de connecteurs sur « Mon compte » : un module coupé n'y
+     * apparaît pas et ne peut pas être activé.
+     *
+     * {@see self::all()} reste volontairement exhaustif (le cron y journalise
+     * les modules sautés, et les clés i18n `integration.<key>.*` en sont dérivées).
+     *
+     * @param array<string, mixed> $config
+     * @return list<ExportModuleInterface>
+     */
+    public static function enabled(array $config): array
+    {
+        $modules = [];
+        foreach (self::all($config) as $module) {
+            if ($module->isGloballyEnabled()) {
+                $modules[] = $module;
+            }
+        }
+
+        return $modules;
+    }
+
+    /**
      * @param array<string, mixed> $config
      */
     public static function find(string $key, array $config): ?ExportModuleInterface

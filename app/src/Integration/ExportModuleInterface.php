@@ -19,7 +19,11 @@ interface ExportModuleInterface
     /** Clé stable du module = user_integrations.module_key + préfixe i18n `integration.<key>.*`. */
     public function key(): string;
 
-    /** Kill-switch global (config) : le cron saute le module si false. N'affecte pas l'opt-in web. */
+    /**
+     * Kill-switch global (config), opt-in explicite : false ⇒ le cron saute le module
+     * ET sa carte disparaît de « Mon compte » (#233). L'opt-in par utilisateur déjà
+     * enregistré en base est conservé et redevient visible à la réactivation.
+     */
     public function isGloballyEnabled(): bool;
 
     /**

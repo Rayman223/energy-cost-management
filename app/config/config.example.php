@@ -13,8 +13,10 @@ return [
     ],
 
     'energyid' => [
-        // Kill-switch global du push EnergyID (lu par cron_daily_webhook.php).
-        // Absent ⇒ activé par défaut. Mettre à false pour couper l'export.
+        // Kill-switch global du module EnergyID (lu par cron_export_sync.php et
+        // par la page « Mon compte »). Opt-in explicite : absent ou false ⇒ module
+        // coupé, aucune carte connecteur sur /account et aucun push nocturne.
+        // Mettre à true pour l'activer.
         'enabled'             => false,
         'provisioning_key'    => 'change_me',
         'provisioning_secret' => 'change_me',

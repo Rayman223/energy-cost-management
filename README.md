@@ -151,7 +151,7 @@ return [
     // VAT and supplier markup are NOT configured here (see the dynamic-price notes below).
     'dynamic_prices' => [ 'enabled' => true, 'provider' => 'entsoe', 'security_token' => 'change_me',
                           'bidding_zone' => '10YBE----------2' ],
-    'energyid'     => [ 'provisioning_key' => 'change_me', 'provisioning_secret' => 'change_me' ],
+    'energyid'     => [ 'enabled' => true, 'provisioning_key' => 'change_me', 'provisioning_secret' => 'change_me' ],
 
     'timezone'     => 'Europe/Brussels',
 ];
@@ -320,7 +320,8 @@ Optional per-user integration (BE/NL). When enabled, readings are pushed nightly
 [EnergyID](https://app.energyid.eu/) via the V2 provisioning protocol
 (`POST /hello` device provisioning, then the first daily value of each stream).
 Credentials live under `energyid` in `config.php`; users opt in from their account
-page.
+page. The module is **off by default**: without `energyid.enabled => true` the
+connector card is hidden from the account page and the nightly push is skipped.
 
 ---
 

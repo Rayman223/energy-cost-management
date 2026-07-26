@@ -16,7 +16,7 @@ namespace App\Config;
  *   - 'requiredKeys'  list   Clés dont l'absence rend la section incomplète (ERROR).
  *   - 'enabledDefault' bool  Défaut du drapeau `enabled` de CE nœud, utilisé pour
  *                            décider si ses sentinelles sont « actives » (le défaut
- *                            diffère par section : dynamic_prices=false, energyid=true).
+ *                            diffère par section : energyid=false, web_security=true).
  *   - 'children'      map    Clés connues → sous-nœuds (validation récursive +
  *                            détection de clé inconnue).
  *   - 'map'           bool   Clés libres (oidc.providers.*, energyid.device.*) :
@@ -60,9 +60,10 @@ final class ConfigSchema
 
                 'energyid' => [
                     // Module d'export (#70) : code dans app/src/Integration/EnergyId/.
-                    // Kill-switch global lu par le cron d'export (?? true). Tout nouveau
-                    // module d'export déclare sa section de config ici + dans config.example.php.
-                    'enabledDefault' => true,
+                    // Opt-in explicite (#233) : absent ⇒ off (ni carte /account, ni push
+                    // nocturne). Tout nouveau module d'export déclare sa section ici +
+                    // dans config.example.php.
+                    'enabledDefault' => false,
                     'absentHint'     => 'push EnergyID indisponible',
                     'children'       => [
                         'enabled'             => [],

@@ -198,7 +198,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } elseif ($action === 'integration_enable' || $action === 'integration_disable') {
             $moduleKey = (string) ($_POST['module_key'] ?? '');
             $module    = ModuleRegistry::find($moduleKey, $config);
-            if ($module === null) {
+            // Un module coupé en config n'a pas de carte affichée (#233) : son
+            // action est refusée aussi côté serveur, pour qu'un POST forgé ne
+            // puisse pas basculer l'opt-in d'un connecteur inactif.
+            if ($module === null || !$module->isGloballyEnabled()) {
                 throw new \RuntimeException($view->t('account.integration_unknown'));
             }
             if ($action === 'integration_enable') {
@@ -290,9 +293,11 @@ foreach ($providerLabels as $pKey => $label) {
 $profile  = $users->getProfile($userId) ?? UserProfile::defaults();
 $tokens   = $tokensRepo->listForUser($userId);
 
-// Connecteurs d'export (opt-in) : une carte par module du registre.
+// Connecteurs d'export (opt-in) : une carte par module actif en config. Un
+// module coupé (`<key>.enabled` absent ou false) ne rend aucune carte (#233) ;
+// l'opt-in déjà enregistré en base est conservé pour sa réactivation.
 $integrations = [];
-foreach (ModuleRegistry::all($config) as $module) {
+foreach (ModuleRegistry::enabled($config) as $module) {
     $row = $integrationRepo->get($userId, $module->key());
     $integrations[] = [
         'key'     => $module->key(),

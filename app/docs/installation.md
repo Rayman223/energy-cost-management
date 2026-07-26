@@ -228,6 +228,8 @@ Set at least `database`, then choose the authentication mode:
   owner account is used.
 
 Optionally set `dynamic_prices` (ENTSO-E token), `energyid`, `i18n`, and `api`.
+`energyid` is opt-in: keep `enabled => false` (or omit the flag) to hide the
+connector card from the account page and skip the nightly push.
 Set `discord.invite_url` to show a Discord link in the page header (empty = hidden).
 
 Fill in `legal` (publisher, address, contact e-mail, hosting provider,

@@ -39,7 +39,9 @@ final class EnergyIdModule implements ExportModuleInterface
 
     public function isGloballyEnabled(): bool
     {
-        return ($this->section()['enabled'] ?? true) !== false;
+        // Opt-in explicite (#233) : sans `energyid.enabled => true`, le module est
+        // inactif — ni carte sur « Mon compte », ni push nocturne.
+        return ($this->section()['enabled'] ?? false) === true;
     }
 
     /**

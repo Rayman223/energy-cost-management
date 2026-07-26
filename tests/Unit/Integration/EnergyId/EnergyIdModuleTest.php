@@ -13,9 +13,12 @@ final class EnergyIdModuleTest extends TestCase
     public function testKeyAndGlobalEnabledDefault(): void
     {
         self::assertSame('energyid', $this->module([])->key());
-        self::assertTrue($this->module([])->isGloballyEnabled());
-        self::assertTrue($this->module(['energyid' => []])->isGloballyEnabled());
+
+        // Opt-in explicite (#233) : sans le drapeau, le module est coupé.
+        self::assertFalse($this->module([])->isGloballyEnabled());
+        self::assertFalse($this->module(['energyid' => []])->isGloballyEnabled());
         self::assertFalse($this->module(['energyid' => ['enabled' => false]])->isGloballyEnabled());
+        self::assertTrue($this->module(['energyid' => ['enabled' => true]])->isGloballyEnabled());
     }
 
     public function testDefaultSettingsDerivesDeviceId(): void
