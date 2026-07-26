@@ -20,6 +20,7 @@ return [
     'common.inactive'      => 'Inactief',
     'common.yes'           => 'Ja',
     'common.no'            => 'Nee',
+    'common.loading'       => 'Laden…',
 
     'auth.sign_in'         => 'Aanmelden',
     'auth.signin_with'     => 'Aanmelden met {provider}',
@@ -291,6 +292,95 @@ return [
     'dash.card.solar'      => 'Δ PV-productie',
     'dash.card.vs_prev'    => 'vs vorige maand',
     'dash.card.new'        => 'nieuw deze maand',
+    'dash.db_error_hint'   => 'Controleer {file} en zorg dat de database bereikbaar is.',
+
+    // Dashboard — sectietitels per energievorm
+    'dash.cost.electricity'    => 'Kostenraming elektriciteit',
+    'dash.cost.gas'            => 'Kostenraming gas',
+    'dash.consumption.water'   => 'Waterverbruik',
+    'dash.history.electricity' => 'Historiek elektriciteit',
+    'dash.history.gas'         => 'Historiek gas',
+    'dash.history.water'       => 'Historiek water',
+
+    // Dashboard — periodenavigatie en grafiekbereiken
+    'dash.nav.month'       => 'Maand',
+    'dash.nav.year'        => 'Jaar',
+    'dash.nav.prev_month'  => 'Vorige maand',
+    'dash.nav.next_month'  => 'Volgende maand',
+    'dash.nav.prev_period' => 'Vorige periode',
+    'dash.nav.next_period' => 'Volgende periode',
+    'dash.range.30d'       => '30d',
+    'dash.range.1y'        => '1 jaar',
+
+    // Dashboard — labels die door dashboard.js worden weergegeven (#223).
+    // {cur} is het valutasymbool van het profiel: nooit een vast „€”.
+    'dash.load_error' => 'Laden mislukt.',
+    'dash.err_short'  => 'fout',
+    'dash.not_loaded' => 'Gegevens niet geladen',
+
+    'dash.empty.electricity'        => 'Geen gegevens beschikbaar',
+    'dash.empty.electricity_reason' => 'Geen tarief of geen gegevens voor deze periode.',
+    'dash.empty.gas'                => 'Geen gasgegevens beschikbaar',
+    'dash.empty.gas_reason'         => 'Registreer minstens twee meterstanden en configureer een gastarief.',
+    'dash.empty.water'              => 'Geen waterverbruik beschikbaar',
+    'dash.empty.water_reason'       => 'Registreer minstens twee meterstanden voor water.',
+
+    'dash.period.current_month'  => 'Raming huidige maand',
+    'dash.period.current_period' => 'Raming huidige periode',
+
+    'dash.detail.fixed_annual'      => '{days} d × {rate} {cur}/dag',
+    'dash.detail.fixed_annual_note' => '({rate} {cur}/jaar)',
+    'dash.detail.fixed_monthly'     => '{months} maanden × {rate} {cur}/maand',
+
+    'dash.cost.total_incl_vat'    => 'Totaal incl. btw',
+    'dash.cost.of_which_excl_vat' => 'waarvan excl. btw',
+    'dash.cost.of_which_vat'      => 'waarvan btw inbegrepen',
+    'dash.cost.of_which_vat_rate' => 'waarvan {rate}% btw inbegrepen',
+
+    'dash.solar.group'             => 'Zon (zelfverbruik)',
+    'dash.solar.produced'          => 'Totale PV-productie',
+    'dash.solar.self_consumed'     => 'Zelf verbruikt (niet geïnjecteerd)',
+    'dash.solar.self_consumed_pct' => 'Zelf verbruikt — {pct} %',
+    'dash.solar.savings'           => 'Gerealiseerde besparing (tarief T1 incl. btw)',
+    'dash.solar.savings_detail'    => '{kwh} kWh × {rate} {cur}/kWh',
+
+    'dash.meta.tariff'         => 'Tarief: {name}',
+    'dash.meta.segment'        => '{name} — {from}→{to} ({days} d): {total}',
+    'dash.meta.import_t1'      => 'Afname T1: {kwh} kWh',
+    'dash.meta.import_t2'      => 'Afname T2: {kwh} kWh',
+    'dash.meta.export_t1'      => 'Injectie T1: {kwh} kWh',
+    'dash.meta.export_t2'      => 'Injectie T2: {kwh} kWh',
+    'dash.meta.solar_produced' => 'PV-productie: {kwh} kWh',
+    'dash.meta.self_consumed'  => 'Zelfverbruik: {kwh} kWh',
+    'dash.meta.savings'        => 'Besparing: +{amount}',
+    'dash.meta.solar'          => 'Zon: {kwh} kWh',
+    'dash.meta.period_days'    => 'Periode: {days} dagen',
+    'dash.meta.days_one'       => '{days} dag',
+    'dash.meta.days_other'     => '{days} dagen',
+    'dash.meta.pcs'            => 'Calorische waarde {value} kWh/m³',
+
+    'dash.dynamic.group'          => 'Dynamisch tarief (day-ahead)',
+    'dash.dynamic.unavailable'    => 'Dynamische prijzen niet beschikbaar. Start cron_dynamic_prices.',
+    'dash.dynamic.energy_dynamic' => 'Dynamische energie (spot + marge, incl. btw)',
+    'dash.dynamic.energy_detail'  => '{kwh} kWh × {rate} {cur}/kWh gem. · dekking {coverage} %',
+    'dash.dynamic.energy_classic' => 'Klassieke energie (T1 + T2)',
+    'dash.dynamic.total_dynamic'  => 'Dynamisch totaal (geschat)',
+    'dash.dynamic.total_classic'  => 'Klassiek totaal',
+    'dash.dynamic.saving_vs'      => 'Besparing t.o.v. klassiek',
+    'dash.dynamic.extra_vs'       => 'Meerkost t.o.v. klassiek',
+    'dash.dynamic.daily_title'    => 'Energiekost per dag',
+    'dash.dynamic.col_day'        => 'Dag',
+    'dash.dynamic.col_import'     => 'Afname',
+    'dash.dynamic.col_energy'     => 'Energie {cur}',
+
+    'dash.chart.import_t1' => 'Afname T1 (dag)',
+    'dash.chart.import_t2' => 'Afname T2 (nacht)',
+    'dash.chart.export'    => 'Injectie',
+    'dash.chart.solar'     => 'PV-productie',
+    'dash.chart.gas'       => 'Gasverbruik (m³)',
+    'dash.chart.water'     => 'Waterverbruik (m³)',
+
+    'dash.water.projection' => '(prognose einde maand)',
 
     // Juridische pagina's (#185) — /privacy, /terms, /cookies, /legal-notice.
     // Geen enkele waarde mag HTML bevatten: de templates escapen alles.

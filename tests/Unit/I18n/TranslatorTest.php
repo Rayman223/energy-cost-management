@@ -15,8 +15,8 @@ final class TranslatorTest extends TestCase
     {
         $this->dir = sys_get_temp_dir() . '/i18ntest_' . uniqid('', true);
         mkdir($this->dir);
-        file_put_contents($this->dir . '/fr.php', "<?php return ['greet' => 'Bonjour {name}', 'only_fr' => 'Exclusif'];");
-        file_put_contents($this->dir . '/en.php', "<?php return ['greet' => 'Hello {name}'];");
+        file_put_contents($this->dir . '/fr.php', "<?php return ['greet' => 'Bonjour {name}', 'only_fr' => 'Exclusif', 'dash.a' => 'A fr', 'dash.b' => 'B fr', 'other' => 'Autre'];");
+        file_put_contents($this->dir . '/en.php', "<?php return ['greet' => 'Hello {name}', 'dash.a' => 'A en'];");
     }
 
     protected function tearDown(): void
@@ -52,5 +52,28 @@ final class TranslatorTest extends TestCase
         $translator = new Translator($this->dir, 'de', 'de');
 
         self::assertSame('greet', $translator->t('greet'));
+    }
+
+    /**
+     * Le sous-catalogue exporté vers les scripts clients (#223) doit se replier
+     * clé par clé sur la locale par défaut, exactement comme t() : une clé encore
+     * non traduite doit sortir en français plutôt que disparaître du bloc JSON —
+     * sinon le JS afficherait la clé brute.
+     */
+    public function testAllWithPrefixFiltersAndFallsBackPerKey(): void
+    {
+        $translator = new Translator($this->dir, 'en', 'fr');
+
+        self::assertSame(
+            ['dash.a' => 'A en', 'dash.b' => 'B fr'],
+            $translator->allWithPrefix('dash.'),
+        );
+    }
+
+    public function testAllWithPrefixIsEmptyForAnUnknownPrefix(): void
+    {
+        $translator = new Translator($this->dir, 'en', 'fr');
+
+        self::assertSame([], $translator->allWithPrefix('nope.'));
     }
 }

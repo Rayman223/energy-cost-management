@@ -20,6 +20,7 @@ return [
     'common.inactive'      => 'Inaktiv',
     'common.yes'           => 'Ja',
     'common.no'            => 'Nein',
+    'common.loading'       => 'Wird geladen…',
 
     'auth.sign_in'         => 'Anmelden',
     'auth.signin_with'     => 'Mit {provider} anmelden',
@@ -291,6 +292,95 @@ return [
     'dash.card.solar'      => 'Δ PV-Erzeugung',
     'dash.card.vs_prev'    => 'vs. Vormonat',
     'dash.card.new'        => 'neu in diesem Monat',
+    'dash.db_error_hint'   => 'Prüfen Sie {file} und stellen Sie sicher, dass die Datenbank erreichbar ist.',
+
+    // Dashboard — Abschnittstitel je Energieart
+    'dash.cost.electricity'    => 'Kostenschätzung Strom',
+    'dash.cost.gas'            => 'Kostenschätzung Gas',
+    'dash.consumption.water'   => 'Wasserverbrauch',
+    'dash.history.electricity' => 'Verlauf Strom',
+    'dash.history.gas'         => 'Verlauf Gas',
+    'dash.history.water'       => 'Verlauf Wasser',
+
+    // Dashboard — Periodennavigation und Diagrammzeiträume
+    'dash.nav.month'       => 'Monat',
+    'dash.nav.year'        => 'Jahr',
+    'dash.nav.prev_month'  => 'Vorheriger Monat',
+    'dash.nav.next_month'  => 'Nächster Monat',
+    'dash.nav.prev_period' => 'Vorheriger Zeitraum',
+    'dash.nav.next_period' => 'Nächster Zeitraum',
+    'dash.range.30d'       => '30 T',
+    'dash.range.1y'        => '1 Jahr',
+
+    // Dashboard — clientseitig von dashboard.js gerenderte Bezeichnungen (#223).
+    // {cur} ist das Währungssymbol des Profils, niemals ein festes „€“.
+    'dash.load_error' => 'Laden fehlgeschlagen.',
+    'dash.err_short'  => 'Fehler',
+    'dash.not_loaded' => 'Daten nicht geladen',
+
+    'dash.empty.electricity'        => 'Keine Daten verfügbar',
+    'dash.empty.electricity_reason' => 'Kein Tarif oder keine Daten für diesen Zeitraum.',
+    'dash.empty.gas'                => 'Keine Gasdaten verfügbar',
+    'dash.empty.gas_reason'         => 'Erfassen Sie mindestens zwei Zählerstände und konfigurieren Sie einen Gastarif.',
+    'dash.empty.water'              => 'Kein Wasserverbrauch verfügbar',
+    'dash.empty.water_reason'       => 'Erfassen Sie mindestens zwei Wasserzählerstände.',
+
+    'dash.period.current_month'  => 'Schätzung laufender Monat',
+    'dash.period.current_period' => 'Schätzung laufender Zeitraum',
+
+    'dash.detail.fixed_annual'      => '{days} T × {rate} {cur}/Tag',
+    'dash.detail.fixed_annual_note' => '({rate} {cur}/Jahr)',
+    'dash.detail.fixed_monthly'     => '{months} Monate × {rate} {cur}/Monat',
+
+    'dash.cost.total_incl_vat'    => 'Gesamt inkl. MwSt.',
+    'dash.cost.of_which_excl_vat' => 'davon ohne MwSt.',
+    'dash.cost.of_which_vat'      => 'davon MwSt. enthalten',
+    'dash.cost.of_which_vat_rate' => 'davon {rate} % MwSt. enthalten',
+
+    'dash.solar.group'             => 'Solar (Eigenverbrauch)',
+    'dash.solar.produced'          => 'PV-Erzeugung gesamt',
+    'dash.solar.self_consumed'     => 'Eigenverbrauch (nicht eingespeist)',
+    'dash.solar.self_consumed_pct' => 'Eigenverbrauch — {pct} %',
+    'dash.solar.savings'           => 'Erzielte Einsparung (Tarif T1 inkl. MwSt.)',
+    'dash.solar.savings_detail'    => '{kwh} kWh × {rate} {cur}/kWh',
+
+    'dash.meta.tariff'         => 'Tarif: {name}',
+    'dash.meta.segment'        => '{name} — {from}→{to} ({days} T): {total}',
+    'dash.meta.import_t1'      => 'Bezug T1: {kwh} kWh',
+    'dash.meta.import_t2'      => 'Bezug T2: {kwh} kWh',
+    'dash.meta.export_t1'      => 'Einspeisung T1: {kwh} kWh',
+    'dash.meta.export_t2'      => 'Einspeisung T2: {kwh} kWh',
+    'dash.meta.solar_produced' => 'PV-Erzeugung: {kwh} kWh',
+    'dash.meta.self_consumed'  => 'Eigenverbr.: {kwh} kWh',
+    'dash.meta.savings'        => 'Einsparung: +{amount}',
+    'dash.meta.solar'          => 'Solar: {kwh} kWh',
+    'dash.meta.period_days'    => 'Zeitraum: {days} Tage',
+    'dash.meta.days_one'       => '{days} Tag',
+    'dash.meta.days_other'     => '{days} Tage',
+    'dash.meta.pcs'            => 'Brennwert {value} kWh/m³',
+
+    'dash.dynamic.group'          => 'Dynamischer Tarif (Day-Ahead)',
+    'dash.dynamic.unavailable'    => 'Dynamische Preise nicht verfügbar. Führen Sie cron_dynamic_prices aus.',
+    'dash.dynamic.energy_dynamic' => 'Dynamische Energie (Spot + Marge, inkl. MwSt.)',
+    'dash.dynamic.energy_detail'  => '{kwh} kWh × {rate} {cur}/kWh Durchschn. · Abdeckung {coverage} %',
+    'dash.dynamic.energy_classic' => 'Klassische Energie (T1 + T2)',
+    'dash.dynamic.total_dynamic'  => 'Dynamisch gesamt (geschätzt)',
+    'dash.dynamic.total_classic'  => 'Klassisch gesamt',
+    'dash.dynamic.saving_vs'      => 'Einsparung gegenüber klassisch',
+    'dash.dynamic.extra_vs'       => 'Mehrkosten gegenüber klassisch',
+    'dash.dynamic.daily_title'    => 'Energiekosten pro Tag',
+    'dash.dynamic.col_day'        => 'Tag',
+    'dash.dynamic.col_import'     => 'Bezug',
+    'dash.dynamic.col_energy'     => 'Energie {cur}',
+
+    'dash.chart.import_t1' => 'Bezug T1 (Tag)',
+    'dash.chart.import_t2' => 'Bezug T2 (Nacht)',
+    'dash.chart.export'    => 'Einspeisung',
+    'dash.chart.solar'     => 'PV-Erzeugung',
+    'dash.chart.gas'       => 'Gasverbrauch (m³)',
+    'dash.chart.water'     => 'Wasserverbrauch (m³)',
+
+    'dash.water.projection' => '(Prognose Monatsende)',
 
     // Rechtliche Seiten (#185) — /privacy, /terms, /cookies, /legal-notice.
     // Kein Wert darf HTML enthalten: die Templates escapen alles.

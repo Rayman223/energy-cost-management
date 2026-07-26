@@ -103,6 +103,23 @@ final class View
         return $this->e($this->t($key, $params));
     }
 
+    /**
+     * Sous-catalogue traduit des clés portant l'un des préfixes donnés, destiné à
+     * être sérialisé vers un script client (aucun échappement : la sortie passe
+     * par json_encode, pas par le HTML).
+     *
+     * @return array<string, string>
+     */
+    public function translations(string ...$prefixes): array
+    {
+        $out = [];
+        foreach ($prefixes as $prefix) {
+            $out += $this->translator?->allWithPrefix($prefix) ?? [];
+        }
+
+        return $out;
+    }
+
     public function money(float $amount, string $currency = 'EUR'): string
     {
         return $this->formatter?->money($amount, $currency)

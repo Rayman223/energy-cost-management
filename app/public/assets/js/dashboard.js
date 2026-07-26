@@ -21,26 +21,55 @@
   window.__INIT_WATER_MONTH__ = d.initWaterMonth;
   window.__TARIFF_LINE_LABELS__ = d.tariffLineLabels;
   window.__TARIFF_GROUP_LABELS__ = d.tariffGroupLabels;
+  window.__I18N__ = d.i18n;
 })();
+
+// ── Traduction des libellés rendus côté client (#223) ───────────────────────
+// Le serveur sérialise le sous-catalogue `dash.*` / `common.*` dans le data
+// block. Même convention de paramètres que Translator::t() côté PHP : `{name}`.
+// Nommée `tr` et non `t` : plusieurs fonctions du fichier utilisent déjà `t`
+// comme variable locale (total, delta), qui masquerait la fonction globale.
+const I18N = (typeof window !== 'undefined' && window.__I18N__) || {};
+function tr(key, params) {
+  let message = Object.prototype.hasOwnProperty.call(I18N, key) ? I18N[key] : key;
+  if (params) {
+    Object.keys(params).forEach((name) => {
+      message = message.split('{' + name + '}').join(String(params[name]));
+    });
+  }
+  return message;
+}
 
 // ── Formatage monétaire localisé (devise + séparateurs du profil) ───────────
 // Remplace les `toFixed(2) + ' €'` : le symbole et le format s'adaptent à la
-// devise/locale du profil (APP_CURRENCY/APP_LOCALE). Les unités composées
-// (€/kWh, €/mois…) restent littérales — lot i18n JS ultérieur (#73).
+// devise/locale du profil (APP_CURRENCY/APP_LOCALE).
 const APP_LOCALE   = (typeof window !== 'undefined' && window.APP_LOCALE)   ? window.APP_LOCALE   : 'fr';
 const APP_CURRENCY = (typeof window !== 'undefined' && window.APP_CURRENCY) ? window.APP_CURRENCY : 'EUR';
 const _moneyFmt = new Intl.NumberFormat(APP_LOCALE, { style: 'currency', currency: APP_CURRENCY });
 function formatMoney(v) {
   return _moneyFmt.format(Number(v) || 0);
 }
+// Symbole seul, pour les unités composées (€/kWh, €/j…) où le montant n'est pas
+// formaté par Intl : dérivé de la devise du profil plutôt que codé en dur (#223).
+const CURRENCY_SYMBOL = (function () {
+  const part = _moneyFmt.formatToParts(0).find((p) => p.type === 'currency');
+  return part ? part.value : APP_CURRENCY;
+})();
+
+// Le catalogue est plat (pas de pluralisation intégrée côté Translator) : on
+// choisit la forme via Intl.PluralRules, qui applique les règles de la locale
+// (le français range 0 et 1 dans « one », l'anglais seulement 1).
+const _pluralRules = new Intl.PluralRules(APP_LOCALE);
+function daysLabel(days) {
+  const n = Number(days) || 0;
+  const form = _pluralRules.select(n) === 'one' ? 'one' : 'other';
+  return tr('dash.meta.days_' + form, { days: n });
+}
 
 // ── Rendu générique du détail de coût (piloté par cost.lines / kinds) ───────
 // Le moteur de calcul renvoie une liste de lignes typées {key,kind,group,label,
 // quantity,unit,rate,amount}. On les regroupe par nature — indépendant du pays.
-const COST_GROUP_LABELS = (typeof window !== 'undefined' && window.__TARIFF_GROUP_LABELS__) || {
-  energy: 'Énergie', distribution: 'Distribution & acheminement', fixed: 'Abonnements & forfaits',
-  taxes: 'Taxes & contributions', injection: 'Injection',
-};
+const COST_GROUP_LABELS = (typeof window !== 'undefined' && window.__TARIFF_GROUP_LABELS__) || {};
 const COST_LINE_LABELS = (typeof window !== 'undefined' && window.__TARIFF_LINE_LABELS__) || {};
 const COST_GROUP_ORDER = ['energy', 'distribution', 'fixed', 'taxes', 'injection'];
 // Un crédit se reconnaît à son kind (injection), indépendamment de la catégorie
@@ -57,10 +86,19 @@ function costLineDetail(ln) {
   const rate = ln.rate;
   if (rate == null || Number(rate) === 0) return '';
   const q = Number(ln.quantity) || 0;
-  if (ln.kind === 'fixed_annual')  return `${q} j × ${(Number(rate) / 365).toFixed(5)} €/j <span class="t-dim">(${Number(rate).toFixed(2)} €/an)</span>`;
+  if (ln.kind === 'fixed_annual') {
+    return tr('dash.detail.fixed_annual', { days: q, rate: (Number(rate) / 365).toFixed(5), cur: CURRENCY_SYMBOL })
+      + ` <span class="t-dim">${tr('dash.detail.fixed_annual_note', { rate: Number(rate).toFixed(2), cur: CURRENCY_SYMBOL })}</span>`;
+  }
   // La quantité de mois peut être fractionnaire quand la période est répartie
   // entre plusieurs grilles successives (proration multi-grilles).
-  if (ln.kind === 'fixed_monthly') return `${Number.isInteger(q) ? q : q.toFixed(2)} mois × ${Number(rate).toFixed(2)} €/mois`;
+  if (ln.kind === 'fixed_monthly') {
+    return tr('dash.detail.fixed_monthly', {
+      months: Number.isInteger(q) ? q : q.toFixed(2),
+      rate: Number(rate).toFixed(2),
+      cur: CURRENCY_SYMBOL,
+    });
+  }
   return `${q.toFixed(2)} × ${Number(rate).toFixed(7)} ${ln.unit || ''}`;
 }
 // Génère les lignes groupées à partir de cost.lines, avec la fonction `row` locale.
@@ -83,9 +121,9 @@ function costVatRows(c, row) {
   const mixedVat = (c.vat_rate == null);
   const vr       = mixedVat ? null : c.vat_rate;
   const factor   = mixedVat ? '' : `÷ ${(1 + vr / 100).toFixed(2)}`;
-  return row('Total TTC', '', c.total, 'total')
-    + row('dont HTVA', factor, c.htva, 'vat')
-    + row(mixedVat ? 'dont TVA incluse' : `dont TVA ${vr}% incluse`,
+  return row(tr('dash.cost.total_incl_vat'), '', c.total, 'total')
+    + row(tr('dash.cost.of_which_excl_vat'), factor, c.htva, 'vat')
+    + row(mixedVat ? tr('dash.cost.of_which_vat') : tr('dash.cost.of_which_vat_rate', { rate: vr }),
           `${formatMoney(Math.abs(c.total))} − ${formatMoney(Math.abs(c.htva))}`,
           c.vat_included, 'vat vat-highlight');
 }
@@ -105,14 +143,20 @@ function tariffSegmentsMeta(data) {
   const segs = data.tariff_segments || [];
   if (segs.length < 2) return '';
   const _d = (iso) => String(iso).slice(8, 10) + '/' + String(iso).slice(5, 7);
-  return segs.map((s) => `<span>${escapeHtml(s.name)} — ${_d(s.from)}→${_d(s.to)} (${s.days} j) : ${formatMoney(s.total)}</span>`).join('');
+  return segs.map((s) => `<span>${tr('dash.meta.segment', {
+    name: escapeHtml(s.name),
+    from: _d(s.from),
+    to: _d(s.to),
+    days: s.days,
+    total: formatMoney(s.total),
+  })}</span>`).join('');
 }
 
 // ── Electricity cost navigation ────────────────────────────────────────────
 (function () {
   const _APP_LOC = (typeof window !== 'undefined' && window.APP_LOCALE) ? window.APP_LOCALE : 'fr';
   const _cap = (str) => str.charAt(0).toUpperCase() + str.slice(1);
-  const MONTHS_FR   = Array.from({ length: 12 }, (_, i) => _cap(new Date(2000, i, 1).toLocaleDateString(_APP_LOC, { month: 'short' })));
+  const MONTHS_SHORT = Array.from({ length: 12 }, (_, i) => _cap(new Date(2000, i, 1).toLocaleDateString(_APP_LOC, { month: 'short' })));
   const MONTH_NAMES = Array.from({ length: 12 }, (_, i) => _cap(new Date(2000, i, 1).toLocaleDateString(_APP_LOC, { month: 'long' })));
 
   let navYear  = window.__INIT_YEAR__;
@@ -130,8 +174,8 @@ function tariffSegmentsMeta(data) {
     const el = document.getElementById('cost-content');
     if (!data || !data.available) {
       el.innerHTML = `<div class="no-tariff">
-        <strong>Aucune donnée disponible</strong>
-        ${data?.reason ?? 'Pas de tarif ou de données pour cette période.'}
+        <strong>${tr('dash.empty.electricity')}</strong>
+        ${data?.reason ?? tr('dash.empty.electricity_reason')}
       </div>`;
       return;
     }
@@ -163,23 +207,27 @@ function tariffSegmentsMeta(data) {
     }
 
     const isCurrentMonth = (navYear === NOW_YEAR && navMonth === NOW_MONTH);
-    const periodLabel    = isCurrentMonth ? 'Estimation mois en cours' : `${MONTHS_FR[navMonth-1]} ${navYear}`;
+    const periodLabel    = isCurrentMonth ? tr('dash.period.current_month') : `${MONTHS_SHORT[navMonth-1]} ${navYear}`;
 
     el.innerHTML = `<div class="cost-wrap">
       <div class="cost-lines">
         ${costLinesHtml(c, row)}
 
         ${c.solar_produced != null ? `
-        <div class="cost-group-label cost-group-label--solar">☀ Solaire (auto-consommation)</div>
-        ${solarKwhRow('Production PV totale', c.solar_produced)}
+        <div class="cost-group-label cost-group-label--solar">☀ ${tr('dash.solar.group')}</div>
+        ${solarKwhRow(tr('dash.solar.produced'), c.solar_produced)}
         ${solarKwhRow(
             c.self_consumption_pct != null
-              ? `Auto-consommée — ${Number(c.self_consumption_pct).toFixed(1)} %`
-              : 'Auto-consommée (non exportée)',
+              ? tr('dash.solar.self_consumed_pct', { pct: Number(c.self_consumption_pct).toFixed(1) })
+              : tr('dash.solar.self_consumed'),
             c.solar_consumed
         )}
-        ${row('Économies réalisées (tarif T1 TTC)',
-              `${Number(c.solar_consumed).toFixed(2)} kWh × ${Number(c.solar_savings_rate).toFixed(6)} €/kWh`,
+        ${row(tr('dash.solar.savings'),
+              tr('dash.solar.savings_detail', {
+                kwh: Number(c.solar_consumed).toFixed(2),
+                rate: Number(c.solar_savings_rate).toFixed(6),
+                cur: CURRENCY_SYMBOL,
+              }),
               c.solar_savings, 'credit')}
         ` : ''}
 
@@ -192,18 +240,18 @@ function tariffSegmentsMeta(data) {
           <div class="cost-total-amount">${formatMoney(c.total)}</div>
         </div>
         <div class="cost-total-meta">
-          <span>Tarif : ${escapeHtml(data.tariff_name ?? '—')}</span>
+          <span>${tr('dash.meta.tariff', { name: escapeHtml(data.tariff_name ?? '—') })}</span>
           ${tariffSegmentsMeta(data)}
-          <span>Import T1 : ${t1.toFixed(2)} kWh</span>
-          <span>Import T2 : ${t2.toFixed(2)} kWh</span>
-          <span>Export T1 : ${e1.toFixed(2)} kWh</span>
-          <span>Export T2 : ${e2.toFixed(2)} kWh</span>
+          <span>${tr('dash.meta.import_t1', { kwh: t1.toFixed(2) })}</span>
+          <span>${tr('dash.meta.import_t2', { kwh: t2.toFixed(2) })}</span>
+          <span>${tr('dash.meta.export_t1', { kwh: e1.toFixed(2) })}</span>
+          <span>${tr('dash.meta.export_t2', { kwh: e2.toFixed(2) })}</span>
           ${c.solar_produced != null ? `
-          <span class="t-green">☀ Prod. PV : ${Number(c.solar_produced).toFixed(2)} kWh</span>
-          <span class="t-green">Auto-conso : ${Number(c.solar_consumed).toFixed(2)} kWh${c.self_consumption_pct != null ? ` (${Number(c.self_consumption_pct).toFixed(1)} %)` : ''}</span>
-          <span class="t-green">Économies : +${formatMoney(c.solar_savings)}</span>
-          ` : (d.solar != null ? `<span>Solaire : ${Number(d.solar).toFixed(2)} kWh</span>` : '')}
-          <span>Période : ${data.days} jours</span>
+          <span class="t-green">☀ ${tr('dash.meta.solar_produced', { kwh: Number(c.solar_produced).toFixed(2) })}</span>
+          <span class="t-green">${tr('dash.meta.self_consumed', { kwh: Number(c.solar_consumed).toFixed(2) })}${c.self_consumption_pct != null ? ` (${Number(c.self_consumption_pct).toFixed(1)} %)` : ''}</span>
+          <span class="t-green">${tr('dash.meta.savings', { amount: formatMoney(c.solar_savings) })}</span>
+          ` : (d.solar != null ? `<span>${tr('dash.meta.solar', { kwh: Number(d.solar).toFixed(2) })}</span>` : '')}
+          <span>${tr('dash.meta.period_days', { days: data.days })}</span>
         </div>
       </div>
     </div>`;
@@ -215,12 +263,12 @@ function tariffSegmentsMeta(data) {
   }
 
   function renderDynamicSection(dyn, classic) {
-    const head = `<div class="cost-group-label cost-group-label--solar mt-8">⚡ Tarif dynamique (day-ahead)</div>`;
+    const head = `<div class="cost-group-label cost-group-label--solar mt-8">⚡ ${tr('dash.dynamic.group')}</div>`;
 
     if (!dyn || !dyn.available) {
       return `<div class="cost-wrap mt-18"><div class="cost-lines">
         ${head}
-        <div class="no-tariff mt-10">${(dyn && dyn.reason) ? dyn.reason : 'Prix dynamiques indisponibles. Lancez cron_dynamic_prices.'}</div>
+        <div class="no-tariff mt-10">${(dyn && dyn.reason) ? dyn.reason : tr('dash.dynamic.unavailable')}</div>
       </div></div>`;
     }
 
@@ -248,29 +296,34 @@ function tariffSegmentsMeta(data) {
         <td>${Number(d.import_kwh).toFixed(2)} kWh</td>
         <td>${formatMoney(d.energy_dynamic)}</td></tr>`;
     });
-    const dailyTable = dailyRows ? `<div class="cost-group-label">Coût énergie par jour</div>
+    const dailyTable = dailyRows ? `<div class="cost-group-label">${tr('dash.dynamic.daily_title')}</div>
       <div class="daily-scroll">
         <table class="daily-table">
           <thead><tr>
-            <th>Jour</th>
-            <th>Import</th>
-            <th>Énergie €</th>
+            <th>${tr('dash.dynamic.col_day')}</th>
+            <th>${tr('dash.dynamic.col_import')}</th>
+            <th>${tr('dash.dynamic.col_energy', { cur: CURRENCY_SYMBOL })}</th>
           </tr></thead>
           <tbody>${dailyRows}</tbody>
         </table>
       </div>` : '';
 
-    const diffLabel = diff == null ? '' : (diff <= 0 ? 'Économie vs classique' : 'Surcoût vs classique');
+    const diffLabel = diff == null ? '' : (diff <= 0 ? tr('dash.dynamic.saving_vs') : tr('dash.dynamic.extra_vs'));
 
     return `<div class="cost-wrap mt-18"><div class="cost-lines">
       ${head}
-      ${line('Énergie dynamique (spot + marge, TTC)',
-            `${Number(dyn.matched_kwh ?? 0).toFixed(2)} kWh × ${dyn.avg_price_kwh != null ? Number(dyn.avg_price_kwh).toFixed(5) : '—'} €/kWh moy. · couverture ${Number(dyn.coverage_pct ?? 0).toFixed(0)} %`,
+      ${line(tr('dash.dynamic.energy_dynamic'),
+            tr('dash.dynamic.energy_detail', {
+              kwh: Number(dyn.matched_kwh ?? 0).toFixed(2),
+              rate: dyn.avg_price_kwh != null ? Number(dyn.avg_price_kwh).toFixed(5) : '—',
+              cur: CURRENCY_SYMBOL,
+              coverage: Number(dyn.coverage_pct ?? 0).toFixed(0),
+            }),
             dyn.energy_dynamic)}
-      ${line('Énergie classique (T1 + T2)', '', classicEnergy)}
+      ${line(tr('dash.dynamic.energy_classic'), '', classicEnergy)}
       <div class="cost-group-sep"></div>
-      ${line('Total dynamique (estimé)', '', dynTotal, 'total')}
-      ${line('Total classique', '', classicTotal)}
+      ${line(tr('dash.dynamic.total_dynamic'), '', dynTotal, 'total')}
+      ${line(tr('dash.dynamic.total_classic'), '', classicTotal)}
       ${diff != null ? line(diffLabel, diffPct != null ? `${diffPct > 0 ? '+' : ''}${diffPct.toFixed(1)} %` : '', diff, diff <= 0 ? 'credit' : '') : ''}
       ${dailyTable}
     </div></div>`;
@@ -278,7 +331,7 @@ function tariffSegmentsMeta(data) {
 
   async function loadMonthCost(year, month) {
     const el = document.getElementById('cost-content');
-    el.innerHTML = '<div class="async-note">Chargement…</div>';
+    el.innerHTML = `<div class="async-note">${tr('common.loading')}</div>`;
     if (year === NOW_YEAR && month === NOW_MONTH && window.__INIT_COST__) {
       renderCostContent(window.__INIT_COST__);
       return;
@@ -288,7 +341,7 @@ function tariffSegmentsMeta(data) {
       const data = await res.json();
       renderCostContent(data);
     } catch (e) {
-      el.innerHTML = '<div class="async-note async-note--error">Erreur de chargement.</div>';
+      el.innerHTML = `<div class="async-note async-note--error">${tr('dash.load_error')}</div>`;
     }
   }
 
@@ -328,7 +381,7 @@ function tariffSegmentsMeta(data) {
                 : await (await fetch(`api?action=month_cost&year=${year}&month=${m}`)).json();
               yearCache[key] = d;
               updateYearCard(card, d);
-            } catch { card.querySelector('.ymc-cost').innerHTML = '<span class="ymc-nd">err</span>'; }
+            } catch { card.querySelector('.ymc-cost').innerHTML = `<span class="ymc-nd">${tr('dash.err_short')}</span>`; }
           })(card, m);
         }
       }
@@ -416,7 +469,7 @@ function tariffSegmentsMeta(data) {
 (function () {
   const _APP_LOC = (typeof window !== 'undefined' && window.APP_LOCALE) ? window.APP_LOCALE : 'fr';
   const _cap = (str) => str.charAt(0).toUpperCase() + str.slice(1);
-  const MONTHS_FR   = Array.from({ length: 12 }, (_, i) => _cap(new Date(2000, i, 1).toLocaleDateString(_APP_LOC, { month: 'short' })));
+  const MONTHS_SHORT = Array.from({ length: 12 }, (_, i) => _cap(new Date(2000, i, 1).toLocaleDateString(_APP_LOC, { month: 'short' })));
   const MONTH_NAMES = Array.from({ length: 12 }, (_, i) => _cap(new Date(2000, i, 1).toLocaleDateString(_APP_LOC, { month: 'long' })));
 
   let gasNavYear  = window.__INIT_GAS_YEAR__;
@@ -442,8 +495,8 @@ function tariffSegmentsMeta(data) {
     if (!el) return;
     if (!data || !data.available) {
       el.innerHTML = `<div class="no-tariff">
-        <strong>Aucune donnée gaz disponible</strong>
-        ${data?.reason ?? 'Enregistrez au moins deux relevés et configurez un tarif gaz.'}
+        <strong>${tr('dash.empty.gas')}</strong>
+        ${data?.reason ?? tr('dash.empty.gas_reason')}
       </div>`;
       return;
     }
@@ -455,7 +508,7 @@ function tariffSegmentsMeta(data) {
     const to          = data.period_to   ? _day(data.period_to)   : '—';
 
     const isCurrentPeriod = (gasNavYear === NOW_YEAR && gasNavMonth === NOW_MONTH);
-    const periodLabel     = isCurrentPeriod ? 'Estimation période en cours' : `${MONTHS_FR[gasNavMonth-1]} ${gasNavYear}`;
+    const periodLabel     = isCurrentPeriod ? tr('dash.period.current_period') : `${MONTHS_SHORT[gasNavMonth-1]} ${gasNavYear}`;
 
     el.innerHTML = `<div class="cost-wrap">
       <div class="cost-lines">
@@ -469,12 +522,12 @@ function tariffSegmentsMeta(data) {
           <div class="cost-total-amount">${fmtE(c.total)}</div>
         </div>
         <div class="cost-total-meta">
-          <span>Tarif : ${escapeHtml(data.tariff_name ?? '—')}</span>
+          <span>${tr('dash.meta.tariff', { name: escapeHtml(data.tariff_name ?? '—') })}</span>
           ${tariffSegmentsMeta(data)}
           <span>${from} → ${to}</span>
-          <span>${data.days} jour${data.days > 1 ? 's' : ''}</span>
+          <span>${daysLabel(data.days)}</span>
           <span>${Number(data.delta_m3).toFixed(3)} m³ → ${Number(kwh).toFixed(1)} kWh</span>
-          <span>PCS ${data.pcs_coefficient} kWh/m³</span>
+          <span>${tr('dash.meta.pcs', { value: data.pcs_coefficient })}</span>
         </div>
       </div>
     </div>`;
@@ -482,7 +535,7 @@ function tariffSegmentsMeta(data) {
 
   async function loadMonthGasCost(year, month) {
     const el = document.getElementById('gas-cost-content');
-    el.innerHTML = '<div class="async-note">Chargement…</div>';
+    el.innerHTML = `<div class="async-note">${tr('common.loading')}</div>`;
     if (year === window.__INIT_GAS_YEAR__ && month === window.__INIT_GAS_MONTH__ && window.__INIT_GAS_COST__) {
       renderGasCostContent(window.__INIT_GAS_COST__);
       return;
@@ -492,7 +545,7 @@ function tariffSegmentsMeta(data) {
       const data = await res.json();
       renderGasCostContent(data);
     } catch (e) {
-      el.innerHTML = '<div class="async-note async-note--error">Erreur de chargement.</div>';
+      el.innerHTML = `<div class="async-note async-note--error">${tr('dash.load_error')}</div>`;
     }
   }
 
@@ -533,7 +586,7 @@ function tariffSegmentsMeta(data) {
               gasYearCache[key] = d;
               updateGasYearCard(card, d);
             } catch {
-              card.querySelector('.ymc-cost').innerHTML = '<span class="ymc-nd">err</span>';
+              card.querySelector('.ymc-cost').innerHTML = `<span class="ymc-nd">${tr('dash.err_short')}</span>`;
             }
           })(card, m);
         }
@@ -608,14 +661,14 @@ function tariffSegmentsMeta(data) {
 
   // Init
   updateGasNav();
-  renderGasCostContent(window.__INIT_GAS_COST__ ?? { available: false, reason: 'Données non chargées' });
+  renderGasCostContent(window.__INIT_GAS_COST__ ?? { available: false, reason: tr('dash.not_loaded') });
 })();
 
 // ── Water consumption navigation (volume m³, sans coût) ────────────────────
 (function () {
   const _APP_LOC = (typeof window !== 'undefined' && window.APP_LOCALE) ? window.APP_LOCALE : 'fr';
   const _cap = (str) => str.charAt(0).toUpperCase() + str.slice(1);
-  const MONTHS_FR   = Array.from({ length: 12 }, (_, i) => _cap(new Date(2000, i, 1).toLocaleDateString(_APP_LOC, { month: 'short' })));
+  const MONTHS_SHORT = Array.from({ length: 12 }, (_, i) => _cap(new Date(2000, i, 1).toLocaleDateString(_APP_LOC, { month: 'short' })));
   const MONTH_NAMES = Array.from({ length: 12 }, (_, i) => _cap(new Date(2000, i, 1).toLocaleDateString(_APP_LOC, { month: 'long' })));
 
   let wNavYear  = window.__INIT_WATER_YEAR__;
@@ -630,8 +683,8 @@ function tariffSegmentsMeta(data) {
     if (!el) return;
     if (!data || !data.available) {
       el.innerHTML = `<div class="no-tariff">
-        <strong>Aucune consommation eau disponible</strong>
-        ${data?.reason ?? 'Enregistrez au moins deux relevés d’eau.'}
+        <strong>${tr('dash.empty.water')}</strong>
+        ${data?.reason ?? tr('dash.empty.water_reason')}
       </div>`;
       return;
     }
@@ -640,8 +693,8 @@ function tariffSegmentsMeta(data) {
     const from = data.period_from ? _day(data.period_from) : '—';
     const to   = data.period_to   ? _day(data.period_to)   : '—';
     const isCurrent = (wNavYear === NOW_YEAR && wNavMonth === NOW_MONTH);
-    const label = isCurrent ? 'Estimation mois en cours' : `${MONTHS_FR[wNavMonth-1]} ${wNavYear}`;
-    const projNote = data.is_projection ? ' <span class="t-dim">(projection fin de mois)</span>' : '';
+    const label = isCurrent ? tr('dash.period.current_month') : `${MONTHS_SHORT[wNavMonth-1]} ${wNavYear}`;
+    const projNote = data.is_projection ? ` <span class="t-dim">${tr('dash.water.projection')}</span>` : '';
 
     const c = data.cost;
 
@@ -654,7 +707,7 @@ function tariffSegmentsMeta(data) {
         </div>
         <div class="cost-total-meta">
           <span>${from} → ${to}${projNote}</span>
-          <span>${data.days} jour${data.days > 1 ? 's' : ''}</span>
+          <span>${daysLabel(data.days)}</span>
         </div>
       </div>`;
       return;
@@ -679,10 +732,10 @@ function tariffSegmentsMeta(data) {
           <div class="cost-total-amount">${formatMoney(c.total)}</div>
         </div>
         <div class="cost-total-meta">
-          <span>Tarif : ${escapeHtml(data.tariff_name ?? '—')}</span>
+          <span>${tr('dash.meta.tariff', { name: escapeHtml(data.tariff_name ?? '—') })}</span>
           ${tariffSegmentsMeta(data)}
           <span>${from} → ${to}${projNote}</span>
-          <span>${data.days} jour${data.days > 1 ? 's' : ''}</span>
+          <span>${daysLabel(data.days)}</span>
           <span>${Number(data.delta_m3).toFixed(3)} m³</span>
         </div>
       </div>
@@ -691,7 +744,7 @@ function tariffSegmentsMeta(data) {
 
   async function loadMonthWater(year, month) {
     const el = document.getElementById('water-cost-content');
-    el.innerHTML = '<div class="async-note">Chargement…</div>';
+    el.innerHTML = `<div class="async-note">${tr('common.loading')}</div>`;
     if (year === window.__INIT_WATER_YEAR__ && month === window.__INIT_WATER_MONTH__ && window.__INIT_WATER_COST__) {
       renderWaterContent(window.__INIT_WATER_COST__);
       return;
@@ -700,7 +753,7 @@ function tariffSegmentsMeta(data) {
       const res  = await fetch(`api?action=water_month_cost&year=${year}&month=${month}`);
       renderWaterContent(await res.json());
     } catch (e) {
-      el.innerHTML = '<div class="async-note async-note--error">Erreur de chargement.</div>';
+      el.innerHTML = `<div class="async-note async-note--error">${tr('dash.load_error')}</div>`;
     }
   }
 
@@ -741,7 +794,7 @@ function tariffSegmentsMeta(data) {
               waterYearCache[key] = d;
               updateWaterYearCard(card, d);
             } catch {
-              card.querySelector('.ymc-cost').innerHTML = '<span class="ymc-nd">err</span>';
+              card.querySelector('.ymc-cost').innerHTML = `<span class="ymc-nd">${tr('dash.err_short')}</span>`;
             }
           })(card, m);
         }
@@ -811,7 +864,7 @@ function tariffSegmentsMeta(data) {
 
   // Init
   updateWaterNav();
-  renderWaterContent(window.__INIT_WATER_COST__ ?? { available: false, reason: 'Données non chargées' });
+  renderWaterContent(window.__INIT_WATER_COST__ ?? { available: false, reason: tr('dash.not_loaded') });
 })();
 
 // ── Horloge ─────────────────────────────────────────────────────────────────
@@ -877,10 +930,10 @@ function renderChart(data) {
     data: {
       labels,
       datasets: [
-        { label: 'Import T1 (jour)',   data: importT1,  backgroundColor: 'rgba(245,166,35,.7)', borderColor: 'rgba(245,166,35,.9)', borderWidth: 1, stack: 'import' },
-        { label: 'Import T2 (nuit)',   data: importT2,  backgroundColor: 'rgba(245,166,35,.3)', borderColor: 'rgba(245,166,35,.5)', borderWidth: 1, stack: 'import' },
-        { label: 'Export (injection)', data: exportAll, backgroundColor: 'rgba(65,179,245,.55)', borderColor: 'rgba(65,179,245,.8)', borderWidth: 1, stack: 'export' },
-        { label: 'Production PV', data: solar, type: 'line', borderColor: 'rgba(47,213,142,.8)', backgroundColor: 'rgba(47,213,142,.08)', fill: true, tension: .3, pointRadius: 2, borderWidth: 2 },
+        { label: tr('dash.chart.import_t1'), data: importT1,  backgroundColor: 'rgba(245,166,35,.7)', borderColor: 'rgba(245,166,35,.9)', borderWidth: 1, stack: 'import' },
+        { label: tr('dash.chart.import_t2'), data: importT2,  backgroundColor: 'rgba(245,166,35,.3)', borderColor: 'rgba(245,166,35,.5)', borderWidth: 1, stack: 'import' },
+        { label: tr('dash.chart.export'),    data: exportAll, backgroundColor: 'rgba(65,179,245,.55)', borderColor: 'rgba(65,179,245,.8)', borderWidth: 1, stack: 'export' },
+        { label: tr('dash.chart.solar'), data: solar, type: 'line', borderColor: 'rgba(47,213,142,.8)', backgroundColor: 'rgba(47,213,142,.08)', fill: true, tension: .3, pointRadius: 2, borderWidth: 2 },
       ],
     },
     options: chartOptions({ unit: 'kWh', decimals: 2, stackedX: true }),
@@ -915,8 +968,8 @@ function renderVolumeChart(canvasId, kind, rows, label, color) {
 }
 
 const UTIL_META = {
-  gas:   { action: 'gas_history',   canvas: 'gasChart',   label: 'Conso gaz (m³)',  color: { fill: 'rgba(245,166,35,.55)', line: 'rgba(245,166,35,.8)' }, btnPrefix: 'gas-btn-' },
-  water: { action: 'water_history', canvas: 'waterChart', label: 'Conso eau (m³)',  color: { fill: 'rgba(65,179,245,.55)', line: 'rgba(65,179,245,.8)' }, btnPrefix: 'water-btn-' },
+  gas:   { action: 'gas_history',   canvas: 'gasChart',   label: tr('dash.chart.gas'),   color: { fill: 'rgba(245,166,35,.55)', line: 'rgba(245,166,35,.8)' }, btnPrefix: 'gas-btn-' },
+  water: { action: 'water_history', canvas: 'waterChart', label: tr('dash.chart.water'), color: { fill: 'rgba(65,179,245,.55)', line: 'rgba(65,179,245,.8)' }, btnPrefix: 'water-btn-' },
 };
 
 function filterAndRenderUtil(kind, days) {

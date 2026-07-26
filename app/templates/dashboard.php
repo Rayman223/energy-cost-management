@@ -77,7 +77,7 @@ $deltaBadge = function (?float $pct, bool $lowerIsBetter, bool $isNew = false): 
 
   <!-- ── Header ─────────────────────────────────────────────────────────── -->
   <?= $this->partial('_header', [
-      'subtitle'    => 'Dashboard',
+      'subtitle'    => $this->t('dash.subtitle'),
       'current'     => 'dashboard',
       'isAdmin'     => $isAdmin ?? false,
       'discordUrl'  => $discordUrl ?? null,
@@ -87,9 +87,9 @@ $deltaBadge = function (?float $pct, bool $lowerIsBetter, bool $isNew = false): 
 
   <?php if ($dbError): ?>
   <div class="error-banner">
-    <strong>⚠ Database connection error</strong>
+    <strong>⚠ <?= $this->te('dash.db_offline') ?></strong>
     <?= $this->e($dbError) ?><br>
-    Check <code>app/config/config.php</code> and ensure the DB is reachable.
+    <?= $this->te('dash.db_error_hint', ['file' => 'app/config/config.php']) ?>
   </div>
   <?php endif; ?>
 
@@ -127,15 +127,15 @@ $deltaBadge = function (?float $pct, bool $lowerIsBetter, bool $isNew = false): 
 
   <!-- ── Cost estimate ─────────────────────────────────────────────────── -->
   <div class="section-header">
-    <span class="section-title">Estimation coûts électricité</span>
+    <span class="section-title"><?= $this->te('dash.cost.electricity') ?></span>
     <span class="section-line"></span>
     <div class="month-nav">
-      <button class="month-nav-btn" id="nav-prev" title="Mois précédent">&#8592;</button>
+      <button class="month-nav-btn" id="nav-prev" title="<?= $this->te('dash.nav.prev_month') ?>">&#8592;</button>
       <span class="month-nav-current" id="nav-label">…</span>
-      <button class="month-nav-btn" id="nav-next" title="Mois suivant">&#8594;</button>
+      <button class="month-nav-btn" id="nav-next" title="<?= $this->te('dash.nav.next_month') ?>">&#8594;</button>
       <div class="month-nav-mode">
-        <button id="mode-month" class="active" data-nav-mode="month">Mois</button>
-        <button id="mode-year"  data-nav-mode="year">Année</button>
+        <button id="mode-month" class="active" data-nav-mode="month"><?= $this->te('dash.nav.month') ?></button>
+        <button id="mode-year"  data-nav-mode="year"><?= $this->te('dash.nav.year') ?></button>
       </div>
     </div>
   </div>
@@ -147,7 +147,7 @@ $deltaBadge = function (?float $pct, bool $lowerIsBetter, bool $isNew = false): 
 
   <!-- Dynamic cost content -->
   <div id="cost-content">
-    <div class="async-note">Chargement…</div>
+    <div class="async-note"><?= $this->te('common.loading') ?></div>
   </div>
 
   <?php
@@ -185,17 +185,22 @@ $deltaBadge = function (?float $pct, bool $lowerIsBetter, bool $isNew = false): 
         'initWaterMonth'    => (int) $waterInitMonth,
         'tariffLineLabels'  => $tariffLineLabels,
         'tariffGroupLabels' => $tariffGroupLabels,
+        // Sous-catalogue des libellés rendus côté client (#223). Extrait par
+        // préfixe : aucune clé à énumérer ici, donc pas de désynchronisation
+        // possible entre dashboard.js et les catalogues. Les mêmes clés servent
+        // au template et au script, sans doublon.
+        'i18n'              => $this->translations('dash.', 'common.'),
     ];
   ?>
   <script type="application/json" id="dashboard-data"><?= json_encode($dashboardData, JSON_HEX_TAG | JSON_UNESCAPED_UNICODE) ?></script>
 
   <!-- ── Chart électricité ─────────────────────────────────────────────── -->
   <div class="section-header">
-    <span class="section-title">Historique électricité</span>
+    <span class="section-title"><?= $this->te('dash.history.electricity') ?></span>
     <span class="section-line"></span>
     <div class="btn-row">
-      <button class="btn btn-ghost btn-xs" id="btn-30" data-chart-days="30">30j</button>
-      <button class="btn btn-ghost btn-xs" id="btn-365" data-chart-days="365">1 an</button>
+      <button class="btn btn-ghost btn-xs" id="btn-30" data-chart-days="30"><?= $this->te('dash.range.30d') ?></button>
+      <button class="btn btn-ghost btn-xs" id="btn-365" data-chart-days="365"><?= $this->te('dash.range.1y') ?></button>
     </div>
   </div>
   <div class="chart-card">
@@ -204,15 +209,15 @@ $deltaBadge = function (?float $pct, bool $lowerIsBetter, bool $isNew = false): 
 
   <!-- ── Estimation coûts gaz ─────────────────────────────────────────── -->
   <div class="section-header">
-    <span class="section-title">Estimation coûts gaz</span>
+    <span class="section-title"><?= $this->te('dash.cost.gas') ?></span>
     <span class="section-line"></span>
     <div class="month-nav">
-      <button class="month-nav-btn" id="gas-nav-prev" title="Période précédente">&#8592;</button>
+      <button class="month-nav-btn" id="gas-nav-prev" title="<?= $this->te('dash.nav.prev_period') ?>">&#8592;</button>
       <span class="month-nav-current" id="gas-nav-label">…</span>
-      <button class="month-nav-btn" id="gas-nav-next" title="Période suivante">&#8594;</button>
+      <button class="month-nav-btn" id="gas-nav-next" title="<?= $this->te('dash.nav.next_period') ?>">&#8594;</button>
       <div class="month-nav-mode">
-        <button id="gas-mode-month" class="active" data-gas-nav-mode="month">Mois</button>
-        <button id="gas-mode-year"  data-gas-nav-mode="year">Année</button>
+        <button id="gas-mode-month" class="active" data-gas-nav-mode="month"><?= $this->te('dash.nav.month') ?></button>
+        <button id="gas-mode-year"  data-gas-nav-mode="year"><?= $this->te('dash.nav.year') ?></button>
       </div>
     </div>
   </div>
@@ -224,16 +229,16 @@ $deltaBadge = function (?float $pct, bool $lowerIsBetter, bool $isNew = false): 
 
   <!-- Dynamic gas cost content -->
   <div id="gas-cost-content">
-    <div class="async-note">Chargement…</div>
+    <div class="async-note"><?= $this->te('common.loading') ?></div>
   </div>
 
   <!-- ── Chart gaz ─────────────────────────────────────────────────────── -->
   <div class="section-header">
-    <span class="section-title">Historique gaz</span>
+    <span class="section-title"><?= $this->te('dash.history.gas') ?></span>
     <span class="section-line"></span>
     <div class="btn-row">
-      <button class="btn btn-ghost btn-xs" id="gas-btn-30" data-gas-chart-days="30">30j</button>
-      <button class="btn btn-ghost btn-xs" id="gas-btn-365" data-gas-chart-days="365">1 an</button>
+      <button class="btn btn-ghost btn-xs" id="gas-btn-30" data-gas-chart-days="30"><?= $this->te('dash.range.30d') ?></button>
+      <button class="btn btn-ghost btn-xs" id="gas-btn-365" data-gas-chart-days="365"><?= $this->te('dash.range.1y') ?></button>
     </div>
   </div>
   <div class="chart-card">
@@ -242,15 +247,15 @@ $deltaBadge = function (?float $pct, bool $lowerIsBetter, bool $isNew = false): 
 
   <!-- ── Consommation eau ─────────────────────────────────────────────── -->
   <div class="section-header">
-    <span class="section-title">Consommation eau</span>
+    <span class="section-title"><?= $this->te('dash.consumption.water') ?></span>
     <span class="section-line"></span>
     <div class="month-nav">
-      <button class="month-nav-btn" id="water-nav-prev" title="Mois précédent">&#8592;</button>
+      <button class="month-nav-btn" id="water-nav-prev" title="<?= $this->te('dash.nav.prev_month') ?>">&#8592;</button>
       <span class="month-nav-current" id="water-nav-label">…</span>
-      <button class="month-nav-btn" id="water-nav-next" title="Mois suivant">&#8594;</button>
+      <button class="month-nav-btn" id="water-nav-next" title="<?= $this->te('dash.nav.next_month') ?>">&#8594;</button>
       <div class="month-nav-mode">
-        <button id="water-mode-month" class="active" data-water-nav-mode="month">Mois</button>
-        <button id="water-mode-year"  data-water-nav-mode="year">Année</button>
+        <button id="water-mode-month" class="active" data-water-nav-mode="month"><?= $this->te('dash.nav.month') ?></button>
+        <button id="water-mode-year"  data-water-nav-mode="year"><?= $this->te('dash.nav.year') ?></button>
       </div>
     </div>
   </div>
@@ -262,16 +267,16 @@ $deltaBadge = function (?float $pct, bool $lowerIsBetter, bool $isNew = false): 
 
   <!-- Water consumption content (volume m³, pas de coût) -->
   <div id="water-cost-content">
-    <div class="async-note">Chargement…</div>
+    <div class="async-note"><?= $this->te('common.loading') ?></div>
   </div>
 
   <!-- ── Chart eau ─────────────────────────────────────────────────────── -->
   <div class="section-header">
-    <span class="section-title">Historique eau</span>
+    <span class="section-title"><?= $this->te('dash.history.water') ?></span>
     <span class="section-line"></span>
     <div class="btn-row">
-      <button class="btn btn-ghost btn-xs" id="water-btn-30" data-water-chart-days="30">30j</button>
-      <button class="btn btn-ghost btn-xs" id="water-btn-365" data-water-chart-days="365">1 an</button>
+      <button class="btn btn-ghost btn-xs" id="water-btn-30" data-water-chart-days="30"><?= $this->te('dash.range.30d') ?></button>
+      <button class="btn btn-ghost btn-xs" id="water-btn-365" data-water-chart-days="365"><?= $this->te('dash.range.1y') ?></button>
     </div>
   </div>
   <div class="chart-card">

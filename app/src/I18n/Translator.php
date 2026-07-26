@@ -40,6 +40,29 @@ final class Translator
     }
 
     /**
+     * Sous-catalogue de toutes les clés commençant par `$prefix`, avec repli clé
+     * par clé sur la locale par défaut (même sémantique que t()).
+     *
+     * Destiné aux scripts qui rendent du contenu côté client : le template
+     * sérialise le sous-catalogue dans son data block JSON plutôt que d'énumérer
+     * les clés une à une, ce qui rendrait une désynchronisation possible.
+     *
+     * @return array<string, string>
+     */
+    public function allWithPrefix(string $prefix): array
+    {
+        $filter = static function (array $messages) use ($prefix): array {
+            return array_filter(
+                $messages,
+                static fn (string $key): bool => str_starts_with($key, $prefix),
+                ARRAY_FILTER_USE_KEY,
+            );
+        };
+
+        return array_merge($filter($this->fallback), $filter($this->messages));
+    }
+
+    /**
      * @return array<string, string>
      */
     private static function loadCatalog(string $translationsDir, string $locale): array
