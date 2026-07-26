@@ -16,12 +16,14 @@ final class LocaleTest extends TestCase
 
     protected function setUp(): void
     {
-        unset($_GET['lang'], $_COOKIE['lang'], $_SERVER['HTTP_ACCEPT_LANGUAGE']);
+        $_GET = [];
+        unset($_COOKIE['lang'], $_SERVER['HTTP_ACCEPT_LANGUAGE']);
     }
 
     protected function tearDown(): void
     {
-        unset($_GET['lang'], $_COOKIE['lang'], $_SERVER['HTTP_ACCEPT_LANGUAGE']);
+        $_GET = [];
+        unset($_COOKIE['lang'], $_SERVER['HTTP_ACCEPT_LANGUAGE']);
     }
 
     public function testExplicitQueryWinsOverProfile(): void
@@ -88,5 +90,42 @@ final class LocaleTest extends TestCase
     {
         $_GET['lang'] = '';
         self::assertNull(Locale::explicitChoice($this->config));
+    }
+
+    public function testSwitchUrlWithoutQuery(): void
+    {
+        self::assertSame('?lang=en', Locale::switchUrl('en'));
+    }
+
+    public function testSwitchUrlCarriesPageState(): void
+    {
+        // L'onglet énergie et la grille en édition survivent au changement de langue.
+        $_GET = ['energy' => 'gas', 'edit' => '12'];
+        self::assertSame('?energy=gas&edit=12&lang=en', Locale::switchUrl('en'));
+    }
+
+    public function testSwitchUrlDropsOneShotParams(): void
+    {
+        // Bandeaux à usage unique et déclencheur de téléchargement : jamais rejoués.
+        $_GET = ['linked' => '', 'link_error' => 'taken', 'export' => 'csv'];
+        self::assertSame('?lang=en', Locale::switchUrl('en'));
+    }
+
+    public function testSwitchUrlNeverDuplicatesLang(): void
+    {
+        $_GET = ['lang' => 'fr'];
+        self::assertSame('?lang=nl', Locale::switchUrl('nl'));
+    }
+
+    public function testSwitchUrlAddsExplicitParams(): void
+    {
+        // Cas du POST de connexion raté : la cible ne vient pas de l'URL.
+        self::assertSame('?next=%2Fdashboard&lang=en', Locale::switchUrl('en', ['next' => '/dashboard']));
+    }
+
+    public function testSwitchUrlExplicitParamsWinOverQuery(): void
+    {
+        $_GET = ['energy' => 'gas'];
+        self::assertSame('?energy=water&lang=en', Locale::switchUrl('en', ['energy' => 'water']));
     }
 }

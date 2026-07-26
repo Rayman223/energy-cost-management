@@ -21,7 +21,7 @@ $url   = $this->e($apiUrl);
 <head>
 <?= $this->partial('_head', [
     'title' => $title . ' — ' . $this->t('app.title'),
-    'css'   => ['assets/css/page-standalone.css', 'assets/css/app-header.css', 'assets/css/api-guide.css'],
+    'css'   => ['assets/css/page-standalone.css', 'assets/css/app-header.css', 'assets/css/lang-switcher.css', 'assets/css/api-guide.css'],
     'adsenseClient' => $adsenseClient ?? null,
 ]) ?>
 </head>
@@ -92,5 +92,6 @@ $url   = $this->e($apiUrl);
   <p class="mt-12"><a href="<?= $this->url('account') ?>"><?= $this->te('legal.my_account') ?></a></p>
 </div>
 <script defer src="<?= \App\Support\Assets::url('assets/js/header.js') ?>"></script>
+<script defer src="<?= \App\Support\Assets::url('assets/js/lang-switcher.js') ?>"></script>
 </body>
 </html>

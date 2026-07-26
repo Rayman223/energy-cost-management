@@ -24,6 +24,19 @@ final class Locale
     ];
 
     /**
+     * Paramètres de query reconduits par {@see self::switchUrl()} : l'état de
+     * page (onglet énergie, grille en cours d'édition/duplication, template
+     * importé) qu'il serait pénible de perdre en changeant de langue.
+     *
+     * Liste blanche volontaire : les paramètres à usage unique — bandeaux
+     * `?linked` / `?already` / `?link_error` de « Mon compte », déclencheur de
+     * téléchargement `?export` — ne doivent PAS être rejoués. Une future page
+     * qui oublierait d'y déclarer son état retombe sur l'ancien comportement
+     * (paramètre simplement perdu), jamais sur un effet de bord.
+     */
+    private const CARRIED_PARAMS = ['edit', 'duplicate', 'energy', 'template'];
+
+    /**
      * @param array<string, mixed> $config
      */
     public static function resolve(array $config, ?string $profileLocale = null): string
@@ -68,6 +81,26 @@ final class Locale
     public static function displayName(string $locale): string
     {
         return self::ENDONYMS[$locale] ?? strtoupper($locale);
+    }
+
+    /**
+     * URL de bascule vers `$locale`, pour les liens du sélecteur de langue.
+     *
+     * Conserve le chemin courant (URL relative réduite à la query) et reconduit
+     * l'état de page lu dans l'URL ({@see self::CARRIED_PARAMS}) : changer de
+     * langue depuis l'onglet gaz d'une grille en édition y revient.
+     *
+     * `$extra` sert aux valeurs que l'URL courante ne porte pas forcément — la
+     * cible post-connexion des pages de login, déjà validée côté route, qui
+     * arrive en POST quand l'authentification vient d'échouer.
+     *
+     * @param array<string, string> $extra Paramètres ajoutés (priment sur l'URL).
+     */
+    public static function switchUrl(string $locale, array $extra = []): string
+    {
+        $query = array_intersect_key($_GET, array_flip(self::CARRIED_PARAMS));
+
+        return '?' . http_build_query(array_merge($query, $extra, ['lang' => $locale]));
     }
 
     /**

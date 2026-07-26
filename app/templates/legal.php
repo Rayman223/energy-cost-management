@@ -76,16 +76,17 @@ $outbound = fn (string $url, string $labelKey): string =>
 <head>
 <?= $this->partial('_head', [
     'title' => $title . ' — ' . $this->t('app.title'),
-    'css'   => ['assets/css/page-standalone.css', 'assets/css/legal.css'],
+    'css'   => ['assets/css/page-standalone.css', 'assets/css/legal.css', 'assets/css/lang-switcher.css'],
     'adsenseClient' => $adsenseClient ?? null,
 ]) ?>
 </head>
 <body>
 <div class="wrap">
-  <p><a href="<?= $this->url() ?>"><?= $this->te('nav.back') ?></a>
+  <?php /* <div> et non <p> : <details> n'est pas du contenu de phrasé, un <p> serait auto-fermé avant. */ ?>
+  <div class="legal-topbar"><a href="<?= $this->url() ?>"><?= $this->te('nav.back') ?></a>
      &nbsp;·&nbsp;
-     <?php foreach ($available as $loc): ?><a href="?lang=<?= $this->e($loc) ?>"<?= $loc === $this->locale() ? ' class="lang-active"' : '' ?>><?= $this->e(strtoupper($loc)) ?></a> <?php endforeach; ?>
-  </p>
+     <?= $this->partial('_lang-switcher', ['available' => $available]) ?>
+  </div>
   <h1><?= $this->e($title) ?></h1>
   <p class="muted"><?= $this->te('legal.updated', ['date' => date('Y-m-d')]) ?></p>
 
@@ -221,5 +222,6 @@ $outbound = fn (string $url, string $labelKey): string =>
     <?php foreach ($titleKeys as $slug => $key): ?><?php if ($slug !== $page): ?> · <a href="<?= $this->url($slug) ?>"><?= $this->te($key) ?></a><?php endif; ?><?php endforeach; ?>
   </p>
 </div>
+<script defer src="<?= \App\Support\Assets::url('assets/js/lang-switcher.js') ?>"></script>
 </body>
 </html>

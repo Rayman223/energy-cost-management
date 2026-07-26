@@ -1,6 +1,10 @@
 /* Pages légales (CGU / confidentialité / cookies / mentions) — spécifique ; base commune dans page-standalone.css (#98). */
 .legal-nav { margin-top: 32px; }
 
+/* Ligne de tête « ← Retour · [sélecteur de langue] » : un <div> (le sélecteur est
+   un <details>, interdit dans un <p>) qui reprend les marges d'un paragraphe. */
+.legal-topbar { margin: 1em 0; }
+
 /* Mentions légales (#185) : un libellé, une valeur, une ligne par information. */
 .legal-identity { margin: 16px 0; }
 .legal-identity dt { font-weight: 600; margin-top: 12px; }

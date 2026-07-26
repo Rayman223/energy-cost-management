@@ -9,8 +9,8 @@
     background-size: 28px 28px;
   }
 
-  /* Layout (.wrap) et en-tête (header/.logo/.clock/.langs) mutualisés dans
-     app-header.css (#193). */
+  /* Layout (.wrap) et en-tête (header/.logo/.clock) mutualisés dans
+     app-header.css (#193) ; sélecteur de langue dans lang-switcher.css. */
 
   /* ── Section titles ─────────────────────────────────────────────────────── */
   .section-header {
@@ -299,7 +299,6 @@
   .gas-grid-history-only { grid-template-columns: 1fr; }
 
   /* ── Résidus d'attributs style inline migrés en classes (#98) ────────────── */
-  /* .langs mutualisé dans app-header.css (#193). */
   .deltas-range { font-family: var(--mono); font-size: .76rem; color: var(--muted); }
   .dot--amber     { background: var(--amber); }
   .dot--amber-dim { background: var(--amber); opacity: .6; }

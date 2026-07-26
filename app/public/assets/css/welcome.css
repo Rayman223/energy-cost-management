@@ -40,9 +40,7 @@ body {
 .logo-sub  { font-family: var(--mono); font-size: .76rem; color: var(--muted); letter-spacing: .08em; margin-top: 1px; }
 
 .landing-header-right { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
-.langs { font-size: .72rem; letter-spacing: .03em; }
-.langs a { text-decoration: none; margin: 0 3px; color: var(--muted); }
-.langs a.lang-active { color: var(--text-strong); font-weight: 700; }
+/* Sélecteur de langue (.lang-menu) : voir lang-switcher.css. */
 
 /* ── Hero ────────────────────────────────────────────────────────────────── */
 .hero { text-align: center; padding: 72px 0 56px; }

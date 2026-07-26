@@ -29,7 +29,7 @@ $csrf = \App\Security\Csrf::field();
 <head>
 <?= $this->partial('_head', [
     'title' => $this->t('account.title') . ' — ' . $this->t('app.title'),
-    'css'   => ['assets/css/app-header.css', 'assets/css/confirm.css', 'assets/css/backoffice.css', 'assets/css/account.css'],
+    'css'   => ['assets/css/app-header.css', 'assets/css/lang-switcher.css', 'assets/css/confirm.css', 'assets/css/backoffice.css', 'assets/css/account.css'],
     'adsenseClient' => $adsenseClient ?? null,
 ]) ?>
 </head>
@@ -342,6 +342,7 @@ foreach (\App\Service\Import\ImportMapping::UNITS as $type => $units) {
 ?>
 <script type="application/json" id="import-units"><?= json_encode($unitOptions, JSON_HEX_TAG | JSON_UNESCAPED_UNICODE) ?></script>
 <script defer src="<?= \App\Support\Assets::url('assets/js/header.js') ?>"></script>
+<script defer src="<?= \App\Support\Assets::url('assets/js/lang-switcher.js') ?>"></script>
 <script defer src="<?= \App\Support\Assets::url('assets/js/import.js') ?>"></script>
 <script defer src="<?= \App\Support\Assets::url('assets/js/confirm.js') ?>"></script>
 <script defer src="<?= \App\Support\Assets::url('assets/js/account.js') ?>"></script>

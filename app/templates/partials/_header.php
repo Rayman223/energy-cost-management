@@ -55,18 +55,7 @@ $navlink = function (string $page, string $url, string $icon, string $title) use
     <?= $navlink('account', $this->url('account'), '👤', $this->t('nav.account')) ?>
     <form method="post" action="<?= $this->url('auth/logout') ?>" class="logout-form"><?= \App\Security\Csrf::field() ?><button type="submit" class="theme-toggle" title="<?= $this->te('auth.sign_out') ?>">🚪</button></form>
     <?= $this->partial('discord-link', ['url' => $discordUrl ?? null]) ?>
-    <details class="lang-menu">
-      <summary class="lang-summary" title="<?= $this->te('common.language') ?>" aria-label="<?= $this->te('common.language') ?>">
-        <span class="lang-globe" aria-hidden="true">🌐</span>
-        <span class="lang-current"><?= $this->e(strtoupper($this->locale())) ?></span>
-        <span class="lang-caret" aria-hidden="true">▾</span>
-      </summary>
-      <div class="lang-menu-list">
-        <?php foreach ($available as $loc): ?>
-        <a href="?lang=<?= $this->e($loc) ?>" class="lang-item<?= $loc === $this->locale() ? ' lang-active' : '' ?>"><?= $this->e(\App\I18n\Locale::displayName($loc)) ?></a>
-        <?php endforeach; ?>
-      </div>
-    </details>
+    <?= $this->partial('_lang-switcher', ['available' => $available]) ?>
     <button type="button" class="theme-toggle" id="theme-toggle" aria-label="<?= $this->te('common.theme') ?>">🌙</button>
   </div>
 </header>

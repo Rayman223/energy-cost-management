@@ -1,8 +1,8 @@
   body { background: var(--bg); color: var(--text); font-family: var(--sans); min-height: 100vh;
          background-image: radial-gradient(circle, var(--dotgrid) 1px, transparent 1px); background-size: 28px 28px;
          transition: background-color .25s ease, color .25s ease; }
-  /* Largeur (.wrap) et en-tête (header/.logo/.header-right/.langs) mutualisés
-     dans app-header.css (#193). */
+  /* Largeur (.wrap) et en-tête (header/.logo/.header-right) mutualisés dans
+     app-header.css (#193) ; sélecteur de langue dans lang-switcher.css. */
   /* .back : lien « annuler » utilisé dans le contenu de la page (conservé). */
   .back { color:var(--blue); text-decoration:none; font-size:.85rem; font-family:var(--mono); }
   .back:hover { text-decoration:underline; }

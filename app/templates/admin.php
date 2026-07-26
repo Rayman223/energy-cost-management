@@ -18,7 +18,7 @@ $csrf = \App\Security\Csrf::field();
 <head>
 <?= $this->partial('_head', [
     'title' => $this->t('admin.title') . ' — ' . $this->t('app.title'),
-    'css'   => ['assets/css/app-header.css', 'assets/css/backoffice.css', 'assets/css/admin.css'],
+    'css'   => ['assets/css/app-header.css', 'assets/css/lang-switcher.css', 'assets/css/backoffice.css', 'assets/css/admin.css'],
     'adsenseClient' => $adsenseClient ?? null,
 ]) ?>
 </head>
@@ -102,5 +102,6 @@ $csrf = \App\Security\Csrf::field();
   </div>
 </div>
 <script defer src="<?= \App\Support\Assets::url('assets/js/header.js') ?>"></script>
+<script defer src="<?= \App\Support\Assets::url('assets/js/lang-switcher.js') ?>"></script>
 </body>
 </html>

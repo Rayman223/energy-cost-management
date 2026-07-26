@@ -65,7 +65,7 @@ $deltaBadge = function (?float $pct, bool $lowerIsBetter, bool $isNew = false): 
 <head>
 <?= $this->partial('_head', [
     'title'       => 'Manage Energy',
-    'css'         => ['assets/css/app-header.css', 'assets/css/dashboard.css'],
+    'css'         => ['assets/css/app-header.css', 'assets/css/lang-switcher.css', 'assets/css/dashboard.css'],
     'preconnects' => ['https://cdn.jsdelivr.net'],
     'adsenseClient' => $adsenseClient ?? null,
 ]) ?>
@@ -290,6 +290,7 @@ $deltaBadge = function (?float $pct, bool $lowerIsBetter, bool $isNew = false): 
 </div><!-- /wrap -->
 
 <script defer src="<?= \App\Support\Assets::url('assets/js/header.js') ?>"></script>
+<script defer src="<?= \App\Support\Assets::url('assets/js/lang-switcher.js') ?>"></script>
 <script defer src="<?= \App\Support\Assets::url('assets/js/tz.js') ?>"></script>
 <script defer src="<?= \App\Support\Assets::url('assets/js/dashboard.js') ?>"></script>
 </body>

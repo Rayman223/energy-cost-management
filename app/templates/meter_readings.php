@@ -15,7 +15,7 @@ $now = date('H:i');
 <head>
 <?= $this->partial('_head', [
     'title' => $this->t('meter.title') . ' — Manage Energy',
-    'css'   => ['assets/css/app-header.css', 'assets/css/dashboard.css', 'assets/css/confirm.css'],
+    'css'   => ['assets/css/app-header.css', 'assets/css/lang-switcher.css', 'assets/css/dashboard.css', 'assets/css/confirm.css'],
     'adsenseClient' => $adsenseClient ?? null,
 ]) ?>
 </head>
@@ -138,6 +138,7 @@ $now = date('H:i');
 ?>
 <script type="application/json" id="meter-data"><?= json_encode($meterData, JSON_HEX_TAG | JSON_UNESCAPED_UNICODE) ?></script>
 <script defer src="<?= \App\Support\Assets::url('assets/js/header.js') ?>"></script>
+<script defer src="<?= \App\Support\Assets::url('assets/js/lang-switcher.js') ?>"></script>
 <script defer src="<?= \App\Support\Assets::url('assets/js/tz.js') ?>"></script>
 <script defer src="<?= \App\Support\Assets::url('assets/js/confirm.js') ?>"></script>
 <script defer src="<?= \App\Support\Assets::url('assets/js/meter-readings.js') ?>"></script>

@@ -63,7 +63,7 @@ $energyLabels = [
 <head>
 <?= $this->partial('_head', [
     'title' => $this->t('tariffs.title') . ' — ' . $this->t('app.title'),
-    'css'   => ['assets/css/app-header.css', 'assets/css/confirm.css', 'assets/css/tariffs.css'],
+    'css'   => ['assets/css/app-header.css', 'assets/css/lang-switcher.css', 'assets/css/confirm.css', 'assets/css/tariffs.css'],
     'adsenseClient' => $adsenseClient ?? null,
 ]) ?>
 </head>
@@ -479,6 +479,7 @@ $energyLabels = [
 </div>
 
 <script defer src="<?= \App\Support\Assets::url('assets/js/header.js') ?>"></script>
+<script defer src="<?= \App\Support\Assets::url('assets/js/lang-switcher.js') ?>"></script>
 <script defer src="<?= \App\Support\Assets::url('assets/js/confirm.js') ?>"></script>
 <script defer src="<?= \App\Support\Assets::url('assets/js/tariffs.js') ?>" data-next-index="<?= $nextIndex ?>"></script>
 </body>

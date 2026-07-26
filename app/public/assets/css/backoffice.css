@@ -2,7 +2,8 @@
    inline d'account.php / admin.php (#98). Chargé AVANT account.css / admin.css :
    ne contient que les règles identiques aux deux pages. */
 body { font-family: 'Syne', system-ui, sans-serif; background: var(--bg); color: var(--text); margin: 0; }
-/* En-tête (header/.logo-text/.logo-sub/.langs) mutualisé dans app-header.css (#193). */
+/* En-tête (header/.logo-text/.logo-sub) mutualisé dans app-header.css (#193) ;
+   sélecteur de langue dans lang-switcher.css. */
 a { color: var(--blue); }
 .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 20px; margin-bottom: 20px; }
 .card h2 { margin: 0 0 4px; font-size: 1.05rem; }

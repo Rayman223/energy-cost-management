@@ -45,17 +45,3 @@
   tick();
   setInterval(tick, 1000);
 })();
-
-// ── Sélecteur de langue : fermeture au clic extérieur / Échap ────────────────
-// Amélioration progressive du <details class="lang-menu"> : sans ce code le menu
-// reste pleinement fonctionnel (ouverture/fermeture au clic sur le résumé).
-(function langMenu() {
-  const menu = document.querySelector('details.lang-menu');
-  if (!menu) return;
-  document.addEventListener('click', (e) => {
-    if (menu.open && !menu.contains(e.target)) menu.open = false;
-  });
-  document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && menu.open) menu.open = false;
-  });
-})();

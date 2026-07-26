@@ -1,0 +1,40 @@
+/* ── Sélecteur de langue (menu déroulant natif <details>, sans JS) ───────────
+   Rendu par le partial templates/partials/_lang-switcher.php, mutualisé entre
+   l'en-tête applicatif et les pages hors coquille app (connexion, accueil
+   public, pages légales). Ne dépend que des tokens de thème (tokens.css),
+   donc chargeable sur n'importe quelle page. */
+
+/* inline-block + vertical-align : permet l'usage au fil du texte (ligne de tête
+   des pages légales) sans rien changer dans les conteneurs flex. */
+.lang-menu { display: inline-block; position: relative; vertical-align: middle; }
+.lang-summary {
+  list-style: none; cursor: pointer;
+  display: inline-flex; align-items: center; gap: 6px;
+  height: 36px; padding: 0 10px; border-radius: 8px;
+  border: 1px solid var(--border2); background: var(--surface);
+  color: var(--muted); font-family: var(--mono); font-size: .78rem; line-height: 1;
+  transition: color .15s, border-color .15s, background .15s;
+}
+.lang-summary::-webkit-details-marker { display: none; } /* masque le triangle natif (WebKit) */
+.lang-summary:hover { color: var(--text); border-color: var(--amber); }
+.lang-summary:focus-visible { outline: 2px solid var(--amber); outline-offset: 2px; }
+.lang-caret { font-size: .7rem; transition: transform .15s; }
+.lang-menu[open] .lang-caret { transform: rotate(180deg); }
+
+.lang-menu-list {
+  position: absolute; right: 0; top: calc(100% + 6px); z-index: 20;
+  display: flex; flex-direction: column; min-width: 150px;
+  padding: 6px; border-radius: 10px;
+  border: 1px solid var(--border2); background: var(--surface);
+  box-shadow: 0 8px 24px rgba(0,0,0,.18);
+}
+/* Ouverture vers le haut : pour un sélecteur placé en bas de bloc (pages de
+   connexion), dont la liste serait sinon coupée par le bas de la fenêtre. */
+.lang-menu-up .lang-menu-list { top: auto; bottom: calc(100% + 6px); }
+
+.lang-item {
+  padding: 8px 10px; border-radius: 6px;
+  text-decoration: none; color: var(--text); font-size: .82rem;
+}
+.lang-item:hover { background: var(--surface2); color: var(--text-strong); }
+.lang-item.lang-active { color: var(--amber); font-weight: 700; }

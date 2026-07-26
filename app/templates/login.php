@@ -12,7 +12,7 @@
 <head>
 <?= $this->partial('_head', [
     'title' => $this->t('auth.sign_in') . ' — ' . $this->t('app.title'),
-    'css'   => ['assets/css/login.css'],
+    'css'   => ['assets/css/login.css', 'assets/css/lang-switcher.css'],
 ]) ?>
 </head>
 <body>
@@ -34,11 +34,14 @@
       <p class="error"><?= $this->e($error) ?></p>
     <?php endif; ?>
 
-    <p class="login-langs">
-      <?php foreach ($available as $loc): ?>
-        <a href="?lang=<?= $this->e($loc) ?>&next=<?= rawurlencode($next) ?>"<?= $loc === $this->locale() ? ' class="lang-active"' : '' ?>><?= $this->e(strtoupper($loc)) ?></a>
-      <?php endforeach; ?>
-    </p>
+    <?php /* <div> et non <p> : <details> n'est pas du contenu de phrasé, un <p> serait auto-fermé avant. */ ?>
+    <?php /* `next` explicite : après un POST raté il vient de $_POST, pas de l'URL. */ ?>
+    <div class="login-langs"><?= $this->partial('_lang-switcher', [
+        'available' => $available,
+        'direction' => 'up',
+        'params'    => ['next' => $next],
+    ]) ?></div>
   </form>
+<script defer src="<?= \App\Support\Assets::url('assets/js/lang-switcher.js') ?>"></script>
 </body>
 </html>

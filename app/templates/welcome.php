@@ -15,7 +15,7 @@
 <head>
 <?= $this->partial('_head', [
     'title' => $this->t('app.title'),
-    'css'   => ['assets/css/welcome.css'],
+    'css'   => ['assets/css/welcome.css', 'assets/css/lang-switcher.css'],
     'adsenseClient' => $adsenseClient ?? null,
 ]) ?>
 </head>
@@ -32,7 +32,7 @@
     </div>
     <div class="landing-header-right">
       <?= $this->partial('discord-link', ['url' => $discordUrl ?? null]) ?>
-      <span class="langs"><?php foreach ($available as $loc): ?><a href="?lang=<?= $this->e($loc) ?>"<?= $loc === $this->locale() ? ' class="lang-active"' : '' ?>><?= $this->e(strtoupper($loc)) ?></a><?php endforeach; ?></span>
+      <?= $this->partial('_lang-switcher', ['available' => $available]) ?>
       <button type="button" class="theme-toggle" id="theme-toggle" aria-label="<?= $this->te('common.theme') ?>">🌙</button>
     </div>
   </header>
@@ -76,5 +76,6 @@
   </footer>
 
 </div>
+<script defer src="<?= \App\Support\Assets::url('assets/js/lang-switcher.js') ?>"></script>
 </body>
 </html>
