@@ -241,6 +241,65 @@ final class TariffCalculatorServiceTest extends TestCase
         self::assertNotNull($this->lineAmount($cheaper, 'energy_dynamic'));
     }
 
+    /**
+     * Les paramètres de la formule dynamique (#228) ne sont jamais un poste de coût, dans
+     * AUCUN mode. Sans ce filtre, un coefficient 1,08 serait facturé comme 1,08 €/kWh :
+     * +162 € sur 150 kWh — de très loin le premier poste de la facture.
+     */
+    public function testSpotFormulaLinesNeverContributeToTheTotal(): void
+    {
+        $withSpot = $this->electricityTariff();
+        $withSpot['spot_coefficient'] = 1.08;
+        $withSpot['spot_offset']      = 0.0145;
+
+        $plain   = $this->calcTariff($this->electricityTariff());
+        $spotted = $this->calcTariff($withSpot);
+
+        // Tarif fixe : total inchangé, et aucune ligne spot dans le détail.
+        $fixedPlain   = $this->calc->calculateElectricityCost(100.0, 50.0, 20.0, 10.0, 30, $plain);
+        $fixedSpotted = $this->calc->calculateElectricityCost(100.0, 50.0, 20.0, 10.0, 30, $spotted);
+        self::assertEqualsWithDelta($fixedPlain['total'], $fixedSpotted['total'], self::DELTA);
+        self::assertNull($this->lineAmount($fixedSpotted, 'spot_coefficient'));
+        self::assertNull($this->lineAmount($fixedSpotted, 'spot_offset'));
+
+        // Tarif dynamique : idem, le coefficient est déjà intégré à $dynamicEnergyTtc.
+        $dynPlain   = $this->calc->calculateElectricityCostDynamic(100.0, 50.0, 20.0, 10.0, 30, $plain, 14.0);
+        $dynSpotted = $this->calc->calculateElectricityCostDynamic(100.0, 50.0, 20.0, 10.0, 30, $spotted, 14.0);
+        self::assertEqualsWithDelta($dynPlain['total'], $dynSpotted['total'], self::DELTA);
+        self::assertNull($this->lineAmount($dynSpotted, 'spot_coefficient'));
+        self::assertNull($this->lineAmount($dynSpotted, 'spot_offset'));
+    }
+
+    /**
+     * Même garantie sur une grille GAZ : les clés spot y sont typées comme sur
+     * l'électricité (cf. TariffLineCatalog::kindFor), donc inertes. Mal typées, elles
+     * retomberaient sur per_kwh et un coefficient 1,08 serait facturé 1,08 €/kWh.
+     */
+    public function testSpotFormulaLinesAreInertOnAGasGrid(): void
+    {
+        $withSpot = ['energy' => 0.05, 'subscription' => 3.0, 'spot_coefficient' => 1.08, 'spot_offset' => 0.0145];
+
+        $plain   = $this->calc->calculateGasCost(1500.0, 30, $this->calcTariff(['energy' => 0.05, 'subscription' => 3.0], 'gas'));
+        $spotted = $this->calc->calculateGasCost(1500.0, 30, $this->calcTariff($withSpot, 'gas'));
+
+        self::assertEqualsWithDelta($plain['total'], $spotted['total'], self::DELTA);
+        self::assertNull($this->lineAmount($spotted, 'spot_coefficient'));
+    }
+
+    /** Un coefficient ne doit pas non plus gonfler l'économie d'auto-consommation solaire. */
+    public function testSpotFormulaLinesAreExcludedFromSolarSavings(): void
+    {
+        $withSpot = $this->electricityTariff();
+        $withSpot['spot_coefficient'] = 1.08;
+        $withSpot['spot_offset']      = 0.0145;
+
+        $plain   = $this->calc->calculateElectricityCost(100.0, 50.0, 20.0, 10.0, 30, $this->calcTariff($this->electricityTariff()), 80.0);
+        $spotted = $this->calc->calculateElectricityCost(100.0, 50.0, 20.0, 10.0, 30, $this->calcTariff($withSpot), 80.0);
+
+        self::assertEqualsWithDelta($plain['solar_savings_rate'], $spotted['solar_savings_rate'], self::DELTA);
+        self::assertEqualsWithDelta($plain['solar_savings'], $spotted['solar_savings'], self::DELTA);
+    }
+
     public function testGasFullBreakdown(): void
     {
         $tariff = [

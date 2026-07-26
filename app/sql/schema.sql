@@ -73,8 +73,10 @@ CREATE TABLE IF NOT EXISTS tariff_template_fields (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- ── Prix dynamiques day-ahead (marché spot, ex. ENTSO-E) ─────────────────
--- price_eur_kwh = prix spot BRUT HTVA (€/kWh) ; marge fournisseur et TVA sont
--- appliquées au moment du calcul, pas au stockage.
+-- price_eur_kwh = prix spot BRUT HTVA (€/kWh) : l'index de marché, jamais le prix
+-- facturé. La formule du contrat (coefficient × spot + marge, cf. App\Domain\SpotFormula)
+-- et la TVA sont appliquées au moment du calcul, pas au stockage — les paramètres
+-- vivent dans tariff_grid_lines (kinds spot_coefficient / spot_offset).
 CREATE TABLE IF NOT EXISTS dynamic_prices (
     id             BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     energy_type    ENUM('electricity') NOT NULL DEFAULT 'electricity',
@@ -135,8 +137,10 @@ CREATE TABLE IF NOT EXISTS user_profiles (
     currency     CHAR(3)     NOT NULL DEFAULT 'EUR' COMMENT 'Devise ISO 4217',
     bidding_zone VARCHAR(32) NULL COMMENT 'Zone de marché ENTSO-E',
     pricing_mode ENUM('fixed', 'dynamic_hourly', 'dynamic_quarter') NOT NULL DEFAULT 'fixed' COMMENT 'Type de tarification électricité (fixe / dynamique 1h / dynamique 15min)',
-    vat_rate     DECIMAL(5,2)  NOT NULL DEFAULT 21.00 COMMENT 'Taux de TVA en % applique au prix spot dynamique',
-    supplier_markup_per_kwh DECIMAL(12,7) NOT NULL DEFAULT 0.0000000 COMMENT 'Marge fournisseur EUR/kWh ajoutee au prix spot TTC',
+    -- Pas de vat_rate ici : source unique = tariff_grids.vat_rate, versionnee par
+    -- valid_from/valid_to (#232). supplier_markup_per_kwh subsiste comme REPLI
+    -- lorsqu'aucune ligne spot_offset n'existe en grille (#228).
+    supplier_markup_per_kwh DECIMAL(12,7) NOT NULL DEFAULT 0.0000000 COMMENT 'Marge fournisseur EUR/kWh ajoutee au prix spot TTC (repli sans ligne spot_offset)',
     locale       VARCHAR(8)  NOT NULL DEFAULT 'fr',
     CONSTRAINT fk_user_profiles_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

@@ -29,8 +29,8 @@
 
 // ── Pays → préremplit la devise (page compte, #188) ──────────────────────────
 // Aligné sur le formulaire tarifs : sélectionner un pays met à jour la devise
-// (ajoutée comme option si absente). La devise reste modifiable ensuite. Le champ
-// TVA n'existe pas dans ce formulaire → garde défensive sur `[data-vat-input]`.
+// (ajoutée comme option si absente). La devise reste modifiable ensuite. Pas de
+// préremplissage de TVA ici : ce champ n'appartient qu'au formulaire tarifs (#232).
 (function countryToCurrency() {
   'use strict';
 
@@ -40,10 +40,6 @@
   countrySelect.addEventListener('change', function () {
     const opt = countrySelect.options[countrySelect.selectedIndex];
     if (!opt) return;
-
-    const vat = opt.dataset.vat;
-    const vatInput = document.querySelector('[data-vat-input]');
-    if (vat && vatInput) vatInput.value = vat;
 
     const cur = opt.dataset.currency;
     const curSelect = document.querySelector('[data-currency-select]');

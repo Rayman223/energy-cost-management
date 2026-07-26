@@ -16,6 +16,7 @@ use App\Repository\UserRepository;
 use App\Security\AuthGuard;
 use App\Security\Csrf;
 use App\Security\UserContext;
+use App\Service\SpotFormulaResolver;
 use App\Support\Adsense;
 use App\Support\DiscordLink;
 use App\Support\DynamicPricing;
@@ -119,6 +120,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                 $kind = ComponentKind::tryFrom((string) ($row['kind'] ?? ''));
                 if ($kind === null) throw new \InvalidArgumentException($view->t('tariffs.invalid_kind'));
+
+                // Le coefficient d'indexation multiplie le prix spot (#228) : hors bornes,
+                // il annulerait le coût énergie (≤ 0) ou trahirait un pourcentage saisi tel
+                // quel (108 au lieu de 1,08). Refus explicite plutôt que repli silencieux.
+                if ($kind === ComponentKind::SpotCoefficient
+                    && ($val <= SpotFormulaResolver::COEFFICIENT_MIN || $val > SpotFormulaResolver::COEFFICIENT_MAX)) {
+                    throw new \InvalidArgumentException($view->t('tariffs.invalid_coefficient', [
+                        'max' => (string) SpotFormulaResolver::COEFFICIENT_MAX,
+                    ]));
+                }
 
                 $label = trim((string) ($row['label'] ?? ''));
                 $key   = strtolower(trim((string) ($row['key'] ?? '')));

@@ -88,6 +88,23 @@ final class TariffControllerTest extends TestCase
         ], $repo->savedGrid['lines']);
     }
 
+    /** L'API plate accepte aussi la formule dynamique (#228), kind déduit du catalogue. */
+    public function testSaveMapsSpotFormulaLines(): void
+    {
+        $repo = new FakeTariffRepository();
+
+        $body = $this->validBody();
+        $body['lines'] = ['spot_coefficient' => 1.08, 'spot_offset' => 0.0145];
+
+        (new TariffController($repo))->save($this->post($body));
+
+        self::assertNotNull($repo->savedGrid);
+        self::assertSame([
+            ['key' => 'spot_coefficient', 'amount' => 1.08, 'kind' => 'spot_coefficient', 'label' => null, 'category' => null],
+            ['key' => 'spot_offset', 'amount' => 0.0145, 'kind' => 'spot_offset', 'label' => null, 'category' => null],
+        ], $repo->savedGrid['lines']);
+    }
+
     public function testIndexMapsGridsByEnergyType(): void
     {
         $repo = new FakeTariffRepository();

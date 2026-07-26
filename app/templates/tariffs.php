@@ -366,6 +366,9 @@ $energyLabels = [
               // sont ignorées au calcul (prix ENTSO-E) → grisées + note, mais conservées
               // (valeurs toujours postées) pour rebasculer en fixe sans re-saisie.
               $ignoredInDynamic = $isDynamic && ComponentKind::fromStringOrDefault($f['kind'])->isSupplierEnergy();
+              // Cas symétrique (#228) : coefficient et marge sur le prix de marché ne
+              // servent qu'en tarif dynamique → grisés en tarif fixe, également conservés.
+              $ignoredInFixed = !$isDynamic && ComponentKind::fromStringOrDefault($f['kind'])->isSpotFormula();
             ?>
             <?php
               // Toute ligne est pleinement éditable (libellé, type, catégorie,
@@ -377,7 +380,7 @@ $energyLabels = [
               $kindListed  = false;
               foreach ($kindOptions as $groupOpts) { if (isset($groupOpts[$currentKind->value])) { $kindListed = true; break; } }
             ?>
-            <div class="form-row line-item is-custom<?= $ignoredInDynamic ? ' is-dynamic-ignored' : '' ?>">
+            <div class="form-row line-item is-custom<?= $ignoredInDynamic || $ignoredInFixed ? ' is-dynamic-ignored' : '' ?>">
               <input type="hidden" name="lines[<?= $i ?>][key]" value="<?= $this->e($f['key']) ?>">
               <label class="form-label">
                 <input type="text" name="lines[<?= $i ?>][label]" class="form-input line-label-input" placeholder="<?= $this->e($this->t('tariffs.field_label')) ?>" value="<?= $this->e($f['label']) ?>">
@@ -404,6 +407,7 @@ $energyLabels = [
                 <button type="button" class="btn btn-ghost btn-sm line-remove" data-remove-line aria-label="<?= $this->e($this->t('tariffs.remove_field')) ?>">×</button>
               </div>
               <?php if ($ignoredInDynamic): ?><p class="dynamic-ignored-hint"><?= $this->te('tariffs.energy_ignored_dynamic') ?></p><?php endif; ?>
+              <?php if ($ignoredInFixed): ?><p class="dynamic-ignored-hint"><?= $this->te('tariffs.spot_ignored_fixed') ?></p><?php endif; ?>
             </div>
             <?php endforeach; ?>
             <div class="form-row full add-field-row">

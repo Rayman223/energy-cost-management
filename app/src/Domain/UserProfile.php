@@ -10,9 +10,12 @@ namespace App\Domain;
  *
  * Objet-valeur immuable couvrant la lecture ET l'écriture du profil
  * (`UserRepository::getProfile` / `updateProfile`). Simple porteur de données :
- * le bornage (TVA, marge) et la normalisation du mode de tarification restent du
+ * le bornage (marge) et la normalisation du mode de tarification restent du
  * ressort du repository — voir la note sur l'asymétrie lecture/écriture dans
  * `UserRepository::updateProfile`.
+ *
+ * Pas de taux de TVA ici : sa source unique est `tariff_grids.vat_rate` (#232),
+ * ce qui le versionne par période de validité de la grille.
  */
 final class UserProfile
 {
@@ -29,7 +32,6 @@ final class UserProfile
         public readonly string $currency,
         public readonly ?string $biddingZone,
         public readonly string $pricingMode,
-        public readonly float $vatRate,
         public readonly float $supplierMarkupPerKwh,
         public readonly string $locale,
     ) {
@@ -47,7 +49,6 @@ final class UserProfile
             currency: 'EUR',
             biddingZone: null,
             pricingMode: 'fixed',
-            vatRate: 21.0,
             supplierMarkupPerKwh: 0.0,
             locale: 'fr',
         );

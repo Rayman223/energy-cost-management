@@ -11,7 +11,7 @@ use App\Domain\User;
  * @var User|null   $user
  * @var list<array{id:int,provider:string,label:string,is_primary:bool,created_at:string}> $identities
  * @var list<array{key:string,label:string}> $linkableProviders
- * @var array{country:?string,timezone:string,currency:string,bidding_zone:?string,pricing_mode:string,vat_rate:float,supplier_markup_per_kwh:float,locale:string} $profile
+ * @var array{country:?string,timezone:string,currency:string,bidding_zone:?string,pricing_mode:string,supplier_markup_per_kwh:float,locale:string} $profile
  * @var list<array{id:int,name:string,prefix:string,scopes:string,last_used_at:?string,created_at:string,revoked_at:?string}> $tokens
  * @var list<array{key:string,enabled:bool,status:\App\Integration\IntegrationStatus}> $integrations
  * @var list<string> $available
@@ -85,7 +85,6 @@ $csrf = \App\Security\Csrf::field();
             <?php endif; ?>
             <?php foreach ($countries as $iso => $cname): ?>
               <option value="<?= $this->e($iso) ?>"
-                      data-vat="<?= $this->e((string) (\App\Domain\EuropeanCountries::vatRate($iso) ?? '')) ?>"
                       data-currency="<?= $this->e((string) (\App\Domain\EuropeanCountries::currencyOf($iso) ?? '')) ?>"
                       <?= $profile->country === $iso ? 'selected' : '' ?>><?= $this->e($cname) ?></option>
             <?php endforeach; ?>
@@ -145,9 +144,8 @@ $csrf = \App\Security\Csrf::field();
         // invalide/illisible dans un input number.
         $num = static fn (float $v, int $d): string => rtrim(rtrim(number_format($v, $d, '.', ''), '0'), '.');
       ?>
-      <label><?= $this->te('account.vat_rate') ?></label>
-      <input type="number" name="vat_rate" step="0.01" min="0" max="100" value="<?= $this->e($num($profile->vatRate, 2)) ?>">
-      <p class="hint"><?= $this->te('account.vat_rate_hint') ?></p>
+      <?php // Pas de champ TVA ici : le taux se saisit sur la grille tarifaire, seule
+            // source depuis #232 — l'y dupliquer laisserait deux valeurs divergentes. ?>
       <label><?= $this->te('account.supplier_markup') ?></label>
       <input type="number" name="supplier_markup_per_kwh" step="0.0000001" min="-1" max="1" value="<?= $this->e($num($profile->supplierMarkupPerKwh, 7)) ?>">
       <p class="hint"><?= $this->te('account.supplier_markup_hint') ?></p>

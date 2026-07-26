@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Service;
 
+use App\Domain\SpotFormula;
 use App\Domain\TariffGrid;
 use App\Domain\TariffSegment;
 use App\Repository\Contract\DynamicPriceRepositoryInterface;
@@ -21,6 +22,11 @@ use DateTimeZone;
  *  1. Fetch monthly/hourly deltas from the register model (ElectricityReadingRepository).
  *  2. Resolve active tariff grids from DB (TariffRepository).
  *  3. Delegate cost maths to TariffCalculatorService.
+ *
+ * Le taux de TVA vient TOUJOURS de la grille de la sous-période concernée
+ * (`tariff_grids.vat_rate`) : source unique depuis #232, versionnée par
+ * valid_from/valid_to, aussi bien pour la décomposition HTVA des montants TTC que
+ * pour la TVA du prix spot.
  */
 final class CostCalculationService
 {
@@ -34,11 +40,11 @@ final class CostCalculationService
      *        ('fixed' | 'dynamic_hourly' | 'dynamic_quarter'). Sélectionne la
      *        résolution des prix dynamiques ; le calcul au quart d'heure est
      *        différé → 'dynamic_quarter' retombe sur l'horaire pour l'instant.
-     * @param float $vatRatePercent TVA appliquée au prix spot, EN POURCENTAGE
-     *        (21.0 = 21 %), par utilisateur (user_profiles.vat_rate). Même unité
-     *        que tariff_grids.vat_rate — cf. #153, unification d'unité.
      * @param float $supplierMarkupPerKwh Marge fournisseur €/kWh ajoutée au prix
      *        spot TTC, par utilisateur (user_profiles.supplier_markup_per_kwh).
+     *        Sert de REPLI depuis #228 : une grille portant des lignes spot_coefficient
+     *        ou spot_offset fait autorité et ce champ est alors ignoré
+     *        (cf. SpotFormulaResolver).
      * @param string $tariffTimezone Fuseau (IANA) du contrat servant à borner la
      *        bascule tarifaire jour/nuit (T1/T2). Les clés horaires étant stockées
      *        en UTC (cf. App\Support\Dates), on reconvertit vers ce fuseau avant de
@@ -55,11 +61,11 @@ final class CostCalculationService
         private readonly bool $dynamicEnabled = false,
         private readonly ?MeterReadingRepositoryInterface $waterRepo = null,
         private readonly string $pricingMode = 'fixed',
-        private readonly float $vatRatePercent = 21.0,
         private readonly float $supplierMarkupPerKwh = 0.0,
         private readonly string $tariffTimezone = 'Europe/Brussels',
         private readonly TariffPeriodSplitter $splitter = new TariffPeriodSplitter(),
         private readonly CostBreakdownAggregator $aggregator = new CostBreakdownAggregator(),
+        private readonly SpotFormulaResolver $formulaResolver = new SpotFormulaResolver(),
     ) {
     }
 
@@ -526,14 +532,25 @@ final class CostCalculationService
      */
     private function dominantGrid(array $segments): TariffGrid
     {
-        $best = $segments[0];
-        foreach ($segments as $segment) {
-            if ($segment->days > $best->days) {
-                $best = $segment;
+        return $segments[$this->dominantIndex($segments)]->grid;
+    }
+
+    /**
+     * Index de la sous-période la plus longue. Extrait de {@see dominantGrid()} pour que
+     * la formule dynamique exposée (#228) désigne la même sous-période que `tariff_rates`.
+     *
+     * @param list<TariffSegment> $segments
+     */
+    private function dominantIndex(array $segments): int
+    {
+        $best = 0;
+        foreach ($segments as $i => $segment) {
+            if ($segment->days > $segments[$best]->days) {
+                $best = $i;
             }
         }
 
-        return $best->grid;
+        return $best;
     }
 
     /**
@@ -633,6 +650,10 @@ final class CostCalculationService
      * composants fixes du tarif classique. Repli sur le tarif classique pour les
      * heures sans prix dynamique (couverture exposée via coverage_pct).
      *
+     * Le prix spot brut n'est jamais facturé tel quel : la formule du contrat
+     * (coefficient × spot + marge) est appliquée heure par heure via SpotFormula (#228),
+     * avec des paramètres résolus par sous-période tarifaire.
+     *
      * @param array<string, mixed> $deltas
      * @param list<TariffSegment> $segments
      * @return array<string, mixed>
@@ -667,8 +688,13 @@ final class CostCalculationService
             return ['available' => false, 'reason' => 'Aucun prix dynamique pour cette période (lancez cron_dynamic_prices).'];
         }
 
-        $vatRatePercent = $this->vatRatePercent;
-        $markup         = $this->supplierMarkupPerKwh;
+        // Formule d'indexation par sous-période (#228) : coefficient et marge sont des
+        // lignes de la grille, donc ils changent avec elle. Résolu une fois par segment
+        // plutôt qu'à chaque heure.
+        $formulas = array_map(
+            fn (TariffSegment $s): SpotFormula => $this->formulaResolver->resolve($s->grid, $this->supplierMarkupPerKwh),
+            $segments,
+        );
 
         $energyTtc  = 0.0;
         $totalKwh   = 0.0;
@@ -687,7 +713,13 @@ final class CostCalculationService
             $segmentIndex = $this->segmentIndexForHour($segments, $hour);
 
             if (isset($prices[$hour])) {
-                $rateTtc     = $prices[$hour] * (1.0 + $vatRatePercent / 100.0) + $markup;
+                // TVA de la grille de CETTE sous-période (#232) : source unique du taux,
+                // et versionnée — un passage de 21 % à 6 % en cours de période s'applique
+                // à partir de sa date, sans réécrire l'avant.
+                $rateTtc     = $formulas[$segmentIndex]->rateTtc(
+                    $prices[$hour],
+                    $segments[$segmentIndex]->grid->vatRate,
+                );
                 $coveredKwh += $kwh;
             } else {
                 // Heure sans prix dynamique → repli sur le tarif fournisseur classique
@@ -733,6 +765,10 @@ final class CostCalculationService
             $daily
         ));
 
+        // Sous-période la plus longue : les champs qui ne peuvent porter qu'une valeur
+        // (tariff_rates, formula) désignent tous la même, pour rester cohérents entre eux.
+        $dominant = $this->dominantIndex($segments);
+
         return [
             'available'      => true,
             'period_from'    => $deltas['from'],
@@ -743,15 +779,35 @@ final class CostCalculationService
             'price_source'   => $priceSource,
             'tariff_name'    => $this->tariffName($segments),
             'currency'        => $segments[0]->grid->currency,
-            'tariff_rates'   => $this->dominantGrid($segments)->toTariffArray(),
+            'tariff_rates'   => $segments[$dominant]->grid->toTariffArray(),
             'tariff_segments' => $this->segmentsMeta($segments, $breakdowns),
             'deltas'         => $deltas,
+            'formula'        => $this->formulaMeta($segments[$dominant], $formulas[$dominant]),
             'energy_dynamic' => round($energyTtc, 2),
             'avg_price_kwh'  => $totalKwh > 0.0 ? round($energyTtc / $totalKwh, 6) : null,
             'coverage_pct'   => $totalKwh > 0.0 ? round($coveredKwh / $totalKwh * 100.0, 1) : 0.0,
             'matched_kwh'    => round($totalKwh, 3),
             'cost'           => $this->aggregator->aggregate($breakdowns),
             'daily'          => $dailyOut,
+        ];
+    }
+
+    /**
+     * Formule d'indexation exposée au dashboard, pour que l'utilisateur voie ce qui a été
+     * appliqué au prix de marché (#228). `offset_source` dit d'où vient la marge (grille
+     * ou repli profil) ; `coefficient_rejected` signale un coefficient hors bornes
+     * neutralisé, cas où la formule appliquée ne correspond à rien de saisi.
+     *
+     * @return array<string, float|string|bool>
+     */
+    private function formulaMeta(TariffSegment $segment, SpotFormula $formula): array
+    {
+        return [
+            'spot_coefficient'     => round($formula->coefficient, 4),
+            'spot_offset_ttc'      => round($formula->offsetTtc, 7),
+            'vat_rate'             => $segment->grid->vatRate,
+            'offset_source'        => $formula->offsetSource,
+            'coefficient_rejected' => $formula->coefficientRejected,
         ];
     }
 

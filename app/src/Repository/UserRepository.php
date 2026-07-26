@@ -163,10 +163,10 @@ final class UserRepository implements UserRepositoryInterface
      * Met à jour le profil de l'utilisateur (crée la ligne si absente).
      *
      * NOTE d'asymétrie assumée : la normalisation de `pricingMode` (liste blanche
-     * `UserProfile::PRICING_MODES`) et le bornage de `vatRate`/`supplierMarkupPerKwh`
-     * vivent ici, côté écriture — dernière ligne de défense avant l'INSERT. Le DTO
+     * `UserProfile::PRICING_MODES`) et le bornage de `supplierMarkupPerKwh` vivent
+     * ici, côté écriture — dernière ligne de défense avant l'INSERT. Le DTO
      * `UserProfile` reste un simple porteur de données, et `getProfile` ne borne
-     * PAS vat/markup en lecture : déplacer ce garde dans le constructeur changerait
+     * PAS la marge en lecture : déplacer ce garde dans le constructeur changerait
      * le comportement de lecture.
      */
     public function updateProfile(int $userId, UserProfile $profile): void
@@ -174,19 +174,17 @@ final class UserRepository implements UserRepositoryInterface
         $pricingMode = in_array($profile->pricingMode, UserProfile::PRICING_MODES, true)
             ? $profile->pricingMode
             : 'fixed';
-        // Bornage côté repository : TVA en % ∈ [0,100] (unité de tariff_grids.vat_rate),
-        // marge ∈ [-1,1] €/kWh (négatif = remise). Garde symétrique aux deux champs
-        // pour qu'aucun appelant ne puisse déborder DECIMAL(5,2) / DECIMAL(12,7).
-        $vatRate              = max(0.0, min(100.0, $profile->vatRate));
+        // Bornage côté repository : marge ∈ [-1,1] €/kWh (négatif = remise), pour
+        // qu'aucun appelant ne puisse déborder DECIMAL(12,7).
         $supplierMarkupPerKwh = max(-1.0, min(1.0, $profile->supplierMarkupPerKwh));
 
         $stmt = $this->pdo->prepare(
-            'INSERT INTO user_profiles (user_id, country, timezone, currency, bidding_zone, pricing_mode, vat_rate, supplier_markup_per_kwh, locale)
-             VALUES (:uid, :country, :tz, :currency, :zone, :pricing_mode, :vat, :markup, :locale)
+            'INSERT INTO user_profiles (user_id, country, timezone, currency, bidding_zone, pricing_mode, supplier_markup_per_kwh, locale)
+             VALUES (:uid, :country, :tz, :currency, :zone, :pricing_mode, :markup, :locale)
              ON DUPLICATE KEY UPDATE
                 country = VALUES(country), timezone = VALUES(timezone),
                 currency = VALUES(currency), bidding_zone = VALUES(bidding_zone),
-                pricing_mode = VALUES(pricing_mode), vat_rate = VALUES(vat_rate),
+                pricing_mode = VALUES(pricing_mode),
                 supplier_markup_per_kwh = VALUES(supplier_markup_per_kwh), locale = VALUES(locale)'
         );
         $stmt->execute([
@@ -196,7 +194,6 @@ final class UserRepository implements UserRepositoryInterface
             'currency'     => $profile->currency,
             'zone'         => $profile->biddingZone,
             'pricing_mode' => $pricingMode,
-            'vat'          => $vatRate,
             'markup'       => $supplierMarkupPerKwh,
             'locale'       => $profile->locale,
         ]);
@@ -275,7 +272,7 @@ final class UserRepository implements UserRepositoryInterface
     public function getProfile(int $userId): ?UserProfile
     {
         $stmt = $this->pdo->prepare(
-            'SELECT country, timezone, currency, bidding_zone, pricing_mode, vat_rate, supplier_markup_per_kwh, locale
+            'SELECT country, timezone, currency, bidding_zone, pricing_mode, supplier_markup_per_kwh, locale
              FROM user_profiles WHERE user_id = :id LIMIT 1'
         );
         $stmt->execute(['id' => $userId]);
@@ -296,7 +293,6 @@ final class UserRepository implements UserRepositoryInterface
             currency: (string) $row['currency'],
             biddingZone: $row['bidding_zone'] !== null ? (string) $row['bidding_zone'] : null,
             pricingMode: $pricingMode,
-            vatRate: (float) ($row['vat_rate'] ?? 21.0),
             supplierMarkupPerKwh: (float) ($row['supplier_markup_per_kwh'] ?? 0.0),
             locale: (string) $row['locale'],
         );

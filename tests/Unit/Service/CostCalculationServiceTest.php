@@ -75,6 +75,38 @@ final class CostCalculationServiceTest extends TestCase
         );
     }
 
+    /** Grille élec portant la formule d'indexation dynamique du contrat (#228). */
+    private function electricityGridWithSpot(float $coefficient, float $offsetTtc, float $vatRate = 21.0): TariffGrid
+    {
+        return $this->elecGridWithSpot(1, 'Elec spot', '2026-01-01', null, $coefficient, $offsetTtc, $vatRate);
+    }
+
+    private function elecGridWithSpot(
+        int $id,
+        string $name,
+        string $validFrom,
+        ?string $validTo,
+        float $coefficient,
+        float $offsetTtc,
+        float $vatRate = 21.0,
+    ): TariffGrid {
+        return new TariffGrid(
+            id: $id,
+            energyType: 'electricity',
+            name: $name,
+            validFrom: new DateTimeImmutable($validFrom),
+            validTo: $validTo !== null ? new DateTimeImmutable($validTo) : null,
+            lines: [
+                'energy_t1'        => new TariffLine('energy_t1', 0.10, ComponentKind::EnergyT1),
+                'energy_t2'        => new TariffLine('energy_t2', 0.08, ComponentKind::EnergyT2),
+                'subscription'     => new TariffLine('subscription', 5.0, ComponentKind::FixedMonthly),
+                'spot_coefficient' => new TariffLine('spot_coefficient', $coefficient, ComponentKind::SpotCoefficient),
+                'spot_offset'      => new TariffLine('spot_offset', $offsetTtc, ComponentKind::SpotOffset),
+            ],
+            vatRate: $vatRate,
+        );
+    }
+
     private function gasGrid(float $pcs): TariffGrid
     {
         return new TariffGrid(
@@ -203,10 +235,10 @@ final class CostCalculationServiceTest extends TestCase
         FakeTariffRepository $tariff,
         FakeDynamicPriceRepository $dynamic,
         bool $enabled = true,
-        float $vatRatePercent = 21.0,
         float $supplierMarkupPerKwh = 0.0,
         string $tariffTimezone = 'Europe/Brussels',
     ): CostCalculationService {
+        // Pas de taux de TVA ici : il vient de la grille du segment (#232).
         return new CostCalculationService(
             legacyRepo: $legacy,
             tariffRepo: $tariff,
@@ -214,7 +246,6 @@ final class CostCalculationServiceTest extends TestCase
             calculator: new TariffCalculatorService(),
             dynamicPriceRepo: $dynamic,
             dynamicEnabled: $enabled,
-            vatRatePercent: $vatRatePercent,
             supplierMarkupPerKwh: $supplierMarkupPerKwh,
             tariffTimezone: $tariffTimezone,
         );
@@ -245,8 +276,8 @@ final class CostCalculationServiceTest extends TestCase
     }
 
     /**
-     * Verrou anti-facteur-100 (#153) : vatRatePercent est un POURCENTAGE (21.0),
-     * pas une fraction (0.21). La même valeur numérique interprétée dans la
+     * Verrou anti-facteur-100 (#153) : `tariff_grids.vat_rate` est un POURCENTAGE
+     * (21.0), pas une fraction (0.21). La même valeur numérique interprétée dans la
      * mauvaise unité produit un résultat manifestement différent.
      */
     public function testDynamicVatRateIsPercentNotFraction(): void
@@ -258,20 +289,285 @@ final class CostCalculationServiceTest extends TestCase
         $prices = new FakeDynamicPriceRepository(pricesByHour: ['2026-06-10 10:00:00' => 0.20]);
 
         // 21.0 % (correct) : 10 × (0.20 × 1.21) = 2.42.
-        $correct = $this->makeDynamicService($legacy, new FakeTariffRepository(grid: $this->electricityGrid()), $prices, vatRatePercent: 21.0)
+        $correctGrid = $this->elecGrid(1, 'Elec', '2026-01-01', null, 0.10, 0.08, 21.0);
+        $correct     = $this->makeDynamicService($legacy, new FakeTariffRepository(grid: $correctGrid), $prices)
             ->estimateMonthElectricityDynamic(2026, 6);
         self::assertEqualsWithDelta(2.42, $correct['energy_dynamic'], 0.0001);
 
         // 0.21 (fraction saisie par erreur comme %) : 10 × (0.20 × 1.0021) = 2.0042,
         // arrondi à 2 décimales dans la réponse → 2.0. La différence avec 2.42 reste
         // manifeste (le prix moyen non arrondi la confirme au 6e chiffre).
-        $wrong = $this->makeDynamicService($legacy, new FakeTariffRepository(grid: $this->electricityGrid()), $prices, vatRatePercent: 0.21)
+        $wrongGrid = $this->elecGrid(1, 'Elec', '2026-01-01', null, 0.10, 0.08, 0.21);
+        $wrong     = $this->makeDynamicService($legacy, new FakeTariffRepository(grid: $wrongGrid), $prices)
             ->estimateMonthElectricityDynamic(2026, 6);
         self::assertEqualsWithDelta(2.0, $wrong['energy_dynamic'], 0.0001);
         self::assertEqualsWithDelta(0.20042, $wrong['avg_price_kwh'], 0.000001);
 
         // Les deux unités doivent produire des montants nettement distincts.
         self::assertGreaterThan(0.4, abs($correct['energy_dynamic'] - $wrong['energy_dynamic']));
+    }
+
+    /**
+     * Source unique du taux (#232) : la TVA du prix spot vient de la grille, donc une
+     * seule saisie gouverne à la fois l'indexation du spot et la décomposition HTVA.
+     */
+    public function testDynamicVatComesFromTheGrid(): void
+    {
+        $legacy = new FakeLegacyDailyRepository(
+            monthlyDeltasForMonth: $this->electricityDeltas(),
+            hourlyImportDeltas: [['hour' => '2026-06-10 10:00:00', 'import_kwh' => 10.0]],
+        );
+        $prices = new FakeDynamicPriceRepository(pricesByHour: ['2026-06-10 10:00:00' => 0.20]);
+
+        $r = $this->makeDynamicService(
+            $legacy,
+            new FakeTariffRepository(grid: $this->elecGrid(1, 'Elec 6 %', '2026-01-01', null, 0.10, 0.08, 6.0)),
+            $prices,
+        )->estimateMonthElectricityDynamic(2026, 6);
+
+        // 10 × (0.20 × 1.06) = 2.12, et non 2.42 (21 %).
+        self::assertEqualsWithDelta(2.12, $r['energy_dynamic'], 0.0001);
+        self::assertSame(6.0, $r['formula']['vat_rate']);
+        self::assertSame(6.0, $r['cost']['vat_rate']);
+    }
+
+    /**
+     * Le taux étant porté par la grille, il est VERSIONNÉ : un passage de 21 % à 6 %
+     * en cours de période ne s'applique qu'à partir de sa sous-période (#232), là où
+     * un taux unique au profil aurait réécrit tout le mois.
+     */
+    public function testDynamicVatIsResolvedPerTariffSegment(): void
+    {
+        $tariffs = new FakeTariffRepository();
+        $tariffs->gridsBetween = [
+            $this->elecGrid(2, 'Elec 6 %', '2026-01-11', null, 0.10, 0.08, 6.0),
+            $this->elecGrid(1, 'Elec 21 %', '2026-01-01', '2026-01-10', 0.10, 0.08, 21.0),
+        ];
+
+        $legacy = new FakeLegacyDailyRepository(
+            monthlyDeltasForMonth: $this->electricityDeltasFor('2026-01-01 00:00:00', '2026-01-31 00:00:00'),
+            hourlyImportDeltas: [
+                ['hour' => '2026-01-05 10:00:00', 'import_kwh' => 10.0], // grille à 21 %
+                ['hour' => '2026-01-20 10:00:00', 'import_kwh' => 10.0], // grille à 6 %
+            ],
+        );
+        $prices = new FakeDynamicPriceRepository(pricesByHour: [
+            '2026-01-05 10:00:00' => 0.20,
+            '2026-01-20 10:00:00' => 0.20,
+        ]);
+
+        $r = $this->makeDynamicService($legacy, $tariffs, $prices)->estimateMonthElectricityDynamic(2026, 1);
+
+        // 10 × 0.20 × 1.21 + 10 × 0.20 × 1.06 = 2.42 + 2.12 = 4.54.
+        self::assertEqualsWithDelta(4.54, $r['energy_dynamic'], 0.0001);
+        // 20 jours à 6 % contre 10 à 21 % → la formule exposée est celle du segment dominant.
+        self::assertSame(6.0, $r['formula']['vat_rate']);
+    }
+
+    /**
+     * Non-régression #228 : sans ligne spot dans la grille, la formule doit reproduire
+     * exactement l'ancien calcul `spot × (1+TVA) + supplier_markup_per_kwh`. Ce test est
+     * le garde-fou du lot : aucun montant déjà affiché ne doit bouger.
+     */
+    public function testDynamicWithoutSpotLinesReproducesProfileMarkupBehaviour(): void
+    {
+        $legacy = new FakeLegacyDailyRepository(
+            monthlyDeltasForMonth: $this->electricityDeltas(),
+            hourlyImportDeltas: [['hour' => '2026-06-10 10:00:00', 'import_kwh' => 10.0]],
+        );
+        $prices = new FakeDynamicPriceRepository(pricesByHour: ['2026-06-10 10:00:00' => 0.20]);
+
+        $r = $this->makeDynamicService(
+            $legacy,
+            new FakeTariffRepository(grid: $this->electricityGrid()),
+            $prices,
+            supplierMarkupPerKwh: 0.0145,
+        )->estimateMonthElectricityDynamic(2026, 6);
+
+        // 10 × (0.20 × 1.0 × 1.21 + 0.0145) = 2.565, arrondi à 2 décimales dans la réponse.
+        self::assertEqualsWithDelta(2.57, $r['energy_dynamic'], 0.0001);
+        self::assertEqualsWithDelta(0.2565, $r['avg_price_kwh'], 0.000001);
+        self::assertSame(1.0, $r['formula']['spot_coefficient']);
+        self::assertEqualsWithDelta(0.0145, $r['formula']['spot_offset_ttc'], 0.0000001);
+        self::assertSame('profile', $r['formula']['offset_source']);
+        self::assertFalse($r['formula']['coefficient_rejected']);
+    }
+
+    /** La grille porte la formule du contrat : coefficient × spot + marge (#228). */
+    public function testDynamicAppliesGridCoefficientAndOffset(): void
+    {
+        $legacy = new FakeLegacyDailyRepository(
+            monthlyDeltasForMonth: $this->electricityDeltas(),
+            hourlyImportDeltas: [['hour' => '2026-06-10 10:00:00', 'import_kwh' => 10.0]],
+        );
+        $prices = new FakeDynamicPriceRepository(pricesByHour: ['2026-06-10 10:00:00' => 0.20]);
+        $grid   = $this->electricityGridWithSpot(coefficient: 1.08, offsetTtc: 0.0145, vatRate: 6.0);
+
+        $r = $this->makeDynamicService($legacy, new FakeTariffRepository(grid: $grid), $prices)
+            ->estimateMonthElectricityDynamic(2026, 6);
+
+        // 10 × (0.20 × 1.08 × 1.06 + 0.0145) = 2.4346, arrondi à 2 décimales.
+        self::assertEqualsWithDelta(2.43, $r['energy_dynamic'], 0.0001);
+        self::assertEqualsWithDelta(0.24346, $r['avg_price_kwh'], 0.000001);
+        self::assertEqualsWithDelta(1.08, $r['formula']['spot_coefficient'], 0.0000001);
+        self::assertSame('grid', $r['formula']['offset_source']);
+    }
+
+    /** Anti-double-comptage : une marge en grille écarte celle du profil (#228). */
+    public function testDynamicGridOffsetOverridesProfileMarkup(): void
+    {
+        $legacy = new FakeLegacyDailyRepository(
+            monthlyDeltasForMonth: $this->electricityDeltas(),
+            hourlyImportDeltas: [['hour' => '2026-06-10 10:00:00', 'import_kwh' => 10.0]],
+        );
+        $prices = new FakeDynamicPriceRepository(pricesByHour: ['2026-06-10 10:00:00' => 0.20]);
+        $grid   = $this->electricityGridWithSpot(coefficient: 1.0, offsetTtc: 0.02);
+
+        $r = $this->makeDynamicService(
+            $legacy,
+            new FakeTariffRepository(grid: $grid),
+            $prices,
+            supplierMarkupPerKwh: 0.0145,
+        )->estimateMonthElectricityDynamic(2026, 6);
+
+        // 10 × (0.20 × 1.21 + 0.02) = 2.62 — et non 2.765 (0.02 + 0.0145 cumulés).
+        self::assertEqualsWithDelta(2.62, $r['energy_dynamic'], 0.0001);
+        self::assertEqualsWithDelta(0.02, $r['formula']['spot_offset_ttc'], 0.0000001);
+    }
+
+    /**
+     * Un coefficient saisi SANS ligne de marge ne doit pas escamoter celle du profil :
+     * la perte serait invisible (le champ reste rempli dans /account) et porterait sur
+     * chaque heure de la période.
+     */
+    public function testDynamicCoefficientAloneKeepsProfileMarkup(): void
+    {
+        $legacy = new FakeLegacyDailyRepository(
+            monthlyDeltasForMonth: $this->electricityDeltas(),
+            hourlyImportDeltas: [['hour' => '2026-06-10 10:00:00', 'import_kwh' => 10.0]],
+        );
+        $prices = new FakeDynamicPriceRepository(pricesByHour: ['2026-06-10 10:00:00' => 0.20]);
+
+        $grid = new TariffGrid(
+            id: 1,
+            energyType: 'electricity',
+            name: 'Coef seul',
+            validFrom: new DateTimeImmutable('2026-01-01'),
+            validTo: null,
+            lines: [
+                'energy_t1'        => new TariffLine('energy_t1', 0.10, ComponentKind::EnergyT1),
+                'spot_coefficient' => new TariffLine('spot_coefficient', 1.08, ComponentKind::SpotCoefficient),
+            ],
+        );
+
+        $r = $this->makeDynamicService(
+            $legacy,
+            new FakeTariffRepository(grid: $grid),
+            $prices,
+            supplierMarkupPerKwh: 0.025,
+        )->estimateMonthElectricityDynamic(2026, 6);
+
+        // 10 × (0.20 × 1.08 × 1.21 + 0.025) = 2.8636 — et non 2.6136 (marge perdue).
+        self::assertEqualsWithDelta(2.86, $r['energy_dynamic'], 0.0001);
+        self::assertEqualsWithDelta(0.025, $r['formula']['spot_offset_ttc'], 0.0000001);
+        self::assertSame('profile', $r['formula']['offset_source']);
+    }
+
+    /**
+     * Un coefficient hors bornes est neutralisé, mais l'utilisateur doit le savoir :
+     * sinon le dashboard annonce une formule qui ne correspond ni à sa grille, ni au
+     * repli profil. Chemin atteignable par l'API, non validée sur ce point.
+     */
+    public function testDynamicReportsRejectedCoefficient(): void
+    {
+        $legacy = new FakeLegacyDailyRepository(
+            monthlyDeltasForMonth: $this->electricityDeltas(),
+            hourlyImportDeltas: [['hour' => '2026-06-10 10:00:00', 'import_kwh' => 10.0]],
+        );
+        $prices = new FakeDynamicPriceRepository(pricesByHour: ['2026-06-10 10:00:00' => 0.20]);
+        // 108 au lieu de 1,08 : pourcentage saisi tel quel.
+        $grid   = $this->electricityGridWithSpot(coefficient: 108.0, offsetTtc: 0.0145);
+
+        $r = $this->makeDynamicService($legacy, new FakeTariffRepository(grid: $grid), $prices)
+            ->estimateMonthElectricityDynamic(2026, 6);
+
+        self::assertSame(1.0, $r['formula']['spot_coefficient']);
+        self::assertTrue($r['formula']['coefficient_rejected']);
+        // 10 × (0.20 × 1.21 + 0.0145) = 2.565 → le spot n'a PAS été multiplié par 108.
+        self::assertEqualsWithDelta(2.57, $r['energy_dynamic'], 0.0001);
+    }
+
+    /** Les paramètres de formule ne sont jamais facturés comme un poste de coût (#228). */
+    public function testSpotLinesAreNotBilledAsCostComponents(): void
+    {
+        $legacy = new FakeLegacyDailyRepository(
+            monthlyDeltasForMonth: $this->electricityDeltas(),
+            hourlyImportDeltas: [['hour' => '2026-06-10 10:00:00', 'import_kwh' => 10.0]],
+        );
+        $prices = new FakeDynamicPriceRepository(pricesByHour: ['2026-06-10 10:00:00' => 0.20]);
+        $grid   = $this->electricityGridWithSpot(coefficient: 1.08, offsetTtc: 0.0145);
+
+        $r    = $this->makeDynamicService($legacy, new FakeTariffRepository(grid: $grid), $prices)
+            ->estimateMonthElectricityDynamic(2026, 6);
+        $keys = array_column($r['cost']['lines'], 'key');
+
+        self::assertNotContains('spot_coefficient', $keys);
+        self::assertNotContains('spot_offset', $keys);
+    }
+
+    /**
+     * Même grille en tarif FIXE : les lignes spot restent inertes. Un coefficient 1,08
+     * facturé comme 1,08 €/kWh gonflerait le total de 162 € sur 150 kWh.
+     */
+    public function testSpotLinesAreInertInFixedMode(): void
+    {
+        $withSpot = $this->makeService(
+            new FakeLegacyDailyRepository(monthlyDeltasForMonth: $this->electricityDeltas()),
+            new FakeTariffRepository(grid: $this->electricityGridWithSpot(coefficient: 1.08, offsetTtc: 0.0145)),
+            new FakeGasReadingRepository(),
+        )->estimateMonthElectricity(2026, 6);
+
+        $withoutSpot = $this->makeService(
+            new FakeLegacyDailyRepository(monthlyDeltasForMonth: $this->electricityDeltas()),
+            new FakeTariffRepository(grid: $this->electricityGrid()),
+            new FakeGasReadingRepository(),
+        )->estimateMonthElectricity(2026, 6);
+
+        self::assertEqualsWithDelta($withoutSpot['cost']['total'], $withSpot['cost']['total'], 0.0001);
+    }
+
+    /**
+     * Les paramètres vivant dans la grille, ils changent avec elle : chaque sous-période
+     * doit indexer son énergie avec SON coefficient (#196 + #228).
+     */
+    public function testDynamicResolvesFormulaPerTariffSegment(): void
+    {
+        $tariffs = new FakeTariffRepository();
+        $tariffs->gridsBetween = [
+            $this->elecGridWithSpot(2, 'Elec B', '2026-01-11', null, 2.0, 0.0),
+            $this->elecGridWithSpot(1, 'Elec A', '2026-01-01', '2026-01-10', 1.0, 0.0),
+        ];
+
+        $legacy = new FakeLegacyDailyRepository(
+            monthlyDeltasForMonth: $this->electricityDeltasFor('2026-01-01 00:00:00', '2026-01-31 00:00:00'),
+            hourlyImportDeltas: [
+                ['hour' => '2026-01-05 10:00:00', 'import_kwh' => 10.0], // grille A, coef 1,0
+                ['hour' => '2026-01-20 10:00:00', 'import_kwh' => 10.0], // grille B, coef 2,0
+            ],
+        );
+        $prices = new FakeDynamicPriceRepository(pricesByHour: [
+            '2026-01-05 10:00:00' => 0.20,
+            '2026-01-20 10:00:00' => 0.20,
+        ]);
+
+        $r = $this->makeDynamicService($legacy, $tariffs, $prices)->estimateMonthElectricityDynamic(2026, 1);
+
+        // A : 10 × 0.20 × 1.0 × 1.21 = 2.42 ; B : 10 × 0.20 × 2.0 × 1.21 = 4.84 → 7.26.
+        // Une formule unique, quelle qu'elle soit, ne pourrait pas produire ce total.
+        self::assertEqualsWithDelta(7.26, $r['energy_dynamic'], 0.0001);
+        // 20 jours pour B contre 10 pour A → la formule exposée est celle de B, comme
+        // `tariff_rates` expose la grille de la sous-période la plus longue.
+        self::assertEqualsWithDelta(2.0, $r['formula']['spot_coefficient'], 0.0000001);
     }
 
     public function testMonthElectricityDynamicUsesNativeHourlyOverAverage(): void

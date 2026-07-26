@@ -114,6 +114,19 @@ comme `{}`.
 `reading_at` absent ⇒ horodatage `now`. Les bornes anti-régression compteur
 (date croissante, index croissant) sont vérifiées contre `getLatest()`.
 
+`save_tariff` accepte `lines` au format plat `clé => montant`, le `component_kind`
+étant déduit du catalogue (clé inconnue ⇒ `per_kwh`). Deux clés paramètrent la
+formule dynamique (#228) au lieu d'être facturées : `spot_coefficient`
+(multiplicateur du prix spot) et `spot_offset` (€/kWh TTC). Elles sont typées comme
+telles **quel que soit `energy_type`** : sur une grille gaz ou eau elles restent
+inertes, alors que le repli `per_kwh` facturerait un coefficient 1,08 comme
+1,08 €/kWh. Elles apparaissent en retour dans `lines` des grilles et dans le
+`tariff_rates` des réponses de coût — clés additionnelles, non cassantes.
+
+Contrairement à la saisie web, l'API ne rejette pas un coefficient hors bornes
+(`]0 ; 5]`) : il est neutralisé à 1,0 au calcul (`SpotFormulaResolver`) et signalé
+par `dynamic.formula.coefficient_rejected` dans les réponses de coût.
+
 ---
 
 ## Couverture de tests (Phase 0)

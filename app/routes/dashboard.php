@@ -121,7 +121,6 @@ try {
         dynamicEnabled: DynamicPricing::isEnabled($config),
         waterRepo: $waterRepo,
         pricingMode: $pricingMode,
-        vatRatePercent: $profile->vatRate ?? 21.0,
         supplierMarkupPerKwh: $profile->supplierMarkupPerKwh ?? 0.0,
         tariffTimezone: $timezone,
     );

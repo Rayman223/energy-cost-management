@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Unit\Domain;
 
+use App\Domain\ComponentKind;
 use App\Domain\TariffLineCatalog;
 use PHPUnit\Framework\TestCase;
 
@@ -13,9 +14,40 @@ final class TariffLineCatalogTest extends TestCase
     {
         $keys = array_keys(TariffLineCatalog::electricity());
 
-        self::assertCount(15, $keys);
+        self::assertCount(17, $keys);
         self::assertContains('energy_t1', $keys);
         self::assertContains('injection_t2', $keys);
+        self::assertContains('spot_coefficient', $keys);
+        self::assertContains('spot_offset', $keys);
+    }
+
+    /** Les clés spot ne concernent que l'électricité (#228). */
+    public function testSpotKeysAreElectricityOnly(): void
+    {
+        foreach (['spot_coefficient', 'spot_offset'] as $key) {
+            self::assertArrayNotHasKey($key, TariffLineCatalog::gas());
+            self::assertArrayNotHasKey($key, TariffLineCatalog::water());
+        }
+    }
+
+    public function testKindForMapsSpotKeys(): void
+    {
+        self::assertSame(ComponentKind::SpotCoefficient, TariffLineCatalog::kindFor('electricity', 'spot_coefficient'));
+        self::assertSame(ComponentKind::SpotOffset, TariffLineCatalog::kindFor('electricity', 'spot_offset'));
+    }
+
+    /**
+     * Le mapping ne doit PAS être restreint à l'électricité : le repli par défaut est
+     * per_kwh, qui facturerait un coefficient 1,08 comme 1,08 €/kWh sur une grille gaz
+     * reçue par l'API (~1620 € sur 1500 kWh), le garde-fou isSpotFormula() ne pouvant
+     * pas s'activer sur un kind erroné.
+     */
+    public function testKindForMapsSpotKeysOnEveryEnergyType(): void
+    {
+        foreach (['gas', 'water'] as $energy) {
+            self::assertSame(ComponentKind::SpotCoefficient, TariffLineCatalog::kindFor($energy, 'spot_coefficient'), $energy);
+            self::assertSame(ComponentKind::SpotOffset, TariffLineCatalog::kindFor($energy, 'spot_offset'), $energy);
+        }
     }
 
     public function testGasHasExpectedKeys(): void
@@ -59,6 +91,10 @@ final class TariffLineCatalogTest extends TestCase
         self::assertSame('€/kWh', $elec['energy_t1']['unit']);
         self::assertSame("Droit d'accise spécial", $elec['excise_duty']['label']);
         self::assertSame('€/an', $elec['management_annual']['unit']);
+        // Multiplicateur sans dimension, à ne pas afficher en €/kWh.
+        self::assertSame('×', $elec['spot_coefficient']['unit']);
+        // « TTC » explicite : la fiche tarifaire donne souvent la marge HTVA.
+        self::assertStringContainsString('TTC', $elec['spot_offset']['label']);
 
         $gas = TariffLineCatalog::gas();
         self::assertSame('Énergie fournisseur', $gas['energy']['label']);

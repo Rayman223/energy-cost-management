@@ -84,10 +84,13 @@ final class ConfigSchema
                         'security_token'          => ['sentinel' => true],
                         'bidding_zone'            => [],
                         'timeout'                 => [],
-                        // Déplacés vers user_profiles (#153, P3). ATTENTION à l'unité :
-                        // la TVA passe de la fraction (0.21) au pourcentage (21.00).
+                        // Sortis de la config globale (#153, P3). La TVA a ensuite quitté
+                        // le profil pour la grille tarifaire, seule source (#232) ;
+                        // la marge, elle, reste au profil comme repli (#228).
+                        // ATTENTION à l'unité : la TVA passe de la fraction (0.21) au
+                        // pourcentage (21.00).
                         'vat_rate' => [
-                            'moved' => 'déplacé vers le profil utilisateur — reportez la valeur dans /account. '
+                            'moved' => 'déplacé vers la grille tarifaire — reportez la valeur dans /tariffs (champ TVA de la grille). '
                                 . "ATTENTION : l'unité passe de la fraction (0.21) au pourcentage (21.00).",
                         ],
                         'supplier_markup_per_kwh' => [

@@ -23,6 +23,10 @@ use App\Domain\ComponentKind;
  *   fixed_monthly                         €/mois × mois entiers
  *   fixed_annual                          €/an proratisé sur la période
  *   injection_t1 / injection_t2           −(€/kWh × injection) (crédits)
+ *
+ * Les lignes spot_coefficient / spot_offset sont ignorées ici quel que soit le mode :
+ * elles paramètrent l'indexation du prix de marché (cf. App\Domain\SpotFormula) et ne
+ * constituent pas un poste de coût.
  */
 final class TariffCalculatorService
 {
@@ -184,6 +188,14 @@ final class TariffCalculatorService
             $kind = ComponentKind::fromStringOrDefault((string) $line['kind']);
             $rate = (float) $line['amount'];
 
+            // Paramètre de la formule d'indexation (#228), pas un poste facturé : à sauter
+            // dans TOUS les modes. En dynamique il est déjà intégré au prix horaire par
+            // SpotFormula ; en fixe il est inerte. Sans ce filtre, un coefficient 1,08
+            // serait facturé comme 1,08 €/kWh.
+            if ($kind->isSpotFormula()) {
+                continue;
+            }
+
             if ($isDynamic && $kind->isSupplierEnergy()) {
                 continue; // remplacé par la ligne énergie dynamique
             }
@@ -249,6 +261,9 @@ final class TariffCalculatorService
             ComponentKind::FixedAnnual  => [(float) $ctx['days'], $this->prorateAnnual($rate, $ctx['days'])],
             ComponentKind::InjectionT1  => [$ctx['export_t1'], -($ctx['export_t1'] * $rate)],
             ComponentKind::InjectionT2  => [$ctx['export_t2'], -($ctx['export_t2'] * $rate)],
+            // Paramètres de la formule dynamique (#228) : jamais un montant. computeLines()
+            // les écarte en amont ; ce bras garde le match exhaustif et sert de second filet.
+            ComponentKind::SpotCoefficient, ComponentKind::SpotOffset => [0.0, 0.0],
         };
     }
 

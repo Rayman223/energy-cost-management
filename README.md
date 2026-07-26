@@ -148,8 +148,9 @@ return [
     'discord'      => [ 'invite_url' => '' ],                    // e.g. https://discord.gg/xxxxxxx
 
     // Optional: day-ahead spot prices (ENTSO-E), EnergyID sync, local meter agent.
+    // VAT and supplier markup are NOT configured here (see the dynamic-price notes below).
     'dynamic_prices' => [ 'enabled' => true, 'provider' => 'entsoe', 'security_token' => 'change_me',
-                          'bidding_zone' => '10YBE----------2', 'vat_rate' => 0.21 ],
+                          'bidding_zone' => '10YBE----------2' ],
     'energyid'     => [ 'provisioning_key' => 'change_me', 'provisioning_secret' => 'change_me' ],
 
     'timezone'     => 'Europe/Brussels',
@@ -236,6 +237,23 @@ a `flock` lock and automatic 30-day rotation. Containerized example:
 Dynamic prices use the `dynamic_prices` config (ENTSO-E by default; free token at
 [transparency.entsoe.eu](https://transparency.entsoe.eu/)). The dashboard then
 shows a regulated-vs-dynamic comparison.
+
+ENTSO-E only provides the raw day-ahead index — no supplier bills it as is. The
+contract formula lives in the electricity tariff grid, as two line kinds:
+`spot_coefficient` (multiplier, e.g. `1.08`, covering grid losses and
+balancing/profile costs) and `spot_offset` (€/kWh incl. VAT: supplier margin and
+per-kWh fees). Read both off your tariff sheet and enter them under `/tariffs`;
+the applied rate is then `spot × coefficient × (1 + VAT) + offset`. Because they
+are grid lines, they follow `valid_from`/`valid_to`, so a contract renewal does
+not rewrite past months. Each term falls back independently: with no
+`spot_offset` line the legacy `user_profiles.supplier_markup_per_kwh` still
+applies (even alongside a grid coefficient), and with no `spot_coefficient` line
+the coefficient is simply neutral.
+
+The VAT rate comes from the grid too (`tariff_grids.vat_rate`) — a single source
+for both the spot price and the VAT breakdown of the TTC amounts, versioned by
+validity period so a rate change (Belgium's 21 % → 6 % on residential
+electricity) applies from its date onwards instead of rewriting the past.
 
 ---
 

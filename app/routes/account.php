@@ -134,16 +134,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $zone        = trim((string) ($_POST['bidding_zone'] ?? '')) ?: null;
                 $pricingMode = (string) ($_POST['pricing_mode'] ?? 'fixed');
 
-                // TVA (%) et marge fournisseur (€/kWh) par utilisateur — vivent dans
-                // le garde $dynamicEnabled comme les champs zone/mode (#153). Un champ
-                // absent ou vide RECONDUIT la valeur stockée (pas de reset silencieux
-                // à 21.0/0.0) ; une valeur effectivement fournie hors bornes est rejetée.
-                $vatRaw  = $_POST['vat_rate'] ?? null;
-                $vatRate = is_numeric($vatRaw) ? (float) $vatRaw : $storedProfile->vatRate;
-                if ($vatRate < 0.0 || $vatRate > 100.0) {
-                    throw new \InvalidArgumentException($view->t('account.invalid_vat_rate'));
-                }
-
+                // Marge fournisseur (€/kWh) par utilisateur — vit dans le garde
+                // $dynamicEnabled comme les champs zone/mode (#153). Un champ absent ou
+                // vide RECONDUIT la valeur stockée (pas de reset silencieux à 0.0) ; une
+                // valeur effectivement fournie hors bornes est rejetée. La TVA, elle, a
+                // quitté le profil : sa source unique est la grille tarifaire (#232).
                 $markupRaw = $_POST['supplier_markup_per_kwh'] ?? null;
                 $markup    = is_numeric($markupRaw) ? (float) $markupRaw : $storedProfile->supplierMarkupPerKwh;
                 if ($markup < -1.0 || $markup > 1.0) {
@@ -158,7 +153,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $storedZone    = $storedProfile->biddingZone;
                 $zone          = (is_string($storedZone) && $storedZone !== '') ? $storedZone : null;
                 $pricingMode   = $storedProfile->pricingMode;
-                $vatRate       = $storedProfile->vatRate;
                 $markup        = $storedProfile->supplierMarkupPerKwh;
             }
 
@@ -168,7 +162,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 currency: $currency,
                 biddingZone: $zone,
                 pricingMode: $pricingMode,
-                vatRate: $vatRate,
                 supplierMarkupPerKwh: $markup,
                 locale: $chosenLocale,
             ));

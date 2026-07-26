@@ -116,6 +116,14 @@
   .cost-line.vat-highlight .cl-amount { color: var(--red); }
   .cost-line.subtotal-sep     { border-top: 1px solid var(--border2); margin-top: 4px; padding-top: 14px; }
 
+  /* Formule d'indexation appliquée au prix de marché (#228) : note discrète sous la
+     ligne « énergie dynamique ». Sort de la grille 3 colonnes de .cost-line. */
+  .cost-formula-note {
+    font-family: var(--mono); font-size: .78rem; color: var(--muted);
+    padding: 0 0 10px; border-bottom: 1px solid var(--border);
+  }
+  .cost-formula-note--fallback { color: var(--amber); }
+
   .cost-group-label {
     font-size: .76rem; font-weight: 700; letter-spacing: .13em;
     text-transform: uppercase; color: var(--muted);

@@ -145,7 +145,7 @@ final class ConfigValidatorTest extends TestCase
         // journalisé (finding #1), même en section désactivée.
         $issues = ConfigValidator::validate([
             'database'       => $this->fullDatabase(),
-            'dynamic_prices' => ['enabled' => false, 'vat_rate' => 0.21],
+            'dynamic_prices' => ['enabled' => false, 'vat_rate' => 0.21, 'supplier_markup_per_kwh' => 0.01],
         ]);
 
         $byPath = [];
@@ -156,7 +156,11 @@ final class ConfigValidatorTest extends TestCase
         self::assertArrayHasKey('dynamic_prices.vat_rate', $byPath);
         self::assertSame(ConfigIssue::KIND_MOVED, $byPath['dynamic_prices.vat_rate']->kind);
         self::assertTrue($byPath['dynamic_prices.vat_rate']->isRuntimeSignal());
-        self::assertStringContainsString('/account', $byPath['dynamic_prices.vat_rate']->message);
+        // La TVA a rejoint la grille tarifaire (#232), la marge est restée au profil (#228) :
+        // chaque message doit pointer la bonne destination, sinon la valeur est reportée au
+        // mauvais endroit et ignorée en silence.
+        self::assertStringContainsString('/tariffs', $byPath['dynamic_prices.vat_rate']->message);
+        self::assertStringContainsString('/account', $byPath['dynamic_prices.supplier_markup_per_kwh']->message);
     }
 
     public function testSentinelInDisabledSectionIsIgnored(): void

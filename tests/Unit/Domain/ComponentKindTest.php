@@ -40,4 +40,43 @@ final class ComponentKindTest extends TestCase
     {
         self::assertSame(ComponentKind::forEnergy('electricity'), ComponentKind::forEnergy('unknown'));
     }
+
+    public function testSpotKindsAreProposedForElectricityOnly(): void
+    {
+        foreach ([ComponentKind::SpotCoefficient, ComponentKind::SpotOffset] as $kind) {
+            self::assertContains($kind, ComponentKind::forEnergy('electricity'));
+            self::assertNotContains($kind, ComponentKind::forEnergy('gas'));
+            self::assertNotContains($kind, ComponentKind::forEnergy('water'));
+        }
+    }
+
+    public function testOnlySpotKindsAreFormulaParameters(): void
+    {
+        foreach (ComponentKind::cases() as $kind) {
+            $expected = $kind === ComponentKind::SpotCoefficient || $kind === ComponentKind::SpotOffset;
+            self::assertSame($expected, $kind->isSpotFormula(), $kind->value);
+        }
+    }
+
+    /**
+     * Distinction structurante (#228) : les kinds spot PARAMÈTRENT le prix de marché,
+     * ils ne sont pas remplacés par lui. Les confondre les ferait facturer en tarif fixe.
+     */
+    public function testSpotKindsAreNotSupplierEnergy(): void
+    {
+        self::assertFalse(ComponentKind::SpotCoefficient->isSupplierEnergy());
+        self::assertFalse(ComponentKind::SpotOffset->isSupplierEnergy());
+    }
+
+    public function testSpotKindsAreGroupedWithEnergy(): void
+    {
+        self::assertSame('energy', ComponentKind::SpotCoefficient->group());
+        self::assertSame('energy', ComponentKind::SpotOffset->group());
+    }
+
+    public function testSpotCoefficientIsDimensionlessWhileOffsetIsPerKwh(): void
+    {
+        self::assertSame('×', ComponentKind::SpotCoefficient->unit('electricity'));
+        self::assertSame('€/kWh', ComponentKind::SpotOffset->unit('electricity'));
+    }
 }

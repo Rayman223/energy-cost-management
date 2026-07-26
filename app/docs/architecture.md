@@ -84,6 +84,24 @@ Transformation du site mono-utilisateur belge en plateforme **multi-tenant**,
 - **Catalogue tarifaire européen** : `tariff_grids.user_id` NULL = grille
   **partagée** (communauté), renseigné = surcharge perso ; multi-devises (ISO
   4217) ; zones de marché **ENTSO-E**.
+- **Tarif dynamique = index + formule** (#228) : ENTSO-E ne fournit que l'index
+  day-ahead brut (`dynamic_prices.price_eur_kwh`, HTVA), qu'aucun fournisseur ne
+  facture tel quel. La formule du contrat est portée par la grille sous forme de
+  lignes typées — `spot_coefficient` (multiplicateur) et `spot_offset` (€/kWh TTC)
+  — résolues par `App\Service\SpotFormulaResolver` en `App\Domain\SpotFormula`, qui
+  applique `spot × coef × (1+TVA) + offset` heure par heure. Ces kinds ne sont
+  jamais facturés comme postes (`ComponentKind::isSpotFormula()`) ; les héberger
+  dans la grille leur fait suivre `valid_from`/`valid_to`, donc un changement de
+  contrat ne réécrit pas les mois passés. Repli **par composante** : sans ligne
+  `spot_offset`, `user_profiles.supplier_markup_per_kwh` s'applique toujours (même
+  si la grille porte un coefficient) ; sans `spot_coefficient`, le coefficient vaut
+  simplement 1,0. Un coefficient hors bornes est neutralisé **et signalé**, la
+  formule appliquée ne correspondant alors à rien de saisi.
+- **TVA : source unique** (#232) — `tariff_grids.vat_rate`, pour la décomposition
+  HTVA des montants TTC **comme** pour la TVA du prix spot. Deux colonnes portaient
+  auparavant le même taux (profil + grille), ce qui produisait un calcul mixte
+  silencieux quand elles divergeaient. Vivant dans la grille, le taux est
+  versionné : un passage de 21 % à 6 % s'applique à partir de sa date.
 - **API d'ingestion** (`api.php`) : jetons Bearer par utilisateur (`api_tokens`,
   hachés SHA-256, scope `ingest`, rate-limit à fenêtre fixe, révocables). Un
   jeton Bearer est restreint aux routes d'ingestion ; le reste exige une session.

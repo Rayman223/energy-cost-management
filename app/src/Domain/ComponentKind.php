@@ -21,6 +21,12 @@ namespace App\Domain;
  *   fixed_monthly €/mois × mois entiers       (abonnements)
  *   fixed_annual  €/an proratisé sur la période
  *   injection_t1/t2  −(€/kWh × export T1/T2)  (crédits d'injection)
+ *
+ * Cas à part — paramètres de la formule dynamique (#228), qui ne produisent AUCUN
+ * montant : ils décrivent comment indexer le prix de marché, pas une composante
+ * facturée. Cf. {@see self::isSpotFormula()}.
+ *   spot_coefficient  multiplicateur sans dimension appliqué au prix spot
+ *   spot_offset       €/kWh TTC ajoutés au prix spot indexé
  */
 enum ComponentKind: string
 {
@@ -35,6 +41,8 @@ enum ComponentKind: string
     case FixedAnnual = 'fixed_annual';
     case InjectionT1 = 'injection_t1';
     case InjectionT2 = 'injection_t2';
+    case SpotCoefficient = 'spot_coefficient';
+    case SpotOffset      = 'spot_offset';
 
     /** @return list<string> */
     public static function values(): array
@@ -84,11 +92,31 @@ enum ComponentKind: string
         return $this === self::InjectionT1 || $this === self::InjectionT2;
     }
 
+    /**
+     * Paramètre de la formule d'indexation dynamique, et non une composante de coût (#228).
+     *
+     * Ces lignes portent un multiplicateur ou un offset €/kWh appliqués au prix spot ;
+     * elles ne doivent JAMAIS être facturées comme un poste. Un coefficient 1,08 ajouté
+     * au total coûterait 1,08 €/kWh. Le moteur de calcul les saute donc dans TOUS les
+     * modes — y compris en tarif fixe, où elles sont simplement inertes.
+     *
+     * Volontairement distinct de {@see self::isSupplierEnergy()} : ces kinds ne sont pas
+     * « remplacés » par le prix de marché, ils le paramètrent.
+     */
+    public function isSpotFormula(): bool
+    {
+        return match ($this) {
+            self::SpotCoefficient, self::SpotOffset => true,
+            default => false,
+        };
+    }
+
     /** Groupe d'affichage du formulaire et du détail de coût. */
     public function group(): string
     {
         return match ($this) {
-            self::EnergyFlat, self::EnergyT1, self::EnergyT2 => 'energy',
+            self::EnergyFlat, self::EnergyT1, self::EnergyT2,
+            self::SpotCoefficient, self::SpotOffset          => 'energy',
             self::FixedMonthly, self::FixedAnnual           => 'fixed',
             self::InjectionT1, self::InjectionT2            => 'injection',
             default                                          => 'taxes',
@@ -99,10 +127,12 @@ enum ComponentKind: string
     public function unit(string $energyType): string
     {
         return match ($this) {
-            self::FixedMonthly => '€/mois',
-            self::FixedAnnual  => '€/an',
-            self::PerM3        => '€/m³',
-            default            => $energyType === 'water' ? '€/m³' : '€/kWh',
+            self::FixedMonthly    => '€/mois',
+            self::FixedAnnual     => '€/an',
+            self::PerM3           => '€/m³',
+            // Multiplicateur sans dimension : ni une devise, ni une quantité.
+            self::SpotCoefficient => '×',
+            default               => $energyType === 'water' ? '€/m³' : '€/kWh',
         };
     }
 }

@@ -1,0 +1,41 @@
+-- ============================================================
+-- Migration 2026-07-26 — TVA : source unique dans tariff_grids (Issue #232)
+-- NON baselinée : idempotente, laissée hors du seed de schema.sql.
+--
+-- Deux colonnes vat_rate portaient la MÊME sémantique (taux de TVA électricité) :
+-- tariff_grids.vat_rate décomposait HTVA/TVA les montants TTC de la grille, tandis
+-- que user_profiles.vat_rate TVAait le prix spot. Un utilisateur avec grid=21 et
+-- profile=6 obtenait un calcul mixte incohérent — part énergie à 6 %, décomposition
+-- du total à 21 % — sans aucun signal. La grille devient la source unique : cohérent
+-- avec #228 (coefficient et marge contractuels y vivent déjà) et surtout VERSIONNÉ
+-- par valid_from/valid_to, alors que le profil écrasait le passé. Un taux de TVA
+-- change dans le temps (21 % → 6 % sur l'électricité résidentielle belge) : les mois
+-- passés doivent rester calculés au taux de l'époque.
+--
+-- AUCUN BACKFILL, VOLONTAIREMENT. Reporter user_profiles.vat_rate dans les grilles
+-- DÉTRUIRAIT de la donnée : tariff_grids.vat_rate fait déjà autorité (saisie
+-- explicite dans /tariffs, pré-remplie par pays, et déjà utilisée pour la
+-- décomposition HTVA), là où la colonne du profil vaut le plus souvent son défaut
+-- 21.00 jamais touché — son champ n'était même rendu que si les prix dynamiques
+-- étaient activés. Un report écraserait donc une grille allemande à 19 % avec un
+-- 21.00 par défaut, et aplatirait sur une seule valeur un utilisateur ayant
+-- correctement versionné 21 % → 6 %, c'est-à-dire exactement le versionnage que
+-- cette issue introduit. On supprime donc la colonne sans rien recopier.
+--
+-- CONSÉQUENCE ASSUMÉE : pour un utilisateur dont profile.vat_rate différait de
+-- grid.vat_rate, la TVA du prix spot change — elle s'aligne sur le taux de la
+-- grille, déjà appliqué à tout le reste de sa facture. C'est précisément
+-- l'incohérence corrigée ici, pas un effet de bord. Un utilisateur ayant
+-- délibérément saisi un taux spot distinct doit le reporter sur sa grille.
+--
+-- DROP … IF EXISTS = idempotent (le runner ne peut pas rollback du DDL) : no-op sur
+-- base fraîche, DROP réel sur base existante.
+--
+-- NB : sur base fraîche, 2026-07-17_user_dynamic_pricing.sql (hors seed, idempotente)
+-- recrée la colonne juste avant que celle-ci ne la resupprime — ordre lexical garanti,
+-- et user_profiles est vide à ce stade, donc aucune donnée en jeu. Laissé tel quel
+-- plutôt que de baseliner 2026-07-17, dont l'autre colonne (supplier_markup_per_kwh)
+-- reste nécessaire.
+-- ============================================================
+
+ALTER TABLE user_profiles DROP COLUMN IF EXISTS vat_rate;

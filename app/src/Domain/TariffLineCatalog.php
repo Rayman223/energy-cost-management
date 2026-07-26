@@ -20,6 +20,8 @@ final class TariffLineCatalog
             'energy_simple'         => ['label' => 'Énergie simple (monohoraire)',     'unit' => '€/kWh'],
             'energy_t1'             => ['label' => 'Énergie T1 (jour)',                'unit' => '€/kWh'],
             'energy_t2'             => ['label' => 'Énergie T2 (nuit)',                'unit' => '€/kWh'],
+            'spot_coefficient'      => ['label' => 'Coefficient sur le prix de marché','unit' => '×'],
+            'spot_offset'           => ['label' => 'Marge fournisseur sur le marché (TTC)', 'unit' => '€/kWh'],
             'subscription'          => ['label' => 'Abonnement fournisseur',           'unit' => '€/mois'],
             'distribution_t1'       => ['label' => 'Distribution T1 (jour)',           'unit' => '€/kWh'],
             'distribution_t2'       => ['label' => 'Distribution T2 (nuit)',           'unit' => '€/kWh'],
@@ -89,6 +91,13 @@ final class TariffLineCatalog
             $key === 'energy_simple', $key === 'energy'          => ComponentKind::EnergyFlat,
             $energyType === 'electricity' && $key === 'energy_t1' => ComponentKind::EnergyT1,
             $energyType === 'electricity' && $key === 'energy_t2' => ComponentKind::EnergyT2,
+            // Volontairement NON restreint à l'électricité, contrairement aux clés
+            // bihoraires : le repli par défaut est per_kwh, qui FACTURERAIT un
+            // coefficient 1,08 comme 1,08 €/kWh sur une grille gaz reçue par l'API
+            // (les lignes plates sont typées ici, cf. TariffController::normalizeLines).
+            // Mappées correctement, ces clés restent inertes hors tarif dynamique.
+            $key === 'spot_coefficient' => ComponentKind::SpotCoefficient,
+            $key === 'spot_offset'      => ComponentKind::SpotOffset,
             $key === 'subscription'                              => ComponentKind::FixedMonthly,
             $energyType === 'electricity' && $key === 'distribution_t1' => ComponentKind::PerKwhT1,
             $energyType === 'electricity' && $key === 'distribution_t2' => ComponentKind::PerKwhT2,

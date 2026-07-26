@@ -81,12 +81,12 @@ final class UserRepositoryDbTest extends TestCase
         self::assertSame('EUR', $profile->currency);
         self::assertSame('fr', $profile->locale);
         self::assertSame('UTC', $profile->timezone);
-        // Défauts des colonnes TVA/marge par utilisateur (#153).
-        self::assertSame(21.0, $profile->vatRate);
+        // Défaut de la marge fournisseur par utilisateur (#153) ; la TVA a quitté le
+        // profil pour la grille tarifaire (#232).
         self::assertSame(0.0, $profile->supplierMarkupPerKwh);
     }
 
-    public function testUpdateProfilePersistsVatAndMarkup(): void
+    public function testUpdateProfilePersistsMarkup(): void
     {
         $repo = new UserRepository($this->pdo());
         $user = $repo->create('https://iss.example', 'sub-vat', 'example', 'Vera');
@@ -101,7 +101,6 @@ final class UserRepositoryDbTest extends TestCase
             currency: 'SEK',
             biddingZone: '10YFR-RTE------C',
             pricingMode: 'dynamic_hourly',
-            vatRate: 20.0,
             supplierMarkupPerKwh: 0.0123456,
             locale: 'en',
         ));
@@ -114,23 +113,20 @@ final class UserRepositoryDbTest extends TestCase
         self::assertSame('10YFR-RTE------C', $profile->biddingZone);
         self::assertSame('en', $profile->locale);
         self::assertSame('dynamic_hourly', $profile->pricingMode);
-        self::assertSame(20.0, $profile->vatRate);
         self::assertEqualsWithDelta(0.0123456, $profile->supplierMarkupPerKwh, 0.0000001);
 
-        // vat_rate ∈ [0,100] et supplier_markup ∈ [-1,1] bornés côté repository.
+        // supplier_markup ∈ [-1,1] borné côté repository.
         $repo->updateProfile($user->id, new UserProfile(
             country: 'FR',
             timezone: 'Europe/Paris',
             currency: 'EUR',
             biddingZone: null,
             pricingMode: 'dynamic_hourly',
-            vatRate: 250.0,
             supplierMarkupPerKwh: 5.0,
             locale: 'fr',
         ));
         $clamped = $repo->getProfile($user->id);
         self::assertNotNull($clamped);
-        self::assertSame(100.0, $clamped->vatRate);
         self::assertSame(1.0, $clamped->supplierMarkupPerKwh);
 
         $repo->updateProfile($user->id, new UserProfile(
@@ -139,13 +135,11 @@ final class UserRepositoryDbTest extends TestCase
             currency: 'EUR',
             biddingZone: null,
             pricingMode: 'dynamic_hourly',
-            vatRate: -10.0,
             supplierMarkupPerKwh: -5.0,
             locale: 'fr',
         ));
         $clampedLow = $repo->getProfile($user->id);
         self::assertNotNull($clampedLow);
-        self::assertSame(0.0, $clampedLow->vatRate);
         self::assertSame(-1.0, $clampedLow->supplierMarkupPerKwh);
     }
 

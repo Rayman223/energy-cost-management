@@ -319,6 +319,24 @@ function tariffSegmentsMeta(data) {
 
     const diffLabel = diff == null ? '' : (diff <= 0 ? tr('dash.dynamic.saving_vs') : tr('dash.dynamic.extra_vs'));
 
+    // Formule d'indexation réellement appliquée au prix de marché (#228). Le prix spot
+    // n'est pas ce que facture un fournisseur : rendre coefficient et marge visibles
+    // évite de croire à un écart de calcul. Deux cas méritent un avertissement plutôt
+    // qu'une note neutre — un coefficient rejeté (la formule ne correspond à rien de
+    // saisi) et une marge reprise du profil faute de ligne en grille.
+    const f = dyn.formula;
+    let formulaKey = 'dash.dynamic.formula';
+    if (f && f.coefficient_rejected) formulaKey = 'dash.dynamic.formula_rejected';
+    else if (f && f.offset_source === 'profile') formulaKey = 'dash.dynamic.formula_fallback';
+
+    const formulaNote = f ? `<div class="cost-formula-note${formulaKey === 'dash.dynamic.formula' ? '' : ' cost-formula-note--fallback'}">${
+      tr(formulaKey, {
+        coef: Number(f.spot_coefficient ?? 1).toFixed(4),
+        offset: Number(f.spot_offset_ttc ?? 0).toFixed(5),
+        vat: Number(f.vat_rate ?? 0).toFixed(2),
+        cur: CURRENCY_SYMBOL,
+      })}</div>` : '';
+
     return `<div class="cost-wrap mt-18"><div class="cost-lines">
       ${head}
       ${line(tr('dash.dynamic.energy_dynamic'),
@@ -329,6 +347,7 @@ function tariffSegmentsMeta(data) {
               coverage: Number(dyn.coverage_pct ?? 0).toFixed(0),
             }),
             dyn.energy_dynamic)}
+      ${formulaNote}
       ${line(tr('dash.dynamic.energy_classic'), '', classicEnergy)}
       <div class="cost-group-sep"></div>
       ${line(tr('dash.dynamic.total_dynamic'), '', dynTotal, 'total')}

@@ -17,7 +17,6 @@ final class UserProfileTest extends TestCase
             currency: 'EUR',
             biddingZone: '10YFR-RTE------C',
             pricingMode: 'dynamic_hourly',
-            vatRate: 20.0,
             supplierMarkupPerKwh: 0.0123456,
             locale: 'fr',
         );
@@ -27,7 +26,6 @@ final class UserProfileTest extends TestCase
         self::assertSame('EUR', $profile->currency);
         self::assertSame('10YFR-RTE------C', $profile->biddingZone);
         self::assertSame('dynamic_hourly', $profile->pricingMode);
-        self::assertSame(20.0, $profile->vatRate);
         self::assertSame(0.0123456, $profile->supplierMarkupPerKwh);
         self::assertSame('fr', $profile->locale);
     }
@@ -43,7 +41,6 @@ final class UserProfileTest extends TestCase
         self::assertSame('EUR', $profile->currency);
         self::assertNull($profile->biddingZone);
         self::assertSame('fixed', $profile->pricingMode);
-        self::assertSame(21.0, $profile->vatRate);
         self::assertSame(0.0, $profile->supplierMarkupPerKwh);
         self::assertSame('fr', $profile->locale);
     }
