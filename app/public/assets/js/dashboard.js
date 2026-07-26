@@ -29,15 +29,20 @@
 // block. Même convention de paramètres que Translator::t() côté PHP : `{name}`.
 // Nommée `tr` et non `t` : plusieurs fonctions du fichier utilisent déjà `t`
 // comme variable locale (total, delta), qui masquerait la fonction globale.
+//
+// La valeur retournée est interpolée telle quelle dans des templates `innerHTML` :
+// aucune valeur de catalogue ne doit contenir de HTML, et toute donnée utilisateur
+// passée en paramètre doit l'être via escapeHtml().
 const I18N = (typeof window !== 'undefined' && window.__I18N__) || {};
 function tr(key, params) {
-  let message = Object.prototype.hasOwnProperty.call(I18N, key) ? I18N[key] : key;
-  if (params) {
-    Object.keys(params).forEach((name) => {
-      message = message.split('{' + name + '}').join(String(params[name]));
-    });
-  }
-  return message;
+  const message = Object.prototype.hasOwnProperty.call(I18N, key) ? I18N[key] : key;
+  if (!params) return message;
+
+  // Passe unique : une valeur substituée qui contiendrait « {autre} » (un nom de
+  // grille saisi par l'utilisateur, p. ex.) ne doit pas être resubstituée ensuite.
+  return message.replace(/\{(\w+)\}/g, (placeholder, name) => (
+    Object.prototype.hasOwnProperty.call(params, name) ? String(params[name]) : placeholder
+  ));
 }
 
 // ── Formatage monétaire localisé (devise + séparateurs du profil) ───────────
@@ -65,6 +70,10 @@ function daysLabel(days) {
   const form = _pluralRules.select(n) === 'one' ? 'one' : 'other';
   return tr('dash.meta.days_' + form, { days: n });
 }
+// Divergence assumée entre les blocs : gaz et eau affichent la plage `from → to`
+// juste avant le compteur, qui se suffit alors à lui-même (« 31 jours »). Le bloc
+// électricité n'affiche pas de plage, d'où le préfixe `dash.meta.period`
+// (« Période : 31 jours ») qui porte seul le contexte temporel.
 
 // ── Rendu générique du détail de coût (piloté par cost.lines / kinds) ───────
 // Le moteur de calcul renvoie une liste de lignes typées {key,kind,group,label,
@@ -251,7 +260,7 @@ function tariffSegmentsMeta(data) {
           <span class="t-green">${tr('dash.meta.self_consumed', { kwh: Number(c.solar_consumed).toFixed(2) })}${c.self_consumption_pct != null ? ` (${Number(c.self_consumption_pct).toFixed(1)} %)` : ''}</span>
           <span class="t-green">${tr('dash.meta.savings', { amount: formatMoney(c.solar_savings) })}</span>
           ` : (d.solar != null ? `<span>${tr('dash.meta.solar', { kwh: Number(d.solar).toFixed(2) })}</span>` : '')}
-          <span>${tr('dash.meta.period_days', { days: data.days })}</span>
+          <span>${tr('dash.meta.period', { days: daysLabel(data.days) })}</span>
         </div>
       </div>
     </div>`;

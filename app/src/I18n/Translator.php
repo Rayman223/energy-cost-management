@@ -26,17 +26,26 @@ final class Translator
     }
 
     /**
+     * Substitution en une seule passe, même sémantique que `tr()` dans
+     * dashboard.js : une valeur déjà insérée qui contiendrait « {autre} » (un nom
+     * de grille tarifaire saisi par l'utilisateur, p. ex.) ne doit pas être
+     * resubstituée par le paramètre suivant. Un `{name}` sans paramètre
+     * correspondant est laissé intact.
+     *
      * @param array<string, string|int|float> $params
      */
     public function t(string $key, array $params = []): string
     {
         $message = $this->messages[$key] ?? $this->fallback[$key] ?? $key;
-
-        foreach ($params as $name => $value) {
-            $message = str_replace('{' . $name . '}', (string) $value, $message);
+        if ($params === []) {
+            return $message;
         }
 
-        return $message;
+        return (string) preg_replace_callback(
+            '/\{(\w+)\}/',
+            static fn (array $m): string => array_key_exists($m[1], $params) ? (string) $params[$m[1]] : $m[0],
+            $message,
+        );
     }
 
     /**

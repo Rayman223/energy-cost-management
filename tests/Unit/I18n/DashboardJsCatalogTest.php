@@ -44,9 +44,14 @@ final class DashboardJsCatalogTest extends TestCase
         return array_values(array_unique($keys));
     }
 
+    /**
+     * Repli sur la locale elle-même, et non sur le français par défaut : sinon
+     * `allWithPrefix()` fusionne le catalogue fr par-dessus les trous de la locale
+     * testée, et une clé réellement absente de en/nl/de passerait inaperçue ici.
+     */
     private function translator(string $locale): Translator
     {
-        return new Translator(__DIR__ . '/../../../app/translations', $locale);
+        return new Translator(__DIR__ . '/../../../app/translations', $locale, $locale);
     }
 
     public function testEveryKeyUsedByDashboardJsIsTranslatedInEveryLocale(): void
@@ -93,9 +98,14 @@ final class DashboardJsCatalogTest extends TestCase
         foreach (['en', 'nl', 'de'] as $locale) {
             $catalog = $this->translator($locale)->allWithPrefix('');
             foreach ($keys as $key) {
+                // Assertion explicite : sans elle, une clé absente sort en `''`,
+                // donc en liste de paramètres vide, et l'échec parlerait à tort
+                // de paramètres divergents plutôt que de traduction manquante.
+                self::assertArrayHasKey($key, $catalog, "Clé {$key} absente de {$locale}.php");
+
                 self::assertSame(
                     $this->placeholders($reference->t($key)),
-                    $this->placeholders($catalog[$key] ?? ''),
+                    $this->placeholders($catalog[$key]),
                     "Paramètres {name} divergents entre fr.php et {$locale}.php pour {$key}",
                 );
             }

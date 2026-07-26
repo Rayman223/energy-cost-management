@@ -354,7 +354,8 @@ return [
     'dash.meta.self_consumed'  => 'Eigenverbr.: {kwh} kWh',
     'dash.meta.savings'        => 'Einsparung: +{amount}',
     'dash.meta.solar'          => 'Solar: {kwh} kWh',
-    'dash.meta.period_days'    => 'Zeitraum: {days} Tage',
+    // {days} enthält bereits die von daysLabel() gewählte Pluralform.
+    'dash.meta.period'         => 'Zeitraum: {days}',
     'dash.meta.days_one'       => '{days} Tag',
     'dash.meta.days_other'     => '{days} Tage',
     'dash.meta.pcs'            => 'Brennwert {value} kWh/m³',

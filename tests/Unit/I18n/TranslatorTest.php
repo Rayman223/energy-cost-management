@@ -15,7 +15,7 @@ final class TranslatorTest extends TestCase
     {
         $this->dir = sys_get_temp_dir() . '/i18ntest_' . uniqid('', true);
         mkdir($this->dir);
-        file_put_contents($this->dir . '/fr.php', "<?php return ['greet' => 'Bonjour {name}', 'only_fr' => 'Exclusif', 'dash.a' => 'A fr', 'dash.b' => 'B fr', 'other' => 'Autre'];");
+        file_put_contents($this->dir . '/fr.php', "<?php return ['greet' => 'Bonjour {name}', 'only_fr' => 'Exclusif', 'dash.a' => 'A fr', 'dash.b' => 'B fr', 'other' => 'Autre', 'segment' => '{name} : {total}'];");
         file_put_contents($this->dir . '/en.php', "<?php return ['greet' => 'Hello {name}', 'dash.a' => 'A en'];");
     }
 
@@ -31,6 +31,28 @@ final class TranslatorTest extends TestCase
         $translator = new Translator($this->dir, 'en', 'fr');
 
         self::assertSame('Hello Bob', $translator->t('greet', ['name' => 'Bob']));
+    }
+
+    /**
+     * Substitution en une passe : une valeur insérée qui contient elle-même
+     * « {autre} » — un nom de grille tarifaire saisi par l'utilisateur, p. ex. —
+     * ne doit pas être resubstituée par le paramètre suivant.
+     */
+    public function testParametersAreSubstitutedInASinglePass(): void
+    {
+        $translator = new Translator($this->dir, 'fr', 'fr');
+
+        self::assertSame(
+            'Heures {total} : 42',
+            $translator->t('segment', ['name' => 'Heures {total}', 'total' => '42']),
+        );
+    }
+
+    public function testPlaceholderWithoutParameterIsLeftIntact(): void
+    {
+        $translator = new Translator($this->dir, 'fr', 'fr');
+
+        self::assertSame('Bob : {total}', $translator->t('segment', ['name' => 'Bob']));
     }
 
     public function testFallsBackToDefaultLocaleForMissingKey(): void

@@ -355,7 +355,8 @@ return [
     'dash.meta.self_consumed'  => 'Self-cons.: {kwh} kWh',
     'dash.meta.savings'        => 'Savings: +{amount}',
     'dash.meta.solar'          => 'Solar: {kwh} kWh',
-    'dash.meta.period_days'    => 'Period: {days} days',
+    // {days} already carries the plural form picked by daysLabel().
+    'dash.meta.period'         => 'Period: {days}',
     'dash.meta.days_one'       => '{days} day',
     'dash.meta.days_other'     => '{days} days',
     'dash.meta.pcs'            => 'CV {value} kWh/m³',

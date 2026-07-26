@@ -364,7 +364,8 @@ return [
     'dash.meta.self_consumed'  => 'Auto-conso : {kwh} kWh',
     'dash.meta.savings'        => 'Économies : +{amount}',
     'dash.meta.solar'          => 'Solaire : {kwh} kWh',
-    'dash.meta.period_days'    => 'Période : {days} jours',
+    // {days} reçoit déjà la forme accordée produite par daysLabel().
+    'dash.meta.period'         => 'Période : {days}',
     'dash.meta.days_one'       => '{days} jour',
     'dash.meta.days_other'     => '{days} jours',
     'dash.meta.pcs'            => 'PCS {value} kWh/m³',

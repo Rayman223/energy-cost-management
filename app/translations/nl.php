@@ -354,7 +354,8 @@ return [
     'dash.meta.self_consumed'  => 'Zelfverbruik: {kwh} kWh',
     'dash.meta.savings'        => 'Besparing: +{amount}',
     'dash.meta.solar'          => 'Zon: {kwh} kWh',
-    'dash.meta.period_days'    => 'Periode: {days} dagen',
+    // {days} bevat al de door daysLabel() gekozen meervoudsvorm.
+    'dash.meta.period'         => 'Periode: {days}',
     'dash.meta.days_one'       => '{days} dag',
     'dash.meta.days_other'     => '{days} dagen',
     'dash.meta.pcs'            => 'Calorische waarde {value} kWh/m³',
