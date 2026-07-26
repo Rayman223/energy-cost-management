@@ -127,7 +127,7 @@ $deltaBadge = function (?float $pct, bool $lowerIsBetter, bool $isNew = false): 
 
   <!-- ── Cost estimate ─────────────────────────────────────────────────── -->
   <div class="section-header">
-    <span class="section-title">Estimation coûts</span>
+    <span class="section-title">Estimation coûts électricité</span>
     <span class="section-line"></span>
     <div class="month-nav">
       <button class="month-nav-btn" id="nav-prev" title="Mois précédent">&#8592;</button>
@@ -202,19 +202,6 @@ $deltaBadge = function (?float $pct, bool $lowerIsBetter, bool $isNew = false): 
     <canvas id="energyChart"></canvas>
   </div>
 
-  <!-- ── Chart gaz ─────────────────────────────────────────────────────── -->
-  <div class="section-header">
-    <span class="section-title">Historique gaz</span>
-    <span class="section-line"></span>
-    <div class="btn-row">
-      <button class="btn btn-ghost btn-xs" id="gas-btn-30" data-gas-chart-days="30">30j</button>
-      <button class="btn btn-ghost btn-xs" id="gas-btn-365" data-gas-chart-days="365">1 an</button>
-    </div>
-  </div>
-  <div class="chart-card">
-    <canvas id="gasChart"></canvas>
-  </div>
-
   <!-- ── Estimation coûts gaz ─────────────────────────────────────────── -->
   <div class="section-header">
     <span class="section-title">Estimation coûts gaz</span>
@@ -240,17 +227,17 @@ $deltaBadge = function (?float $pct, bool $lowerIsBetter, bool $isNew = false): 
     <div class="async-note">Chargement…</div>
   </div>
 
-  <!-- ── Chart eau ─────────────────────────────────────────────────────── -->
+  <!-- ── Chart gaz ─────────────────────────────────────────────────────── -->
   <div class="section-header">
-    <span class="section-title">Historique eau</span>
+    <span class="section-title">Historique gaz</span>
     <span class="section-line"></span>
     <div class="btn-row">
-      <button class="btn btn-ghost btn-xs" id="water-btn-30" data-water-chart-days="30">30j</button>
-      <button class="btn btn-ghost btn-xs" id="water-btn-365" data-water-chart-days="365">1 an</button>
+      <button class="btn btn-ghost btn-xs" id="gas-btn-30" data-gas-chart-days="30">30j</button>
+      <button class="btn btn-ghost btn-xs" id="gas-btn-365" data-gas-chart-days="365">1 an</button>
     </div>
   </div>
   <div class="chart-card">
-    <canvas id="waterChart"></canvas>
+    <canvas id="gasChart"></canvas>
   </div>
 
   <!-- ── Consommation eau ─────────────────────────────────────────────── -->
@@ -276,6 +263,19 @@ $deltaBadge = function (?float $pct, bool $lowerIsBetter, bool $isNew = false): 
   <!-- Water consumption content (volume m³, pas de coût) -->
   <div id="water-cost-content">
     <div class="async-note">Chargement…</div>
+  </div>
+
+  <!-- ── Chart eau ─────────────────────────────────────────────────────── -->
+  <div class="section-header">
+    <span class="section-title">Historique eau</span>
+    <span class="section-line"></span>
+    <div class="btn-row">
+      <button class="btn btn-ghost btn-xs" id="water-btn-30" data-water-chart-days="30">30j</button>
+      <button class="btn btn-ghost btn-xs" id="water-btn-365" data-water-chart-days="365">1 an</button>
+    </div>
+  </div>
+  <div class="chart-card">
+    <canvas id="waterChart"></canvas>
   </div>
 
   <div class="page-footer">
