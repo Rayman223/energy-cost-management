@@ -143,10 +143,10 @@ front controller.
 #### Sous-domaine SWAG (`energy.domain.com`)
 
 Pour exposer le site sur un sous-domaine dédié, le repo fournit un **site-conf**
-prêt à l'emploi : [`energy.domain.com.conf`](energy.domain.com.conf). Il reprend le
+d'exemple : [`nginx-swag-site.conf.example`](nginx-swag-site.conf.example). Il reprend le
 bloc Nginx ci-dessus dans un `server { server_name energy.*; … }` servi
 directement par le PHP-FPM de SWAG (pas de reverse-proxy — l'app vit dans le
-container SWAG).
+container SWAG). Remplacer `domain.com` par le domaine réel.
 
 1. **DNS** — pointer `energy.domain.com` (A/AAAA, ou CNAME vers l'hôte) sur
    l'IP de l'Unraid, comme les autres sous-domaines de `domain.com`.
@@ -158,7 +158,7 @@ container SWAG).
 
    ```bash
    # depuis l'hôte Unraid ; APP_NAME=energyv3 par défaut (cf. deploy_unraid.sh)
-   cp /mnt/user/appdata/swag/www/energyv3/app/docs/energy.domain.com.conf \
+   cp /mnt/user/appdata/swag/www/energyv3/app/docs/nginx-swag-site.conf.example \
       /mnt/user/appdata/swag/nginx/site-confs/energy.domain.com.conf
    docker exec swag nginx -t          # vérifie la syntaxe
    docker exec swag nginx -s reload   # applique sans redémarrer le container

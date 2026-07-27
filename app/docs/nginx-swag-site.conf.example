@@ -1,0 +1,41 @@
+## energy.domain.com — Manage-energy-costs (servi par le PHP-FPM de SWAG).
+##
+## Bloc « site-conf » : l'app est hébergée DANS le container SWAG
+## (/config/www/energyv3, cf. app/scripts/deploy_unraid.sh) et servie
+## directement par son PHP-FPM — pas de reverse-proxy vers un container tiers.
+##
+## Installation :
+##   1. Copier ce fichier dans /config/nginx/site-confs/ du container SWAG
+##      (en le renommant, p. ex. energy.domain.com.conf).
+##   2. `docker exec swag nginx -t` puis `docker exec swag nginx -s reload`.
+## (cf. app/docs/installation.md → « Sous-domaine SWAG (energy.domain.com) »).
+##
+## Adapter `energyv3` ci-dessous si APP_NAME diffère (deploy_unraid.sh).
+
+server {
+    listen 443 ssl;
+    listen [::]:443 ssl;
+
+    server_name energy.*;                      # → energy.domain.com (cert *.domain.com géré par SWAG)
+    include /config/nginx/ssl.conf;            # certif Let's Encrypt de SWAG
+
+    root /config/www/energyv3/app/public;      # document root = app/public (front controller)
+    index index.php;
+
+    location / {
+        try_files $uri $uri/ /index.php$is_args$args;
+    }
+
+    # Tout …/xxx.php passe par le front controller, qui 308-redirige vers l'URL
+    # propre (méthode + corps préservés → les clients POST sur /api.php marchent).
+    location ~ \.php$ {
+        try_files $uri /index.php$is_args$args;
+        include /etc/nginx/fastcgi_params;
+        fastcgi_pass 127.0.0.1:9000;                           # PHP-FPM de SWAG (TCP, comme default.conf)
+        fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
+        fastcgi_param HTTPS on;                                 # l'app construit des URLs https (redirect_uri OIDC)
+    }
+}
+
+# La redirection HTTP (port 80) → HTTPS est déjà assurée globalement par le
+# default.conf de SWAG : inutile d'ajouter un bloc `listen 80` ici.
