@@ -237,8 +237,8 @@ $deltaBadge = function (?float $pct, bool $lowerIsBetter, bool $isNew = false): 
     <span class="section-title"><?= $this->te('dash.history.gas') ?></span>
     <span class="section-line"></span>
     <div class="btn-row">
-      <button class="btn btn-ghost btn-xs" id="gas-btn-30" data-gas-chart-days="30"><?= $this->te('dash.range.30d') ?></button>
-      <button class="btn btn-ghost btn-xs" id="gas-btn-365" data-gas-chart-days="365"><?= $this->te('dash.range.1y') ?></button>
+      <button class="btn btn-ghost btn-xs" id="gas-btn-12" data-gas-chart-months="12"><?= $this->te('dash.range.12m') ?></button>
+      <button class="btn btn-ghost btn-xs" id="gas-btn-24" data-gas-chart-months="24"><?= $this->te('dash.range.24m') ?></button>
     </div>
   </div>
   <div class="chart-card">
@@ -275,8 +275,8 @@ $deltaBadge = function (?float $pct, bool $lowerIsBetter, bool $isNew = false): 
     <span class="section-title"><?= $this->te('dash.history.water') ?></span>
     <span class="section-line"></span>
     <div class="btn-row">
-      <button class="btn btn-ghost btn-xs" id="water-btn-30" data-water-chart-days="30"><?= $this->te('dash.range.30d') ?></button>
-      <button class="btn btn-ghost btn-xs" id="water-btn-365" data-water-chart-days="365"><?= $this->te('dash.range.1y') ?></button>
+      <button class="btn btn-ghost btn-xs" id="water-btn-12" data-water-chart-months="12"><?= $this->te('dash.range.12m') ?></button>
+      <button class="btn btn-ghost btn-xs" id="water-btn-24" data-water-chart-months="24"><?= $this->te('dash.range.24m') ?></button>
     </div>
   </div>
   <div class="chart-card">

@@ -312,6 +312,8 @@ return [
     'dash.nav.next_period' => 'Nächster Zeitraum',
     'dash.range.30d'       => '30 T',
     'dash.range.1y'        => '1 Jahr',
+    'dash.range.12m'       => '12 Monate',
+    'dash.range.24m'       => '24 Monate',
 
     // Dashboard — clientseitig von dashboard.js gerenderte Bezeichnungen (#223).
     // {cur} ist das Währungssymbol des Profils, niemals ein festes „€“.

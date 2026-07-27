@@ -342,6 +342,75 @@ final class ElectricityReadingRepositoryDbTest extends TestCase
         self::assertSame([$impDay, $solDay], $days);
     }
 
+    public function testMonthlySeriesAggregatesConsumptionPerCalendarMonth(): void
+    {
+        // Vue « 1 an » du graphe (#238) : 12 points mensuels, calculés sur la
+        // consommation (bornes interpolées à minuit) et non sur l'index brut.
+        $series = $this->repo()->getMonthlyDeltaSeries(12, new \DateTimeImmutable('2026-07-15 00:00:00', new \DateTimeZone('UTC')));
+        $byMonth = array_column($series, null, 'month');
+
+        // Fenêtre : août 2025 → juillet 2026, tronquée aux mois couverts par les
+        // relevés (le premier tombe le 30 nov. 2025 à 23:00).
+        self::assertSame(
+            ['2025-11', '2025-12', '2026-01', '2026-02', '2026-03', '2026-04', '2026-05', '2026-06', '2026-07'],
+            array_column($series, 'month'),
+        );
+
+        // Décembre 2025 : 81 − 51, exactement la valeur de la card mensuelle.
+        self::assertEqualsWithDelta(30.0, $byMonth['2025-12']['import_t1'], 0.001);
+        self::assertEqualsWithDelta(30.0, $byMonth['2025-12']['export_t1'], 0.001);
+        self::assertFalse($byMonth['2025-12']['partial']);
+
+        // Mai 2026 : 201 − 101, idem getMonthlyDeltasForMonth(2026, 5).
+        self::assertEqualsWithDelta(100.0, $byMonth['2026-05']['import_t1'], 0.001);
+        self::assertEqualsWithDelta(
+            $this->repo()->getMonthlyDeltasForMonth(2026, 5)['prelev_jour'],
+            $byMonth['2026-05']['import_t1'],
+            0.001,
+        );
+
+        // Aucun registre « production » sur ce compteur → solaire absent.
+        self::assertNull($byMonth['2026-05']['solar']);
+    }
+
+    public function testMonthlySeriesClampsCurrentMonthOnLastReadingWithoutProjecting(): void
+    {
+        // Juillet 2026 : dernier relevé le 10 à 12:00 (350). La barre vaut la conso
+        // réelle (350 − 301 = 49) et non une projection à fin de mois.
+        $series  = $this->repo()->getMonthlyDeltaSeries(3, new \DateTimeImmutable('2026-07-15 00:00:00', new \DateTimeZone('UTC')));
+        $byMonth = array_column($series, null, 'month');
+
+        self::assertEqualsWithDelta(49.0, $byMonth['2026-07']['import_t1'], 0.001);
+        self::assertTrue($byMonth['2026-07']['partial']);
+        self::assertFalse($byMonth['2026-06']['partial']);
+    }
+
+    public function testMonthlySeriesIncludesSolarWhenTheRegisterIsFed(): void
+    {
+        $otherId = (new UserRepository($this->pdo()))->create('https://iss.test', 'series-solar', 'test', 'Série PV')->id;
+        $utc     = new \DateTimeZone('UTC');
+        $repo    = new ElectricityReadingRepository($this->pdo(), $otherId);
+
+        $repo->insertIndexes(new \DateTimeImmutable('2026-02-01 00:00:00', $utc), ['import_t1' => 100.0, 'production' => 10.0]);
+        $repo->insertIndexes(new \DateTimeImmutable('2026-03-01 00:00:00', $utc), ['import_t1' => 160.0, 'production' => 40.0]);
+
+        $byMonth = array_column(
+            $repo->getMonthlyDeltaSeries(2, new \DateTimeImmutable('2026-03-05 00:00:00', $utc)),
+            null,
+            'month',
+        );
+
+        self::assertEqualsWithDelta(60.0, $byMonth['2026-02']['import_t1'], 0.001);
+        self::assertEqualsWithDelta(30.0, $byMonth['2026-02']['solar'], 0.001);
+    }
+
+    public function testMonthlySeriesIsScopedPerUserAndEmptyWithoutReadings(): void
+    {
+        $otherId = (new UserRepository($this->pdo()))->create('https://iss.test', 'series-scope', 'test', 'Série')->id;
+
+        self::assertSame([], (new ElectricityReadingRepository($this->pdo(), $otherId))->getMonthlyDeltaSeries(12));
+    }
+
     public function testTodayIndexUsesUserLocalDay(): void
     {
         // Utilisateur isolé pour ne pas mélanger avec le seed 2025/2026 de la classe.

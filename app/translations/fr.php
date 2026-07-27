@@ -322,6 +322,8 @@ return [
     'dash.nav.next_period' => 'Période suivante',
     'dash.range.30d'       => '30j',
     'dash.range.1y'        => '1 an',
+    'dash.range.12m'       => '12 mois',
+    'dash.range.24m'       => '24 mois',
 
     // Dashboard — libellés rendus côté client par dashboard.js (#223).
     // {cur} est le symbole de la devise du profil : jamais « € » en dur.

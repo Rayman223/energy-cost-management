@@ -615,6 +615,161 @@ final class ElectricityReadingRepository implements LegacyDailyRepositoryInterfa
         return array_values($deltas);
     }
 
+    /**
+     * Consommation MENSUELLE des $months derniers mois, par registre (#238).
+     *
+     * La vue « 1 an » du graphique traçait 365 barres journalières : illisible.
+     * On agrège donc par mois calendaire, sur la CONSOMMATION (différence des
+     * index interpolés aux bornes de mois) et non sur la lecture d'index brute —
+     * même sémantique que {@see interpolatedMonthlyDeltas} qui alimente les cards,
+     * pour que graphe et cards concordent.
+     *
+     * Les bornes sont résolues une seule fois chacune ($months + 1 instants, 2
+     * requêtes indexées par instant) : la fin du mois M est le début du mois M+1.
+     * {@see interpolatedValuesAt} clampe déjà sur le relevé le plus proche quand
+     * l'instant sort de la plage, ce qui donne au mois en cours la consommation
+     * réelle à ce jour (`partial => true`) plutôt qu'une projection.
+     *
+     * @param DateTimeImmutable|null $now Instant de référence (tests) ; « maintenant » par défaut.
+     * @return list<array{month:string, import_t1:float, import_t2:float, export_t1:float, export_t2:float, solar:float|null, partial:bool}>
+     */
+    public function getMonthlyDeltaSeries(int $months = 12, ?DateTimeImmutable $now = null): array
+    {
+        $months = max(1, min(60, $months));
+
+        $registerKeys = ['import_t1', 'import_t2', 'export_t1', 'export_t2'];
+
+        $rids    = [];
+        $elecIds = [];
+        foreach ($registerKeys as $registerKey) {
+            $rid                = $this->registerId($registerKey);
+            $rids[$registerKey] = $rid;
+            if ($rid !== null) {
+                $elecIds[] = $rid;
+            }
+        }
+        $solarId = $this->registerId('production');
+
+        $allIds = $solarId === null ? $elecIds : [...$elecIds, $solarId];
+        if ($allIds === []) {
+            return [];
+        }
+
+        $bounds = $this->readingRange($allIds);
+        if ($bounds === null) {
+            return [];
+        }
+        $firstAt = $bounds['first'];
+        $lastAt  = $bounds['last'];
+
+        // Fenêtre : le mois courant et les ($months - 1) précédents, en UTC
+        // (fuseau de stockage) comme toutes les bornes calendaires du projet.
+        $currentMonth = ($now ?? new DateTimeImmutable('now'))
+            ->setTimezone(Dates::utc())
+            ->modify('first day of this month')
+            ->setTime(0, 0, 0);
+        $windowStart = $currentMonth->modify('-' . ($months - 1) . ' months');
+
+        // Instants de bornes retenus : ceux qui délimitent un mois recoupant la
+        // plage des relevés. Chaque instant n'est interpolé qu'une fois.
+        /** @var array<string, array<int, array{value: float, timestamp: string}|null>> $valuesAt */
+        $valuesAt = [];
+        $series   = [];
+
+        for ($i = 0; $i < $months; $i++) {
+            $monthStartDt = $windowStart->modify('+' . $i . ' months');
+            $monthEndDt   = $monthStartDt->modify('+1 month');
+
+            $monthStart = $monthStartDt->format('Y-m-d H:i:s');
+            $monthEnd   = $monthEndDt->format('Y-m-d H:i:s');
+
+            // Mois entièrement hors de la plage des relevés → aucune barre.
+            if ($monthEnd <= $firstAt || $monthStart >= $lastAt) {
+                continue;
+            }
+
+            // Bornes clampées sur les relevés : pas de conso inventée avant le
+            // premier relevé, pas de projection après le dernier.
+            $partial  = $monthEnd > $lastAt;
+            $effStart = max($monthStart, $firstAt);
+            $effEnd   = min($monthEnd, $lastAt);
+
+            $valuesAt[$effStart] ??= $this->interpolatedValuesAt($allIds, $effStart);
+            $valuesAt[$effEnd]   ??= $this->interpolatedValuesAt($allIds, $effEnd);
+
+            $row = [
+                'month'     => $monthStartDt->format('Y-m'),
+                'import_t1' => 0.0,
+                'import_t2' => 0.0,
+                'export_t1' => 0.0,
+                'export_t2' => 0.0,
+                'solar'     => null,
+                'partial'   => $partial || $effStart !== $monthStart,
+            ];
+
+            foreach ($registerKeys as $registerKey) {
+                $rid = $rids[$registerKey];
+                if ($rid === null) {
+                    continue;
+                }
+                $row[$registerKey] = self::boundedDelta($valuesAt[$effStart][$rid] ?? null, $valuesAt[$effEnd][$rid] ?? null);
+            }
+
+            // Solaire : null (et non 0) quand le registre existe mais n'a aucun
+            // relevé sur la période — la courbe PV ne doit pas tomber à zéro,
+            // même sémantique que getDailyDeltasForChart.
+            $solarStart = $solarId === null ? null : ($valuesAt[$effStart][$solarId] ?? null);
+            $solarEnd   = $solarId === null ? null : ($valuesAt[$effEnd][$solarId] ?? null);
+            if ($solarStart !== null && $solarEnd !== null) {
+                $row['solar'] = self::boundedDelta($solarStart, $solarEnd);
+            }
+
+            $series[] = $row;
+        }
+
+        return $series;
+    }
+
+    /**
+     * Delta entre deux index interpolés (0.0 si l'un des deux manque : registre
+     * vide sur la période, donc rien à imputer au mois).
+     *
+     * @param array{value: float, timestamp: string}|null $start
+     * @param array{value: float, timestamp: string}|null $end
+     */
+    private static function boundedDelta(?array $start, ?array $end): float
+    {
+        if ($start === null || $end === null) {
+            return 0.0;
+        }
+
+        return round(max(0.0, $end['value'] - $start['value']), 3);
+    }
+
+    /**
+     * Premier et dernier horodatage de relevé, tous registres confondus.
+     *
+     * @param list<int> $registerIds
+     * @return array{first: string, last: string}|null  null si aucun relevé.
+     */
+    private function readingRange(array $registerIds): ?array
+    {
+        $placeholders = implode(', ', array_fill(0, count($registerIds), '?'));
+
+        $stmt = $this->pdo->prepare(
+            "SELECT MIN(reading_at) AS first_at, MAX(reading_at) AS last_at
+             FROM meter_readings WHERE register_id IN ($placeholders)"
+        );
+        $stmt->execute($registerIds);
+        $row = $stmt->fetch();
+
+        if (!is_array($row) || $row['first_at'] === null || $row['last_at'] === null) {
+            return null;
+        }
+
+        return ['first' => (string) $row['first_at'], 'last' => (string) $row['last_at']];
+    }
+
     // -------------------------------------------------------------------------
     // Tarif dynamique : conso import horaire
     // -------------------------------------------------------------------------

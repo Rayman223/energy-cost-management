@@ -6,6 +6,7 @@ namespace Tests\Unit\Service;
 
 use App\Service\MonthlyConsumptionInterpolator;
 use DateTimeImmutable;
+use DateTimeZone;
 use PHPUnit\Framework\TestCase;
 
 final class MonthlyConsumptionInterpolatorTest extends TestCase
@@ -181,5 +182,118 @@ final class MonthlyConsumptionInterpolatorTest extends TestCase
         self::assertNull(
             $this->interp->interpolateValueAt($r, (new DateTimeImmutable('2026-04-01 00:00:00'))->getTimestamp()),
         );
+    }
+
+    // ── monthlySeries() : graphique mensuel (#238) ────────────────────────────
+
+    private function ts(string $moment): int
+    {
+        return (new DateTimeImmutable($moment, new DateTimeZone('UTC')))->getTimestamp();
+    }
+
+    public function testMonthlySeriesSpreadsOneReadingOverTheMonthsItCovers(): void
+    {
+        // Cas de l'issue : deux relevés seulement (1er janv. et 12 juin), qui
+        // donnaient deux barres. La conso doit être ventilée sur chaque mois.
+        $series = $this->interp->monthlySeries(
+            $this->readings([['2026-01-01 00:00:00', 100.0], ['2026-06-12 00:00:00', 262.0]]),
+            6,
+            $this->ts('2026-06-20 10:00:00'),
+        );
+
+        self::assertCount(6, $series);
+        self::assertSame(
+            ['2026-01', '2026-02', '2026-03', '2026-04', '2026-05', '2026-06'],
+            array_column($series, 'month'),
+        );
+
+        // 162 m³ sur 162 jours = 1 m³/jour → chaque mois vaut son nombre de jours.
+        self::assertEqualsWithDelta(31.0, $series[0]['delta_m3'], 0.001); // janvier
+        self::assertEqualsWithDelta(28.0, $series[1]['delta_m3'], 0.001); // février
+        self::assertEqualsWithDelta(30.0, $series[3]['delta_m3'], 0.001); // avril
+
+        // Juin : borne de fin clampée sur le dernier relevé (11 jours), pas de projection.
+        self::assertEqualsWithDelta(11.0, $series[5]['delta_m3'], 0.001);
+        self::assertTrue($series[5]['partial']);
+        self::assertFalse($series[0]['partial']);
+    }
+
+    public function testMonthlySeriesMergesSeveralReadingsOfTheSameMonth(): void
+    {
+        // Trois relevés dans le même mois → UNE seule barre, somme des deltas.
+        $series = $this->interp->monthlySeries(
+            $this->readings([
+                ['2026-03-01 00:00:00', 0.0],
+                ['2026-03-10 00:00:00', 12.0],
+                ['2026-03-20 00:00:00', 20.0],
+                ['2026-04-01 00:00:00', 33.0],
+            ]),
+            1,
+            $this->ts('2026-03-25 12:00:00'),
+        );
+
+        self::assertCount(1, $series);
+        self::assertSame('2026-03', $series[0]['month']);
+        self::assertEqualsWithDelta(33.0, $series[0]['delta_m3'], 0.001);
+    }
+
+    public function testMonthlySeriesSkipsMonthsBeforeTheFirstReading(): void
+    {
+        // Fenêtre de 12 mois mais relevés depuis novembre seulement : aucune barre
+        // inventée avant le premier relevé.
+        $series = $this->interp->monthlySeries(
+            $this->readings([['2025-11-15 00:00:00', 0.0], ['2026-01-15 00:00:00', 61.0]]),
+            12,
+            $this->ts('2026-01-20 08:00:00'),
+        );
+
+        self::assertSame(['2025-11', '2025-12', '2026-01'], array_column($series, 'month'));
+        // Novembre part du relevé du 15 (mois incomplet côté données) → partiel.
+        self::assertTrue($series[0]['partial']);
+        self::assertFalse($series[1]['partial']);
+        self::assertEqualsWithDelta(31.0, $series[1]['delta_m3'], 0.001); // décembre, 1 m³/jour
+    }
+
+    public function testMonthlySeriesCurrentMonthIsNotProjected(): void
+    {
+        // 10 m³/jour, dernier relevé le 10 du mois : la barre du mois en cours
+        // vaut la conso réelle (100) et non la projection à 30 jours (300).
+        $series = $this->interp->monthlySeries(
+            $this->readings([['2026-06-01 00:00:00', 0.0], ['2026-06-11 00:00:00', 100.0]]),
+            1,
+            $this->ts('2026-06-25 18:00:00'),
+        );
+
+        self::assertCount(1, $series);
+        self::assertEqualsWithDelta(100.0, $series[0]['delta_m3'], 0.001);
+        self::assertTrue($series[0]['partial']);
+    }
+
+    public function testMonthlySeriesReturnsEmptyBelowTwoReadings(): void
+    {
+        self::assertSame([], $this->interp->monthlySeries([], 12, $this->ts('2026-06-01 00:00:00')));
+        self::assertSame(
+            [],
+            $this->interp->monthlySeries(
+                $this->readings([['2026-05-01 00:00:00', 10.0]]),
+                12,
+                $this->ts('2026-06-01 00:00:00'),
+            ),
+        );
+    }
+
+    public function testMonthlySeriesHandlesYearRollover(): void
+    {
+        $series = $this->interp->monthlySeries(
+            $this->readings([['2025-12-01 00:00:00', 0.0], ['2026-02-01 00:00:00', 62.0]]),
+            3,
+            $this->ts('2026-02-01 00:00:00'),
+        );
+
+        self::assertSame(['2025-12', '2026-01'], array_column($series, 'month'));
+        self::assertEqualsWithDelta(31.0, $series[0]['delta_m3'], 0.001);
+        self::assertEqualsWithDelta(31.0, $series[1]['delta_m3'], 0.001);
+        // Le dernier relevé tombe pile au 1er février : février n'a rien à montrer.
+        self::assertFalse($series[0]['partial']);
     }
 }

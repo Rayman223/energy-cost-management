@@ -33,8 +33,8 @@
 ### Conventions de réponse
 
 - Les actions **« données »** (`today`, `monthly_delta`, `chart_data`,
-  `gas_history`, `water_history`, `tariffs`) renvoient directement
-  l'objet/tableau métier, **sans** enveloppe `{ ok }`.
+  `gas_history`, `water_history`, `*_monthly_series`, `tariffs`) renvoient
+  directement l'objet/tableau métier, **sans** enveloppe `{ ok }`.
 - Les actions **« estimation de coût »** (`month_cost`, `cost_estimate`,
   `gas_cost`, `gas_month_cost`) renvoient un objet avec `available: bool` ; si
   `false`, un champ `reason` explique pourquoi (voir `CostCalculationService`).
@@ -53,6 +53,9 @@
 | `month_cost` | `year` (défaut année courante), `month` (défaut mois courant) | `estimateMonthElectricity(year, month)`. `422` si `year ∉ [2000,2100]` ou `month ∉ [1,12]`. |
 | `gas_history` | — | Tous les relevés gaz (`GasRepository::getAllReadings`). |
 | `water_history` | — | Tous les relevés eau (`WaterRepository::getAllReadings`). |
+| `electricity_monthly_series` | `months` (défaut 12, borné 1–60) | Consommation mensuelle pour le graphique (`getMonthlyDeltaSeries`) : `[{ month:"YYYY-MM", import_t1, import_t2, export_t1, export_t2, solar:number\|null, partial:bool }]`. |
+| `gas_monthly_series` | `months` (défaut 12, borné 1–60) | Volume gaz mensuel (`UtilityConsumptionSeriesService`) : `[{ month:"YYYY-MM", delta_m3, partial:bool }]`. |
+| `water_monthly_series` | `months` (défaut 12, borné 1–60) | Volume eau mensuel, même forme que `gas_monthly_series`. |
 | `cost_estimate` | — | `estimateCurrentMonthElectricity()`. |
 | `gas_cost` | — | `estimateLastGasPeriod()`. |
 | `gas_month_cost` | `year`, `month` (mêmes défauts/validations que `month_cost`) | `estimateMonthGas(year, month)`. |

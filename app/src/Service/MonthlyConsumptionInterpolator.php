@@ -79,6 +79,88 @@ final class MonthlyConsumptionInterpolator
     }
 
     /**
+     * Série mensuelle de consommation pour le graphique du dashboard (#238).
+     *
+     * Les relevés gaz/eau sont manuels et clairsemés : une barre par relevé donne
+     * une lecture fausse (deux relevés dans le même mois → deux barres, un relevé
+     * couvrant cinq mois → une barre géante). On ventile donc la consommation sur
+     * les mois calendaires avec le MÊME moteur que les cards de coût
+     * ({@see interpolateMonth}), pour que graphe et cards affichent les mêmes m³.
+     *
+     * Différence avec {@see interpolateMonth} : la borne de fin n'est jamais
+     * extrapolée. Elle est clampée sur le dernier relevé, de sorte que le mois en
+     * cours affiche la consommation RÉELLE à ce jour (`partial => true`) plutôt
+     * qu'une projection qui gonflerait artificiellement la dernière barre.
+     *
+     * Les mois entièrement hors de [premier relevé, dernier relevé] sont omis :
+     * on n'invente pas de barre avant le premier relevé.
+     *
+     * @param list<array{ts:int,value:float}> $readingsAsc Relevés triés par timestamp ASC.
+     * @param int $months  Nombre de mois de la fenêtre (le mois de $nowTs inclus).
+     * @param int $nowTs   Instant « maintenant » (dernier mois de la fenêtre).
+     * @return list<array{month:string, delta_m3:float, partial:bool}>
+     */
+    public function monthlySeries(array $readingsAsc, int $months, int $nowTs): array
+    {
+        // Tri défensif (le repository renvoie déjà ASC, mais le moteur reste pur).
+        usort($readingsAsc, static fn (array $a, array $b): int => $a['ts'] <=> $b['ts']);
+
+        $n = count($readingsAsc);
+        if ($n < 2 || $months < 1) {
+            // Un seul relevé : aucune pente connue, donc aucune consommation
+            // attribuable à un mois.
+            return [];
+        }
+
+        $firstTs = $readingsAsc[0]['ts'];
+        $lastTs  = $readingsAsc[$n - 1]['ts'];
+
+        // Premier jour du mois de $nowTs, puis recul de ($months - 1) mois.
+        $currentMonth = (new DateTimeImmutable('@' . $nowTs))
+            ->setTimezone(Dates::utc())
+            ->modify('first day of this month')
+            ->setTime(0, 0, 0);
+        $windowStart = $currentMonth->modify('-' . ($months - 1) . ' months');
+
+        $series = [];
+        for ($i = 0; $i < $months; $i++) {
+            $monthStart = $windowStart->modify('+' . $i . ' months');
+            $monthEnd   = $monthStart->modify('+1 month');
+
+            $startTs = $monthStart->getTimestamp();
+            $endTs   = $monthEnd->getTimestamp();
+
+            // Mois entièrement hors de la plage couverte par les relevés.
+            if ($endTs <= $firstTs || $startTs >= $lastTs) {
+                continue;
+            }
+
+            // Borne de fin clampée : pas de projection au-delà du dernier relevé.
+            $partial   = $endTs > $lastTs;
+            $effEndTs  = $partial ? $lastTs : $endTs;
+
+            // Le premier mois couvert peut commencer avant le premier relevé
+            // (relevé initial en cours de mois) : on part alors du relevé lui-même
+            // plutôt que d'extrapoler en arrière une conso non mesurée.
+            $effStartTs = max($startTs, $firstTs);
+
+            $indexStart = $this->interpolateValueAt($readingsAsc, $effStartTs);
+            $indexEnd   = $this->interpolateValueAt($readingsAsc, $effEndTs);
+            if ($indexStart === null || $indexEnd === null) {
+                continue;
+            }
+
+            $series[] = [
+                'month'    => $monthStart->format('Y-m'),
+                'delta_m3' => round(max(0.0, $indexEnd - $indexStart), 3),
+                'partial'  => $partial || $effStartTs !== $startTs,
+            ];
+        }
+
+        return $series;
+    }
+
+    /**
      * Interpole la consommation d'un mois calendaire à partir d'une fenêtre de
      * relevés (le dernier avant le mois, ceux du mois, le premier après le mois).
      *

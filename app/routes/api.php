@@ -162,6 +162,9 @@ if ($viaToken === false) {
     $router->add('GET', 'gas_history',    $readings->gasHistory(...));
     $router->add('GET', 'water_history',  $readings->waterHistory(...));
     $router->add('GET', 'electricity_history', $readings->electricityHistory(...));
+    $router->add('GET', 'gas_monthly_series',   $readings->gasMonthlySeries(...));
+    $router->add('GET', 'water_monthly_series', $readings->waterMonthlySeries(...));
+    $router->add('GET', 'electricity_monthly_series', $readings->electricityMonthlySeries(...));
     $router->add('GET', 'month_cost',     $cost->monthCost(...));
     $router->add('GET', 'cost_estimate',  $cost->costEstimate(...));
     $router->add('GET', 'gas_cost',       $cost->gasCost(...));

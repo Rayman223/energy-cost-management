@@ -312,6 +312,8 @@ return [
     'dash.nav.next_period' => 'Volgende periode',
     'dash.range.30d'       => '30d',
     'dash.range.1y'        => '1 jaar',
+    'dash.range.12m'       => '12 maanden',
+    'dash.range.24m'       => '24 maanden',
 
     // Dashboard — labels die door dashboard.js worden weergegeven (#223).
     // {cur} is het valutasymbool van het profiel: nooit een vast „€”.

@@ -916,6 +916,17 @@ function tariffSegmentsMeta(data) {
 // ── Chart ──────────────────────────────────────────────────────────────────
 let chart = null;
 
+// Libellé d'un mois 'YYYY-MM' → « juil. 26 » (locale de l'utilisateur). Même
+// motif que les MONTHS_SHORT des blocs de navigation, mais en portée fichier :
+// les graphes mensuels (#238) en ont besoin hors de leurs IIFE.
+function monthLabel(ym) {
+  const [y, m] = String(ym).split('-').map(Number);
+  if (!y || !m) return String(ym);
+  const loc = (typeof window !== 'undefined' && window.APP_LOCALE) ? window.APP_LOCALE : 'fr';
+  const txt = new Date(y, m - 1, 1).toLocaleDateString(loc, { month: 'short', year: '2-digit' });
+  return txt.charAt(0).toUpperCase() + txt.slice(1);
+}
+
 async function loadChart(days = 30) {
   ['btn-30','btn-365'].forEach(id => {
     const el = document.getElementById(id);
@@ -925,6 +936,14 @@ async function loadChart(days = 30) {
   if (btn) btn.style.color = 'var(--amber)';
 
   try {
+    // Vue « 1 an » : 12 points MENSUELS (#238). 365 barres journalières étaient
+    // illisibles, et l'agrégation mensuelle est calculée côté serveur avec la
+    // même interpolation à minuit que les cards de coût → chiffres cohérents.
+    if (days >= 365) {
+      const res  = await fetch('api?action=electricity_monthly_series&months=12');
+      renderChart(await res.json(), true);
+      return;
+    }
     const res  = await fetch(`api?action=chart_data&days=${days}`);
     const data = await res.json();
     renderChart(data);
@@ -957,12 +976,17 @@ function chartOptions({ unit, decimals, stackedX = false }) {
   };
 }
 
-function renderChart(data) {
-  const labels    = data.map(d => d.day);
+function renderChart(data, monthly = false) {
+  const labels    = data.map(d => (monthly ? monthLabel(d.month) : d.day));
   const importT1  = data.map(d => d.import_t1);
   const importT2  = data.map(d => d.import_t2);
   const exportAll = data.map(d => (d.export_t1 || 0) + (d.export_t2 || 0));
   const solar     = data.map(d => d.solar);
+
+  // Vue mensuelle : les mois PARTIELS (mois en cours arrêté au dernier relevé,
+  // premier mois entamé après le premier relevé) sont atténués — sans quoi une
+  // barre tronquée se lit comme une vraie chute de consommation.
+  const shade = (full, muted) => (monthly ? data.map(d => (d.partial ? muted : full)) : full);
 
   const ctx = document.getElementById('energyChart').getContext('2d');
   if (chart) chart.destroy();
@@ -972,9 +996,9 @@ function renderChart(data) {
     data: {
       labels,
       datasets: [
-        { label: tr('dash.chart.import_t1'), data: importT1,  backgroundColor: 'rgba(245,166,35,.7)', borderColor: 'rgba(245,166,35,.9)', borderWidth: 1, stack: 'import' },
-        { label: tr('dash.chart.import_t2'), data: importT2,  backgroundColor: 'rgba(245,166,35,.3)', borderColor: 'rgba(245,166,35,.5)', borderWidth: 1, stack: 'import' },
-        { label: tr('dash.chart.export'),    data: exportAll, backgroundColor: 'rgba(65,179,245,.55)', borderColor: 'rgba(65,179,245,.8)', borderWidth: 1, stack: 'export' },
+        { label: tr('dash.chart.import_t1'), data: importT1,  backgroundColor: shade('rgba(245,166,35,.7)', 'rgba(245,166,35,.28)'), borderColor: 'rgba(245,166,35,.9)', borderWidth: 1, stack: 'import' },
+        { label: tr('dash.chart.import_t2'), data: importT2,  backgroundColor: shade('rgba(245,166,35,.3)', 'rgba(245,166,35,.12)'), borderColor: 'rgba(245,166,35,.5)', borderWidth: 1, stack: 'import' },
+        { label: tr('dash.chart.export'),    data: exportAll, backgroundColor: shade('rgba(65,179,245,.55)', 'rgba(65,179,245,.22)'), borderColor: 'rgba(65,179,245,.8)', borderWidth: 1, stack: 'export' },
         { label: tr('dash.chart.solar'), data: solar, type: 'line', borderColor: 'rgba(47,213,142,.8)', backgroundColor: 'rgba(47,213,142,.08)', fill: true, tension: .3, pointRadius: 2, borderWidth: 2 },
       ],
     },
@@ -983,15 +1007,17 @@ function renderChart(data) {
 }
 
 // ── Charts volume (gaz / eau) ───────────────────────────────────────────────
-// Même principe que le graphe électricité, mais une barre PAR RELEVÉ (les relevés
-// gaz/eau sont manuels et clairsemés : un bucket journalier serait quasi vide).
-// La valeur est le delta_m3 déjà calculé par getAllReadings ; la plage 30j/1an se
-// fait par filtrage client de la série (fetch unique, peu de points).
+// Une barre PAR MOIS calendaire (#238) : les relevés gaz/eau sont manuels et
+// clairsemés, une barre par relevé donnait une lecture fausse (deux relevés dans
+// le même mois → deux barres, un relevé couvrant cinq mois → une barre géante).
+// Le serveur ventile la consommation sur les mois avec la même interpolation à
+// minuit que les cards de coût. Le mois en cours est PARTIEL (conso réelle à ce
+// jour, aucune projection) : barre en teinte atténuée.
 const utilCharts = { gas: null, water: null };
-const utilData   = { gas: null, water: null };
+const utilData   = { gas: {}, water: {} }; // kind → { [months]: rows }
 
 function renderVolumeChart(canvasId, kind, rows, label, color) {
-  const labels = rows.map(r => (window.TZ ? window.TZ.formatReadingAt(r.reading_at).slice(0, 10) : String(r.reading_at).slice(0, 10)));
+  const labels = rows.map(r => monthLabel(r.month));
   const values = rows.map(r => Math.max(0, r.delta_m3 || 0));
 
   const ctx = document.getElementById(canvasId).getContext('2d');
@@ -1002,7 +1028,13 @@ function renderVolumeChart(canvasId, kind, rows, label, color) {
     data: {
       labels,
       datasets: [
-        { label, data: values, backgroundColor: color.fill, borderColor: color.line, borderWidth: 1 },
+        {
+          label,
+          data: values,
+          backgroundColor: rows.map(r => (r.partial ? color.partial : color.fill)),
+          borderColor: color.line,
+          borderWidth: 1,
+        },
       ],
     },
     options: chartOptions({ unit: 'm³', decimals: 3 }),
@@ -1010,54 +1042,47 @@ function renderVolumeChart(canvasId, kind, rows, label, color) {
 }
 
 const UTIL_META = {
-  gas:   { action: 'gas_history',   canvas: 'gasChart',   label: tr('dash.chart.gas'),   color: { fill: 'rgba(245,166,35,.55)', line: 'rgba(245,166,35,.8)' }, btnPrefix: 'gas-btn-' },
-  water: { action: 'water_history', canvas: 'waterChart', label: tr('dash.chart.water'), color: { fill: 'rgba(65,179,245,.55)', line: 'rgba(65,179,245,.8)' }, btnPrefix: 'water-btn-' },
+  gas: {
+    action: 'gas_monthly_series', canvas: 'gasChart', label: tr('dash.chart.gas'),
+    color: { fill: 'rgba(245,166,35,.55)', partial: 'rgba(245,166,35,.22)', line: 'rgba(245,166,35,.8)' },
+    btnPrefix: 'gas-btn-',
+  },
+  water: {
+    action: 'water_monthly_series', canvas: 'waterChart', label: tr('dash.chart.water'),
+    color: { fill: 'rgba(65,179,245,.55)', partial: 'rgba(65,179,245,.22)', line: 'rgba(65,179,245,.8)' },
+    btnPrefix: 'water-btn-',
+  },
 };
 
-function filterAndRenderUtil(kind, days) {
+async function loadUtilChart(kind, months = 12) {
   const meta = UTIL_META[kind];
-  ['30','365'].forEach(d => {
-    const el = document.getElementById(meta.btnPrefix + d);
+
+  [12, 24].forEach(m => {
+    const el = document.getElementById(meta.btnPrefix + m);
     if (el) el.style.color = '';
   });
-  const btn = document.getElementById(meta.btnPrefix + days);
+  const btn = document.getElementById(meta.btnPrefix + months);
   if (btn) btn.style.color = 'var(--amber)';
 
-  const rows   = utilData[kind] || [];
-  const cutoff = Date.now() - days * 86400000;
-  const kept   = rows
-    // Le relevé le plus ancien a delta_m3 === null (aucune conso à afficher) :
-    // l'écarter évite une barre à 0 avec un label d'axe inutile.
-    .filter(r => r.delta_m3 != null)
-    .filter(r => {
-      const d = window.TZ ? window.TZ.dateFromDbUtc(r.reading_at) : new Date(r.reading_at);
-      return !isNaN(d.getTime()) && d.getTime() >= cutoff;
-    })
-    .sort((a, b) => String(a.reading_at).localeCompare(String(b.reading_at)));
-
-  renderVolumeChart(meta.canvas, kind, kept, meta.label, meta.color);
-}
-
-async function loadUtilChart(kind, days = 365) {
-  const meta = UTIL_META[kind];
-  if (utilData[kind] === null) {
+  if (!utilData[kind][months]) {
     try {
-      const res = await fetch(`api?action=${meta.action}`);
-      utilData[kind] = await res.json();
+      const res = await fetch(`api?action=${meta.action}&months=${months}`);
+      utilData[kind][months] = await res.json();
     } catch (e) {
-      // On NE met PAS l'échec en cache (utilData reste null) : un clic ultérieur
-      // sur 30j/1an retentera le fetch. Sinon un incident réseau au chargement
-      // figerait le graphe vide jusqu'au rechargement complet de la page.
+      // On NE met PAS l'échec en cache : un clic ultérieur sur 12/24 mois
+      // retentera le fetch. Sinon un incident réseau au chargement figerait le
+      // graphe vide jusqu'au rechargement complet de la page.
       console.warn(`Chart ${kind} load failed:`, e);
     }
   }
-  filterAndRenderUtil(kind, days);
+
+  renderVolumeChart(meta.canvas, kind, utilData[kind][months] || [], meta.label, meta.color);
 }
 
-// Défaut « 1 an » pour gaz/eau : les relevés sont clairsemés (souvent mensuels),
-// une fenêtre 30j par défaut afficherait fréquemment un graphe vide.
-loadUtilChart('gas', 365);
-loadUtilChart('water', 365);
+// Défaut « 12 mois » : les relevés gaz/eau sont souvent mensuels, une fenêtre
+// plus courte afficherait fréquemment un graphe quasi vide.
+loadUtilChart('gas', 12);
+loadUtilChart('water', 12);
 
 // ── Live dongle polling ────────────────────────────────────────────────────
 // Retiré (P4, #47) : le serveur communautaire ne peut pas atteindre les
@@ -1076,10 +1101,10 @@ document.querySelectorAll('[data-water-nav-mode]').forEach(el =>
   el.addEventListener('click', () => setWaterNavMode(el.dataset.waterNavMode)));
 document.querySelectorAll('[data-chart-days]').forEach(el =>
   el.addEventListener('click', () => loadChart(parseInt(el.dataset.chartDays, 10))));
-document.querySelectorAll('[data-gas-chart-days]').forEach(el =>
-  el.addEventListener('click', () => loadUtilChart('gas', parseInt(el.dataset.gasChartDays, 10))));
-document.querySelectorAll('[data-water-chart-days]').forEach(el =>
-  el.addEventListener('click', () => loadUtilChart('water', parseInt(el.dataset.waterChartDays, 10))));
+document.querySelectorAll('[data-gas-chart-months]').forEach(el =>
+  el.addEventListener('click', () => loadUtilChart('gas', parseInt(el.dataset.gasChartMonths, 10))));
+document.querySelectorAll('[data-water-chart-months]').forEach(el =>
+  el.addEventListener('click', () => loadUtilChart('water', parseInt(el.dataset.waterChartMonths, 10))));
 
 // ── Relevés d'index gaz / eau ────────────────────────────────────────────────
 // Retirés du dashboard (#194) : les index bruts sont consultables et éditables
