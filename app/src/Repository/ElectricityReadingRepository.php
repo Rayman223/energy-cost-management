@@ -27,6 +27,29 @@ final class ElectricityReadingRepository implements LegacyDailyRepositoryInterfa
 {
     private const IMPORT_KEYS = ['import_t1', 'import_t2'];
 
+    /** Durée d'un MTU quart-horaire, en secondes. */
+    private const QUARTER_SECONDS = 900;
+
+    /**
+     * Marge admise sur l'écart entre deux relevés avant de cesser de considérer la
+     * cadence comme quart-horaire. `reading_at` est stocké tel que l'émetteur l'a
+     * envoyé (aucun alignement à l'ingestion) : un compteur ou un poller qui vise
+     * les 15 min dérive de quelques secondes à chaque trame. Sans marge, un flux
+     * réellement quart-horaire serait classé « reconstruit » et n'accéderait jamais
+     * à la facturation au quart d'heure. 90 s reste très en dessous de la cadence
+     * suivante plausible (20 ou 30 min).
+     *
+     * La cadence jugée est celle du STOCKAGE, pas celle de l'émetteur : l'ingestion
+     * ne retient qu'un relevé par créneau de 15 min ({@see ReadingGranularity}). Une
+     * source cadencée plus finement mais ne divisant pas 900 s — un cron toutes les
+     * 10 min, dont les relevés retenus tombent à :00, :20, :30, :50 — laisse donc des
+     * intervalles de 20 min, classés non natifs. C'est voulu : sur 20 min il n'existe
+     * aucune mesure intra-MTU, l'énergie ne peut qu'être étalée, et la facturer au
+     * quart d'heure serait la présenter comme mesurée. Rendre ce cas natif suppose
+     * d'aligner l'ingestion sur les MTU, pas d'élargir cette tolérance.
+     */
+    private const QUARTER_JITTER_SECONDS = 90;
+
     /** Correspondance registre → clé du contrat JSON existant. */
     private const JSON_KEYS = [
         'import_t1' => 'Prelev_jour',
@@ -604,8 +627,104 @@ final class ElectricityReadingRepository implements LegacyDailyRepositoryInterfa
      */
     public function getHourlyImportDeltas(DateTimeImmutable $from, DateTimeImmutable $to): array
     {
-        // Fusion par horodatage : les registres T1/T2 sont relevés au même instant
-        // (même trame du compteur) ; on ne somme que les instants présents des deux côtés.
+        $rows = $this->importIndexTotals($from, $to);
+
+        $buckets = [];
+        for ($i = 1, $iMax = count($rows); $i < $iMax; $i++) {
+            $delta          = $rows[$i]['total'] - $rows[$i - 1]['total'];
+            $hour           = substr($rows[$i - 1]['ts'], 0, 13) . ':00:00';
+            $buckets[$hour] = ($buckets[$hour] ?? 0.0) + max(0.0, $delta);
+        }
+
+        $out = [];
+        foreach ($buckets as $hour => $kwh) {
+            $out[] = ['hour' => $hour, 'import_kwh' => round($kwh, 3)];
+        }
+
+        return $out;
+    }
+
+    /**
+     * Conso IMPORT (T1+T2) ventilée par quart d'heure aligné (:00/:15/:30/:45 UTC)
+     * sur [$from, $to], pour le tarif dynamique quart-horaire (#230).
+     *
+     * Deux questions distinctes, volontairement traitées séparément :
+     *
+     * - COMBIEN dans chaque créneau : la consommation d'un intervalle est toujours
+     *   étalée au prorata du temps passé dans chaque quart qu'il couvre. Un intervalle
+     *   aligné sur un MTU alimente donc un seul créneau (résultat exact), tandis qu'un
+     *   relevé horaire, ou un relevé cadencé mais décalé (poller à :07/:22/:37/:52),
+     *   voit sa consommation répartie au lieu d'être facturée en entier au prix du
+     *   seul quart où l'intervalle commence.
+     * - `native` : la CADENCE des relevés est-elle quart-horaire ? Vrai dès que
+     *   l'intervalle ne dépasse pas 15 min à la tolérance près — le jitter de quelques
+     *   secondes d'un compteur ou d'un poller ne doit pas faire passer un flux
+     *   réellement quart-horaire pour une reconstruction. Un créneau reste natif tant
+     *   que tout son kWh vient d'intervalles de cette cadence.
+     *
+     * L'appelant se sert du drapeau pour refuser de présenter comme quart-horaire un
+     * calcul qui ne l'est pas ; l'étalement, lui, vaut dans les deux cas.
+     *
+     * @return array<int, array{quarter: string, import_kwh: float, native: bool}>
+     */
+    public function getQuarterImportDeltas(DateTimeImmutable $from, DateTimeImmutable $to): array
+    {
+        $rows = $this->importIndexTotals($from, $to);
+        $utc  = Dates::utc();
+
+        /** @var array<string, array{kwh: float, native: bool}> $buckets */
+        $buckets = [];
+        $add = static function (string $slot, float $kwh, bool $native) use (&$buckets): void {
+            $current        = $buckets[$slot] ?? ['kwh' => 0.0, 'native' => true];
+            $buckets[$slot] = [
+                'kwh'    => $current['kwh'] + $kwh,
+                // Un créneau n'est natif que si TOUT son kWh vient de relevés au pas
+                // de 15 min : une seule part étalée suffit à le disqualifier.
+                'native' => $current['native'] && $native,
+            ];
+        };
+
+        for ($i = 1, $iMax = count($rows); $i < $iMax; $i++) {
+            $delta  = max(0.0, $rows[$i]['total'] - $rows[$i - 1]['total']);
+            $start  = Dates::fromDbString($rows[$i - 1]['ts']);
+            $end    = Dates::fromDbString($rows[$i]['ts']);
+            $span   = $end->getTimestamp() - $start->getTimestamp();
+            $native = $span <= self::QUARTER_SECONDS + self::QUARTER_JITTER_SECONDS;
+
+            $cursor = $start;
+            while ($cursor < $end) {
+                [$slotStart, $slotEnd] = ReadingGranularity::QuarterHour->bucket($cursor, $utc);
+                $sliceEnd = $slotEnd < $end ? $slotEnd : $end;
+                $share    = (float) ($sliceEnd->getTimestamp() - $cursor->getTimestamp()) / (float) $span;
+                $add(Dates::toDbString($slotStart), $delta * $share, $native);
+                $cursor = $sliceEnd;
+            }
+        }
+
+        ksort($buckets);
+
+        $out = [];
+        foreach ($buckets as $slot => $bucket) {
+            $out[] = [
+                'quarter'    => $slot,
+                'import_kwh' => round($bucket['kwh'], 3),
+                'native'     => $bucket['native'],
+            ];
+        }
+
+        return $out;
+    }
+
+    /**
+     * Index IMPORT (T1+T2) cumulés par horodatage sur [$from, $to], triés.
+     *
+     * Fusion par horodatage : les registres T1/T2 sont relevés au même instant
+     * (même trame du compteur) ; on ne somme que les instants présents des deux côtés.
+     *
+     * @return list<array{ts: string, total: float}>
+     */
+    private function importIndexTotals(DateTimeImmutable $from, DateTimeImmutable $to): array
+    {
         $byTs = [];
         foreach (self::IMPORT_KEYS as $key) {
             $rid = $this->registerId($key);
@@ -636,19 +755,7 @@ final class ElectricityReadingRepository implements LegacyDailyRepositoryInterfa
             }
         }
 
-        $buckets = [];
-        for ($i = 1, $iMax = count($rows); $i < $iMax; $i++) {
-            $delta          = $rows[$i]['total'] - $rows[$i - 1]['total'];
-            $hour           = substr($rows[$i - 1]['ts'], 0, 13) . ':00:00';
-            $buckets[$hour] = ($buckets[$hour] ?? 0.0) + max(0.0, $delta);
-        }
-
-        $out = [];
-        foreach ($buckets as $hour => $kwh) {
-            $out[] = ['hour' => $hour, 'import_kwh' => round($kwh, 3)];
-        }
-
-        return $out;
+        return $rows;
     }
 
     // -------------------------------------------------------------------------

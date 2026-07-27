@@ -452,6 +452,135 @@ final class ElectricityReadingRepositoryDbTest extends TestCase
         self::assertCount(1, $this->repo()->getHistory());
     }
 
+    /**
+     * Tarif dynamique quart-horaire (#230) : des relevés au pas de 15 min donnent
+     * un créneau par MTU, chacun portant exactement le delta mesuré, et tous marqués
+     * natifs — c'est ce drapeau qui autorise le service à facturer au quart d'heure.
+     */
+    public function testQuarterImportDeltasKeepEachMeasuredQuarter(): void
+    {
+        $this->seedImportIndexes([
+            ['2026-08-01 10:00:00', 100.0],
+            ['2026-08-01 10:15:00', 101.0],
+            ['2026-08-01 10:30:00', 103.0],
+            ['2026-08-01 10:45:00', 106.0],
+            ['2026-08-01 11:00:00', 110.0],
+        ]);
+
+        $rows = $this->repo()->getQuarterImportDeltas(
+            new \DateTimeImmutable('2026-08-01 10:00:00'),
+            new \DateTimeImmutable('2026-08-01 11:00:00'),
+        );
+
+        self::assertSame(
+            ['2026-08-01 10:00:00', '2026-08-01 10:15:00', '2026-08-01 10:30:00', '2026-08-01 10:45:00'],
+            array_column($rows, 'quarter'),
+        );
+        // Deltas 1 / 2 / 3 / 4 kWh, doublés par la somme des deux registres import.
+        self::assertSame([2.0, 4.0, 6.0, 8.0], array_column($rows, 'import_kwh'));
+        self::assertSame([true, true, true, true], array_column($rows, 'native'));
+    }
+
+    /**
+     * Relevés horaires : faute de mesure intra-horaire, le delta est étalé au prorata
+     * du temps sur les quatre quarts, et AUCUN n'est natif — l'imputer entièrement au
+     * quart :00 le ferait facturer au prix d'un seul MTU.
+     */
+    public function testQuarterImportDeltasSpreadHourlyReadingsAndMarkThemEstimated(): void
+    {
+        $this->seedImportIndexes([
+            ['2026-08-01 10:00:00', 100.0],
+            ['2026-08-01 11:00:00', 104.0],
+        ]);
+
+        $rows = $this->repo()->getQuarterImportDeltas(
+            new \DateTimeImmutable('2026-08-01 10:00:00'),
+            new \DateTimeImmutable('2026-08-01 11:00:00'),
+        );
+
+        self::assertCount(4, $rows);
+        self::assertSame([2.0, 2.0, 2.0, 2.0], array_column($rows, 'import_kwh'));
+        self::assertSame([false, false, false, false], array_column($rows, 'native'));
+    }
+
+    /**
+     * `reading_at` est stocké tel que l'émetteur l'envoie : un compteur qui vise les
+     * 15 min dérive de quelques secondes à chaque trame. Ce jitter ne doit pas faire
+     * passer un flux réellement quart-horaire pour une reconstruction — sinon le mode
+     * 15 min ne s'engagerait quasiment jamais en production, et l'écran annoncerait à
+     * tort que les relevés ne sont pas au bon pas.
+     */
+    public function testQuarterImportDeltasToleratesReadingJitter(): void
+    {
+        $this->seedImportIndexes([
+            ['2026-08-01 10:00:00', 100.0],
+            ['2026-08-01 10:15:02', 101.0],
+            ['2026-08-01 10:30:01', 102.0],
+            ['2026-08-01 10:45:03', 103.0],
+            ['2026-08-01 11:00:02', 104.0],
+        ]);
+
+        $rows = $this->repo()->getQuarterImportDeltas(
+            new \DateTimeImmutable('2026-08-01 10:00:00'),
+            new \DateTimeImmutable('2026-08-01 11:00:02'),
+        );
+
+        self::assertNotContains(false, array_column($rows, 'native'));
+        // Chaque MTU garde ses 2 kWh à quelques millièmes près : seule la fraction de
+        // seconde qui déborde passe au créneau suivant.
+        foreach (['2026-08-01 10:00:00', '2026-08-01 10:15:00', '2026-08-01 10:30:00', '2026-08-01 10:45:00'] as $slot) {
+            $row = array_column($rows, 'import_kwh', 'quarter')[$slot] ?? null;
+            self::assertNotNull($row, "Créneau {$slot} absent.");
+            self::assertEqualsWithDelta(2.0, $row, 0.02);
+        }
+    }
+
+    /**
+     * Relevés cadencés à 15 min mais décalés (poller à :07/:22/:37/:52) : la cadence
+     * est bien quart-horaire, mais chaque intervalle chevauche deux MTU. Imputer le
+     * tout au créneau de départ facturerait la moitié de l'énergie au prix d'un quart
+     * d'heure qu'elle n'a pas consommé.
+     */
+    public function testQuarterImportDeltasSplitsOffsetButQuarterlyReadings(): void
+    {
+        $this->seedImportIndexes([
+            ['2026-08-01 10:07:00', 100.0],
+            ['2026-08-01 10:22:00', 102.0],
+        ]);
+
+        $rows = $this->repo()->getQuarterImportDeltas(
+            new \DateTimeImmutable('2026-08-01 10:07:00'),
+            new \DateTimeImmutable('2026-08-01 10:22:00'),
+        );
+
+        self::assertSame(['2026-08-01 10:00:00', '2026-08-01 10:15:00'], array_column($rows, 'quarter'));
+        self::assertSame([true, true], array_column($rows, 'native'));
+        // 4 kWh répartis 8 min / 7 min entre les deux MTU couverts.
+        self::assertEqualsWithDelta(4.0 * 8 / 15, $rows[0]['import_kwh'], 0.001);
+        self::assertEqualsWithDelta(4.0 * 7 / 15, $rows[1]['import_kwh'], 0.001);
+    }
+
+    /**
+     * Relevés import (T1 + T2 au même instant, valeurs identiques) pour les scénarios
+     * quart-horaires, sur une fenêtre disjointe du seed de setUp().
+     *
+     * @param list<array{string, float}> $rows
+     */
+    private function seedImportIndexes(array $rows): void
+    {
+        $topology  = new MeterTopology($this->pdo());
+        $registers = $topology->ensureRegisters($topology->ensureElectricityMeter($this->userId));
+
+        $ins = $this->pdo()->prepare(
+            'INSERT INTO meter_readings (register_id, reading_at, index_value) VALUES (:rid, :at, :val)'
+        );
+        foreach (['import_t1', 'import_t2'] as $key) {
+            foreach ($rows as [$ts, $value]) {
+                $ins->execute(['rid' => $registers[$key], 'at' => $ts, 'val' => $value]);
+            }
+        }
+    }
+
     private function pdo(): PDO
     {
         if ($this->pdo === null) {

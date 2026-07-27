@@ -34,12 +34,33 @@ final class CostCalculationService
     private const DEFAULT_PCS = 10.55;
 
     /**
+     * Part minimale de consommation devant être mesurée au pas de 15 min pour qu'une
+     * période soit facturée au quart d'heure (#230). En dessous, l'essentiel du profil
+     * intra-horaire serait reconstruit par étalement plutôt que mesuré : mieux vaut le
+     * calcul horaire, qui repose sur un prix PT60M publié, qu'un quart-horaire de
+     * façade. Le seuil laisse passer les trous ponctuels d'un flux quart-horaire
+     * (relevé manqué, coupure) sans faire basculer tout le mois.
+     */
+    private const QUARTER_READINGS_MIN_PCT = 80.0;
+
+    /**
+     * Part minimale de consommation devant disposer d'un prix pour qu'une série de
+     * prix soit retenue. En dessous, les créneaux non couverts ne retombent pas sur
+     * une autre série de prix mais sur le tarif fournisseur CLASSIQUE : une série
+     * lacunaire ferait donc sortir l'essentiel de la période du tarif dynamique,
+     * sans que `price_source` le signale. Mieux vaut alors la série concurrente,
+     * moins fine mais complète.
+     */
+    private const PRICE_COVERAGE_MIN_PCT = 80.0;
+
+    /**
      * @param bool $dynamicEnabled Kill-switch global du tarif dynamique (config
      *        `dynamic_prices.enabled`). false = tarif dynamique désactivé.
      * @param string $pricingMode Mode de tarification choisi par l'utilisateur
      *        ('fixed' | 'dynamic_hourly' | 'dynamic_quarter'). Sélectionne la
-     *        résolution des prix dynamiques ; le calcul au quart d'heure est
-     *        différé → 'dynamic_quarter' retombe sur l'horaire pour l'instant.
+     *        résolution des prix dynamiques : 'dynamic_quarter' facture au MTU de
+     *        15 min quand la zone publie des prix PT15M ET que les relevés sont au
+     *        pas de 15 min, sinon repli sur l'horaire (cf. buildDynamicResponse).
      * @param float $supplierMarkupPerKwh Marge fournisseur €/kWh ajoutée au prix
      *        spot TTC, par utilisateur (user_profiles.supplier_markup_per_kwh).
      *        Sert de REPLI depuis #228 : une grille portant des lignes spot_coefficient
@@ -578,9 +599,10 @@ final class CostCalculationService
     }
 
     /**
-     * Sous-période à laquelle rattacher une clé horaire (stockée en UTC) : on
-     * classe l'heure par sa date dans le fuseau du contrat, comme la bascule
-     * jour/nuit. Les heures hors fenêtre sont rattachées au segment le plus proche.
+     * Sous-période à laquelle rattacher une clé de créneau (heure ou quart d'heure,
+     * stockée en UTC) : on la classe par sa date dans le fuseau du contrat, comme la
+     * bascule jour/nuit. Les créneaux hors fenêtre sont rattachés au segment le plus
+     * proche.
      *
      * @param list<TariffSegment> $segments
      */
@@ -645,14 +667,19 @@ final class CostCalculationService
     }
 
     /**
-     * Construit la réponse « tarif dynamique » : croise la conso horaire avec les
-     * prix de marché horaires, indexe la part énergie et réutilise tous les
-     * composants fixes du tarif classique. Repli sur le tarif classique pour les
-     * heures sans prix dynamique (couverture exposée via coverage_pct).
+     * Construit la réponse « tarif dynamique » : croise la conso avec les prix de
+     * marché, indexe la part énergie et réutilise tous les composants fixes du tarif
+     * classique. Repli sur le tarif classique pour les créneaux sans prix dynamique
+     * (couverture exposée via coverage_pct).
+     *
+     * Le pas de calcul est celui de {@see resolveDynamicSeries()} : quart d'heure en
+     * mode 'dynamic_quarter' quand les données le permettent, heure sinon. Le reste
+     * de la méthode est indifférent au pas — un « créneau » est une clé de période
+     * UTC et une quantité.
      *
      * Le prix spot brut n'est jamais facturé tel quel : la formule du contrat
-     * (coefficient × spot + marge) est appliquée heure par heure via SpotFormula (#228),
-     * avec des paramètres résolus par sous-période tarifaire.
+     * (coefficient × spot + marge) est appliquée créneau par créneau via SpotFormula
+     * (#228), avec des paramètres résolus par sous-période tarifaire.
      *
      * @param array<string, mixed> $deltas
      * @param list<TariffSegment> $segments
@@ -667,26 +694,16 @@ final class CostCalculationService
         $from = new DateTimeImmutable($deltas['from']);
         $to   = new DateTimeImmutable($deltas['to']);
 
-        $hourlyImport = $this->legacyRepo->getHourlyImportDeltas($from, $to);
-        if ($hourlyImport === []) {
-            return ['available' => false, 'reason' => 'Pas de relevés horaires sur la période.'];
+        $series = $this->resolveDynamicSeries($from, $to);
+        if (isset($series['reason'])) {
+            return ['available' => false, 'reason' => $series['reason']];
         }
 
-        // Prix horaire NATIF (PT60M) d'abord — ENTSO-E publie un prix horaire propre,
-        // distinct de la moyenne des points 15 min. Repli sur la moyenne horaire si
-        // aucune série horaire native n'est disponible pour la période.
-        // NB : le mode 'dynamic_quarter' (15 min) retombe sur l'horaire pour l'instant
-        // (calcul au quart d'heure différé) → résolution effective 'hourly'.
-        $to1        = $to->modify('+1 hour');
-        $prices     = $this->dynamicPriceRepo->getHourlyPrices($from, $to1);
-        $priceSource = 'native_hourly';
-        if ($prices === []) {
-            $prices      = $this->dynamicPriceRepo->getAveragePriceByHour($from, $to1);
-            $priceSource = 'avg_hourly';
-        }
-        if ($prices === []) {
-            return ['available' => false, 'reason' => 'Aucun prix dynamique pour cette période (lancez cron_dynamic_prices).'];
-        }
+        /** @var list<array{slot: string, import_kwh: float}> $slots */
+        $slots = $series['slots'];
+        /** @var array<string, float> $prices */
+        $prices      = $series['prices'];
+        $priceSource = $series['price_source'];
 
         // Formule d'indexation par sous-période (#228) : coefficient et marge sont des
         // lignes de la grille, donc ils changent avec elle. Résolu une fois par segment
@@ -708,29 +725,29 @@ final class CostCalculationService
         /** @var array<string, array{day: string, import_kwh: float, energy_dynamic: float}> $daily */
         $daily = [];
         // Énergie dynamique ventilée par sous-période tarifaire : ici pas de prorata,
-        // chaque heure est rattachée à sa sous-période par sa date réelle (#196).
+        // chaque créneau est rattaché à sa sous-période par sa date réelle (#196).
         $energyBySegment = array_fill(0, count($segments), 0.0);
 
-        foreach ($hourlyImport as $row) {
-            $hour = $row['hour'];
+        foreach ($slots as $row) {
+            $slot = $row['slot'];
             $kwh  = $row['import_kwh'];
             $totalKwh += $kwh;
 
-            $segmentIndex = $this->segmentIndexForHour($segments, $hour);
+            $segmentIndex = $this->segmentIndexForHour($segments, $slot);
 
-            if (isset($prices[$hour])) {
+            if (isset($prices[$slot])) {
                 // TVA de la grille de CETTE sous-période (#232) : source unique du taux,
                 // et versionnée — un passage de 21 % à 6 % en cours de période s'applique
                 // à partir de sa date, sans réécrire l'avant.
                 $vatRate     = $segments[$segmentIndex]->grid->vatRate;
-                $rateTtc     = $formulas[$segmentIndex]->rateTtc($prices[$hour], $vatRate);
+                $rateTtc     = $formulas[$segmentIndex]->rateTtc($prices[$slot], $vatRate);
                 $coveredKwh += $kwh;
                 // Base indexée AVANT coefficient et offset, avec la même TVA que rateTtc().
-                $indexedBaseTtc += $kwh * $prices[$hour] * (1.0 + $vatRate / 100.0);
+                $indexedBaseTtc += $kwh * $prices[$slot] * (1.0 + $vatRate / 100.0);
             } else {
-                // Heure sans prix dynamique → repli sur le tarif fournisseur classique
-                // (déjà TTC) de la grille applicable à CETTE heure.
-                $rateTtc       = $this->classicEnergyRateForHour($hour, $segments[$segmentIndex]->grid->toTariffArray());
+                // Créneau sans prix dynamique → repli sur le tarif fournisseur classique
+                // (déjà TTC) de la grille applicable à CE créneau.
+                $rateTtc       = $this->classicEnergyRateForHour($slot, $segments[$segmentIndex]->grid->toTariffArray());
                 $uncoveredTtc += $kwh * $rateTtc;
             }
 
@@ -738,7 +755,7 @@ final class CostCalculationService
             $energyTtc += $lineCost;
             $energyBySegment[$segmentIndex] += $lineCost;
 
-            $day = substr($hour, 0, 10);
+            $day = substr($slot, 0, 10);
             if (!isset($daily[$day])) {
                 $daily[$day] = ['day' => $day, 'import_kwh' => 0.0, 'energy_dynamic' => 0.0];
             }
@@ -782,7 +799,12 @@ final class CostCalculationService
             'period_to'      => $deltas['to'],
             'days'           => $days,
             'pricing_mode'   => $this->pricingMode,
-            'resolution'     => 'hourly',
+            // Résolution EFFECTIVE du calcul, à distinguer de celle demandée par le
+            // mode : un utilisateur en 'dynamic_quarter' doit voir qu'il a été
+            // facturé à l'heure, et pourquoi, plutôt que de croire au quart d'heure.
+            'resolution'           => $series['resolution'],
+            'resolution_requested' => $this->pricingMode === 'dynamic_quarter' ? 'quarter' : 'hourly',
+            'resolution_fallback'  => $series['fallback'],
             'price_source'   => $priceSource,
             'tariff_name'    => $this->tariffName($segments),
             'currency'        => $segments[0]->grid->currency,
@@ -798,6 +820,150 @@ final class CostCalculationService
             'cost'           => $this->aggregator->aggregate($breakdowns),
             'daily'          => $dailyOut,
         ];
+    }
+
+    /**
+     * Choisit le pas de calcul du tarif dynamique et la série de prix associée, sur
+     * la cascade quart natif → horaire natif → moyenne horaire (#230).
+     *
+     * Le quart d'heure n'est retenu qu'à deux conditions cumulatives, mesurées sur la
+     * consommation réelle et non sur la simple existence des données : les prix PT15M
+     * couvrent la période, et les relevés sont réellement au pas de 15 min
+     * ({@see self::QUARTER_READINGS_MIN_PCT} pour les deux seuils). Sans relevés 15 min,
+     * le calcul facturerait un profil de consommation reconstruit par étalement. Sans
+     * couverture de prix, c'est pire qu'un simple retour à l'horaire : les créneaux
+     * sans prix 15 min ne retombent pas sur le spot horaire mais sur le tarif
+     * fournisseur CLASSIQUE, si bien qu'un seul point PT15M publié — un mois de
+     * bascule MTU15, un cron qui n'a rétro-rempli que les derniers jours — suffirait à
+     * faire facturer presque tout le mois hors du tarif dynamique. `fallback` dit
+     * laquelle des deux conditions a manqué.
+     *
+     * Le mode 'dynamic_hourly' court-circuite tout cela et garde son comportement
+     * historique, prix horaire natif d'abord, moyenne des 15 min ensuite.
+     *
+     * @return array{resolution: string, price_source: string, prices: array<string, float>,
+     *               slots: list<array{slot: string, import_kwh: float}>, fallback: ?string}
+     *         |array{reason: string} Motif d'indisponibilité si la série est inexploitable.
+     */
+    private function resolveDynamicSeries(DateTimeImmutable $from, DateTimeImmutable $to): array
+    {
+        // +1 h : la borne haute des deltas est le dernier relevé, dont le créneau de
+        // prix commence avant lui — l'élargir garantit de couvrir ce dernier créneau.
+        $to1      = $to->modify('+1 hour');
+        $repo     = $this->dynamicPriceRepo;
+        $fallback = null;
+
+        if ($this->pricingMode === 'dynamic_quarter' && $repo !== null) {
+            $quarterPrices = $repo->getQuarterPrices($from, $to1);
+            $quarterSlots  = $quarterPrices === [] ? [] : $this->legacyRepo->getQuarterImportDeltas($from, $to);
+
+            if ($quarterSlots !== []
+                && $this->weightedShare($quarterSlots, static fn (array $s): bool => $s['native'] === true)
+                   < self::QUARTER_READINGS_MIN_PCT
+            ) {
+                $fallback = 'readings_not_quarter';
+            } elseif ($quarterPrices === []
+                || $this->weightedShare($quarterSlots, static fn (array $s): bool => isset($quarterPrices[$s['quarter']]))
+                   < self::PRICE_COVERAGE_MIN_PCT
+            ) {
+                $fallback = 'no_quarter_prices';
+            } else {
+                return [
+                    'resolution'   => 'quarter',
+                    'price_source' => 'native_quarter',
+                    'prices'       => $quarterPrices,
+                    'slots'        => array_map(
+                        static fn (array $r): array => ['slot' => $r['quarter'], 'import_kwh' => $r['import_kwh']],
+                        $quarterSlots,
+                    ),
+                    'fallback'     => null,
+                ];
+            }
+        }
+
+        $hourlyImport = $this->legacyRepo->getHourlyImportDeltas($from, $to);
+        if ($hourlyImport === []) {
+            return ['reason' => 'Pas de relevés horaires sur la période.'];
+        }
+
+        // Prix horaire NATIF (PT60M) d'abord — ENTSO-E publie un prix horaire propre,
+        // distinct de la moyenne des points 15 min.
+        //
+        // Le repli sur la moyenne horaire se décide sur la COUVERTURE, pas sur une
+        // série vide : un mois à cheval sur la bascule MTU15 a des heures natives sur
+        // sa première moitié et des points 15 min sur la seconde. Ne regarder que
+        // « natif vide ? » ferait facturer la seconde moitié au tarif fournisseur
+        // classique, sans que `price_source` en dise rien, alors que la moyenne
+        // horaire, elle, agrège les deux résolutions et couvre tout le mois.
+        $prices      = $repo?->getHourlyPrices($from, $to1) ?? [];
+        $priceSource = 'native_hourly';
+        $covered     = $this->weightedShare($hourlyImport, static fn (array $r): bool => isset($prices[$r['hour']]));
+
+        if ($covered < self::PRICE_COVERAGE_MIN_PCT) {
+            $average = $repo?->getAveragePriceByHour($from, $to1) ?? [];
+            // Le natif reste prioritaire à couverture égale : c'est le prix publié pour
+            // l'heure, pas une moyenne reconstruite de ses quarts. Sauf s'il est vide —
+            // une série absente n'est jamais préférable, même à couverture nulle des deux
+            // côtés : c'est ce qui distingue « aucun prix » de « prix hors des heures
+            // consommées », et l'appelant a besoin des deux cas séparément.
+            if ($prices === []
+                || $this->weightedShare($hourlyImport, static fn (array $r): bool => isset($average[$r['hour']])) > $covered
+            ) {
+                $prices      = $average;
+                $priceSource = 'avg_hourly';
+            }
+        }
+
+        if ($prices === []) {
+            return ['reason' => 'Aucun prix dynamique pour cette période (lancez cron_dynamic_prices).'];
+        }
+
+        return [
+            'resolution'   => 'hourly',
+            'price_source' => $priceSource,
+            'prices'       => $prices,
+            'slots'        => array_map(
+                static fn (array $r): array => ['slot' => $r['hour'], 'import_kwh' => $r['import_kwh']],
+                $hourlyImport,
+            ),
+            'fallback'     => $fallback,
+        ];
+    }
+
+    /**
+     * Part (en %) de la consommation portée par les créneaux vérifiant $matches —
+     * mesurés au pas de 15 min, ou disposant d'un prix. Pondérer par les kWh plutôt
+     * que compter les créneaux est ce qui rend le seuil pertinent : ce sont les
+     * kilowattheures qui sont facturés, pas les cases du calendrier.
+     *
+     * Sur une période sans consommation (index stable), le ratio en kWh n'a pas de
+     * sens : on retombe sur la proportion de créneaux, pour ne pas annoncer un repli
+     * alors que les données sont bien là.
+     *
+     * @param array<int, array<string, mixed>> $slots Créneaux horaires ou quart-horaires.
+     * @param callable(array<string, mixed>): bool $matches
+     */
+    private function weightedShare(array $slots, callable $matches): float
+    {
+        if ($slots === []) {
+            return 0.0;
+        }
+
+        $total   = 0.0;
+        $matched = 0.0;
+        $count   = 0;
+        foreach ($slots as $slot) {
+            $kwh    = (float) $slot['import_kwh'];
+            $total += $kwh;
+            if ($matches($slot)) {
+                $matched += $kwh;
+                $count++;
+            }
+        }
+
+        return $total > 0.0
+            ? $matched / $total * 100.0
+            : $count / count($slots) * 100.0;
     }
 
     /**
@@ -886,8 +1052,9 @@ final class CostCalculationService
     }
 
     /**
-     * Tarif fournisseur classique (TTC) applicable à une heure donnée, pour le repli
-     * des heures sans prix dynamique. T1 (jour) 07h–23h, T2 (nuit) sinon.
+     * Tarif fournisseur classique (TTC) applicable à un créneau donné (clé horaire ou
+     * quart-horaire), pour le repli des créneaux sans prix dynamique. T1 (jour)
+     * 07h–23h, T2 (nuit) sinon.
      *
      * @param array<string, mixed> $tariff
      */

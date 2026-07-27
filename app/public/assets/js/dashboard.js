@@ -324,6 +324,19 @@ function tariffSegmentsMeta(data) {
     // évite de croire à un écart de calcul. Deux cas méritent un avertissement plutôt
     // qu'une note neutre — un coefficient rejeté (la formule ne correspond à rien de
     // saisi) et une marge reprise du profil faute de ligne en grille.
+    // Résolution effective du calcul (#230) : en mode 15 min, l'utilisateur doit
+    // pouvoir distinguer un calcul réellement quart-horaire d'un repli à l'heure, et
+    // savoir ce qui a manqué. En mode horaire assumé, pas de note — rien à signaler.
+    let resolutionNote = '';
+    if (dyn.resolution === 'quarter') {
+      resolutionNote = `<div class="cost-formula-note">${tr('dash.dynamic.resolution_quarter')}</div>`;
+    } else if (dyn.resolution_requested === 'quarter') {
+      resolutionNote = `<div class="cost-formula-note cost-formula-note--fallback">${
+        dyn.resolution_fallback === 'no_quarter_prices'
+          ? tr('dash.dynamic.resolution_fallback_prices')
+          : tr('dash.dynamic.resolution_fallback_readings')}</div>`;
+    }
+
     const f = dyn.formula;
     let formulaKey = 'dash.dynamic.formula';
     if (f && f.coefficient_rejected) formulaKey = 'dash.dynamic.formula_rejected';
@@ -347,6 +360,7 @@ function tariffSegmentsMeta(data) {
               coverage: Number(dyn.coverage_pct ?? 0).toFixed(0),
             }),
             dyn.energy_dynamic)}
+      ${resolutionNote}
       ${formulaNote}
       ${line(tr('dash.dynamic.energy_classic'), '', classicEnergy)}
       <div class="cost-group-sep"></div>

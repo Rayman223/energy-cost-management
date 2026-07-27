@@ -16,6 +16,7 @@ final class FakeLegacyDailyRepository implements LegacyDailyRepositoryInterface
      * @param array<string,mixed> $monthlyDeltas
      * @param array<string,mixed> $monthlyDeltasForMonth
      * @param array<int, array{hour: string, import_kwh: float}> $hourlyImportDeltas
+     * @param array<int, array{quarter: string, import_kwh: float, native: bool}> $quarterImportDeltas
      */
     /** Couples (année, mois) demandés à getMonthlyDeltasForMonth(), dans l'ordre.
      *
@@ -27,6 +28,7 @@ final class FakeLegacyDailyRepository implements LegacyDailyRepositoryInterface
         public array $monthlyDeltas = [],
         public array $monthlyDeltasForMonth = [],
         public array $hourlyImportDeltas = [],
+        public array $quarterImportDeltas = [],
     ) {
     }
 
@@ -45,5 +47,10 @@ final class FakeLegacyDailyRepository implements LegacyDailyRepositoryInterface
     public function getHourlyImportDeltas(DateTimeImmutable $from, DateTimeImmutable $to): array
     {
         return $this->hourlyImportDeltas;
+    }
+
+    public function getQuarterImportDeltas(DateTimeImmutable $from, DateTimeImmutable $to): array
+    {
+        return $this->quarterImportDeltas;
     }
 }

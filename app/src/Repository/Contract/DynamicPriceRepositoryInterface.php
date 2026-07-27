@@ -28,6 +28,19 @@ interface DynamicPriceRepositoryInterface
     public function getHourlyPrices(DateTimeImmutable $from, DateTimeImmutable $to): array;
 
     /**
+     * Prix NATIF au quart d'heure €/kWh (HTVA) sur [$from, $to[ : uniquement les
+     * points de résolution 15 min (PT15M), sans agrégation.
+     *
+     * Sert le mode de tarification 'dynamic_quarter' (#230). Renvoie une map vide
+     * quand la zone ne publie pas de série 15 min sur la période : l'appelant se
+     * rabat alors sur le calcul horaire ({@see getHourlyPrices()}) plutôt que
+     * d'interpoler un prix intra-horaire qui n'existe pas.
+     *
+     * @return array<string, float> Map 'Y-m-d H:i:00' => prix €/kWh HTVA.
+     */
+    public function getQuarterPrices(DateTimeImmutable $from, DateTimeImmutable $to): array;
+
+    /**
      * Prix moyen €/kWh (HTVA) par heure sur [$from, $to[.
      * Agrège les intervalles de 15 min en une moyenne horaire.
      *

@@ -237,6 +237,7 @@ final class CostCalculationServiceTest extends TestCase
         bool $enabled = true,
         float $supplierMarkupPerKwh = 0.0,
         string $tariffTimezone = 'Europe/Brussels',
+        string $pricingMode = 'dynamic_hourly',
     ): CostCalculationService {
         // Pas de taux de TVA ici : il vient de la grille du segment (#232).
         return new CostCalculationService(
@@ -246,6 +247,7 @@ final class CostCalculationServiceTest extends TestCase
             calculator: new TariffCalculatorService(),
             dynamicPriceRepo: $dynamic,
             dynamicEnabled: $enabled,
+            pricingMode: $pricingMode,
             supplierMarkupPerKwh: $supplierMarkupPerKwh,
             tariffTimezone: $tariffTimezone,
         );
@@ -746,6 +748,302 @@ final class CostCalculationServiceTest extends TestCase
 
         self::assertTrue($r['available']);
         self::assertSame('avg_hourly', $r['price_source']);
+        self::assertEqualsWithDelta(2.42, $r['energy_dynamic'], 0.0001);
+    }
+
+    /**
+     * Mode 'dynamic_quarter' (#230) : quand la zone publie des prix PT15M et que les
+     * relevés sont au pas de 15 min, chaque quart d'heure est facturé à SON prix.
+     * Le jeu de données est choisi pour que les deux calculs divergent franchement —
+     * toute la consommation tombe dans le quart le moins cher, donc un calcul resté
+     * horaire (prix moyen 0,20) coûterait le double.
+     */
+    public function testMonthElectricityDynamicUsesQuarterPricesWhenReadingsAreQuarterHourly(): void
+    {
+        $legacy = new FakeLegacyDailyRepository(
+            monthlyDeltasForMonth: $this->electricityDeltas(),
+            hourlyImportDeltas: [['hour' => '2026-06-10 10:00:00', 'import_kwh' => 10.0]],
+            quarterImportDeltas: [
+                ['quarter' => '2026-06-10 10:00:00', 'import_kwh' => 10.0, 'native' => true],
+                ['quarter' => '2026-06-10 10:15:00', 'import_kwh' => 0.0,  'native' => true],
+                ['quarter' => '2026-06-10 10:30:00', 'import_kwh' => 0.0,  'native' => true],
+                ['quarter' => '2026-06-10 10:45:00', 'import_kwh' => 0.0,  'native' => true],
+            ],
+        );
+        $dynamic = new FakeDynamicPriceRepository(
+            hourlyPricesByHour: ['2026-06-10 10:00:00' => 0.20],
+            quarterPricesBySlot: [
+                '2026-06-10 10:00:00' => 0.10,
+                '2026-06-10 10:15:00' => 0.10,
+                '2026-06-10 10:30:00' => 0.10,
+                '2026-06-10 10:45:00' => 0.50,
+            ],
+        );
+
+        $svc = $this->makeDynamicService(
+            $legacy,
+            new FakeTariffRepository(grid: $this->electricityGrid()),
+            $dynamic,
+            pricingMode: 'dynamic_quarter',
+        );
+        $r = $svc->estimateMonthElectricityDynamic(2026, 6);
+
+        self::assertTrue($r['available']);
+        self::assertSame('quarter', $r['resolution']);
+        self::assertSame('quarter', $r['resolution_requested']);
+        self::assertNull($r['resolution_fallback']);
+        self::assertSame('native_quarter', $r['price_source']);
+        // 10 × (0.10 × 1.21) = 1.21 au quart d'heure, contre 2.42 à l'heure.
+        self::assertEqualsWithDelta(1.21, $r['energy_dynamic'], 0.0001);
+        self::assertEqualsWithDelta(100.0, $r['coverage_pct'], 0.1);
+    }
+
+    /**
+     * Relevés trop grossiers : la consommation intra-horaire serait reconstruite par
+     * étalement (`native` faux), pas mesurée. On préfère alors le prix horaire NATIF
+     * à un quart-horaire de façade, et on dit pourquoi.
+     */
+    public function testMonthElectricityDynamicFallsBackToHourlyWhenReadingsAreNotQuarterHourly(): void
+    {
+        $legacy = new FakeLegacyDailyRepository(
+            monthlyDeltasForMonth: $this->electricityDeltas(),
+            hourlyImportDeltas: [['hour' => '2026-06-10 10:00:00', 'import_kwh' => 10.0]],
+            quarterImportDeltas: [
+                ['quarter' => '2026-06-10 10:00:00', 'import_kwh' => 2.5, 'native' => false],
+                ['quarter' => '2026-06-10 10:15:00', 'import_kwh' => 2.5, 'native' => false],
+                ['quarter' => '2026-06-10 10:30:00', 'import_kwh' => 2.5, 'native' => false],
+                ['quarter' => '2026-06-10 10:45:00', 'import_kwh' => 2.5, 'native' => false],
+            ],
+        );
+        $dynamic = new FakeDynamicPriceRepository(
+            hourlyPricesByHour: ['2026-06-10 10:00:00' => 0.20],
+            quarterPricesBySlot: ['2026-06-10 10:00:00' => 0.10, '2026-06-10 10:45:00' => 0.50],
+        );
+
+        $svc = $this->makeDynamicService(
+            $legacy,
+            new FakeTariffRepository(grid: $this->electricityGrid()),
+            $dynamic,
+            pricingMode: 'dynamic_quarter',
+        );
+        $r = $svc->estimateMonthElectricityDynamic(2026, 6);
+
+        self::assertSame('hourly', $r['resolution']);
+        self::assertSame('quarter', $r['resolution_requested']);
+        self::assertSame('readings_not_quarter', $r['resolution_fallback']);
+        self::assertSame('native_hourly', $r['price_source']);
+        // 10 × (0.20 × 1.21) = 2.42 : le prix horaire natif, pas les prix 15 min.
+        self::assertEqualsWithDelta(2.42, $r['energy_dynamic'], 0.0001);
+    }
+
+    /** Zone sans série PT15M sur la période : repli horaire, avec la raison distincte. */
+    public function testMonthElectricityDynamicFallsBackToHourlyWithoutQuarterPrices(): void
+    {
+        $legacy = new FakeLegacyDailyRepository(
+            monthlyDeltasForMonth: $this->electricityDeltas(),
+            hourlyImportDeltas: [['hour' => '2026-06-10 10:00:00', 'import_kwh' => 10.0]],
+            quarterImportDeltas: [
+                ['quarter' => '2026-06-10 10:00:00', 'import_kwh' => 10.0, 'native' => true],
+            ],
+        );
+        $dynamic = new FakeDynamicPriceRepository(hourlyPricesByHour: ['2026-06-10 10:00:00' => 0.20]);
+
+        $svc = $this->makeDynamicService(
+            $legacy,
+            new FakeTariffRepository(grid: $this->electricityGrid()),
+            $dynamic,
+            pricingMode: 'dynamic_quarter',
+        );
+        $r = $svc->estimateMonthElectricityDynamic(2026, 6);
+
+        self::assertSame('hourly', $r['resolution']);
+        self::assertSame('no_quarter_prices', $r['resolution_fallback']);
+        self::assertEqualsWithDelta(2.42, $r['energy_dynamic'], 0.0001);
+    }
+
+    /**
+     * Prix PT15M présents mais ne couvrant qu'une bribe de la consommation (mois de
+     * bascule MTU15, cron qui n'a rétro-rempli que les derniers jours). Basculer
+     * quand même serait pire qu'un retour à l'horaire : les créneaux sans prix 15 min
+     * ne retombent pas sur le spot horaire mais sur le tarif fournisseur CLASSIQUE,
+     * donc l'essentiel du mois sortirait du tarif dynamique.
+     */
+    public function testMonthElectricityDynamicFallsBackWhenQuarterPricesBarelyCoverConsumption(): void
+    {
+        $legacy = new FakeLegacyDailyRepository(
+            monthlyDeltasForMonth: $this->electricityDeltas(),
+            hourlyImportDeltas: [['hour' => '2026-06-10 10:00:00', 'import_kwh' => 10.0]],
+            quarterImportDeltas: [
+                ['quarter' => '2026-06-10 10:00:00', 'import_kwh' => 1.0, 'native' => true],
+                ['quarter' => '2026-06-10 10:15:00', 'import_kwh' => 9.0, 'native' => true],
+            ],
+        );
+        // Un seul créneau tarifé sur les deux, soit 10 % des kWh couverts.
+        $dynamic = new FakeDynamicPriceRepository(
+            hourlyPricesByHour: ['2026-06-10 10:00:00' => 0.20],
+            quarterPricesBySlot: ['2026-06-10 10:00:00' => 0.10],
+        );
+
+        $svc = $this->makeDynamicService(
+            $legacy,
+            new FakeTariffRepository(grid: $this->electricityGrid()),
+            $dynamic,
+            pricingMode: 'dynamic_quarter',
+        );
+        $r = $svc->estimateMonthElectricityDynamic(2026, 6);
+
+        self::assertSame('hourly', $r['resolution']);
+        self::assertSame('no_quarter_prices', $r['resolution_fallback']);
+        self::assertSame('native_hourly', $r['price_source']);
+        // 10 × (0.20 × 1.21) = 2.42, entièrement au spot horaire — et non 9 kWh au
+        // tarif classique T1 (0.10) faute de prix 15 min.
+        self::assertEqualsWithDelta(2.42, $r['energy_dynamic'], 0.0001);
+        self::assertEqualsWithDelta(100.0, $r['coverage_pct'], 0.1);
+    }
+
+    /** Symétrique : une couverture de prix quasi complète laisse bien passer le quart. */
+    public function testMonthElectricityDynamicKeepsQuarterWhenPriceCoverageIsNearlyComplete(): void
+    {
+        $legacy = new FakeLegacyDailyRepository(
+            monthlyDeltasForMonth: $this->electricityDeltas(),
+            hourlyImportDeltas: [['hour' => '2026-06-10 10:00:00', 'import_kwh' => 10.0]],
+            quarterImportDeltas: [
+                ['quarter' => '2026-06-10 10:00:00', 'import_kwh' => 9.0, 'native' => true],
+                ['quarter' => '2026-06-10 10:15:00', 'import_kwh' => 1.0, 'native' => true],
+            ],
+        );
+        $dynamic = new FakeDynamicPriceRepository(
+            hourlyPricesByHour: ['2026-06-10 10:00:00' => 0.20],
+            quarterPricesBySlot: ['2026-06-10 10:00:00' => 0.10],
+        );
+
+        $svc = $this->makeDynamicService(
+            $legacy,
+            new FakeTariffRepository(grid: $this->electricityGrid()),
+            $dynamic,
+            pricingMode: 'dynamic_quarter',
+        );
+        $r = $svc->estimateMonthElectricityDynamic(2026, 6);
+
+        self::assertSame('quarter', $r['resolution']);
+        self::assertNull($r['resolution_fallback']);
+        // 9 × (0.10 × 1.21) au spot 15 min + 1 × 0.10 au tarif classique T1.
+        self::assertEqualsWithDelta(1.189, $r['energy_dynamic'], 0.01);
+        self::assertEqualsWithDelta(90.0, $r['coverage_pct'], 0.1);
+    }
+
+    /**
+     * Le seuil (80 % de la conso mesurée au pas de 15 min) tolère les trous ponctuels
+     * d'un flux quart-horaire sans faire basculer un mois majoritairement reconstruit.
+     */
+    public function testMonthElectricityDynamicQuarterThresholdToleratesGaps(): void
+    {
+        $quarterPrices = [
+            '2026-06-10 10:00:00' => 0.10,
+            '2026-06-10 10:15:00' => 0.10,
+            '2026-06-10 10:30:00' => 0.10,
+            '2026-06-10 10:45:00' => 0.10,
+        ];
+
+        $slotsFor = static fn (float $nativeKwh, float $estimatedKwh): array => [
+            ['quarter' => '2026-06-10 10:00:00', 'import_kwh' => $nativeKwh,    'native' => true],
+            ['quarter' => '2026-06-10 10:15:00', 'import_kwh' => $estimatedKwh, 'native' => false],
+        ];
+
+        // 8,5 / 10 kWh mesurés au quart d'heure → 85 %, au-dessus du seuil.
+        $above = $this->makeDynamicService(
+            new FakeLegacyDailyRepository(
+                monthlyDeltasForMonth: $this->electricityDeltas(),
+                hourlyImportDeltas: [['hour' => '2026-06-10 10:00:00', 'import_kwh' => 10.0]],
+                quarterImportDeltas: $slotsFor(8.5, 1.5),
+            ),
+            new FakeTariffRepository(grid: $this->electricityGrid()),
+            new FakeDynamicPriceRepository(
+                hourlyPricesByHour: ['2026-06-10 10:00:00' => 0.20],
+                quarterPricesBySlot: $quarterPrices,
+            ),
+            pricingMode: 'dynamic_quarter',
+        );
+
+        // 7 / 10 kWh seulement → 70 %, sous le seuil.
+        $below = $this->makeDynamicService(
+            new FakeLegacyDailyRepository(
+                monthlyDeltasForMonth: $this->electricityDeltas(),
+                hourlyImportDeltas: [['hour' => '2026-06-10 10:00:00', 'import_kwh' => 10.0]],
+                quarterImportDeltas: $slotsFor(7.0, 3.0),
+            ),
+            new FakeTariffRepository(grid: $this->electricityGrid()),
+            new FakeDynamicPriceRepository(
+                hourlyPricesByHour: ['2026-06-10 10:00:00' => 0.20],
+                quarterPricesBySlot: $quarterPrices,
+            ),
+            pricingMode: 'dynamic_quarter',
+        );
+
+        self::assertSame('quarter', $above->estimateMonthElectricityDynamic(2026, 6)['resolution']);
+        self::assertSame('hourly', $below->estimateMonthElectricityDynamic(2026, 6)['resolution']);
+    }
+
+    /**
+     * Non-régression du mode horaire : des prix 15 min disponibles ne doivent pas
+     * changer le calcul d'un utilisateur qui a choisi le tarif horaire.
+     */
+    public function testMonthElectricityDynamicHourlyModeIgnoresQuarterData(): void
+    {
+        $legacy = new FakeLegacyDailyRepository(
+            monthlyDeltasForMonth: $this->electricityDeltas(),
+            hourlyImportDeltas: [['hour' => '2026-06-10 10:00:00', 'import_kwh' => 10.0]],
+            quarterImportDeltas: [
+                ['quarter' => '2026-06-10 10:00:00', 'import_kwh' => 10.0, 'native' => true],
+            ],
+        );
+        $dynamic = new FakeDynamicPriceRepository(
+            hourlyPricesByHour: ['2026-06-10 10:00:00' => 0.20],
+            quarterPricesBySlot: ['2026-06-10 10:00:00' => 0.10],
+        );
+
+        $svc = $this->makeDynamicService(
+            $legacy,
+            new FakeTariffRepository(grid: $this->electricityGrid()),
+            $dynamic,
+            pricingMode: 'dynamic_hourly',
+        );
+        $r = $svc->estimateMonthElectricityDynamic(2026, 6);
+
+        self::assertSame('hourly', $r['resolution']);
+        self::assertSame('hourly', $r['resolution_requested']);
+        self::assertNull($r['resolution_fallback']);
+        self::assertEqualsWithDelta(2.42, $r['energy_dynamic'], 0.0001);
+    }
+
+    /**
+     * Mois à cheval sur la bascule MTU15 : des heures natives sur la première moitié,
+     * des points 15 min sur la seconde. Se contenter de « la série native est-elle
+     * vide ? » ferait facturer la seconde moitié au tarif fournisseur classique, sans
+     * que `price_source` en dise rien. La moyenne horaire agrège les deux résolutions
+     * et couvre tout le mois : c'est elle qu'il faut prendre.
+     */
+    public function testMonthElectricityDynamicPrefersAverageWhenNativeHourlyIsPartial(): void
+    {
+        $legacy = new FakeLegacyDailyRepository(
+            monthlyDeltasForMonth: $this->electricityDeltas(),
+            hourlyImportDeltas: [
+                ['hour' => '2026-06-05 10:00:00', 'import_kwh' => 2.0],
+                ['hour' => '2026-06-25 10:00:00', 'import_kwh' => 8.0],
+            ],
+        );
+        $dynamic = new FakeDynamicPriceRepository(
+            // La moyenne couvre les deux heures ; le natif s'arrête à la bascule.
+            pricesByHour: ['2026-06-05 10:00:00' => 0.20, '2026-06-25 10:00:00' => 0.20],
+            hourlyPricesByHour: ['2026-06-05 10:00:00' => 0.30],
+        );
+
+        $svc = $this->makeDynamicService($legacy, new FakeTariffRepository(grid: $this->electricityGrid()), $dynamic);
+        $r   = $svc->estimateMonthElectricityDynamic(2026, 6);
+
+        self::assertSame('avg_hourly', $r['price_source']);
+        self::assertEqualsWithDelta(100.0, $r['coverage_pct'], 0.1);
+        // 10 × (0.20 × 1.21) = 2.42, et non 2 kWh au spot + 8 kWh au tarif classique T1.
         self::assertEqualsWithDelta(2.42, $r['energy_dynamic'], 0.0001);
     }
 

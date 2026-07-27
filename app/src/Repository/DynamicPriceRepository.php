@@ -142,6 +142,43 @@ final class DynamicPriceRepository implements DynamicPriceRepositoryInterface
     }
 
     /**
+     * Prix NATIF au quart d'heure €/kWh (HTVA) sur [$from, $to[ : uniquement les
+     * points resolution_min = 15 (PT15M), sans agrégation. Map vide si la zone ne
+     * publie pas de série 15 min sur la période — l'appelant se rabat alors sur
+     * l'horaire ({@see getHourlyPrices()}), pas sur une interpolation.
+     *
+     * @return array<string, float> Map 'Y-m-d H:i:00' => prix €/kWh HTVA.
+     */
+    public function getQuarterPrices(DateTimeImmutable $from, DateTimeImmutable $to): array
+    {
+        $stmt = $this->pdo->prepare(
+            "SELECT DATE_FORMAT(period_start, '%Y-%m-%d %H:%i:00') AS quarter,
+                    price_eur_kwh AS price
+             FROM dynamic_prices
+             WHERE energy_type = 'electricity'
+               AND bidding_zone = :zone
+               AND resolution_min = 15
+               AND period_start >= :from
+               AND period_start <  :to
+             ORDER BY period_start"
+        );
+        $stmt->execute([
+            'zone' => $this->biddingZone,
+            'from' => Dates::toDbString($from),
+            'to'   => Dates::toDbString($to),
+        ]);
+
+        $map = [];
+        /** @var array<int, array{quarter: string, price: string}> $rows */
+        $rows = $stmt->fetchAll();
+        foreach ($rows as $row) {
+            $map[$row['quarter']] = (float) $row['price'];
+        }
+
+        return $map;
+    }
+
+    /**
      * Prix moyen €/kWh (HTVA) par heure sur [$from, $to[, pour la zone du repository.
      *
      * @return array<string, float> Map 'Y-m-d H:00:00' => prix moyen €/kWh HTVA.
