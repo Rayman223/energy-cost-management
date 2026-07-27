@@ -12,7 +12,9 @@
       "Bash(git cherry-pick *)",
       "Bash(rm -f .git/config.lock)",
       "Edit(/.claude/skills/fix-issue/**)",
-      "Bash(php -r ' *)"
+      "Bash(php -r ' *)",
+      "Bash(php -S 127.0.0.1:8899 index.php)",
+      "Bash(curl -s -o /tmp/claude-1000/-var-www-Manage-energy-costs/620e26bb-82f7-46c1-8540-bef58a354d2b/scratchpad/out.html -w \"HTTP %{http_code}\\\\n\" http://127.0.0.1:8899/reconciliation)"
     ],
     "deny": [],
     "ask": [],

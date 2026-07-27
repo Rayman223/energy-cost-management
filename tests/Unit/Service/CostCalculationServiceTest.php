@@ -365,6 +365,146 @@ final class CostCalculationServiceTest extends TestCase
     }
 
     /**
+     * VERROU #229 — l'invariant dont dépend tout le rapprochement facture :
+     *
+     *     energy_dynamic = coefficient × indexed_ttc + offset × covered_kwh + uncovered_ttc
+     *
+     * Il permet de retrouver (coefficient, offset) à partir d'un montant facturé sans
+     * rejouer le croisement conso × prix heure par heure. Toute modification de la boucle
+     * horaire qui le romprait ferait silencieusement dériver le couple proposé : ce test
+     * doit casser à ce moment-là, pas l'écran de rapprochement.
+     *
+     * Le jeu mélange volontairement une heure couverte par un prix de marché et une heure
+     * de repli au tarif classique — c'est la seule configuration où les trois termes sont
+     * non nuls en même temps.
+     */
+    public function testSpotBaseReconstitutesEnergyDynamic(): void
+    {
+        $legacy = new FakeLegacyDailyRepository(
+            monthlyDeltasForMonth: $this->electricityDeltas(),
+            hourlyImportDeltas: [
+                ['hour' => '2026-06-10 10:00:00', 'import_kwh' => 10.0], // couverte
+                ['hour' => '2026-06-10 23:00:00', 'import_kwh' => 5.0],  // repli energy_t2
+            ],
+        );
+        $prices = new FakeDynamicPriceRepository(pricesByHour: ['2026-06-10 10:00:00' => 0.20]);
+
+        $grid = $this->electricityGridWithSpot(coefficient: 1.08, offsetTtc: 0.02);
+        $r    = $this->makeDynamicService($legacy, new FakeTariffRepository(grid: $grid), $prices)
+            ->estimateMonthElectricityDynamic(2026, 6);
+
+        // Base indexée AVANT coefficient et offset : 10 × 0.20 × 1.21 = 2.42.
+        self::assertEqualsWithDelta(2.42, $r['spot_base']['indexed_ttc'], 0.0001);
+        self::assertEqualsWithDelta(10.0, $r['spot_base']['covered_kwh'], 0.0001);
+        // Heure de repli : 5 × 0.08 (energy_t2, déjà TTC) = 0.40.
+        self::assertEqualsWithDelta(0.40, $r['spot_base']['uncovered_ttc'], 0.0001);
+        self::assertTrue($r['spot_base']['formula_uniform']);
+
+        // L'invariant lui-même, reconstruit depuis les seules valeurs exposées :
+        // 1.08 × 2.42 + 0.02 × 10 + 0.40 = 3.2136.
+        $reconstructed = $r['formula']['spot_coefficient'] * $r['spot_base']['indexed_ttc']
+            + $r['formula']['spot_offset_ttc'] * $r['spot_base']['covered_kwh']
+            + $r['spot_base']['uncovered_ttc'];
+        // Tolérance d'un demi-centime : `energy_dynamic` est arrondi à 2 décimales pour
+        // l'affichage, alors que les termes de `spot_base` gardent leur précision — c'est
+        // justement pourquoi la résolution s'appuie sur ces derniers et non sur le total.
+        self::assertEqualsWithDelta($r['energy_dynamic'], $reconstructed, 0.005);
+    }
+
+    /**
+     * Un mois à cheval sur deux contrats aux formules différentes n'admet pas de couple
+     * unique : son équation mêlerait les deux. `formula_uniform` doit le dire, sinon le
+     * rapprochement attribuerait la moyenne des deux contrats à celui en cours (#229).
+     */
+    public function testSpotBaseFlagsMonthSpanningTwoDifferentFormulas(): void
+    {
+        $tariffs = new FakeTariffRepository();
+        $tariffs->gridsBetween = [
+            $this->elecGridWithSpot(2, 'Contrat 2', '2026-01-11', null, 1.05, 0.03),
+            $this->elecGridWithSpot(1, 'Contrat 1', '2026-01-01', '2026-01-10', 1.08, 0.02),
+        ];
+
+        $legacy = new FakeLegacyDailyRepository(
+            monthlyDeltasForMonth: $this->electricityDeltasFor('2026-01-01 00:00:00', '2026-01-31 00:00:00'),
+            hourlyImportDeltas: [
+                ['hour' => '2026-01-05 10:00:00', 'import_kwh' => 10.0],
+                ['hour' => '2026-01-20 10:00:00', 'import_kwh' => 10.0],
+            ],
+        );
+        $prices = new FakeDynamicPriceRepository(pricesByHour: [
+            '2026-01-05 10:00:00' => 0.20,
+            '2026-01-20 10:00:00' => 0.20,
+        ]);
+
+        $r = $this->makeDynamicService($legacy, $tariffs, $prices)->estimateMonthElectricityDynamic(2026, 1);
+
+        self::assertFalse($r['spot_base']['formula_uniform']);
+    }
+
+    /**
+     * Le taux de TVA compte dans `formula_uniform` bien qu'il n'apparaisse pas dans
+     * l'invariant : l'appelant s'en sert pour convertir un montant facturé HTVA en TTC.
+     * Deux sous-périodes de même formule mais de TVA différente rendraient cette
+     * conversion ambiguë, alors même que la résolution resterait exacte (suivi de revue
+     * de la PR #236).
+     */
+    public function testSpotBaseFlagsMonthSpanningTwoVatRates(): void
+    {
+        $tariffs = new FakeTariffRepository();
+        $tariffs->gridsBetween = [
+            $this->elecGridWithSpot(2, 'TVA 6 %', '2026-01-11', null, 1.08, 0.02, 6.0),
+            $this->elecGridWithSpot(1, 'TVA 21 %', '2026-01-01', '2026-01-10', 1.08, 0.02, 21.0),
+        ];
+
+        $legacy = new FakeLegacyDailyRepository(
+            monthlyDeltasForMonth: $this->electricityDeltasFor('2026-01-01 00:00:00', '2026-01-31 00:00:00'),
+            hourlyImportDeltas: [
+                ['hour' => '2026-01-05 10:00:00', 'import_kwh' => 10.0],
+                ['hour' => '2026-01-20 10:00:00', 'import_kwh' => 10.0],
+            ],
+        );
+        $prices = new FakeDynamicPriceRepository(pricesByHour: [
+            '2026-01-05 10:00:00' => 0.20,
+            '2026-01-20 10:00:00' => 0.20,
+        ]);
+
+        $r = $this->makeDynamicService($legacy, $tariffs, $prices)->estimateMonthElectricityDynamic(2026, 1);
+
+        self::assertFalse($r['spot_base']['formula_uniform']);
+    }
+
+    /**
+     * À l'inverse, un mois découpé en deux sous-périodes aux paramètres IDENTIQUES reste
+     * uniforme : la comparaison est à tolérance, pour qu'un coefficient composé
+     * différemment (1,08 d'un côté, 1,04 × 1,0385 de l'autre) ne le déclare pas
+     * faussement non-uniforme sur un écart de dernier bit.
+     */
+    public function testSpotBaseStaysUniformAcrossIdenticalConsecutiveGrids(): void
+    {
+        $tariffs = new FakeTariffRepository();
+        $tariffs->gridsBetween = [
+            $this->elecGridWithSpot(2, 'Renouvellement', '2026-01-11', null, 1.08, 0.02),
+            $this->elecGridWithSpot(1, 'Contrat initial', '2026-01-01', '2026-01-10', 1.08, 0.02),
+        ];
+
+        $legacy = new FakeLegacyDailyRepository(
+            monthlyDeltasForMonth: $this->electricityDeltasFor('2026-01-01 00:00:00', '2026-01-31 00:00:00'),
+            hourlyImportDeltas: [
+                ['hour' => '2026-01-05 10:00:00', 'import_kwh' => 10.0],
+                ['hour' => '2026-01-20 10:00:00', 'import_kwh' => 10.0],
+            ],
+        );
+        $prices = new FakeDynamicPriceRepository(pricesByHour: [
+            '2026-01-05 10:00:00' => 0.20,
+            '2026-01-20 10:00:00' => 0.20,
+        ]);
+
+        $r = $this->makeDynamicService($legacy, $tariffs, $prices)->estimateMonthElectricityDynamic(2026, 1);
+
+        self::assertTrue($r['spot_base']['formula_uniform']);
+    }
+
+    /**
      * Non-régression #228 : sans ligne spot dans la grille, la formule doit reproduire
      * exactement l'ancien calcul `spot × (1+TVA) + supplier_markup_per_kwh`. Ce test est
      * le garde-fou du lot : aucun montant déjà affiché ne doit bouger.

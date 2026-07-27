@@ -29,6 +29,39 @@ final class FormatterTest extends TestCase
         self::assertStringContainsString('RON', (new Formatter('fr'))->money(10.0, 'RON'));
     }
 
+    /**
+     * Symbole seul, pour les unités composées type « €/kWh » (#229). Vérifié sur
+     * plusieurs locales : le symbole suit la DEVISE, pas la langue de l'utilisateur —
+     * un contrat en euros reste en euros pour un lecteur néerlandophone.
+     */
+    public function testCurrencySymbolFollowsTheCurrencyNotTheLocale(): void
+    {
+        foreach (['fr', 'en', 'nl', 'de'] as $locale) {
+            $formatter = new Formatter($locale);
+            self::assertSame('€', $formatter->currencySymbol('EUR'), 'locale ' . $locale);
+            self::assertSame('$', $formatter->currencySymbol('USD'), 'locale ' . $locale);
+        }
+    }
+
+    /** Devise hors table : le code ISO est plus honnête qu'un symbole approximatif. */
+    public function testCurrencySymbolFallsBackToTheIsoCode(): void
+    {
+        self::assertSame('XYZ', (new Formatter('fr'))->currencySymbol('XYZ'));
+    }
+
+    /**
+     * `currencySymbol()` partage le cache de formatters avec `money()` : appeler l'un
+     * puis l'autre sur deux devises ne doit pas rendre le symbole de la première.
+     */
+    public function testCurrencySymbolDoesNotLeakAcrossCurrencies(): void
+    {
+        $formatter = new Formatter('fr');
+
+        $formatter->money(10.0, 'USD');
+        self::assertSame('€', $formatter->currencySymbol('EUR'));
+        self::assertSame('$', $formatter->currencySymbol('USD'));
+    }
+
     public function testNumberKeepsDecimals(): void
     {
         $out = (new Formatter('fr'))->number(1234.5, 2);

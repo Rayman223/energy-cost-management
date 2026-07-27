@@ -5,11 +5,13 @@ declare(strict_types=1);
 namespace Tests\Unit\I18n;
 
 use App\Domain\ComponentKind;
+use App\Domain\SpotFormulaFit;
 use App\Domain\TariffCategory;
 use App\Domain\TariffTemplateCatalog;
 use App\I18n\Translator;
 use App\Infrastructure\MeterTopology;
 use App\Integration\ModuleRegistry;
+use App\Service\BillReconciliationService;
 use App\Service\Import\ImportMapping;
 use App\Support\LegalIdentity;
 use PHPUnit\Framework\TestCase;
@@ -215,6 +217,16 @@ final class TemplateCatalogTest extends TestCase
         // legal.php:187 — une ligne de définition par champ d'identité de l'éditeur.
         foreach (LegalIdentity::FIELDS as $field) {
             $keys[] = 'legal.notice.' . $field;
+        }
+
+        // reconciliation.php — mode du rapprochement et raison d'exclusion d'un mois (#229).
+        // Dérivés des constantes publiques plutôt que listés : ajouter un mode ou une
+        // raison sans sa traduction doit rendre la CI rouge.
+        foreach (SpotFormulaFit::MODES as $mode) {
+            $keys[] = 'reconciliation.mode.' . $mode;
+        }
+        foreach (BillReconciliationService::SKIP_REASONS as $reason) {
+            $keys[] = 'reconciliation.skipped.' . $reason;
         }
 
         // partials/integration-card.php — suffixes concaténés à `integration.<key>.`.

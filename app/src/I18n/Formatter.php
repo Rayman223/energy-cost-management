@@ -50,6 +50,30 @@ final class Formatter
         return number_format($amount, 2, '.', ' ') . ' ' . (self::SYMBOLS[$currency] ?? $currency);
     }
 
+    /**
+     * Symbole seul d'une devise (« € »), pour les unités composées où `money()` ne
+     * convient pas — un tarif « 0,0254 €/kWh » n'est pas un montant formatable.
+     * Pendant serveur du `CURRENCY_SYMBOL` de dashboard.js, et même parti pris : on
+     * n'écrit jamais « € » en dur, le symbole suit la devise de la grille.
+     *
+     * Repli sur le code ISO (« PLN ») pour une devise hors table : plus lisible qu'un
+     * symbole approximatif, et toujours compréhensible.
+     */
+    public function currencySymbol(string $currency = 'EUR'): string
+    {
+        if (class_exists(\NumberFormatter::class)) {
+            $fmt  = $this->currencyFmt[$currency] ??= new \NumberFormatter($this->locale, \NumberFormatter::CURRENCY);
+            $part = $fmt->getSymbol(\NumberFormatter::CURRENCY_SYMBOL);
+            // intl rend le symbole du formatter, pas celui de $currency : on ne l'utilise
+            // que si la devise demandée est bien celle par défaut du formatter.
+            if ($part !== '' && $fmt->getTextAttribute(\NumberFormatter::CURRENCY_CODE) === $currency) {
+                return $part;
+            }
+        }
+
+        return self::SYMBOLS[$currency] ?? $currency;
+    }
+
     public function number(float $value, int $decimals = 2): string
     {
         if (class_exists(\NumberFormatter::class)) {

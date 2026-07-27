@@ -699,6 +699,12 @@ final class CostCalculationService
         $energyTtc  = 0.0;
         $totalKwh   = 0.0;
         $coveredKwh = 0.0;
+        // Décomposition de la part énergie selon les deux inconnues de la formule (#229) :
+        // energy_ttc = coefficient × indexedBaseTtc + offset × coveredKwh + uncoveredTtc.
+        // Les deux premiers termes varient avec la formule, le troisième non — c'est ce qui
+        // rend le rapprochement facture résoluble sans rejouer la boucle heure par heure.
+        $indexedBaseTtc = 0.0;
+        $uncoveredTtc   = 0.0;
         /** @var array<string, array{day: string, import_kwh: float, energy_dynamic: float}> $daily */
         $daily = [];
         // Énergie dynamique ventilée par sous-période tarifaire : ici pas de prorata,
@@ -716,15 +722,16 @@ final class CostCalculationService
                 // TVA de la grille de CETTE sous-période (#232) : source unique du taux,
                 // et versionnée — un passage de 21 % à 6 % en cours de période s'applique
                 // à partir de sa date, sans réécrire l'avant.
-                $rateTtc     = $formulas[$segmentIndex]->rateTtc(
-                    $prices[$hour],
-                    $segments[$segmentIndex]->grid->vatRate,
-                );
+                $vatRate     = $segments[$segmentIndex]->grid->vatRate;
+                $rateTtc     = $formulas[$segmentIndex]->rateTtc($prices[$hour], $vatRate);
                 $coveredKwh += $kwh;
+                // Base indexée AVANT coefficient et offset, avec la même TVA que rateTtc().
+                $indexedBaseTtc += $kwh * $prices[$hour] * (1.0 + $vatRate / 100.0);
             } else {
                 // Heure sans prix dynamique → repli sur le tarif fournisseur classique
                 // (déjà TTC) de la grille applicable à CETTE heure.
-                $rateTtc = $this->classicEnergyRateForHour($hour, $segments[$segmentIndex]->grid->toTariffArray());
+                $rateTtc       = $this->classicEnergyRateForHour($hour, $segments[$segmentIndex]->grid->toTariffArray());
+                $uncoveredTtc += $kwh * $rateTtc;
             }
 
             $lineCost   = $kwh * $rateTtc;
@@ -783,6 +790,7 @@ final class CostCalculationService
             'tariff_segments' => $this->segmentsMeta($segments, $breakdowns),
             'deltas'         => $deltas,
             'formula'        => $this->formulaMeta($segments[$dominant], $formulas[$dominant]),
+            'spot_base'      => $this->spotBaseMeta($indexedBaseTtc, $coveredKwh, $uncoveredTtc, $formulas, $segments),
             'energy_dynamic' => round($energyTtc, 2),
             'avg_price_kwh'  => $totalKwh > 0.0 ? round($energyTtc / $totalKwh, 6) : null,
             'coverage_pct'   => $totalKwh > 0.0 ? round($coveredKwh / $totalKwh * 100.0, 1) : 0.0,
@@ -809,6 +817,72 @@ final class CostCalculationService
             'offset_source'        => $formula->offsetSource,
             'coefficient_rejected' => $formula->coefficientRejected,
         ];
+    }
+
+    /**
+     * Décomposition de la part énergie selon les inconnues de la formule (#229), pour le
+     * rapprochement facture. Invariant garanti par la boucle de buildDynamicResponse() :
+     *
+     *     energy_dynamic = coefficient × indexed_ttc + offset_ttc × covered_kwh + uncovered_ttc
+     *
+     * Retrouver (coefficient, offset) à partir d'un montant facturé se ramène donc à une
+     * équation linéaire par mois, sans rejouer le croisement conso × prix heure par heure.
+     *
+     * `formula_uniform` dit si toutes les sous-périodes du mois partagent les mêmes
+     * paramètres. Quand elle est fausse, l'invariant ci-dessus n'a plus de solution unique
+     * — le mois chevauche deux contrats — et l'appelant doit le signaler plutôt
+     * qu'inventer un couple.
+     *
+     * Le TAUX DE TVA en fait partie, alors qu'il n'apparaît pas dans l'invariant : il sert
+     * à l'appelant pour convertir un montant facturé HTVA en TTC. Deux sous-périodes de
+     * même formule mais de TVA différente (passage de 21 % à 6 % en cours de mois) rendent
+     * cette conversion ambiguë, même si la résolution, elle, resterait exacte.
+     *
+     * @param list<SpotFormula>   $formulas
+     * @param list<TariffSegment> $segments Même indexation que $formulas.
+     * @return array{indexed_ttc: float, covered_kwh: float, uncovered_ttc: float, formula_uniform: bool}
+     */
+    private function spotBaseMeta(
+        float $indexedBaseTtc,
+        float $coveredKwh,
+        float $uncoveredTtc,
+        array $formulas,
+        array $segments,
+    ): array {
+        $uniform = true;
+        foreach ($formulas as $i => $formula) {
+            // Comparaison à tolérance plutôt que stricte : deux grilles portant le même
+            // coefficient peuvent le composer différemment (une ligne 1,08 d'un côté,
+            // 1,04 × 1,0385 de l'autre) et différer sur le dernier bit sans que les
+            // contrats diffèrent réellement. Le seuil est très en dessous de ce qu'un
+            // utilisateur peut saisir (7 décimales en base).
+            if (!$this->sameParameter($formula->coefficient, $formulas[0]->coefficient)
+                || !$this->sameParameter($formula->offsetTtc, $formulas[0]->offsetTtc)
+                || !$this->sameParameter($segments[$i]->grid->vatRate, $segments[0]->grid->vatRate)
+            ) {
+                $uniform = false;
+                break;
+            }
+        }
+
+        return [
+            // 4 décimales : ces montants alimentent une division (résolution du système),
+            // arrondir plus court propagerait l'erreur sur le coefficient proposé.
+            'indexed_ttc'     => round($indexedBaseTtc, 4),
+            'covered_kwh'     => round($coveredKwh, 3),
+            'uncovered_ttc'   => round($uncoveredTtc, 4),
+            'formula_uniform' => $uniform,
+        ];
+    }
+
+    /**
+     * Deux paramètres tarifaires sont-ils le même ? Tolérance 1e-9, soit deux ordres de
+     * grandeur sous la précision de saisie (DECIMAL(12,7)) : un écart réel reste détecté,
+     * un artefact de composition en virgule flottante non.
+     */
+    private function sameParameter(float $a, float $b): bool
+    {
+        return abs($a - $b) < 1.0e-9;
     }
 
     /**

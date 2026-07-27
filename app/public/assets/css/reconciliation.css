@@ -1,0 +1,64 @@
+/* Rapprochement facture (#229) — complète tariffs.css, chargé juste avant.
+   Ne contient que ce qui est propre à cette page : le tableau d'écarts et le bloc
+   de formule déduite. Tout le reste (.form-card, .section-header, .btn, .alert)
+   vient de tariffs.css, dont la page reprend la grammaire de formulaire. */
+
+.rec-intro { color: var(--muted); font-size: .88rem; line-height: 1.6; margin: 20px 0 0; max-width: 76ch; }
+
+/* État « tarif fixe » : la page n'a pas d'objet, on explique pourquoi. */
+.rec-empty { background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+             padding: 32px 24px; margin-top: 24px; text-align: center; }
+.rec-empty-title { font-size: 1rem; font-weight: 700; color: var(--text-strong); margin: 0 0 8px; }
+.rec-empty-hint  { color: var(--muted); font-size: .86rem; margin: 0 0 18px; }
+
+/* Tableau des écarts — scroll horizontal propre sur mobile plutôt que débordement. */
+.rec-table-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+                  overflow-x: auto; }
+.rec-table { width: 100%; border-collapse: collapse; font-size: .84rem; min-width: 720px; }
+.rec-table th { text-align: left; padding: 12px 16px; color: var(--muted); font-weight: 600;
+                font-size: .74rem; letter-spacing: .08em; text-transform: uppercase; }
+.rec-table td { padding: 12px 16px; border-top: 1px solid var(--border); vertical-align: middle; }
+.rec-table th.num, .rec-table td.num { text-align: right; font-family: var(--mono); }
+.rec-table tbody tr:hover { background: var(--surface2); }
+.rec-table tr.is-skipped { opacity: .6; }
+.rec-table td.actions { text-align: right; white-space: nowrap; }
+
+.rec-note { display: block; color: var(--muted); font-size: .76rem; margin-top: 3px; }
+.rec-skip { color: var(--muted); font-style: italic; font-size: .82rem; }
+
+/* Signe de l'écart : au-dessus du calculé (facture plus chère) vs en dessous. */
+.gap-over  { color: var(--red); }
+.gap-under { color: var(--green); }
+
+/* Pagination du tableau d'écarts. */
+.rec-pager { display: flex; align-items: center; justify-content: center; gap: 16px; margin-top: 16px; }
+.rec-pager-state { font-family: var(--mono); font-size: .8rem; color: var(--muted); }
+.rec-pager-hint  { text-align: center; color: var(--muted); font-size: .8rem; margin: 8px 0 0; }
+
+/* Bloc « formule déduite ». */
+.rec-fit { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 24px; }
+.rec-fit-mode { font-size: .9rem; line-height: 1.6; margin: 0 0 18px; color: var(--text); }
+.rec-fit-mode--exact,
+.rec-fit-mode--least_squares  { color: var(--green); }
+.rec-fit-mode--single_period,
+.rec-fit-mode--ill_conditioned { color: var(--amber); }
+
+.rec-fit-values { display: flex; flex-wrap: wrap; gap: 32px; margin-bottom: 18px; }
+.rec-fit-value  { display: flex; flex-direction: column; gap: 6px; }
+.rec-fit-label  { font-size: .74rem; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+.rec-fit-number { font-family: var(--mono); font-size: 1.5rem; font-weight: 700; color: var(--amber); }
+.rec-fit-number .unit { font-size: .8rem; font-weight: 400; color: var(--muted); }
+
+.rec-alt-intro { color: var(--muted); font-size: .86rem; margin: 0 0 10px; }
+.rec-alt { margin: 0 0 18px; padding-left: 20px; color: var(--text); font-size: .86rem; line-height: 1.8; }
+
+.rec-warn { background: var(--amber-dim, rgba(210,160,60,.15)); border-radius: 8px; padding: 10px 14px;
+            color: var(--amber); font-size: .84rem; line-height: 1.6; margin: 0 0 14px; }
+
+.rec-apply-hint { color: var(--muted); font-size: .84rem; margin: 0; line-height: 1.6; }
+.rec-apply-hint a { color: var(--blue); }
+
+@media (max-width: 640px) {
+  .rec-fit-values { gap: 20px; }
+  .rec-fit-number { font-size: 1.25rem; }
+}

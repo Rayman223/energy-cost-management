@@ -126,6 +126,12 @@ final class View
             ?? (number_format($amount, 2, '.', ' ') . ' ' . $currency);
     }
 
+    /** Symbole seul de la devise (« € »), pour les unités composées type « €/kWh ». */
+    public function currencySymbol(string $currency = 'EUR'): string
+    {
+        return $this->formatter?->currencySymbol($currency) ?? $currency;
+    }
+
     public function num(float $value, int $decimals = 2): string
     {
         return $this->formatter?->number($value, $decimals) ?? number_format($value, $decimals, '.', ' ');

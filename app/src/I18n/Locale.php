@@ -34,7 +34,7 @@ final class Locale
      * qui oublierait d'y déclarer son état retombe sur l'ancien comportement
      * (paramètre simplement perdu), jamais sur un effet de bord.
      */
-    private const CARRIED_PARAMS = ['edit', 'duplicate', 'energy', 'template'];
+    private const CARRIED_PARAMS = ['edit', 'duplicate', 'energy', 'template', 'page'];
 
     /**
      * @param array<string, mixed> $config
