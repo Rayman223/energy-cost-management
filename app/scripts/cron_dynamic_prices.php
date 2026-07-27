@@ -13,8 +13,12 @@ use App\Service\EntsoePriceParser;
  * pour TOUTES les zones de marché utilisées : celles des profils utilisateurs
  * (user_profiles.bidding_zone) + la zone par défaut de la config.
  *
- * À planifier une fois par jour, après la publication day-ahead (~13h CET) :
- *   30 13 * * *  php /var/www/Manage-energy-costs/app/scripts/cron_dynamic_prices.php
+ * À planifier après la publication day-ahead (~13h CET), avec une passe de
+ * rattrapage si la publication est en retard — l'upsert étant idempotent :
+ *   30 13,18 * * *  php /var/www/Manage-energy-costs/app/scripts/cron_dynamic_prices.php
+ *
+ * Sur Unraid, passer par app/scripts/cron_dynamic_prices_unraid.sh.
+ * Guide complet : app/docs/entsoe-dynamic-prices.md
  */
 
 $config = require __DIR__ . '/../bootstrap.php';

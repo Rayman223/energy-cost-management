@@ -219,8 +219,9 @@ column mapping: [`app/docs/import.md`](app/docs/import.md).
 # Daily export sync (01:15) — iterates over export modules & opted-in users
 # (EnergyID, …). `cron_daily_webhook.php` remains a deprecated alias.
 15 1 * * * /usr/bin/php /path/app/scripts/cron_export_sync.php      >> /var/log/energy-daily.log 2>&1
-# Day-ahead dynamic prices, after market publication (~13:30)
-30 13 * * * /usr/bin/php /path/app/scripts/cron_dynamic_prices.php >> /var/log/energy-dynamic.log 2>&1
+# Day-ahead dynamic prices (13:30 after market publication, 18:30 catch-up).
+# Full setup — token, 15-min prices, Unraid script: app/docs/entsoe-dynamic-prices.md
+30 13,18 * * * /usr/bin/php /path/app/scripts/cron_dynamic_prices.php >> /var/log/energy-dynamic.log 2>&1
 # Daily full SQL backup (03:00) — pure-PHP dump | gzip into backups/, 30-day rotation
 0 3 * * *  /usr/bin/php /path/app/scripts/backup_db.php            >> /var/log/energy-backup.log 2>&1
 ```
@@ -334,5 +335,6 @@ connector card is hidden from the account page and the nightly push is skipped.
 - [`app/docs/oidc-generic.md`](app/docs/oidc-generic.md) — any other self-hosted OIDC provider (Keycloak, Zitadel).
 - [`app/docs/architecture.md`](app/docs/architecture.md) — layered architecture and the #47 community-platform design.
 - [`app/docs/import.md`](app/docs/import.md) — bulk import formats, mapping, idempotence.
+- [`app/docs/entsoe-dynamic-prices.md`](app/docs/entsoe-dynamic-prices.md) — ENTSO-E setup, 15-min prices, cron & Unraid script *(written in French)*.
 - [`app/docs/security-review.md`](app/docs/security-review.md) — security checklist.
 - [`app/docs/plan/`](app/docs/plan/) — per-phase design notes (P0–P8) and the API contract.

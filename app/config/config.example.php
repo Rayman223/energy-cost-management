@@ -32,14 +32,17 @@ return [
     ],
 
     // Tarif dynamique (prix day-ahead du marché spot, ex. ENTSO-E).
-    // Le marché (prix spot, token, zone) est global au site ; l'économique
-    // (TVA, marge fournisseur) est passé PAR UTILISATEUR dans /account (#153).
+    // Le token et l'URL d'API sont globaux au site ; la zone ci-dessous n'est que
+    // le DÉFAUT — chaque utilisateur peut déclarer la sienne dans /account
+    // (user_profiles.bidding_zone) et le cron récupère toutes les zones utilisées.
+    // L'économique (TVA, marge fournisseur) est également PAR UTILISATEUR (#153).
+    // Guide de mise en service : app/docs/entsoe-dynamic-prices.md
     'dynamic_prices' => [
         'enabled'                 => false,
         'provider'                => 'entsoe',
         'api_url'                 => 'https://web-api.tp.entsoe.eu/api',
         'security_token'          => 'change_me',       // token ENTSO-E (inscription gratuite)
-        'bidding_zone'            => '10YBE----------2', // zone de marché Belgique (fallback)
+        'bidding_zone'            => '10YBE----------2', // zone par défaut (fallback profils) : Belgique
         'timeout'                 => 30,
     ],
 
