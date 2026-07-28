@@ -66,4 +66,10 @@ final class FakeMeterReadingRepository implements MeterReadingRepositoryInterfac
     {
         return $this->forInterpolation;
     }
+
+    /** @return list<array{reading_at: string, counter_m3: float}> */
+    public function getReadingsForRange(string $from, string $to): array
+    {
+        return $this->forInterpolation;
+    }
 }

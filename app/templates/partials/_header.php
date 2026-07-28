@@ -10,7 +10,7 @@
  * active. L'icône Admin n'apparaît que pour les administrateurs.
  *
  * @var string            $subtitle    Sous-titre de page, déjà traduit (échappé ici)
- * @var string            $current     Clé de page active : dashboard|tariffs|reconciliation|admin|account|meter-readings|api-guide
+ * @var string            $current     Clé de page active : dashboard|tariffs|reconciliation|advances|admin|account|meter-readings|api-guide
  * @var bool|null         $isAdmin     Affiche l'icône Admin (défaut false)
  * @var string|null       $discordUrl  URL d'invitation Discord (partial discord-link)
  * @var list<string>|null $available   Locales disponibles pour le sélecteur (défaut [])
@@ -53,6 +53,7 @@ $navlink = function (string $page, string $url, string $icon, string $title) use
     <?php if ($isAdmin): ?><?= $navlink('admin', $this->url('admin'), '🛡', $this->t('admin.title')) ?><?php endif; ?>
     <?= $navlink('tariffs', $this->url('tariffs'), '€', $this->t('nav.tariffs')) ?>
     <?= $navlink('reconciliation', $this->url('reconciliation'), '🧾', $this->t('nav.reconciliation')) ?>
+    <?= $navlink('advances', $this->url('advances'), '🏦', $this->t('nav.advances')) ?>
     <?= $navlink('account', $this->url('account'), '👤', $this->t('nav.account')) ?>
     <form method="post" action="<?= $this->url('auth/logout') ?>" class="logout-form"><?= \App\Security\Csrf::field() ?><button type="submit" class="theme-toggle" title="<?= $this->te('auth.sign_out') ?>">🚪</button></form>
     <?= $this->partial('discord-link', ['url' => $discordUrl ?? null]) ?>

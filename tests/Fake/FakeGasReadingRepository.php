@@ -30,4 +30,9 @@ final class FakeGasReadingRepository implements GasReadingRepositoryInterface
     {
         return $this->forInterpolation;
     }
+
+    public function getReadingsForRange(string $from, string $to): array
+    {
+        return $this->forInterpolation;
+    }
 }

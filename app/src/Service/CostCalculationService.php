@@ -12,6 +12,7 @@ use App\Repository\Contract\GasReadingRepositoryInterface;
 use App\Repository\Contract\LegacyDailyRepositoryInterface;
 use App\Repository\Contract\MeterReadingRepositoryInterface;
 use App\Repository\Contract\TariffRepositoryInterface;
+use App\Support\Dates;
 use DateTimeImmutable;
 use DateTimeZone;
 
@@ -52,6 +53,17 @@ final class CostCalculationService
      * moins fine mais complète.
      */
     private const PRICE_COVERAGE_MIN_PCT = 80.0;
+
+    /**
+     * Longueur maximale d'une période à bornes libres (#241).
+     *
+     * {@see TariffPeriodSplitter::split()} alloue un DateTimeImmutable par jour de
+     * la période : une plage saisie de travers (« 1900 → 9999 », un chiffre d'année
+     * mal tapé) demanderait des millions d'objets et tuerait le worker sur la
+     * mémoire. Dix ans couvrent largement tout cycle de régularisation réel, tout en
+     * bornant l'allocation à quelques milliers d'objets.
+     */
+    public const MAX_PERIOD_DAYS = 3660;
 
     /**
      * @param bool $dynamicEnabled Kill-switch global du tarif dynamique (config
@@ -190,6 +202,110 @@ final class CostCalculationService
     }
 
     /**
+     * Estimation électricité sur une période à dates QUELCONQUES (#241).
+     *
+     * Même calcul que le mois calendaire, dont les bornes ne sont qu'un cas
+     * particulier : un bilan d'acomptes court « du 06/06/2025 au 01/07/2026 » et
+     * doit être facturé sur cette fenêtre-là, pas sur les treize mois qu'elle
+     * effleure.
+     *
+     * @return array<string, mixed>
+     */
+    public function estimatePeriodElectricity(DateTimeImmutable $from, DateTimeImmutable $to): array
+    {
+        return $this->electricityBetween($from, $to, dynamic: false);
+    }
+
+    /**
+     * Pendant « tarif dynamique » de {@see estimatePeriodElectricity()}.
+     *
+     * Le coût est reconstitué créneau par créneau sur toute la fenêtre : sur une
+     * période longue, cela suppose que les prix de marché soient importés sur
+     * l'ensemble de la période, faute de quoi les créneaux non couverts retombent
+     * sur le tarif fournisseur classique (cf. buildDynamicResponse).
+     *
+     * @return array<string, mixed>
+     */
+    public function estimatePeriodElectricityDynamic(DateTimeImmutable $from, DateTimeImmutable $to): array
+    {
+        return $this->electricityBetween($from, $to, dynamic: true);
+    }
+
+    /**
+     * Corps commun des deux estimations de période électricité.
+     *
+     * La fenêtre EFFECTIVE est celle que renvoie le repository, pas celle qui est
+     * demandée : la borne de fin est clampée sur le dernier relevé disponible.
+     * Une période qui déborde sur le futur est donc facturée jusqu'aux données
+     * réelles, sans projection.
+     *
+     * @return array<string, mixed>
+     */
+    private function electricityBetween(DateTimeImmutable $from, DateTimeImmutable $to, bool $dynamic): array
+    {
+        $invalid = self::rejectUnusablePeriod($from, $to);
+        if ($invalid !== null) {
+            return $invalid;
+        }
+
+        $deltas = $this->legacyRepo->getDeltasBetween(Dates::toDbString($from), Dates::toDbString($to));
+        if (empty($deltas)) {
+            return [
+                'available' => false,
+                'reason'    => sprintf('No data for %s → %s', $from->format('Y-m-d'), $to->format('Y-m-d')),
+            ];
+        }
+
+        $realFrom = new DateTimeImmutable($deltas['from']);
+        $realTo   = new DateTimeImmutable($deltas['to']);
+        $days     = $this->periodDays($realFrom, $realTo);
+
+        $segments = $this->segmentsFor('electricity', $realFrom, $realTo, $days);
+        if ($segments === []) {
+            return [
+                'available' => false,
+                'reason'    => sprintf('No active electricity tariff for %s → %s', $from->format('Y-m-d'), $to->format('Y-m-d')),
+            ];
+        }
+
+        $response = $dynamic
+            ? $this->buildDynamicResponse($deltas, $segments, $days)
+            : $this->buildElectricityResponse($deltas, $segments, $days);
+
+        // Les bornes de relevés sont clampées sur le relevé le plus proche : un flux
+        // arrêté en mars donne un coût qui s'arrête en mars, sans que le montant le
+        // dise. L'appelant doit pouvoir distinguer « consommation de la période » de
+        // « consommation des données disponibles » (#241).
+        $response['coverage_complete'] = $this->coversPeriod(
+            is_string($deltas['data_from'] ?? null) ? $deltas['data_from'] : null,
+            is_string($deltas['data_to'] ?? null) ? $deltas['data_to'] : null,
+            $from,
+            $to,
+        );
+
+        return $response;
+    }
+
+    /**
+     * La fenêtre de relevés couvre-t-elle la période demandée ?
+     *
+     * Tolérance d'un jour à chaque bout : un relevé quotidien tombe rarement pile à
+     * la seconde de la borne, et signaler une lacune pour quelques heures rendrait
+     * l'avertissement permanent — donc ignoré.
+     */
+    private function coversPeriod(?string $dataFrom, ?string $dataTo, DateTimeImmutable $from, DateTimeImmutable $to): bool
+    {
+        if ($dataFrom === null || $dataTo === null) {
+            return false;
+        }
+
+        $tolerance = 86400;
+
+        return (new DateTimeImmutable($dataFrom))->getTimestamp() <= $from->getTimestamp() + $tolerance
+            && (new DateTimeImmutable($dataTo))->getTimestamp() >= $to->getTimestamp() - $tolerance;
+    }
+
+    /**
      * Estimate gas cost between the two most recent manual readings.
      * Returns ['available' => false] when fewer than two readings exist.
      *
@@ -254,6 +370,45 @@ final class CostCalculationService
             $month,
         );
 
+        return $this->gasResponse($interp, sprintf('%04d-%02d', $year, $month));
+    }
+
+    /**
+     * Estimation gaz sur une période à dates QUELCONQUES (#241) — même moteur
+     * d'interpolation, bornes libres.
+     *
+     * @return array<string, mixed>
+     */
+    public function estimatePeriodGas(DateTimeImmutable $from, DateTimeImmutable $to): array
+    {
+        $invalid = self::rejectUnusablePeriod($from, $to);
+        if ($invalid !== null) {
+            return $invalid;
+        }
+
+        $interp = $this->interpolator->interpolateRange(
+            $this->toSeries($this->gasRepo->getReadingsForRange(Dates::toDbString($from), Dates::toDbString($to))),
+            $from,
+            $to,
+        );
+
+        $response = $this->gasResponse($interp, $from->format('Y-m-d') . ' → ' . $to->format('Y-m-d'));
+        $response['coverage_complete'] = self::boundsAreMeasured($interp);
+
+        return $response;
+    }
+
+    /**
+     * Habille un résultat d'interpolation gaz d'un coût tarifaire.
+     *
+     * Corps commun au mois calendaire et à la période libre : seule la façon
+     * d'obtenir les deux bornes les distingue.
+     *
+     * @param string $label Période, telle qu'affichée dans le message d'indisponibilité.
+     * @return array<string, mixed>
+     */
+    private function gasResponse(MonthInterpolation $interp, string $label): array
+    {
         if (!$interp->available) {
             return ['available' => false, 'reason' => $interp->reason];
         }
@@ -265,7 +420,7 @@ final class CostCalculationService
         if ($segments === []) {
             return [
                 'available' => false,
-                'reason'    => sprintf('Aucun tarif gaz configuré pour %04d-%02d.', $year, $month),
+                'reason'    => sprintf('Aucun tarif gaz configuré pour %s.', $label),
             ];
         }
 
@@ -340,12 +495,95 @@ final class CostCalculationService
             return ['available' => false, 'reason' => 'Relevés eau indisponibles.'];
         }
 
-        $interp = $this->interpolator->interpolateMonth(
+        return $this->waterResponse($this->interpolator->interpolateMonth(
             $this->toSeries($this->waterRepo->getReadingsForInterpolation($year, $month)),
             $year,
             $month,
+        ));
+    }
+
+    /**
+     * Estimation eau sur une période à dates QUELCONQUES (#241) — même moteur
+     * d'interpolation que le gaz, bornes libres.
+     *
+     * @return array<string, mixed>
+     */
+    public function estimatePeriodWater(DateTimeImmutable $from, DateTimeImmutable $to): array
+    {
+        if ($this->waterRepo === null) {
+            return ['available' => false, 'reason' => 'Relevés eau indisponibles.'];
+        }
+
+        $invalid = self::rejectUnusablePeriod($from, $to);
+        if ($invalid !== null) {
+            return $invalid;
+        }
+
+        $interp = $this->interpolator->interpolateRange(
+            $this->toSeries($this->waterRepo->getReadingsForRange(Dates::toDbString($from), Dates::toDbString($to))),
+            $from,
+            $to,
         );
 
+        $response = $this->waterResponse($interp);
+        $response['coverage_complete'] = self::boundsAreMeasured($interp);
+
+        return $response;
+    }
+
+    /**
+     * Refuse une période inexploitable, AVANT tout accès aux données : bornes
+     * inversées, ou plage si longue que le découpage tarifaire épuiserait la
+     * mémoire ({@see self::MAX_PERIOD_DAYS}). Renvoie null quand la période est
+     * acceptable.
+     *
+     * La garde vit ici plutôt que dans l'appelant : c'est ce service qui commande
+     * le splitter, donc lui qui doit protéger le worker — quel que soit le chemin
+     * par lequel la période arrive.
+     *
+     * @return array<string, mixed>|null
+     */
+    private static function rejectUnusablePeriod(DateTimeImmutable $from, DateTimeImmutable $to): ?array
+    {
+        if ($to <= $from) {
+            return ['available' => false, 'reason' => 'Période invalide : la fin doit suivre le début.'];
+        }
+
+        $days = ($to->getTimestamp() - $from->getTimestamp()) / 86400;
+        if ($days > self::MAX_PERIOD_DAYS) {
+            return [
+                'available' => false,
+                'reason'    => sprintf('Période trop longue : %d jours au maximum.', self::MAX_PERIOD_DAYS),
+            ];
+        }
+
+        return null;
+    }
+
+    /**
+     * Les deux bornes de l'interpolation reposent-elles sur des relevés réels ?
+     *
+     * `extrapolated` signale une borne HORS de la plage des relevés : la valeur est
+     * alors obtenue en prolongeant la pente du segment de bord — une projection, pas
+     * une mesure. Sur un mois en cours c'est le comportement voulu ; sur un bilan
+     * d'acomptes, présenter une consommation projetée comme consommée fausserait le
+     * solde sans le dire (#241).
+     */
+    private static function boundsAreMeasured(MonthInterpolation $interp): bool
+    {
+        return $interp->available
+            && $interp->startKind !== 'extrapolated'
+            && $interp->endKind !== 'extrapolated';
+    }
+
+    /**
+     * Habille un résultat d'interpolation eau : volume seul, plus le coût si une
+     * grille « eau » couvre la période. Corps commun au mois et à la période libre.
+     *
+     * @return array<string, mixed>
+     */
+    private function waterResponse(MonthInterpolation $interp): array
+    {
         if (!$interp->available) {
             return ['available' => false, 'reason' => $interp->reason];
         }
@@ -427,6 +665,20 @@ final class CostCalculationService
         }
 
         return (int) $from->format('t');
+    }
+
+    /**
+     * Nombre de jours d'une période à bornes libres (#241).
+     *
+     * Distinct de {@see computeDays()}, qui répond « nombre de jours du mois de
+     * $from » dès que la période chevauche deux mois — hypothèse juste pour un
+     * mois calendaire, fausse pour une période de treize mois, dont les forfaits
+     * (abonnement mensuel, redevance annuelle) seraient alors proratisés sur un
+     * seul mois.
+     */
+    private function periodDays(DateTimeImmutable $from, DateTimeImmutable $to): int
+    {
+        return max(1, (int) round(($to->getTimestamp() - $from->getTimestamp()) / 86400));
     }
 
     // ── Sous-périodes tarifaires (#196) ───────────────────────────────────────

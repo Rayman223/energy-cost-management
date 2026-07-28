@@ -258,6 +258,31 @@ CREATE TABLE IF NOT EXISTS energy_bills (
     CONSTRAINT fk_energy_bills_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+-- ── Barèmes d'acomptes mensuels (#241) ───────────────────────────────────
+-- Ce que l'utilisateur PAIE chaque mois à son fournisseur, par énergie, avec sa
+-- plage de validité — le pendant du coût calculé, pour dire en fin de cycle s'il
+-- devra un complément ou recevra un remboursement.
+-- On stocke le barème et non chaque prélèvement : un montant révisé une ou deux
+-- fois par an tient en deux lignes. `due_day` est le jour du débit ; le total
+-- payé sur une période se compte en échéances tombées, pas au prorata des jours,
+-- pour correspondre au relevé bancaire.
+-- Pas de clé unique : les barèmes se succèdent ; le non-chevauchement est validé
+-- côté service.
+CREATE TABLE IF NOT EXISTS energy_advances (
+    id             BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    user_id        BIGINT UNSIGNED NOT NULL,
+    energy_type    VARCHAR(20) NOT NULL DEFAULT 'electricity' COMMENT 'electricity | gas | water',
+    amount_monthly DECIMAL(12,4) NOT NULL COMMENT 'Acompte mensuel TTC (devise de la grille)',
+    valid_from     DATE NOT NULL COMMENT 'Premier mois où ce barème s applique',
+    valid_to       DATE NULL COMMENT 'Dernier mois couvert ; NULL = barème toujours en cours',
+    due_day        TINYINT UNSIGNED NOT NULL DEFAULT 1 COMMENT 'Jour du prélèvement mensuel (1-31)',
+    note           VARCHAR(255) NOT NULL DEFAULT '' COMMENT 'Annotation libre (contrat, remarque)',
+    created_at     DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at     DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_energy_advances_user (user_id, energy_type, valid_from),
+    CONSTRAINT fk_energy_advances_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 -- ── Suivi des migrations versionnées ─────────────────────────────────────
 CREATE TABLE IF NOT EXISTS schema_migrations (
     version    VARCHAR(255) NOT NULL PRIMARY KEY,

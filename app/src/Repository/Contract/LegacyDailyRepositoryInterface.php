@@ -32,6 +32,17 @@ interface LegacyDailyRepositoryInterface
     public function getMonthlyDeltasForMonth(int $year, int $month): array;
 
     /**
+     * Deltas entre deux instants QUELCONQUES, bornes interpolées (#241) — même
+     * forme de sortie que {@see getMonthlyDeltasForMonth()}, dont le mois n'est
+     * qu'un cas particulier. `[]` si aucun relevé ne tombe dans l'intervalle.
+     *
+     * @param string $from Borne de début, format DB 'Y-m-d H:i:s' (UTC).
+     * @param string $to   Borne de fin, même format.
+     * @return array<string, mixed>
+     */
+    public function getDeltasBetween(string $from, string $to): array;
+
+    /**
      * Consommation IMPORT (T1+T2) ventilée par heure sur [$from, $to], pour
      * croiser avec un prix dynamique horaire (tarif dynamique).
      *

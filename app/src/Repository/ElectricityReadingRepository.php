@@ -75,6 +75,9 @@ final class ElectricityReadingRepository implements LegacyDailyRepositoryInterfa
     /** @var array<string, array<string, mixed>> Cache requête-scopé des deltas par mois donné (clé "Y-n"). */
     private array $monthlyDeltasForMonthCache = [];
 
+    /** @var array<string, array<string, mixed>> Cache requête-scopé des deltas par intervalle libre (clé "from|to"). */
+    private array $rangeDeltasCache = [];
+
     /**
      * @param string $timezone Fuseau IANA de l'utilisateur (user_profiles.timezone).
      *        Sert à délimiter les « jours locaux » des lectures dashboard
@@ -225,14 +228,16 @@ final class ElectricityReadingRepository implements LegacyDailyRepositoryInterfa
     }
 
     /**
-     * Invalide les deltas mensuels mémoïsés : une suppression rend obsolètes les
-     * agrégats calculés (comme une insertion). Cf. insertIndexes.
+     * Invalide les deltas mémoïsés (mensuels et par intervalle libre) : une
+     * suppression rend obsolètes les agrégats calculés (comme une insertion).
+     * Cf. insertIndexes.
      */
     private function invalidateMonthlyDeltaCaches(): void
     {
         $this->monthlyDeltasComputed      = false;
         $this->monthlyDeltasCache         = [];
         $this->monthlyDeltasForMonthCache = [];
+        $this->rangeDeltasCache           = [];
     }
 
     /**
@@ -465,6 +470,22 @@ final class ElectricityReadingRepository implements LegacyDailyRepositoryInterfa
     }
 
     /**
+     * Deltas entre deux instants QUELCONQUES, avec interpolation des bornes (#241).
+     *
+     * Mémoïsation requête-scopée clefée sur le couple de bornes : la page des
+     * acomptes demande le même intervalle une fois par énergie, et le bilan élec
+     * peut rejouer le calcul en classique puis en dynamique.
+     *
+     * @param string $from Borne de début, format DB 'Y-m-d H:i:s' (UTC).
+     * @param string $to   Borne de fin, même format.
+     * @return array<string, mixed>
+     */
+    public function getDeltasBetween(string $from, string $to): array
+    {
+        return $this->rangeDeltasCache[$from . '|' . $to] ??= $this->interpolatedDeltasBetween($from, $to);
+    }
+
+    /**
      * Deltas d'un mois avec interpolation à minuit des bornes, par registre.
      * Même sémantique que l'ancienne implémentation : mois vide → [] ; mois en
      * cours → borne de fin clampée sur le dernier relevé.
@@ -479,8 +500,24 @@ final class ElectricityReadingRepository implements LegacyDailyRepositoryInterfa
         $nextMonth      = $month === 12 ? 1         : $month + 1;
         $nextMonthStart = sprintf('%04d-%02d-01 00:00:00', $nextYear, $nextMonth);
 
+        return $this->interpolatedDeltasBetween($monthStart, $nextMonthStart);
+    }
+
+    /**
+     * Deltas entre deux bornes, par registre, avec interpolation à l'instant exact
+     * de chaque borne. Généralisation du calcul mensuel : le mois n'était qu'un
+     * couple de bornes à minuit.
+     *
+     * Sémantique conservée : aucun relevé dans l'intervalle → [] ; période encore
+     * en cours → borne de fin clampée sur le dernier relevé disponible, de sorte
+     * que `to` reflète la fin RÉELLE des données et non une projection.
+     *
+     * @return array<string, mixed>
+     */
+    private function interpolatedDeltasBetween(string $from, string $to): array
+    {
         $refId = $this->registerId('import_t1');
-        if ($refId === null || $this->hasReadingInRange($refId, $monthStart, $nextMonthStart) === false) {
+        if ($refId === null || $this->hasReadingInRange($refId, $from, $to) === false) {
             return [];
         }
 
@@ -501,10 +538,10 @@ final class ElectricityReadingRepository implements LegacyDailyRepositoryInterfa
         $solarId = $this->registerId('production');
 
         $startIds    = $solarId === null ? $elecIds : [...$elecIds, $solarId];
-        $startValues = $this->interpolatedValuesAt($startIds, $monthStart);
-        $endValues   = $this->interpolatedValuesAt($elecIds, $nextMonthStart);
+        $startValues = $this->interpolatedValuesAt($startIds, $from);
+        $endValues   = $this->interpolatedValuesAt($elecIds, $to);
 
-        $result = ['from' => $monthStart, 'to' => $nextMonthStart];
+        $result = ['from' => $from, 'to' => $to];
 
         foreach ($outKeys as $registerKey => $outKey) {
             $rid = $rids[$registerKey];
@@ -521,9 +558,19 @@ final class ElectricityReadingRepository implements LegacyDailyRepositoryInterfa
 
             $result[$outKey] = max(0.0, round($end['value'] - $start['value'], 3));
 
-            // Borne de fin réelle (mois en cours → timestamp du dernier relevé).
+            // Borne de fin réelle (période en cours → timestamp du dernier relevé).
             if ($registerKey === 'import_t1') {
                 $result['to'] = $end['timestamp'];
+
+                // Fenêtre réellement COUVERTE par des relevés, exposée à part de
+                // `from`/`to` pour ne rien changer aux appelants historiques (#241).
+                // Les bornes sont clampées sur le relevé le plus proche quand
+                // l'instant demandé sort de la plage : les comparer à la période
+                // demandée dit si les données la couvrent vraiment, ou si le calcul
+                // ne porte que sur une fraction — un flux de relevés arrêté ne doit
+                // pas produire un coût partiel présenté comme complet.
+                $result['data_from'] = $start['timestamp'];
+                $result['data_to']   = $end['timestamp'];
             }
         }
 

@@ -1,0 +1,50 @@
+/* Acomptes (#241) — complète tariffs.css, chargé juste avant.
+   Ne contient que ce qui est propre à cette page : le bandeau de solde et le
+   tableau du bilan. Tout le reste (.form-card, .section-header, .btn, .alert)
+   vient de tariffs.css, dont la page reprend la grammaire de formulaire.
+   Le tableau des barèmes et celui du bilan réutilisent .adv-table, calquée sur
+   .rec-table du rapprochement. */
+
+.adv-intro { color: var(--muted); font-size: .88rem; line-height: 1.6; margin: 20px 0 0; max-width: 76ch; }
+
+/* Tableaux — scroll horizontal propre sur mobile plutôt que débordement. */
+.adv-table-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+                  overflow-x: auto; }
+.adv-table { width: 100%; border-collapse: collapse; font-size: .84rem; min-width: 640px; }
+.adv-table th { text-align: left; padding: 12px 16px; color: var(--muted); font-weight: 600;
+                font-size: .74rem; letter-spacing: .08em; text-transform: uppercase; }
+.adv-table td { padding: 12px 16px; border-top: 1px solid var(--border); vertical-align: middle; }
+.adv-table th.num, .adv-table td.num { text-align: right; font-family: var(--mono); }
+.adv-table tbody tr:hover { background: var(--surface2); }
+.adv-table tr.is-gap { opacity: .7; }
+.adv-table td.actions { text-align: right; white-space: nowrap; }
+.adv-table tfoot td { padding: 12px 16px; border-top: 2px solid var(--border); font-weight: 700; }
+
+.adv-note { display: block; color: var(--muted); font-size: .76rem; margin-top: 3px; }
+.adv-gap  { color: var(--muted); font-style: italic; font-size: .82rem; }
+.adv-empty-hint { color: var(--muted); font-size: .86rem; margin: 16px 0 0; }
+
+/* Bandeau de solde : la réponse à la question que pose la page. */
+.adv-summary { background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+               padding: 24px; margin-top: 16px; display: flex; flex-wrap: wrap; gap: 32px;
+               align-items: flex-start; }
+.adv-summary-item  { display: flex; flex-direction: column; gap: 6px; }
+.adv-summary-label { font-size: .74rem; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+.adv-summary-value { font-family: var(--mono); font-size: 1.5rem; font-weight: 700; color: var(--text-strong); }
+
+/* Signe du solde : trop payé (remboursement attendu) vs reste à payer. */
+.adv-balance-credit { color: var(--green); }
+.adv-balance-debit  { color: var(--red); }
+
+.adv-verdict { flex-basis: 100%; margin: 0; font-size: .9rem; line-height: 1.6; color: var(--text); }
+.adv-warn { background: var(--amber-dim, rgba(210,160,60,.15)); border-radius: 8px; padding: 10px 14px;
+            color: var(--amber); font-size: .84rem; line-height: 1.6; margin: 14px 0 0; }
+
+@media (max-width: 640px) {
+  .adv-summary { gap: 20px; }
+  .adv-summary-value { font-size: 1.25rem; }
+}
+
+/* Barème rouvert pour modification : le formulaire en haut de page le reprend. */
+.adv-table tr.is-editing { background: var(--amber-dim, rgba(210,160,60,.15)); }
+.adv-table tr.is-editing:hover { background: var(--amber-dim, rgba(210,160,60,.15)); }

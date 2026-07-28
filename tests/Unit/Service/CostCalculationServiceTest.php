@@ -1602,4 +1602,209 @@ final class CostCalculationServiceTest extends TestCase
         self::assertEqualsWithDelta(90.0, $r['cost']['total'], 0.01);
         self::assertCount(2, $r['tariff_segments']);
     }
+
+    // ── Périodes à dates quelconques (#241) ──────────────────────────────────
+
+    public function testPeriodElectricityQueriesTheRequestedBounds(): void
+    {
+        $legacy = new FakeLegacyDailyRepository(
+            deltasBetween: $this->electricityDeltasFor('2025-06-06 00:00:00', '2026-07-01 00:00:00'),
+        );
+
+        $r = $this->makeService($legacy, new FakeTariffRepository($this->electricityGrid()), new FakeGasReadingRepository())
+            ->estimatePeriodElectricity(
+                new DateTimeImmutable('2025-06-06 00:00:00'),
+                new DateTimeImmutable('2026-07-01 00:00:00'),
+            );
+
+        self::assertTrue($r['available']);
+        self::assertSame([['2025-06-06 00:00:00', '2026-07-01 00:00:00']], $legacy->rangesRequested);
+        // 390 jours réels, et non les 30 jours du mois de départ qu'aurait
+        // renvoyés la règle mensuelle : c'est ce qui proratise les forfaits.
+        self::assertSame(390, $r['days']);
+    }
+
+    /**
+     * L'abonnement mensuel doit être compté une fois par mois de la période :
+     * 5 €/mois × 13 mois sur 390 jours. Un `days` mensuel n'en aurait facturé qu'un.
+     */
+    public function testPeriodElectricityBillsFixedTermsForEveryMonth(): void
+    {
+        $legacy = new FakeLegacyDailyRepository(
+            deltasBetween: $this->electricityDeltasFor('2025-06-01 00:00:00', '2026-07-01 00:00:00'),
+        );
+
+        $r = $this->makeService($legacy, new FakeTariffRepository($this->electricityGrid()), new FakeGasReadingRepository())
+            ->estimatePeriodElectricity(
+                new DateTimeImmutable('2025-06-01 00:00:00'),
+                new DateTimeImmutable('2026-07-01 00:00:00'),
+            );
+
+        $subscription = null;
+        foreach ($r['cost']['lines'] as $line) {
+            if ($line['key'] === 'subscription') {
+                $subscription = $line;
+            }
+        }
+
+        self::assertNotNull($subscription);
+        self::assertEqualsWithDelta(65.0, $subscription['amount'], 0.01);
+    }
+
+    public function testPeriodElectricityUnavailableWhenNoData(): void
+    {
+        $r = $this->makeService(
+            new FakeLegacyDailyRepository(deltasBetween: []),
+            new FakeTariffRepository($this->electricityGrid()),
+            new FakeGasReadingRepository(),
+        )->estimatePeriodElectricity(
+            new DateTimeImmutable('2026-06-06 00:00:00'),
+            new DateTimeImmutable('2026-07-01 00:00:00'),
+        );
+
+        self::assertFalse($r['available']);
+    }
+
+    public function testPeriodElectricityRejectsInvertedBounds(): void
+    {
+        $r = $this->makeService(
+            new FakeLegacyDailyRepository(deltasBetween: $this->electricityDeltas()),
+            new FakeTariffRepository($this->electricityGrid()),
+            new FakeGasReadingRepository(),
+        )->estimatePeriodElectricity(
+            new DateTimeImmutable('2026-07-01 00:00:00'),
+            new DateTimeImmutable('2026-06-06 00:00:00'),
+        );
+
+        self::assertFalse($r['available']);
+    }
+
+    /**
+     * TariffPeriodSplitter alloue un DateTimeImmutable par jour : une année mal
+     * tapée (« 1900 → 9999 ») demanderait des millions d'objets et tuerait le
+     * worker. La garde doit tomber AVANT tout accès aux données.
+     */
+    public function testAbsurdlyLongPeriodIsRejectedBeforeTouchingData(): void
+    {
+        $legacy = new FakeLegacyDailyRepository(deltasBetween: $this->electricityDeltas());
+
+        $r = $this->makeService($legacy, new FakeTariffRepository($this->electricityGrid()), new FakeGasReadingRepository())
+            ->estimatePeriodElectricity(
+                new DateTimeImmutable('1900-01-01 00:00:00'),
+                new DateTimeImmutable('9999-12-31 00:00:00'),
+            );
+
+        self::assertFalse($r['available']);
+        self::assertSame([], $legacy->rangesRequested);
+    }
+
+    public function testAbsurdlyLongPeriodIsRejectedForGasAndWater(): void
+    {
+        $svc = $this->makeService(
+            new FakeLegacyDailyRepository(),
+            new FakeTariffRepository($this->gasGrid(10.0)),
+            new FakeGasReadingRepository(forInterpolation: [
+                ['reading_at' => '2026-06-01 00:00:00', 'counter_m3' => 1000.0],
+                ['reading_at' => '2026-07-01 00:00:00', 'counter_m3' => 1300.0],
+            ]),
+            new FakeMeterReadingRepository(forInterpolation: [
+                ['reading_at' => '2026-06-01 00:00:00', 'counter_m3' => 100.0],
+                ['reading_at' => '2026-07-01 00:00:00', 'counter_m3' => 130.0],
+            ]),
+        );
+
+        $from = new DateTimeImmutable('1900-01-01 00:00:00');
+        $to   = new DateTimeImmutable('9999-12-31 00:00:00');
+
+        self::assertFalse($svc->estimatePeriodGas($from, $to)['available']);
+        self::assertFalse($svc->estimatePeriodWater($from, $to)['available']);
+    }
+
+    /** Dix ans passent : la borne ne doit pas rogner un usage légitime. */
+    public function testTenYearPeriodIsStillAccepted(): void
+    {
+        $legacy = new FakeLegacyDailyRepository(
+            deltasBetween: $this->electricityDeltasFor('2016-01-01 00:00:00', '2025-12-31 00:00:00'),
+        );
+
+        $r = $this->makeService($legacy, new FakeTariffRepository($this->electricityGrid()), new FakeGasReadingRepository())
+            ->estimatePeriodElectricity(
+                new DateTimeImmutable('2016-01-01 00:00:00'),
+                new DateTimeImmutable('2025-12-31 00:00:00'),
+            );
+
+        self::assertTrue($r['available']);
+    }
+
+    public function testPeriodGasComputesOnArbitraryBounds(): void
+    {
+        // 300 m³ sur 30 jours ⇒ 10 m³/jour ; du 06 au 21 juin = 15 jours = 150 m³.
+        $svc = $this->makeService(
+            new FakeLegacyDailyRepository(),
+            new FakeTariffRepository($this->gasGrid(10.0)),
+            new FakeGasReadingRepository(forInterpolation: [
+                ['reading_at' => '2026-06-01 00:00:00', 'counter_m3' => 1000.0],
+                ['reading_at' => '2026-07-01 00:00:00', 'counter_m3' => 1300.0],
+            ]),
+        );
+
+        $r = $svc->estimatePeriodGas(
+            new DateTimeImmutable('2026-06-06 00:00:00'),
+            new DateTimeImmutable('2026-06-21 00:00:00'),
+        );
+
+        self::assertTrue($r['available']);
+        self::assertEqualsWithDelta(150.0, $r['delta_m3'], 0.001);
+        self::assertSame(15, $r['days']);
+    }
+
+    public function testPeriodWaterComputesOnArbitraryBounds(): void
+    {
+        $svc = $this->makeService(
+            new FakeLegacyDailyRepository(),
+            new FakeTariffRepository(),
+            new FakeGasReadingRepository(),
+            new FakeMeterReadingRepository(forInterpolation: [
+                ['reading_at' => '2026-04-01 00:00:00', 'counter_m3' => 100.0],
+                ['reading_at' => '2026-05-01 00:00:00', 'counter_m3' => 130.0],
+            ]),
+        );
+
+        $r = $svc->estimatePeriodWater(
+            new DateTimeImmutable('2026-04-11 00:00:00'),
+            new DateTimeImmutable('2026-04-21 00:00:00'),
+        );
+
+        self::assertTrue($r['available']);
+        // 30 m³ sur 30 jours ⇒ 1 m³/jour × 10 jours.
+        self::assertEqualsWithDelta(10.0, $r['delta_m3'], 0.001);
+        self::assertSame(10, $r['days']);
+    }
+
+    /**
+     * Un mois calendaire demandé comme période libre doit rendre le même coût que
+     * la voie mensuelle : garde-fou du refactoring de #241.
+     */
+    public function testPeriodOnAWholeMonthMatchesTheMonthlyPath(): void
+    {
+        $deltas = $this->electricityDeltasFor('2026-06-01 00:00:00', '2026-07-01 00:00:00');
+
+        $byMonth = $this->makeService(
+            new FakeLegacyDailyRepository(monthlyDeltasForMonth: $deltas),
+            new FakeTariffRepository($this->electricityGrid()),
+            new FakeGasReadingRepository(),
+        )->estimateMonthElectricity(2026, 6);
+
+        $byPeriod = $this->makeService(
+            new FakeLegacyDailyRepository(deltasBetween: $deltas),
+            new FakeTariffRepository($this->electricityGrid()),
+            new FakeGasReadingRepository(),
+        )->estimatePeriodElectricity(
+            new DateTimeImmutable('2026-06-01 00:00:00'),
+            new DateTimeImmutable('2026-07-01 00:00:00'),
+        );
+
+        self::assertSame($byMonth['days'], $byPeriod['days']);
+        self::assertEqualsWithDelta($byMonth['cost']['total'], $byPeriod['cost']['total'], 0.001);
+    }
 }

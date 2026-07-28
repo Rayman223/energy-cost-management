@@ -57,6 +57,7 @@ $routes = [
     '/admin'          => 'admin.php',
     '/tariffs'        => 'tariffs.php',
     '/reconciliation' => 'reconciliation.php',
+    '/advances'       => 'advances.php',
     '/meter-readings' => 'meter-readings.php',
     '/api'            => 'api.php',
     '/api-guide'      => 'api-guide.php',

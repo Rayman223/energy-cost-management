@@ -24,11 +24,23 @@ final class FakeLegacyDailyRepository implements LegacyDailyRepositoryInterface
      */
     public array $monthsRequested = [];
 
+    /** Couples (from, to) demandés à getDeltasBetween(), dans l'ordre.
+     *
+     * @var list<array{string, string}>
+     */
+    public array $rangesRequested = [];
+
+    /**
+     * @param array<string,mixed> $deltasBetween Deltas rendus par getDeltasBetween() ;
+     *        `null` = retomber sur $monthlyDeltasForMonth, pour que les tests écrits
+     *        avant #241 n'aient rien à déclarer.
+     */
     public function __construct(
         public array $monthlyDeltas = [],
         public array $monthlyDeltasForMonth = [],
         public array $hourlyImportDeltas = [],
         public array $quarterImportDeltas = [],
+        public ?array $deltasBetween = null,
     ) {
     }
 
@@ -52,5 +64,12 @@ final class FakeLegacyDailyRepository implements LegacyDailyRepositoryInterface
     public function getQuarterImportDeltas(DateTimeImmutable $from, DateTimeImmutable $to): array
     {
         return $this->quarterImportDeltas;
+    }
+
+    public function getDeltasBetween(string $from, string $to): array
+    {
+        $this->rangesRequested[] = [$from, $to];
+
+        return $this->deltasBetween ?? $this->monthlyDeltasForMonth;
     }
 }

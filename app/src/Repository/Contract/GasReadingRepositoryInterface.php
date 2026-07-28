@@ -27,4 +27,14 @@ interface GasReadingRepositoryInterface
      * @return list<array{reading_at: string, counter_m3: float}>
      */
     public function getReadingsForInterpolation(int $year, int $month): array;
+
+    /**
+     * Même fenêtre d'interpolation sur des bornes quelconques (#241) : dernier
+     * relevé avant $from, relevés de [$from, $to[, premier relevé à/après $to.
+     *
+     * @param string $from Borne de début incluse, format DB 'Y-m-d H:i:s' (UTC).
+     * @param string $to   Borne de fin exclue, même format.
+     * @return list<array{reading_at: string, counter_m3: float}>
+     */
+    public function getReadingsForRange(string $from, string $to): array;
 }

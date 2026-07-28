@@ -296,4 +296,88 @@ final class MonthlyConsumptionInterpolatorTest extends TestCase
         // Le dernier relevé tombe pile au 1er février : février n'a rien à montrer.
         self::assertFalse($series[0]['partial']);
     }
+
+    // ── interpolateRange : bornes quelconques (#241) ────────────────────────────
+
+    /**
+     * Garde-fou du refactoring : `interpolateMonth()` n'est plus qu'un appel à
+     * `interpolateRange()` sur les bornes du mois. Les deux doivent donc rendre
+     * exactement le même résultat, champ par champ.
+     */
+    public function testMonthIsARangeBetweenItsOwnBoundaries(): void
+    {
+        $readings = $this->readings([
+            ['2026-03-28 07:54:00', 900.0],
+            ['2026-04-14 08:10:00', 1150.0],
+            ['2026-05-03 07:30:00', 1420.0],
+        ]);
+
+        $byMonth = $this->interp->interpolateMonth($readings, 2026, 4);
+        $byRange = $this->interp->interpolateRange(
+            $readings,
+            new DateTimeImmutable('2026-04-01 00:00:00', new DateTimeZone('UTC')),
+            new DateTimeImmutable('2026-05-01 00:00:00', new DateTimeZone('UTC')),
+        );
+
+        self::assertEquals($byMonth, $byRange);
+    }
+
+    public function testRangeOnArbitraryDatesInterpolatesBothBounds(): void
+    {
+        // 10 unités/jour entre les deux relevés : du 06/06 au 21/06 → 15 jours × 10.
+        $r = $this->interp->interpolateRange(
+            $this->readings([['2026-06-01 00:00:00', 100.0], ['2026-07-01 00:00:00', 400.0]]),
+            new DateTimeImmutable('2026-06-06 00:00:00', new DateTimeZone('UTC')),
+            new DateTimeImmutable('2026-06-21 00:00:00', new DateTimeZone('UTC')),
+        );
+
+        self::assertTrue($r->available);
+        self::assertEqualsWithDelta(150.0, $r->monthlyDelta, 0.001);
+        self::assertSame(15, $r->days);
+        self::assertSame('interpolated', $r->startKind);
+        self::assertSame('interpolated', $r->endKind);
+        self::assertFalse($r->isProjection);
+    }
+
+    /**
+     * Une période d'acompte couvre plus d'un an : `days` doit porter la vraie
+     * longueur de l'intervalle, sinon la proration des forfaits (abonnement
+     * mensuel, redevance annuelle) compterait un seul mois.
+     */
+    public function testRangeSpanningMoreThanAYearReportsItsRealLength(): void
+    {
+        $r = $this->interp->interpolateRange(
+            $this->readings([['2025-06-01 00:00:00', 0.0], ['2026-08-01 00:00:00', 4260.0]]),
+            new DateTimeImmutable('2025-06-06 00:00:00', new DateTimeZone('UTC')),
+            new DateTimeImmutable('2026-07-01 00:00:00', new DateTimeZone('UTC')),
+        );
+
+        self::assertTrue($r->available);
+        self::assertSame(390, $r->days);
+        self::assertSame(390, $r->calendarDays);
+    }
+
+    public function testRangeWithEndBeforeStartIsUnavailable(): void
+    {
+        $r = $this->interp->interpolateRange(
+            $this->readings([['2026-06-01 00:00:00', 100.0], ['2026-07-01 00:00:00', 400.0]]),
+            new DateTimeImmutable('2026-06-21 00:00:00', new DateTimeZone('UTC')),
+            new DateTimeImmutable('2026-06-06 00:00:00', new DateTimeZone('UTC')),
+        );
+
+        self::assertFalse($r->available);
+    }
+
+    public function testRangeBeyondLastReadingIsFlaggedAsProjection(): void
+    {
+        $r = $this->interp->interpolateRange(
+            $this->readings([['2026-06-01 00:00:00', 100.0], ['2026-06-16 00:00:00', 250.0]]),
+            new DateTimeImmutable('2026-06-01 00:00:00', new DateTimeZone('UTC')),
+            new DateTimeImmutable('2026-07-01 00:00:00', new DateTimeZone('UTC')),
+        );
+
+        self::assertTrue($r->available);
+        self::assertTrue($r->isProjection);
+        self::assertSame('extrapolated', $r->endKind);
+    }
 }

@@ -211,6 +211,8 @@ final class UtilityReadingRepository implements GasReadingRepositoryInterface, M
      * Fenêtre de relevés pour l'interpolation à minuit d'un mois : dernier
      * relevé avant le mois ∪ relevés du mois ∪ premier relevé après le mois.
      *
+     * Enveloppe de {@see getReadingsForRange()} sur les bornes du mois.
+     *
      * @return list<array{reading_at: string, counter_m3: float}>
      */
     public function getReadingsForInterpolation(int $year, int $month): array
@@ -221,6 +223,23 @@ final class UtilityReadingRepository implements GasReadingRepositoryInterface, M
         $nextMonth   = $month === 12 ? 1         : $month + 1;
         $firstOfNext = sprintf('%04d-%02d-01 00:00:00', $nextYear, $nextMonth);
 
+        return $this->getReadingsForRange($firstOfMonth, $firstOfNext);
+    }
+
+    /**
+     * Même fenêtre d'interpolation, sur des bornes QUELCONQUES (#241) : dernier
+     * relevé avant $from ∪ relevés de [$from, $to[ ∪ premier relevé à/après $to.
+     *
+     * Les deux relevés d'encadrement sont indispensables : sans eux, une borne
+     * tombant entre deux relevés serait extrapolée avec la pente d'un segment de
+     * bord au lieu d'être interpolée sur le segment qui la contient réellement.
+     *
+     * @param string $from Borne de début incluse, format DB 'Y-m-d H:i:s' (UTC).
+     * @param string $to   Borne de fin exclue, même format.
+     * @return list<array{reading_at: string, counter_m3: float}>
+     */
+    public function getReadingsForRange(string $from, string $to): array
+    {
         // Placeholders suffixés : PDO (mode natif) n'autorise pas la
         // réutilisation d'un placeholder nommé dans une même requête.
         $sql = '(SELECT reading_at, counter_m3 FROM utility_readings'
@@ -244,10 +263,10 @@ final class UtilityReadingRepository implements GasReadingRepositoryInterface, M
             'etype2' => $this->energyType,
             'uid3'   => $this->userId,
             'etype3' => $this->energyType,
-            'start'  => $firstOfMonth,
-            'start2' => $firstOfMonth,
-            'next'   => $firstOfNext,
-            'next2'  => $firstOfNext,
+            'start'  => $from,
+            'start2' => $from,
+            'next'   => $to,
+            'next2'  => $to,
         ]);
 
         return array_map(

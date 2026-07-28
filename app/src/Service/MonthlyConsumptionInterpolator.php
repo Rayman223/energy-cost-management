@@ -164,9 +164,38 @@ final class MonthlyConsumptionInterpolator
      * Interpole la consommation d'un mois calendaire à partir d'une fenêtre de
      * relevés (le dernier avant le mois, ceux du mois, le premier après le mois).
      *
+     * Enveloppe de {@see interpolateRange()} : le mois n'est qu'un cas particulier
+     * de période, avec ses deux bornes à minuit le 1er de M et le 1er de M+1.
+     *
      * @param list<array{ts:int,value:float}> $readingsAsc Relevés triés par timestamp ASC.
      */
     public function interpolateMonth(array $readingsAsc, int $year, int $month): MonthInterpolation
+    {
+        // ── Bornes calendaires du mois (rollover décembre → janvier) ──────────
+        $nextYear  = $month === 12 ? $year + 1 : $year;
+        $nextMonth = $month === 12 ? 1         : $month + 1;
+
+        // Bornes de mois en UTC (fuseau de stockage), indépendantes du fuseau PHP.
+        $monthStartDt = new DateTimeImmutable(sprintf('%04d-%02d-01 00:00:00', $year,     $month),     Dates::utc());
+        $monthEndDt   = new DateTimeImmutable(sprintf('%04d-%02d-01 00:00:00', $nextYear, $nextMonth), Dates::utc());
+
+        return $this->interpolateRange($readingsAsc, $monthStartDt, $monthEndDt);
+    }
+
+    /**
+     * Interpole la consommation entre deux instants QUELCONQUES (#241).
+     *
+     * Généralisation de {@see interpolateMonth()} : le moteur n'a jamais eu besoin
+     * du calendrier, seulement de deux bornes. Un bilan d'acomptes porte sur une
+     * période à dates exactes (« du 06/06/2025 au 01/07/2026 ») qui ne tombe pas
+     * sur des mois entiers, d'où cette entrée à bornes libres.
+     *
+     * `days` / `calendarDays` valent le nombre de jours de l'intervalle (au moins 1) :
+     * sur un mois entier on retrouve exactement la valeur historique.
+     *
+     * @param list<array{ts:int,value:float}> $readingsAsc Relevés triés par timestamp ASC.
+     */
+    public function interpolateRange(array $readingsAsc, DateTimeImmutable $from, DateTimeImmutable $to): MonthInterpolation
     {
         // Tri défensif (le repository renvoie déjà ASC, mais le moteur reste pur).
         usort($readingsAsc, static fn (array $a, array $b): int => $a['ts'] <=> $b['ts']);
@@ -176,51 +205,49 @@ final class MonthlyConsumptionInterpolator
             return MonthInterpolation::unavailable('Aucun relevé disponible pour cette période.');
         }
 
-        // ── Bornes calendaires du mois (rollover décembre → janvier) ──────────
-        $nextYear  = $month === 12 ? $year + 1 : $year;
-        $nextMonth = $month === 12 ? 1         : $month + 1;
+        $startTs = $from->getTimestamp();
+        $endTs   = $to->getTimestamp();
 
-        // Bornes de mois en UTC (fuseau de stockage), indépendantes du fuseau PHP.
-        $monthStartDt = new DateTimeImmutable(sprintf('%04d-%02d-01 00:00:00', $year,     $month),     Dates::utc());
-        $monthEndDt   = new DateTimeImmutable(sprintf('%04d-%02d-01 00:00:00', $nextYear, $nextMonth), Dates::utc());
-
-        $monthStartTs = $monthStartDt->getTimestamp();
-        $monthEndTs   = $monthEndDt->getTimestamp();
+        if ($endTs <= $startTs) {
+            return MonthInterpolation::unavailable('Période invalide : la fin doit suivre le début.');
+        }
 
         $firstTs = $readingsAsc[0]['ts'];
         $lastTs  = $readingsAsc[$n - 1]['ts'];
 
-        // Mois en cours / incomplet : aucun relevé à/après la fin du mois. Sans un
-        // second relevé, impossible d'établir une pente → on attend le prochain relevé.
-        $incompleteEnd = $monthEndTs > $lastTs;
+        // Période en cours / incomplète : aucun relevé à/après la fin. Sans un second
+        // relevé, impossible d'établir une pente → on attend le prochain relevé.
+        $incompleteEnd = $endTs > $lastTs;
         if ($incompleteEnd && $n < 2) {
             return MonthInterpolation::unavailable('Relevé manquant : le calcul se fera dès le prochain relevé.');
         }
 
-        $indexStart = $this->interpolateValueAt($readingsAsc, $monthStartTs);
-        $indexEnd   = $this->interpolateValueAt($readingsAsc, $monthEndTs);
+        $indexStart = $this->interpolateValueAt($readingsAsc, $startTs);
+        $indexEnd   = $this->interpolateValueAt($readingsAsc, $endTs);
 
         if ($indexStart === null || $indexEnd === null) {
             return MonthInterpolation::unavailable('Pas assez de relevés pour encadrer cette période.');
         }
 
-        $monthlyDelta = round(max(0.0, $indexEnd - $indexStart), 3);
-        $calendarDays = (int) $monthStartDt->format('t');
+        $delta = round(max(0.0, $indexEnd - $indexStart), 3);
+        // Jours pleins de l'intervalle : sur un mois calendaire complet, c'est le
+        // nombre de jours du mois — la valeur qu'attendaient les appelants d'origine.
+        $days = max(1, (int) round(($endTs - $startTs) / 86400));
 
-        $startKind = $this->boundaryKind($readingsAsc, $monthStartTs, $firstTs, $lastTs);
-        $endKind   = $this->boundaryKind($readingsAsc, $monthEndTs, $firstTs, $lastTs);
+        $startKind = $this->boundaryKind($readingsAsc, $startTs, $firstTs, $lastTs);
+        $endKind   = $this->boundaryKind($readingsAsc, $endTs, $firstTs, $lastTs);
 
         return MonthInterpolation::of(
             round($indexStart, 3),
             round($indexEnd, 3),
-            $monthlyDelta,
-            $calendarDays,
-            $calendarDays,
-            $monthStartDt->format('Y-m-d H:i:s'),
-            $monthEndDt->format('Y-m-d H:i:s'),
+            $delta,
+            $days,
+            $days,
+            $from->format('Y-m-d H:i:s'),
+            $to->format('Y-m-d H:i:s'),
             $startKind,
             $endKind,
-            $endKind === 'extrapolated' && $monthEndTs > $lastTs,
+            $endKind === 'extrapolated' && $endTs > $lastTs,
         );
     }
 

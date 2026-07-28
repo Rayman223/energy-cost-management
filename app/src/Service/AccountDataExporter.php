@@ -55,6 +55,9 @@ final class AccountDataExporter
 
         $tail = [
             '"tariff_grids":' . self::enc($this->all('SELECT id, energy_type, country, currency, name, valid_from, valid_to, pcs_coefficient FROM tariff_grids WHERE user_id = :uid ORDER BY id', $userId)),
+            // Barèmes d'acomptes (#241) : saisis à la main par l'utilisateur, donc
+            // exportables au même titre que ses grilles tarifaires.
+            '"energy_advances":' . self::enc($this->all('SELECT id, energy_type, amount_monthly, valid_from, valid_to, due_day, note FROM energy_advances WHERE user_id = :uid ORDER BY energy_type, valid_from', $userId)),
             '"api_tokens":' . self::enc($this->all('SELECT id, name, prefix, scopes, last_used_at, created_at, revoked_at FROM api_tokens WHERE user_id = :uid ORDER BY id', $userId)),
             '"integrations":' . self::enc($this->integrations($userId)),
             '"sync_state":' . self::enc($this->all('SELECT source_name, last_sent_at, updated_at FROM webhook_sync_state WHERE user_id = :uid ORDER BY source_name', $userId)),
