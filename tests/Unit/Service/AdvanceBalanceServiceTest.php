@@ -257,11 +257,12 @@ final class AdvanceBalanceServiceTest extends TestCase
     }
 
     /**
-     * Sans échéance sur la période, il n'y a rien à rapprocher : afficher le coût
-     * seul le retrancherait de 0 € payé. Un utilisateur qui n'a saisi que son
-     * acompte électricité verrait sinon tout son gaz en « reste à payer ».
+     * Une énergie chiffrée sans acompte est AFFICHÉE — la taire donnerait
+     * l'impression que ses index et sa grille ne sont pas lus — mais elle reste
+     * hors du total : l'y inclure retrancherait son coût de 0 € payé et
+     * annoncerait une dette imaginaire.
      */
-    public function testEnergyWithACostButNoInstalmentIsExcluded(): void
+    public function testEnergyWithACostButNoInstalmentIsShownYetExcludedFromTheTotal(): void
     {
         $gasGrid = new TariffGrid(
             id: 2,
@@ -288,11 +289,38 @@ final class AdvanceBalanceServiceTest extends TestCase
 
         $r = $svc->balanceFor($this->at('2026-01-01'), $this->at('2026-12-31'));
 
-        self::assertSame(['electricity'], array_map(
+        // Le gaz est bien rendu…
+        self::assertSame(['electricity', 'gas'], array_map(
             static fn ($b): string => $b->energyType,
             $r['balances'],
         ));
+
+        $gas = $r['balances'][1];
+        self::assertNotNull($gas->cost);
+        self::assertSame(0, $gas->dueCount);
+
+        // … mais son coût n'entre pas dans le total : pas de dette inventée.
         self::assertEqualsWithDelta(0.0, $r['total_cost'], 0.01);
+        self::assertEqualsWithDelta(0.0, $r['total_balance'], 0.01);
+        self::assertTrue($r['has_cost_without_advance']);
+    }
+
+    /**
+     * Le message d'indisponibilité doit remonter jusqu'à l'écran : « non
+     * calculable » sans motif est un mur muet, impossible à diagnostiquer.
+     */
+    public function testUnavailableReasonIsCarriedToTheCaller(): void
+    {
+        $r = (new AdvanceBalanceService(
+            new FakeAdvanceScheduleRepository([$this->schedule()]),
+            $this->costService(
+                new FakeLegacyDailyRepository(deltasBetween: []),
+                new FakeTariffRepository($this->electricityGrid()),
+            ),
+        ))->balanceFor($this->at('2026-01-01'), $this->at('2026-06-30'));
+
+        self::assertNotNull($r['balances'][0]->unavailable);
+        self::assertStringContainsString('2026-01-01', (string) $r['balances'][0]->unavailable);
     }
 
     /**

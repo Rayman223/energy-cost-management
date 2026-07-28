@@ -697,6 +697,8 @@ return [
     'advances.period_too_long'                     => 'Période trop longue : {max} jours au maximum.',
     'advances.col_total_partial'                   => 'Total (lignes complètes)',
     'advances.excluded_from_total'                 => 'hors total',
+    'advances.no_advance_for_energy'               => 'Aucun acompte saisi',
+    'advances.cost_without_advance_warning'        => 'Une énergie au moins est chiffrée sans acompte correspondant : sa consommation est affichée à titre indicatif mais reste hors du solde, faute de montant payé auquel la comparer. Ajoutez-lui un barème pour l\'inclure.',
     'advances.verdict_unavailable'                 => 'Aucune consommation n\'a pu être chiffrée sur cette période : le solde ne peut pas être établi.',
     'advances.partial_advances_warning'            => 'Vos barèmes ne couvrent pas tous les mois de la période : le coût porte sur la période entière alors que les acomptes n\'y sont comptés qu\'en partie. Le solde penche donc du côté du complément à payer.',
     'advances.future_clamped'                      => 'La période a été ramenée à aujourd\'hui : les acomptes à échoir n\'ont pas encore été prélevés, les compter gonflerait le montant payé.',

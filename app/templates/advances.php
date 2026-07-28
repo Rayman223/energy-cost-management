@@ -13,7 +13,7 @@ use App\Domain\AdvanceSchedule;
  * @var bool                     $isAdmin
  * @var list<AdvanceSchedule>    $schedules     Barèmes saisis, toutes énergies
  * @var AdvanceSchedule|null     $editing       Barème rouvert pour modification
- * @var array{from:DateTimeImmutable,to:DateTimeImmutable,balances:list<AdvanceBalance>,total_paid:float,total_cost:float,total_balance:float,currency:?string,has_gaps:bool,has_partial_data:bool,has_partial_advances:bool,mixed_currency:bool}|null $balance
+ * @var array{from:DateTimeImmutable,to:DateTimeImmutable,balances:list<AdvanceBalance>,total_paid:float,total_cost:float,total_balance:float,currency:?string,has_gaps:bool,has_partial_data:bool,has_partial_advances:bool,has_cost_without_advance:bool,mixed_currency:bool}|null $balance
  * @var string|null              $periodError   Période demandée invalide
  * @var bool                     $futureClamped Fin ramenée à aujourd'hui (acompte à échoir)
  * @var string                   $periodFrom    'YYYY-MM-DD' du formulaire de période
@@ -104,17 +104,20 @@ $currency = $balance['currency'] ?? $currency;
     </thead>
     <tbody>
     <?php foreach ($balance['balances'] as $row): ?>
-      <tr class="<?= $row->isComparable() ? '' : 'is-gap' ?>">
+      <?php // Hors solde : coût manquant, ou coût connu mais aucun acompte à comparer.
+            $inTotal = $row->isComparable() && $row->dueCount > 0; ?>
+      <tr class="<?= $inTotal ? '' : 'is-gap' ?>">
         <td><?= $this->te('advances.energy.' . $row->energyType) ?></td>
         <td class="num"><?= $this->e((string) $row->dueCount) ?></td>
         <td class="num">
           <?= $this->e($this->money($row->paid, $currency)) ?>
-          <?php if (!$row->isComparable()): ?>
+          <?php if (!$inTotal): ?>
           <span class="adv-note"><?= $this->te('advances.excluded_from_total') ?></span>
           <?php endif; ?>
         </td>
         <?php if ($row->isComparable()): ?>
         <td class="num"><?= $this->e($this->money((float) $row->cost, $currency)) ?></td>
+        <?php if ($inTotal): ?>
         <td class="num <?= (float) $row->balance() >= 0.0 ? 'adv-balance-credit' : 'adv-balance-debit' ?>">
           <?= $this->e($this->money((float) $row->balance(), $currency)) ?>
           <?php if ($row->partialData): ?>
@@ -122,14 +125,26 @@ $currency = $balance['currency'] ?? $currency;
           <?php endif; ?>
         </td>
         <?php else: ?>
-        <td colspan="2" class="adv-gap"><?= $this->te('advances.unavailable') ?></td>
+        <?php // Consommation chiffrée, mais aucun acompte saisi : pas de solde à établir. ?>
+        <td class="adv-gap"><?= $this->te('advances.no_advance_for_energy') ?></td>
+        <?php endif; ?>
+        <?php else: ?>
+        <?php // La raison technique est AFFICHÉE : sans elle, « non calculable » est un
+              // mur muet, impossible à diagnostiquer depuis l'écran (prix de marché
+              // manquants, grille absente, aucun relevé sur la fenêtre…). ?>
+        <td colspan="2" class="adv-gap">
+          <?= $this->te('advances.unavailable') ?>
+          <?php if ($row->unavailable !== null && $row->unavailable !== ''): ?>
+          <span class="adv-note"><?= $this->e($row->unavailable) ?></span>
+          <?php endif; ?>
+        </td>
         <?php endif; ?>
       </tr>
     <?php endforeach; ?>
     </tbody>
     <tfoot>
       <tr>
-        <td colspan="2"><?= $balance['has_gaps'] ? $this->te('advances.col_total_partial') : $this->te('advances.col_total') ?></td>
+        <td colspan="2"><?= ($balance['has_gaps'] || $balance['has_cost_without_advance']) ? $this->te('advances.col_total_partial') : $this->te('advances.col_total') ?></td>
         <td class="num"><?= $this->e($this->money($balance['total_paid'], $currency)) ?></td>
         <td class="num"><?= $this->e($this->money($balance['total_cost'], $currency)) ?></td>
         <td class="num <?= $balance['total_balance'] >= 0.0 ? 'adv-balance-credit' : 'adv-balance-debit' ?>">
@@ -155,7 +170,7 @@ $currency = $balance['currency'] ?? $currency;
       <?= $this->e($this->money($balance['total_balance'], $currency)) ?>
     </span>
   </div>
-  <?php $hasComparable = false; foreach ($balance['balances'] as $row) { $hasComparable = $hasComparable || $row->isComparable(); } ?>
+  <?php $hasComparable = false; foreach ($balance['balances'] as $row) { $hasComparable = $hasComparable || ($row->isComparable() && $row->dueCount > 0); } ?>
   <p class="adv-verdict">
     <?php if (!$hasComparable): ?>
     <?= $this->te('advances.verdict_unavailable') ?>
@@ -170,6 +185,9 @@ $currency = $balance['currency'] ?? $currency;
   <?php endif; ?>
   <?php if ($balance['has_partial_data']): ?>
   <p class="adv-warn"><?= $this->te('advances.partial_warning') ?></p>
+  <?php endif; ?>
+  <?php if ($balance['has_cost_without_advance']): ?>
+  <p class="adv-warn"><?= $this->te('advances.cost_without_advance_warning') ?></p>
   <?php endif; ?>
   <?php if ($balance['has_partial_advances']): ?>
   <p class="adv-warn"><?= $this->te('advances.partial_advances_warning') ?></p>

@@ -687,6 +687,8 @@ return [
     'advances.period_too_long'                     => 'Zeitraum zu lang: höchstens {max} Tage.',
     'advances.col_total_partial'                   => 'Gesamt (vollständige Zeilen)',
     'advances.excluded_from_total'                 => 'nicht in der Summe',
+    'advances.no_advance_for_energy'               => 'Kein Abschlag erfasst',
+    'advances.cost_without_advance_warning'        => 'Mindestens eine Energie ist beziffert, ohne dass ein Abschlag dazu erfasst wäre: Ihr Verbrauch wird zur Information angezeigt, bleibt aber außerhalb des Saldos, da kein gezahlter Betrag zum Vergleich vorliegt. Legen Sie dafür einen Abschlagsplan an, damit sie einbezogen wird.',
     'advances.verdict_unavailable'                 => 'Für diesen Zeitraum konnte kein Verbrauch beziffert werden: Der Saldo lässt sich nicht ermitteln.',
     'advances.partial_advances_warning'            => 'Ihre Abschlagspläne decken nicht alle Monate des Zeitraums ab: Die Kosten laufen über den gesamten Zeitraum, während die Abschläge nur teilweise gezählt werden. Der Saldo neigt daher zu einer Nachzahlung.',
     'advances.future_clamped'                      => 'Der Zeitraum wurde auf heute gekürzt: Noch nicht fällige Abschläge wurden nicht abgebucht und würden den gezahlten Betrag aufblähen.',

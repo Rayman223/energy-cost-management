@@ -687,6 +687,8 @@ return [
     'advances.period_too_long'                     => 'Periode te lang: maximaal {max} dagen.',
     'advances.col_total_partial'                   => 'Totaal (volledige regels)',
     'advances.excluded_from_total'                 => 'buiten totaal',
+    'advances.no_advance_for_energy'               => 'Geen voorschot ingevoerd',
+    'advances.cost_without_advance_warning'        => 'Minstens één energie is berekend zonder bijhorend voorschot: het verbruik wordt ter informatie getoond maar blijft buiten het saldo, omdat er geen betaald bedrag is om mee te vergelijken. Voeg er een schema aan toe om het op te nemen.',
     'advances.verdict_unavailable'                 => 'Voor deze periode kon geen enkel verbruik worden berekend: het saldo kan niet worden bepaald.',
     'advances.partial_advances_warning'            => 'Uw schema\'s dekken niet alle maanden van de periode: de kost loopt over de volledige periode terwijl de voorschotten er slechts gedeeltelijk in worden geteld. Het saldo neigt daardoor naar een bij te betalen bedrag.',
     'advances.future_clamped'                      => 'De periode is teruggebracht tot vandaag: nog niet vervallen voorschotten zijn niet afgeschreven en zouden het betaalde bedrag opblazen.',

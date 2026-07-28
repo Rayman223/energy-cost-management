@@ -688,6 +688,8 @@ return [
     'advances.period_too_long'                     => 'Period too long: {max} days at most.',
     'advances.col_total_partial'                   => 'Total (complete rows)',
     'advances.excluded_from_total'                 => 'excluded from total',
+    'advances.no_advance_for_energy'               => 'No advance recorded',
+    'advances.cost_without_advance_warning'        => 'At least one energy is costed without a matching advance: its consumption is shown for information but stays out of the balance, as there is no amount paid to compare it with. Add a schedule for it to be included.',
     'advances.verdict_unavailable'                 => 'No consumption could be costed for this period: the balance cannot be established.',
     'advances.partial_advances_warning'            => 'Your schedules do not cover every month of the period: the cost spans the whole period while only part of the advances are counted. The balance therefore leans towards an amount still due.',
     'advances.future_clamped'                      => 'The period was cut back to today: advances not yet due have not been debited, and counting them would inflate the amount paid.',

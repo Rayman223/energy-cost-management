@@ -56,6 +56,7 @@ final class AdvanceBalanceService
      *     has_gaps: bool,
      *     has_partial_data: bool,
      *     has_partial_advances: bool,
+     *     has_cost_without_advance: bool,
      *     mixed_currency: bool
      * }
      */
@@ -70,16 +71,14 @@ final class AdvanceBalanceService
         $hasGaps    = false;
         $hasPartial    = false;
         $hasPartialAdv = false;
+        $hasCostOnly   = false;
         $mixed         = false;
 
         foreach (AdvanceSchedule::ENERGY_TYPES as $energyType) {
             $balance = $this->balanceForEnergy($energyType, $schedules, $from, $to);
 
-            // Sans échéance sur la période, il n'y a pas de bilan d'acompte à faire.
-            // Afficher quand même le coût le retrancherait de 0 € payé et annoncerait
-            // une dette imaginaire : un utilisateur qui n'a saisi que son acompte
-            // électricité verrait son gaz compté intégralement comme « reste à payer ».
-            if ($balance->dueCount === 0) {
+            // Ni acompte, ni coût : rien à dire, la ligne serait vide.
+            if ($balance->dueCount === 0 && $balance->cost === null) {
                 continue;
             }
 
@@ -87,6 +86,15 @@ final class AdvanceBalanceService
 
             if (!$balance->isComparable()) {
                 $hasGaps = true;
+                continue;
+            }
+
+            // Énergie chiffrée mais sans acompte saisi : la ligne est AFFICHÉE — vous
+            // avez bien des index et une grille, les taire donnerait l'impression
+            // qu'ils ne sont pas lus — mais elle reste hors du solde. L'inclure
+            // retrancherait son coût de 0 € payé et annoncerait une dette imaginaire.
+            if ($balance->dueCount === 0) {
+                $hasCostOnly = true;
                 continue;
             }
 
@@ -115,6 +123,7 @@ final class AdvanceBalanceService
             'has_gaps'         => $hasGaps,
             'has_partial_data'     => $hasPartial,
             'has_partial_advances' => $hasPartialAdv,
+            'has_cost_without_advance' => $hasCostOnly,
             'mixed_currency'       => $mixed,
         ];
     }
