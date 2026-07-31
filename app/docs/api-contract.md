@@ -109,13 +109,17 @@ comme `{}`.
 
 | `action` | Corps attendu | Réponse succès | Validations (→ 422) |
 |----------|---------------|----------------|---------------------|
-| `gas_entry` | `{ counter_m3: float>0, reading_at?: date }` | `{ ok:true, saved_at (ISO), counter_m3 }` | `counter_m3` invalide/≤0 ; date invalide ; date ≤ dernier relevé ; `counter_m3` < dernier relevé. |
-| `water_entry` | `{ counter_m3: float>0, reading_at?: date }` | `{ ok:true, saved_at (ISO), counter_m3 }` | idem `gas_entry`. |
-| `save_tariff` | `{ energy_type: "electricity"\|"gas", name, valid_from: date, valid_to?: date, lines: object, pricing_mode?: string }` | `{ ok:true, id }` | champ requis manquant (`energy_type`, `name`, `valid_from`, `lines`) ; `energy_type` hors énum ; `valid_from`/`valid_to` invalides ; montant de ligne illisible ; aucune ligne exploitable. |
+| `gas_entry` | `{ counter_m3: float>=0, reading_at?: date }` | `{ ok:true, saved_at (ISO), counter_m3 }` | `counter_m3` invalide/<0 ; date invalide ; relevé déjà existant à cette date ; `counter_m3` < relevé précédent ou > relevé suivant. |
+| `water_entry` | `{ counter_m3: float>=0, reading_at?: date }` | `{ ok:true, saved_at (ISO), counter_m3 }` | idem `gas_entry`. |
+| `save_tariff` | `{ energy_type: "electricity"\|"gas"\|"water", name, valid_from: date, valid_to?: date, lines: object, pricing_mode?: string }` | `{ ok:true, id }` | champ requis manquant (`energy_type`, `name`, `valid_from`, `lines`) ; `energy_type` hors énum ; `valid_from`/`valid_to` invalides ; montant de ligne illisible ; aucune ligne exploitable. |
 | *(autre)* | — | — | `400 { ok:false, error:"Unknown POST action" }`. |
 
-`reading_at` absent ⇒ horodatage `now`. Les bornes anti-régression compteur
-(date croissante, index croissant) sont vérifiées contre `getLatest()`.
+`reading_at` absent ⇒ horodatage `now`. Un index de 0 est accepté (compteur
+neuf) ; seule une valeur négative est refusée. L'insertion rétroactive est
+permise : le relevé est encadré par `getReadingBefore()` / `getReadingAfter()`,
+et son index doit rester compris entre celui du relevé précédent et celui du
+relevé suivant. Un relevé au même horodatage qu'un existant est refusé (422),
+y compris en cas de course avec l'`INSERT` (contrainte `uq_utility_readings`).
 
 `save_tariff` accepte `lines` au format plat `clé => montant`, le `component_kind`
 étant déduit du catalogue (clé inconnue ⇒ `per_kwh`). Deux clés paramètrent la
