@@ -1,0 +1,59 @@
+-- ============================================================
+-- Migration 2026-07-31 — purge des clés de ligne hors format (Issue #269)
+-- NON baselinée : idempotente (DML avec garde), laissée hors du seed de schema.sql.
+--
+-- Avant #265, POST /api?action=save_tariff acceptait n'importe quelle clé de
+-- ligne : normalizeLines() prenait $key tel quel. Les grilles créées par ce
+-- chemin peuvent porter des line_key hors format — « Energy T1 », « 0 » et « 1 »
+-- (un `lines` envoyé comme liste JSON au lieu d'un objet), « energy_t1\n »…
+--
+-- Ces lignes rendent la grille DÉFINITIVEMENT NON ÉDITABLE : le formulaire web la
+-- charge sans broncher, puis refuse de l'enregistrer, sa propre validation de clé
+-- (app/routes/tariffs.php) rejetant la clé qu'il vient d'afficher. L'utilisateur ne
+-- peut que supprimer la grille et la ressaisir. Depuis #265 ces clés ne peuvent
+-- plus entrer ; celles déjà en base restent, d'où cette purge.
+--
+-- SUPPRESSION ASSUMÉE, PAS DE NORMALISATION. Ces lignes participent au calcul (leur
+-- component_kind est stocké, en général 'per_kwh' par repli du catalogue) : leur
+-- suppression fait BAISSER d'autant les coûts calculés sur les périodes couvertes
+-- par ces grilles. Compromis accepté face à une grille inéditable ; l'alternative
+-- (renommer la clé en conservant kind et montant) a été écartée.
+--
+-- Deux subtilités SQL, vérifiées sur MariaDB 10.11 — les rater rendrait le DELETE
+-- silencieusement incomplet, ou pire, trop large :
+--
+--   1. BINARY est indispensable. line_key est en utf8mb4_general_ci, collation sous
+--      laquelle REGEXP est INSENSIBLE À LA CASSE : sans BINARY, « Energy_T1 » est
+--      considérée conforme à '^[a-z]…' et survivrait à la purge.
+--   2. \\z, pas $. Comme en PCRE, $ matche aussi juste AVANT un \n final :
+--      « energy_t1\n » passerait pour valide. \\z ancre en fin de chaîne stricte —
+--      exact équivalent du modificateur D de App\Domain\TariffLineCatalog::KEY_PATTERN,
+--      dont ce prédicat est le miroir SQL (le garder aligné en cas d'évolution).
+--
+-- Idempotente : après la première passe, plus aucune ligne ne satisfait le WHERE.
+-- Sur base fraîche, no-op (tariff_grid_lines est vide).
+--
+-- tariff_template_fields.line_key n'est PAS concernée : l'API ne crée pas de
+-- templates, et le chemin web (app/routes/tariffs.php, action save avec
+-- save_as_template) les dérive de lignes déjà validées par la même regex.
+--
+-- ── À jouer AVANT application, pour mesurer l'impact ────────────────────────
+--
+-- Lignes qui vont disparaître :
+--   SELECT tariff_grid_id, line_key, component_kind, amount_per_kwh
+--   FROM tariff_grid_lines
+--   WHERE BINARY line_key NOT REGEXP '^[a-z][a-z0-9_]{0,99}\\z';
+--
+-- Grilles qui se retrouveront SANS AUCUNE LIGNE — cas que #247 refuse à l'écriture,
+-- car une grille vide sélectionnée comme active ramène les coûts à 0 EN SILENCE.
+-- Cette migration ne les traite pas : à arbitrer (suppression ou ressaisie) au vu
+-- du résultat.
+--   SELECT g.id, g.name, g.energy_type, g.valid_from, g.valid_to
+--   FROM tariff_grids g
+--   JOIN tariff_grid_lines l ON l.tariff_grid_id = g.id
+--   GROUP BY g.id, g.name, g.energy_type, g.valid_from, g.valid_to
+--   HAVING SUM(BINARY l.line_key REGEXP '^[a-z][a-z0-9_]{0,99}\\z') = 0;
+-- ============================================================
+
+DELETE FROM tariff_grid_lines
+WHERE BINARY line_key NOT REGEXP '^[a-z][a-z0-9_]{0,99}\\z';
