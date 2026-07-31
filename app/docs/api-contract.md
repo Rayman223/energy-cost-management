@@ -114,6 +114,13 @@ comme `{}`.
 | `save_tariff` | `{ energy_type: "electricity"\|"gas"\|"water", name, valid_from: date, valid_to?: date, lines: object, pricing_mode?: string }` | `{ ok:true, id }` | champ requis manquant (`energy_type`, `name`, `valid_from`, `lines`) ; `energy_type` hors énum ; `valid_from`/`valid_to` invalides ; montant de ligne illisible ; aucune ligne exploitable. |
 | *(autre)* | — | — | `400 { ok:false, error:"Unknown POST action" }`. |
 
+Un champ `date` (`reading_at`, `valid_from`, `valid_to`) doit porter une **date
+calendaire réelle** : `2026-07-31`, `2026-07-31 12:00:00`, ISO 8601 avec offset ou
+`Z`, fuseau nommé, `@timestamp`. Sont refusées en 422 les dates impossibles
+(`2026-02-31`, `2026-02-29` hors année bissextile), que le parseur décalerait
+sinon en silence, et les valeurs sans date qui se résoudraient sur l'horloge du
+serveur (`2026`, `12:00`, `now`, `tomorrow`).
+
 `reading_at` absent ⇒ horodatage `now`. Un index de 0 est accepté (compteur
 neuf) ; seule une valeur négative est refusée. L'insertion rétroactive est
 permise : le relevé est encadré par `getReadingBefore()` / `getReadingAfter()`,

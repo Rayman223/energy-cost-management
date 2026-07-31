@@ -82,6 +82,13 @@ final class Request
     /**
      * Parse une valeur en date, ou lève une ValidationException (-> 422).
      * Message identique à l'ancien parseDateTimeOr422.
+     *
+     * Exige une date calendaire réelle. Sont donc refusées, en plus des valeurs
+     * non parsables :
+     * - les dates impossibles (2026-02-31, 2026-02-29 hors année bissextile),
+     *   que le parseur décale sinon en silence ;
+     * - les entrées qui ne portent pas de date et se résoudraient sur l'horloge
+     *   courante (`2026`, `12:00`, `now`, `tomorrow`).
      */
     public static function parseDate(mixed $value, string $field): DateTimeImmutable
     {
@@ -90,6 +97,30 @@ final class Request
         // en silence. Message volontairement identique au cas « non parsable » :
         // stabilité du contrat 422 pour les clients existants.
         if (self::isBlank($value)) {
+            throw new ValidationException(sprintf('Invalid %s date format', $field));
+        }
+
+        // Inspection avant construction, comme le fait déjà ReadingParser à
+        // l'ingestion : `date_parse` décrit ce que le parseur a réellement lu, sans
+        // l'état global de `DateTimeImmutable::getLastErrors()`.
+        $parsed = date_parse($value);
+
+        // Une date calendaire impossible ne lève pas d'exception : le parseur la
+        // décale silencieusement (2026-02-31 -> 2026-03-03) en ne signalant qu'un
+        // warning. Sans cette garde, une typo côté client devient une donnée fausse
+        // et durable — grille active deux jours trop tard, relevé horodaté au
+        // mauvais jour.
+        if ($parsed['error_count'] > 0 || $parsed['warning_count'] > 0) {
+            throw new ValidationException(sprintf('Invalid %s date format', $field));
+        }
+
+        // Une entrée qui ne porte aucune date se résout sur l'horloge courante :
+        // « 2026 » est lu comme l'heure 20:26 d'aujourd'hui, « 0731 » comme 07:31,
+        // « now » et « tomorrow » comme le moment de la requête. Même classe de bug
+        // que la chaîne vide traitée en #246 : un 200 et une donnée fausse. La voie
+        // documentée pour horodater à l'instant courant reste l'absence du champ
+        // (cf. app/docs/api-contract.md), pas une valeur relative.
+        if (!is_int($parsed['year']) || !is_int($parsed['month']) || !is_int($parsed['day'])) {
             throw new ValidationException(sprintf('Invalid %s date format', $field));
         }
 
