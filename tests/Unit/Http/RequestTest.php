@@ -40,6 +40,38 @@ final class RequestTest extends TestCase
         Request::parseDate('not-a-date', 'reading_at');
     }
 
+    public function testParseDateMissingThrows422Message(): void
+    {
+        $this->expectException(ValidationException::class);
+        $this->expectExceptionMessage('Invalid reading_at date format');
+        Request::parseDate(null, 'reading_at');
+    }
+
+    public function testParseDateEmptyThrows422Message(): void
+    {
+        $this->expectException(ValidationException::class);
+        $this->expectExceptionMessage('Invalid reading_at date format');
+        Request::parseDate('   ', 'reading_at');
+    }
+
+    public function testParseDateNonStringThrows422Message(): void
+    {
+        $this->expectException(ValidationException::class);
+        $this->expectExceptionMessage('Invalid reading_at date format');
+        Request::parseDate(1719000000, 'reading_at');
+    }
+
+    /**
+     * Avant la garde, le cast `(string) $value` déclenchait un warning PHP
+     * « Array to string conversion » avant même de lever la 422.
+     */
+    public function testParseDateArrayThrows422WithoutWarning(): void
+    {
+        $this->expectException(ValidationException::class);
+        $this->expectExceptionMessage('Invalid reading_at date format');
+        Request::parseDate([], 'reading_at');
+    }
+
     public function testOptionalDateNullWhenAbsentOrEmpty(): void
     {
         self::assertNull(Request::optionalDate(null, 'valid_to'));

@@ -141,6 +141,27 @@ final class ReadingDeletionControllerDbTest extends TestCase
         $this->controller()->electricityReading($this->post('delete_electricity_reading', ['reading_at' => 'not-a-date']));
     }
 
+    /**
+     * Régression : sans reading_at, le cast `(string) null` faisait construire un
+     * DateTimeImmutable('') — soit « maintenant » — et la suppression partait
+     * quand même, en répondant 200 {"deleted":0}. On attend désormais une 422,
+     * et surtout aucun relevé touché.
+     */
+    public function testDeleteElectricityReadingWithoutTimestampThrows(): void
+    {
+        $elec = new ElectricityReadingRepository($this->pdo(), $this->userId);
+        $elec->insertIndexes(new DateTimeImmutable('2026-06-01 00:00:00'), ['import_t1' => 100.0]);
+
+        try {
+            $this->controller()->electricityReading($this->post('delete_electricity_reading', []));
+            self::fail('Une date requise absente doit lever une ValidationException.');
+        } catch (ValidationException $e) {
+            self::assertSame('Invalid reading_at date format', $e->getMessage());
+        }
+
+        self::assertNotSame([], (new ElectricityReadingRepository($this->pdo(), $this->userId))->getHistory());
+    }
+
     public function testDeleteElectricityMeter(): void
     {
         $elec = new ElectricityReadingRepository($this->pdo(), $this->userId);

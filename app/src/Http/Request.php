@@ -85,8 +85,16 @@ final class Request
      */
     public static function parseDate(mixed $value, string $field): DateTimeImmutable
     {
+        // Valeur absente/vide : refus explicite. Sans cette garde, le cast en
+        // string faisait construire un DateTimeImmutable('') — soit « maintenant »,
+        // en silence. Message volontairement identique au cas « non parsable » :
+        // stabilité du contrat 422 pour les clients existants.
+        if (self::isBlank($value)) {
+            throw new ValidationException(sprintf('Invalid %s date format', $field));
+        }
+
         try {
-            return new DateTimeImmutable((string) $value);
+            return new DateTimeImmutable($value);
         } catch (\Exception) {
             throw new ValidationException(sprintf('Invalid %s date format', $field));
         }
@@ -98,10 +106,22 @@ final class Request
      */
     public static function optionalDate(mixed $value, string $field): ?DateTimeImmutable
     {
-        if (!is_string($value) || trim($value) === '') {
+        if (self::isBlank($value)) {
             return null;
         }
 
         return self::parseDate($value, $field);
+    }
+
+    /**
+     * Vrai si la valeur ne porte aucune date exploitable (non-string, vide, blancs).
+     * Prédicat partagé : ce que `optionalDate` traite comme « absent »,
+     * `parseDate` traite comme « requis manquant ».
+     *
+     * @phpstan-assert-if-false string $value
+     */
+    private static function isBlank(mixed $value): bool
+    {
+        return !is_string($value) || trim($value) === '';
     }
 }
