@@ -70,6 +70,20 @@ final class TariffLineCatalogTest extends TestCase
         }
     }
 
+    /**
+     * KEY_PATTERN est la contrainte appliquée aux deux portes d'entrée (#265) :
+     * une clé du catalogue qui ne la respecterait pas serait refusée à
+     * l'enregistrement, alors que le formulaire la propose.
+     */
+    public function testEveryCatalogKeyMatchesKeyPattern(): void
+    {
+        foreach (['electricity', 'gas', 'water'] as $energy) {
+            foreach (TariffLineCatalog::keysFor($energy) as $key) {
+                self::assertSame(1, preg_match(TariffLineCatalog::KEY_PATTERN, $key), "$energy: $key");
+            }
+        }
+    }
+
     public function testKeysForMatchesDefinitionKeys(): void
     {
         self::assertSame(array_keys(TariffLineCatalog::electricity()), TariffLineCatalog::keysFor('electricity'));

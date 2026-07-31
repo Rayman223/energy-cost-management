@@ -13,6 +13,27 @@ namespace App\Domain;
  */
 final class TariffLineCatalog
 {
+    /**
+     * Format d'une clé technique de ligne (`tariff_lines.line_key`) : minuscule
+     * initiale, puis minuscules/chiffres/underscores, 100 caractères au plus.
+     *
+     * Contrainte partagée par les deux portes d'entrée — formulaire web
+     * (app/routes/tariffs.php) et API `save_tariff`
+     * (App\Http\Controller\TariffController::normalizeLines) : une clé hors
+     * format n'est reconnue par aucun kind du catalogue, retombe sur per_kwh,
+     * et rend ensuite la grille non réenregistrable depuis le formulaire (#265).
+     * Les clés `custom_*` du slug automatique du formulaire la respectent par
+     * construction.
+     *
+     * Le modificateur `D` est indispensable : sans lui, `$` matche aussi juste
+     * avant un `\n` final, et « energy_t1\n » franchissait la garde. Le chemin
+     * API ne trime pas la clé (contrairement au formulaire), la clé polluée
+     * n'était donc reconnue par aucun kind — le bug même que ce format ferme —
+     * et 100 caractères suivis d'un `\n` débordaient le VARCHAR(100) de
+     * `tariff_grid_lines.line_key`.
+     */
+    public const KEY_PATTERN = '/^[a-z][a-z0-9_]{0,99}$/D';
+
     /** @return array<string,array{label:string,unit:string}> */
     public static function electricity(): array
     {

@@ -111,7 +111,7 @@ comme `{}`.
 |----------|---------------|----------------|---------------------|
 | `gas_entry` | `{ counter_m3: float>=0, reading_at?: date }` | `{ ok:true, saved_at (ISO), counter_m3 }` | `counter_m3` invalide/<0 ; date invalide ; relevé déjà existant à cette date ; `counter_m3` < relevé précédent ou > relevé suivant. |
 | `water_entry` | `{ counter_m3: float>=0, reading_at?: date }` | `{ ok:true, saved_at (ISO), counter_m3 }` | idem `gas_entry`. |
-| `save_tariff` | `{ energy_type: "electricity"\|"gas"\|"water", name, valid_from: date, valid_to?: date, lines: object, pricing_mode?: string }` | `{ ok:true, id }` | champ requis manquant (`energy_type`, `name`, `valid_from`, `lines`) ; `energy_type` hors énum ; `valid_from`/`valid_to` invalides ; montant de ligne illisible ; aucune ligne exploitable. |
+| `save_tariff` | `{ energy_type: "electricity"\|"gas"\|"water", name, valid_from: date, valid_to?: date, lines: object, pricing_mode?: string }` | `{ ok:true, id }` | champ requis manquant (`energy_type`, `name`, `valid_from`, `lines`) ; `energy_type` hors énum ; `valid_from`/`valid_to` invalides ; clé de ligne hors format ; montant de ligne illisible ; aucune ligne exploitable. |
 | *(autre)* | — | — | `400 { ok:false, error:"Unknown POST action" }`. |
 
 Un champ `date` (`reading_at`, `valid_from`, `valid_to`) doit porter une **date
@@ -136,6 +136,20 @@ telles **quel que soit `energy_type`** : sur une grille gaz ou eau elles restent
 inertes, alors que le repli `per_kwh` facturerait un coefficient 1,08 comme
 1,08 €/kWh. Elles apparaissent en retour dans `lines` des grilles et dans le
 `tariff_rates` des réponses de coût — clés additionnelles, non cassantes.
+
+Les **clés** de `lines` suivent le même format que le formulaire web (#265) :
+`^[a-z][a-z0-9_]{0,99}$` (minuscule initiale, puis minuscules, chiffres et
+underscores, 100 caractères au plus). Toute autre clé est refusée en 422
+`Invalid tariff line key: <clé>`, sans rien persister — ce qui inclut un `lines`
+envoyé comme **liste JSON** (`[0.1, 0.2]`), dont les clés entières `0`, `1`
+étaient jusqu'ici enregistrées telles quelles. Une clé hors format n'est reconnue
+par aucun `component_kind` du catalogue : elle retombait sur `per_kwh` (`"Energy
+T1"` facturé comme une taxe €/kWh au lieu de `energy_t1`) et rendait ensuite la
+grille non réenregistrable depuis le formulaire web, qui refuse ces clés. La clé
+est validée **avant** le montant : elle est refusée même si la ligne porte un
+montant vide. Elle n'est ni trimée ni mise en minuscules au passage —
+contrairement à la saisie du formulaire, une clé d'intégration mal formée est
+signalée, pas rattrapée : `"Energy_T1"` et `"energy_t1\n"` sont refusés.
 
 Les montants de `lines` suivent la même règle que le formulaire web (#262) : un
 montant `null`, vide ou blanc vaut **ligne non renseignée** et est sauté sans

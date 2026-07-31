@@ -140,7 +140,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $slug = trim($slug, '_');
                     $key  = 'custom_' . ($slug !== '' ? $slug : substr(md5($label . $val), 0, 8));
                 }
-                if (preg_match('/^[a-z][a-z0-9_]{0,99}$/', $key) !== 1) {
+                if (preg_match(TariffLineCatalog::KEY_PATTERN, $key) !== 1) {
                     throw new \InvalidArgumentException($view->t('tariffs.invalid_value', ['key' => $key]));
                 }
 

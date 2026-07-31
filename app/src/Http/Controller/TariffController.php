@@ -96,6 +96,18 @@ final class TariffController
         foreach ($rawLines as $key => $amount) {
             $key = (string) $key;
 
+            // Clé hors format : le formulaire web l'interdit déjà, l'API l'acceptait
+            // telle quelle. `kindFor()` ne la reconnaissant pas, elle retombait sur
+            // per_kwh (« Energy T1 » facturé comme une taxe €/kWh), et un `lines`
+            // envoyé comme liste JSON persistait des clés « 0 », « 1 ». Ces clés
+            // parasites ressortaient dans le formulaire d'édition, qui refusait alors
+            // de réenregistrer la grille qu'il venait de charger (#265). Vérifié avant
+            // le montant : une clé malformée est un défaut d'intégration, que la ligne
+            // porte un montant ou non.
+            if (preg_match(TariffLineCatalog::KEY_PATTERN, $key) !== 1) {
+                throw new ValidationException(sprintf('Invalid tariff line key: %s', $key));
+            }
+
             // Montant absent : la ligne n'est simplement pas renseignée. Même règle
             // que le formulaire web (app/routes/tariffs.php), qui saute un champ
             // montant laissé vide plutôt que d'en faire une erreur.

@@ -125,6 +125,85 @@ final class TariffControllerTest extends TestCase
         ], $repo->savedGrid['lines']);
     }
 
+    /**
+     * Une clé hors format était persistée telle quelle, retombait sur per_kwh faute
+     * d'être reconnue par le catalogue, puis rendait la grille non réenregistrable
+     * depuis le formulaire web — qui, lui, refuse déjà ces clés (#265).
+     */
+    public function testSaveRejectsMalformedLineKey(): void
+    {
+        // Clé entière : `lines` envoyé comme liste JSON ([0.1, 0.2]) plutôt qu'objet.
+        // « energy_t1\n » : sans le modificateur `D` de KEY_PATTERN, `$` matche avant
+        // le saut de ligne final et la clé polluée passait — l'API ne trime pas.
+        $cases = ['Energy_T1', 'Energy T1', '0bad', 'energy-t1', 'énergie', '_energy', '0', "energy_t1\n"];
+
+        foreach ($cases as $key) {
+            $repo = new FakeTariffRepository();
+
+            $body          = $this->validBody();
+            $body['lines'] = [$key => 0.10];
+
+            try {
+                (new TariffController($repo))->save($this->post($body));
+                self::fail(sprintf('Expected ValidationException for key: %s', $key));
+            } catch (ValidationException $e) {
+                self::assertSame('Invalid tariff line key: ' . $key, $e->getMessage());
+            }
+
+            // Refus avant toute persistance, comme pour un montant illisible.
+            self::assertNull($repo->savedGrid, $key);
+        }
+    }
+
+    /**
+     * Borne haute de la regex : 100 caractères passent, 101 non. Elle protège le
+     * VARCHAR(100) de `tariff_grid_lines.line_key` — d'où le cas « 100 caractères
+     * + \n », 101 octets qui franchissaient la garde sans le modificateur `D`.
+     */
+    public function testSaveRejectsOverlongLineKey(): void
+    {
+        $repo = new FakeTariffRepository();
+        $max  = 'a' . str_repeat('b', 99);
+
+        $body          = $this->validBody();
+        $body['lines'] = [$max => 0.10];
+
+        (new TariffController($repo))->save($this->post($body));
+        self::assertNotNull($repo->savedGrid);
+
+        foreach (['a' . str_repeat('b', 100), $max . "\n"] as $tooLong) {
+            $repo          = new FakeTariffRepository();
+            $body['lines'] = [$tooLong => 0.10];
+
+            try {
+                (new TariffController($repo))->save($this->post($body));
+                self::fail('Expected ValidationException for a 101-byte key');
+            } catch (ValidationException $e) {
+                self::assertSame('Invalid tariff line key: ' . $tooLong, $e->getMessage());
+            }
+
+            self::assertNull($repo->savedGrid);
+        }
+    }
+
+    /** Les clés du catalogue et les clés custom du formulaire web restent acceptées. */
+    public function testSaveAcceptsCatalogAndCustomLineKeys(): void
+    {
+        $repo = new FakeTariffRepository();
+
+        $body          = $this->validBody();
+        $body['lines'] = ['energy_t1' => 0.10, 'custom_ma_ligne' => 0.02];
+
+        (new TariffController($repo))->save($this->post($body));
+
+        self::assertNotNull($repo->savedGrid);
+        self::assertSame([
+            ['key' => 'energy_t1', 'amount' => 0.10, 'kind' => 'energy_t1', 'label' => null, 'category' => null],
+            // Hors catalogue mais bien formée : repli documenté sur per_kwh.
+            ['key' => 'custom_ma_ligne', 'amount' => 0.02, 'kind' => 'per_kwh', 'label' => null, 'category' => null],
+        ], $repo->savedGrid['lines']);
+    }
+
     public function testSavePersistsAndReturnsId(): void
     {
         $repo = new FakeTariffRepository();
