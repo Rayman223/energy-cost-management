@@ -60,7 +60,7 @@ final class TariffController
         $pricingMode = (string) ($request->input('pricing_mode') ?? TariffGrid::PRICING_MODE_DEFAULT);
 
         // `Missing field: lines` ne couvre que le tableau absent ou vide. Un payload
-        // dont AUCUN montant n'est numérique traverse normalizeLines() sans laisser
+        // dont tous les montants sont vides traverse normalizeLines() sans laisser
         // une seule ligne : la grille était enregistrée vide, puis sélectionnée comme
         // active sur sa période, ramenant les coûts à 0 en silence. Refus explicite,
         // avant l'appel au repository (donc avant sa transaction).
@@ -87,17 +87,30 @@ final class TariffController
      * en lignes structurées, le kind étant déduit du catalogue (clé inconnue →
      * per_kwh). Rétrocompat des intégrations existantes.
      *
-     * @param  array<string, mixed> $rawLines
+     * @param  array<array-key, mixed> $rawLines
      * @return list<array{key: string, amount: float, kind: string, label: ?string, category: ?string}>
      */
     private function normalizeLines(string $energyType, array $rawLines): array
     {
         $lines = [];
         foreach ($rawLines as $key => $amount) {
-            if (!is_numeric($amount)) {
+            $key = (string) $key;
+
+            // Montant absent : la ligne n'est simplement pas renseignée. Même règle
+            // que le formulaire web (app/routes/tariffs.php), qui saute un champ
+            // montant laissé vide plutôt que d'en faire une erreur.
+            if ($amount === null || (is_string($amount) && trim($amount) === '')) {
                 continue;
             }
-            $key      = (string) $key;
+
+            // Montant renseigné mais illisible (virgule décimale, unité collée,
+            // faute de frappe) : le sauter enregistrait une grille amputée de cette
+            // ligne, en 200 et sans le moindre signal — les coûts calculés à partir
+            // de la grille étaient faux sans que personne puisse le voir (#262).
+            if (!is_numeric($amount)) {
+                throw new ValidationException(sprintf('Invalid amount for tariff line: %s', $key));
+            }
+
             $lines[] = [
                 'key'      => $key,
                 'amount'   => (float) $amount,

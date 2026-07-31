@@ -74,7 +74,7 @@ final class TariffControllerTest extends TestCase
         $repo = new FakeTariffRepository();
 
         $body = $this->validBody();
-        $body['lines'] = ['energy_t1' => 'not-a-number'];
+        $body['lines'] = ['energy_t1' => '', 'energy_t2' => null];
 
         try {
             (new TariffController($repo))->save($this->post($body));
@@ -87,13 +87,35 @@ final class TariffControllerTest extends TestCase
         self::assertNull($repo->savedGrid);
     }
 
-    /** Une ligne exploitable suffit : les montants non numériques restent ignorés (rétrocompat). */
-    public function testSaveKeepsValidLinesAmongInvalidOnes(): void
+    /**
+     * Un montant renseigné mais illisible est un défaut d'intégration, pas une ligne
+     * absente : il était sauté en silence, laissant enregistrer une grille amputée (#262).
+     */
+    public function testSaveRejectsMalformedLineAmount(): void
     {
         $repo = new FakeTariffRepository();
 
         $body = $this->validBody();
-        $body['lines'] = ['energy_t1' => 0.10, 'energy_t2' => 'not-a-number'];
+        $body['lines'] = ['energy_t1' => 0.10, 'energy_t2' => '0,08'];
+
+        try {
+            (new TariffController($repo))->save($this->post($body));
+            self::fail('Expected ValidationException');
+        } catch (ValidationException $e) {
+            self::assertSame('Invalid amount for tariff line: energy_t2', $e->getMessage());
+        }
+
+        // Refus global : la ligne saine ne doit pas être persistée pour autant.
+        self::assertNull($repo->savedGrid);
+    }
+
+    /** Un montant vide/absent reste une ligne non renseignée : sautée, sans erreur. */
+    public function testSaveSkipsBlankLineAmounts(): void
+    {
+        $repo = new FakeTariffRepository();
+
+        $body = $this->validBody();
+        $body['lines'] = ['energy_t1' => 0.10, 'energy_t2' => '  ', 'energy_t3' => null];
 
         (new TariffController($repo))->save($this->post($body));
 

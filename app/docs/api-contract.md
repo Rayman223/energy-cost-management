@@ -111,7 +111,7 @@ comme `{}`.
 |----------|---------------|----------------|---------------------|
 | `gas_entry` | `{ counter_m3: float>0, reading_at?: date }` | `{ ok:true, saved_at (ISO), counter_m3 }` | `counter_m3` invalide/≤0 ; date invalide ; date ≤ dernier relevé ; `counter_m3` < dernier relevé. |
 | `water_entry` | `{ counter_m3: float>0, reading_at?: date }` | `{ ok:true, saved_at (ISO), counter_m3 }` | idem `gas_entry`. |
-| `save_tariff` | `{ energy_type: "electricity"\|"gas", name, valid_from: date, valid_to?: date, lines: object, pricing_mode?: string }` | `{ ok:true, id }` | champ requis manquant (`energy_type`, `name`, `valid_from`, `lines`) ; `energy_type` hors énum ; `valid_from`/`valid_to` invalides. |
+| `save_tariff` | `{ energy_type: "electricity"\|"gas", name, valid_from: date, valid_to?: date, lines: object, pricing_mode?: string }` | `{ ok:true, id }` | champ requis manquant (`energy_type`, `name`, `valid_from`, `lines`) ; `energy_type` hors énum ; `valid_from`/`valid_to` invalides ; montant de ligne illisible ; aucune ligne exploitable. |
 | *(autre)* | — | — | `400 { ok:false, error:"Unknown POST action" }`. |
 
 `reading_at` absent ⇒ horodatage `now`. Les bornes anti-régression compteur
@@ -125,6 +125,15 @@ telles **quel que soit `energy_type`** : sur une grille gaz ou eau elles restent
 inertes, alors que le repli `per_kwh` facturerait un coefficient 1,08 comme
 1,08 €/kWh. Elles apparaissent en retour dans `lines` des grilles et dans le
 `tariff_rates` des réponses de coût — clés additionnelles, non cassantes.
+
+Les montants de `lines` suivent la même règle que le formulaire web (#262) : un
+montant `null`, vide ou blanc vaut **ligne non renseignée** et est sauté sans
+erreur ; un montant renseigné mais non numérique (`"0,08"`, `"0.08 €"`, typo) est
+refusé en 422 `Invalid amount for tariff line: <clé>`, sans rien persister. Il
+était auparavant sauté en silence : la grille partait amputée de cette ligne, en
+200, et faussait les coûts sans le moindre signal. Une fois les lignes blanches
+écartées, un `lines` sans aucune ligne exploitable est refusé en 422
+`At least one valid tariff line is required`.
 
 Contrairement à la saisie web, l'API ne rejette pas un coefficient hors bornes
 (`]0 ; 5]`) : il est neutralisé à 1,0 au calcul (`SpotFormulaResolver`) et signalé
