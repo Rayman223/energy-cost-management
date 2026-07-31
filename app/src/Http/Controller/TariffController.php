@@ -59,12 +59,22 @@ final class TariffController
         // reconduit le comportement des intégrations existantes.
         $pricingMode = (string) ($request->input('pricing_mode') ?? TariffGrid::PRICING_MODE_DEFAULT);
 
+        // `Missing field: lines` ne couvre que le tableau absent ou vide. Un payload
+        // dont AUCUN montant n'est numérique traverse normalizeLines() sans laisser
+        // une seule ligne : la grille était enregistrée vide, puis sélectionnée comme
+        // active sur sa période, ramenant les coûts à 0 en silence. Refus explicite,
+        // avant l'appel au repository (donc avant sa transaction).
+        $lines = $this->normalizeLines($energyType, (array) $request->input('lines'));
+        if ($lines === []) {
+            throw new ValidationException('At least one valid tariff line is required');
+        }
+
         $id = $this->tariffRepo->saveGrid(
             energyType: $energyType,
             name: (string) $request->input('name'),
             validFrom: $validFrom,
             validTo: $validTo,
-            lines: $this->normalizeLines($energyType, (array) $request->input('lines')),
+            lines: $lines,
             vatRate: $vatRate,
             pricingMode: $pricingMode,
         );

@@ -173,6 +173,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 ];
             }
 
+            // Un montant vide fait sauter sa ligne (plus haut) : un formulaire entièrement
+            // vidé produit donc $lines = [] et enregistrait une grille sans aucune ligne,
+            // active sur sa période et ramenant les coûts à 0 en silence. En édition, cela
+            // vidait une grille existante de ses lignes. Même règle que l'API (save_tariff).
+            if ($lines === []) {
+                throw new \InvalidArgumentException($view->t('tariffs.lines_required'));
+            }
+
             $pcs = null;
             if ($energyType === 'gas' && ($_POST['pcs_coefficient'] ?? '') !== '') {
                 $pcs = (float) $_POST['pcs_coefficient'];

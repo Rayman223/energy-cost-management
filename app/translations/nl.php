@@ -227,6 +227,7 @@ return [
     'tariffs.invalid_coefficient' => 'Ongeldige coëfficiënt op de marktprijs: verwacht tussen 0 en {max} (bv. 1,08 voor +8 %).',
     'tariffs.invalid_vat'  => 'Ongeldig btw-tarief (0–100).',
     'tariffs.label_required' => 'Een label is vereist voor aangepaste velden.',
+    'tariffs.lines_required' => 'Ten minste één tarieflijn met een bedrag is vereist.',
     'tariffs.kind.energy_flat'   => 'Energie · enkelvoudig tarief (€/kWh)',
     'tariffs.kind.energy_t1'     => 'Energie · dag / T1 (€/kWh)',
     'tariffs.kind.energy_t2'     => 'Energie · nacht / T2 (€/kWh)',

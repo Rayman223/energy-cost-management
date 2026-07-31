@@ -227,6 +227,7 @@ return [
     'tariffs.invalid_coefficient' => 'Ungültiger Koeffizient auf den Marktpreis: erwartet zwischen 0 und {max} (z. B. 1,08 für +8 %).',
     'tariffs.invalid_vat'  => 'Ungültiger MwSt.-Satz (0–100).',
     'tariffs.label_required' => 'Für benutzerdefinierte Felder ist eine Bezeichnung erforderlich.',
+    'tariffs.lines_required' => 'Mindestens eine Tarifzeile mit einem Betrag ist erforderlich.',
     'tariffs.kind.energy_flat'   => 'Energie · Eintarif (€/kWh)',
     'tariffs.kind.energy_t1'     => 'Energie · Tag / T1 (€/kWh)',
     'tariffs.kind.energy_t2'     => 'Energie · Nacht / T2 (€/kWh)',

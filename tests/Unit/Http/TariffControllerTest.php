@@ -69,6 +69,40 @@ final class TariffControllerTest extends TestCase
         $controller->save($this->post($body));
     }
 
+    public function testSaveRejectsTariffWithoutValidLines(): void
+    {
+        $repo = new FakeTariffRepository();
+
+        $body = $this->validBody();
+        $body['lines'] = ['energy_t1' => 'not-a-number'];
+
+        try {
+            (new TariffController($repo))->save($this->post($body));
+            self::fail('Expected ValidationException');
+        } catch (ValidationException $e) {
+            self::assertSame('At least one valid tariff line is required', $e->getMessage());
+        }
+
+        // Rien ne doit être persisté : le refus intervient avant saveGrid().
+        self::assertNull($repo->savedGrid);
+    }
+
+    /** Une ligne exploitable suffit : les montants non numériques restent ignorés (rétrocompat). */
+    public function testSaveKeepsValidLinesAmongInvalidOnes(): void
+    {
+        $repo = new FakeTariffRepository();
+
+        $body = $this->validBody();
+        $body['lines'] = ['energy_t1' => 0.10, 'energy_t2' => 'not-a-number'];
+
+        (new TariffController($repo))->save($this->post($body));
+
+        self::assertNotNull($repo->savedGrid);
+        self::assertSame([
+            ['key' => 'energy_t1', 'amount' => 0.10, 'kind' => 'energy_t1', 'label' => null, 'category' => null],
+        ], $repo->savedGrid['lines']);
+    }
+
     public function testSavePersistsAndReturnsId(): void
     {
         $repo = new FakeTariffRepository();

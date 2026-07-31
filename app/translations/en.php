@@ -227,6 +227,7 @@ return [
     'tariffs.invalid_coefficient' => 'Invalid market price coefficient: expected between 0 and {max} (e.g. 1.08 for +8 %).',
     'tariffs.invalid_vat'  => 'Invalid VAT rate (0–100).',
     'tariffs.label_required' => 'A label is required for custom fields.',
+    'tariffs.lines_required' => 'At least one tariff line with an amount is required.',
     'tariffs.kind.energy_flat'   => 'Energy · single rate (€/kWh)',
     'tariffs.kind.energy_t1'     => 'Energy · day / T1 (€/kWh)',
     'tariffs.kind.energy_t2'     => 'Energy · night / T2 (€/kWh)',

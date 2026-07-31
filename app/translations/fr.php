@@ -235,6 +235,7 @@ return [
     'tariffs.invalid_coefficient' => 'Coefficient sur le prix de marché invalide : attendu entre 0 et {max} (ex. 1,08 pour +8 %).',
     'tariffs.invalid_vat'  => 'Taux de TVA invalide (0–100).',
     'tariffs.label_required' => 'Un libellé est requis pour les champs personnalisés.',
+    'tariffs.lines_required' => 'Au moins une ligne tarifaire avec un montant est requise.',
     'tariffs.kind.energy_flat'   => 'Énergie · tarif unique (€/kWh)',
     'tariffs.kind.energy_t1'     => 'Énergie · jour / T1 (€/kWh)',
     'tariffs.kind.energy_t2'     => 'Énergie · nuit / T2 (€/kWh)',
