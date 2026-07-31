@@ -83,6 +83,16 @@ final class AdvanceScheduleRepository implements AdvanceScheduleRepositoryInterf
         return $this->hydrate($stmt->fetchAll());
     }
 
+    public function owns(int $id): bool
+    {
+        $stmt = $this->pdo->prepare(
+            'SELECT 1 FROM energy_advances WHERE id = :id AND user_id = :uid LIMIT 1'
+        );
+        $stmt->execute(['id' => $id, 'uid' => $this->userId]);
+
+        return $stmt->fetchColumn() !== false;
+    }
+
     public function insert(
         string $energyType,
         float $amountMonthly,

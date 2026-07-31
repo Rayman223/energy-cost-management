@@ -26,6 +26,15 @@ final class UserProfile
      */
     public const PRICING_MODES = ['fixed', 'dynamic_hourly', 'dynamic_quarter'];
 
+    /**
+     * @param ?string $advancesPeriodFrom Début 'Y-m-d' du dernier bilan d'acomptes
+     *        consulté, restitué au retour de l'utilisateur (#241). null = aucun
+     *        mémorisé, la page retombe sur son défaut. Écrit par
+     *        {@see \App\Repository\UserRepository::setAdvancesPeriod()} et NON par
+     *        `updateProfile` : le formulaire de /account n'a pas à connaître cette
+     *        préférence, ni à l'écraser en enregistrant le reste du profil.
+     * @param ?string $advancesPeriodTo Fin 'Y-m-d', EXCLUE de la période.
+     */
     public function __construct(
         public readonly ?string $country,
         public readonly string $timezone,
@@ -34,6 +43,8 @@ final class UserProfile
         public readonly string $pricingMode,
         public readonly float $supplierMarkupPerKwh,
         public readonly string $locale,
+        public readonly ?string $advancesPeriodFrom = null,
+        public readonly ?string $advancesPeriodTo = null,
     ) {
     }
 

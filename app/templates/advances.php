@@ -75,8 +75,11 @@ $currency = $balance['currency'] ?? $currency;
         <input type="date" id="adv-from" name="from" class="form-input" required min="2000-01-01" max="2100-12-31" value="<?= $this->e($periodFrom) ?>">
       </div>
       <div class="form-row">
-        <label class="form-label" for="adv-to"><?= $this->te('advances.period_to') ?></label>
+        <label class="form-label" for="adv-to"><?= $this->te('advances.period_to') ?> <span class="unit"><?= $this->te('advances.period_to_exclusive') ?></span></label>
         <input type="date" id="adv-to" name="to" class="form-input" required min="2000-01-01" max="2100-12-31" value="<?= $this->e($periodTo) ?>">
+      </div>
+      <div class="form-row full">
+        <p class="dates-hint"><?= $this->te('advances.period_hint') ?></p>
       </div>
     </div>
     <div class="form-actions">

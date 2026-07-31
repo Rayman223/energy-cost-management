@@ -139,23 +139,31 @@ final class AdvanceBalanceService
     ): AdvanceBalance {
         $paid     = 0.0;
         $dueCount = 0;
+        $ofEnergy = [];
 
         foreach ($schedules as $schedule) {
             if ($schedule->energyType !== $energyType) {
                 continue;
             }
 
-            $dates     = $schedule->dueDatesWithin($from, $to);
-            $dueCount += count($dates);
-            $paid     += count($dates) * $schedule->amountMonthly;
+            $ofEnergy[] = $schedule;
+            $dates      = $schedule->dueDatesWithin($from, $to);
+            $dueCount  += count($dates);
+            $paid      += count($dates) * $schedule->amountMonthly;
         }
 
-        // Barème couvrant seulement une partie de la fenêtre (contrat démarré en
-        // cours de période, plage de validité trop courte) : les acomptes portent
-        // sur sept mois, le coût sur douze, et la comparaison annonce une dette qui
-        // n'existe pas. Le cas SANS aucune échéance est déjà écarté par l'appelant ;
-        // celui-ci ne peut pas l'être — le bilan garde du sens — mais il doit être dit.
-        $partialAdvances = $dueCount < self::monthsIn($from, $to);
+        // Barème ne couvrant qu'une partie de la fenêtre (contrat démarré en cours
+        // de période, plage de validité trop courte) : les acomptes portent sur sept
+        // mois, le coût sur douze, et la comparaison annonce une dette qui n'existe
+        // pas. Le cas SANS aucune échéance est déjà écarté par l'appelant ; celui-ci
+        // ne peut pas l'être — le bilan garde du sens — mais il doit être dit.
+        //
+        // Mesuré sur les PLAGES DE VALIDITÉ et non sur un comptage d'échéances : un
+        // prélèvement ne tombe qu'une fois par mois, si bien qu'une fenêtre non
+        // alignée sur les mois (la période par défaut « il y a un an → aujourd'hui »
+        // en est une) traverse treize mois calendaires pour douze prélèvements. Y
+        // lire une lacune ferait crier au loup à chaque visite.
+        $partialAdvances = !self::advancesCoverWindow($ofEnergy, $from, $to);
 
         $estimate = $this->estimate($energyType, $from, $to);
 
@@ -197,15 +205,53 @@ final class AdvanceBalanceService
     }
 
     /**
-     * Nombre de mois entamés par la fenêtre `[from, to[`, soit le nombre de
-     * prélèvements attendus d'un barème qui la couvrirait entièrement.
+     * Les plages de validité des barèmes recouvrent-elles TOUTE la fenêtre
+     * `[from, to[`, sans trou ?
+     *
+     * Question d'intervalles, volontairement indépendante du jour de prélèvement :
+     * c'est la présence d'un contrat sur chaque journée de la période qui rend la
+     * comparaison avec le coût légitime, pas le nombre de débits tombés.
+     *
+     * Les barèmes successifs se recollent (le chevauchement est refusé à la
+     * saisie) ; une plage ouverte (`validTo === null`) court jusqu'au bout.
+     *
+     * @param list<AdvanceSchedule> $schedules Barèmes de l'énergie considérée.
      */
-    private static function monthsIn(DateTimeImmutable $from, DateTimeImmutable $to): int
+    private static function advancesCoverWindow(array $schedules, DateTimeImmutable $from, DateTimeImmutable $to): bool
     {
-        $last = $to->modify('-1 day');
+        if ($schedules === []) {
+            return false;
+        }
 
-        return max(0, ((int) $last->format('Y') - (int) $from->format('Y')) * 12
-            + ((int) $last->format('n') - (int) $from->format('n')) + 1);
+        usort(
+            $schedules,
+            static fn (AdvanceSchedule $a, AdvanceSchedule $b): int => $a->validFrom <=> $b->validFrom,
+        );
+
+        // Dernier jour réellement dans la fenêtre : la borne de fin est exclue.
+        $lastDay = $to->setTime(0, 0, 0)->modify('-1 day');
+        $cursor  = $from->setTime(0, 0, 0);
+
+        foreach ($schedules as $schedule) {
+            if ($schedule->validFrom->setTime(0, 0, 0) > $cursor) {
+                return false; // trou avant ce barème
+            }
+
+            if ($schedule->validTo === null) {
+                return true; // plage ouverte : couvre tout le reste
+            }
+
+            $end = $schedule->validTo->setTime(0, 0, 0);
+            if ($end >= $lastDay) {
+                return true;
+            }
+
+            if ($end >= $cursor) {
+                $cursor = $end->modify('+1 day');
+            }
+        }
+
+        return false;
     }
 
     /**

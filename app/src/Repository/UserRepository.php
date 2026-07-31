@@ -152,6 +152,28 @@ final class UserRepository implements UserRepositoryInterface
         )->execute(['uid' => $userId, 'locale' => $locale]);
     }
 
+    /**
+     * Mémorise la période du bilan d'acomptes (#241), pour la restituer au retour.
+     *
+     * Écriture ciblée, comme {@see setLocale()} : passer par `updateProfile()`
+     * obligerait la page /advances à relire puis réécrire tout le profil, et une
+     * consultation de bilan pourrait alors écraser un réglage modifié entre-temps
+     * dans un autre onglet.
+     *
+     * @param string $from Date 'Y-m-d' de début.
+     * @param string $to   Date 'Y-m-d' de fin, exclue de la période.
+     */
+    public function setAdvancesPeriod(int $userId, string $from, string $to): void
+    {
+        $this->pdo->prepare(
+            'INSERT INTO user_profiles (user_id, advances_period_from, advances_period_to)
+             VALUES (:uid, :from, :to)
+             ON DUPLICATE KEY UPDATE
+                advances_period_from = VALUES(advances_period_from),
+                advances_period_to   = VALUES(advances_period_to)'
+        )->execute(['uid' => $userId, 'from' => $from, 'to' => $to]);
+    }
+
     /** Marque l'acceptation des CGU/confidentialité si ce n'est pas déjà fait. */
     public function acceptTermsIfNeeded(int $userId): void
     {
@@ -272,7 +294,8 @@ final class UserRepository implements UserRepositoryInterface
     public function getProfile(int $userId): ?UserProfile
     {
         $stmt = $this->pdo->prepare(
-            'SELECT country, timezone, currency, bidding_zone, pricing_mode, supplier_markup_per_kwh, locale
+            'SELECT country, timezone, currency, bidding_zone, pricing_mode, supplier_markup_per_kwh, locale,
+                    advances_period_from, advances_period_to
              FROM user_profiles WHERE user_id = :id LIMIT 1'
         );
         $stmt->execute(['id' => $userId]);
@@ -295,6 +318,8 @@ final class UserRepository implements UserRepositoryInterface
             pricingMode: $pricingMode,
             supplierMarkupPerKwh: (float) ($row['supplier_markup_per_kwh'] ?? 0.0),
             locale: (string) $row['locale'],
+            advancesPeriodFrom: isset($row['advances_period_from']) ? (string) $row['advances_period_from'] : null,
+            advancesPeriodTo:   isset($row['advances_period_to'])   ? (string) $row['advances_period_to']   : null,
         );
     }
 

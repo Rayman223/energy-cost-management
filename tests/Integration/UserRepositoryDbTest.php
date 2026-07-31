@@ -198,6 +198,46 @@ final class UserRepositoryDbTest extends TestCase
         self::assertFalse($repo->setRole(999999, 'admin'));
     }
 
+    /**
+     * Période du bilan d'acomptes (#241) : mémorisée par une écriture CIBLÉE, qui
+     * ne doit toucher qu'elle — et survivre à un enregistrement du profil depuis
+     * /account, lequel ne connaît pas cette préférence.
+     */
+    public function testAdvancesPeriodIsStoredAndSurvivesAProfileUpdate(): void
+    {
+        $repo = new UserRepository($this->pdo());
+        $user = $repo->create('https://iss.example', 'sub-advances', 'example', 'Ada');
+
+        self::assertNull($repo->getProfile($user->id)?->advancesPeriodFrom);
+
+        $repo->setAdvancesPeriod($user->id, '2026-01-01', '2026-07-01');
+
+        $profile = $repo->getProfile($user->id);
+        self::assertNotNull($profile);
+        self::assertSame('2026-01-01', $profile->advancesPeriodFrom);
+        self::assertSame('2026-07-01', $profile->advancesPeriodTo);
+
+        // Enregistrement du profil « classique » : les dates ne sont pas dans son
+        // formulaire, elles ne doivent pas être remises à NULL au passage.
+        $repo->updateProfile($user->id, new UserProfile(
+            country: 'BE',
+            timezone: 'Europe/Brussels',
+            currency: 'EUR',
+            biddingZone: null,
+            pricingMode: 'fixed',
+            supplierMarkupPerKwh: 0.0,
+            locale: 'fr',
+        ));
+
+        $after = $repo->getProfile($user->id);
+        self::assertSame('2026-01-01', $after?->advancesPeriodFrom);
+        self::assertSame('2026-07-01', $after?->advancesPeriodTo);
+
+        // Nouvelle période choisie : elle remplace la précédente.
+        $repo->setAdvancesPeriod($user->id, '2025-06-01', '2026-06-01');
+        self::assertSame('2025-06-01', $repo->getProfile($user->id)?->advancesPeriodFrom);
+    }
+
     private function pdo(): PDO
     {
         if ($this->pdo === null) {

@@ -147,6 +147,35 @@ final class AdvanceScheduleRepositoryDbTest extends TestCase
         self::assertSame('chez eux', $still[0]->note);
     }
 
+    /**
+     * `owns()` distingue « barème introuvable » de « réenregistré à l'identique » :
+     * sans `MYSQL_ATTR_FOUND_ROWS`, un UPDATE sans changement rapporte zéro ligne
+     * affectée, si bien que `rowCount()` ne peut pas trancher.
+     */
+    public function testOwnsDistinguishesMissingFromForeignAndOwnRows(): void
+    {
+        $mine   = new AdvanceScheduleRepository($this->pdo(), $this->userId);
+        $theirs = new AdvanceScheduleRepository($this->pdo(), $this->otherUserId);
+
+        $mine->insert('electricity', 120.0, $this->at('2026-01-01'), null, 1);
+        $mineId = $mine->listFor('electricity')[0]->id;
+
+        $theirs->insert('electricity', 200.0, $this->at('2026-01-01'), null, 1);
+        $foreignId = $theirs->listFor('electricity')[0]->id;
+
+        self::assertTrue($mine->owns($mineId));
+        self::assertFalse($mine->owns($foreignId));
+        self::assertFalse($mine->owns(999999));
+
+        // Réenregistrement à l'identique : aucune valeur ne change, la ligne existe
+        // pourtant toujours — c'est précisément le cas que rowCount() confondrait.
+        $mine->update($mineId, 'electricity', 120.0, $this->at('2026-01-01'), null, 1);
+        self::assertTrue($mine->owns($mineId));
+
+        $mine->delete($mineId);
+        self::assertFalse($mine->owns($mineId));
+    }
+
     public function testFindOverlappingDetectsIntersectingRanges(): void
     {
         $repo = new AdvanceScheduleRepository($this->pdo(), $this->userId);

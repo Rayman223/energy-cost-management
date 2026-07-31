@@ -644,6 +644,8 @@ return [
     'advances.period_from'                         => 'Von',
     'advances.period_to'                           => 'Bis',
     'advances.compute'                             => 'Bilanz berechnen',
+    'advances.period_to_exclusive'                 => 'nicht enthalten',
+    'advances.period_hint'                         => 'Das Enddatum gehört NICHT zur Bilanz: „vom 01.01. bis 01.07.“ umfasst Januar bis Juni, also sechs Monate und sechs Abbuchungen. Um einen Tag einzuschließen, geben Sie den Folgetag an. Dieser Zeitraum wird gespeichert und Ihnen beim nächsten Besuch erneut vorgeschlagen.',
     'advances.no_data'                             => 'Kein Abschlag erfasst und kein Verbrauch für diesen Zeitraum berechenbar.',
     'advances.invalid_period'                      => 'Ungültiger Zeitraum: Geben Sie zwei Daten an, das Ende nach dem Beginn.',
 

@@ -654,6 +654,8 @@ return [
     'advances.period_from'                         => 'Du',
     'advances.period_to'                           => 'Au',
     'advances.compute'                             => 'Calculer le bilan',
+    'advances.period_to_exclusive'                 => 'non incluse',
+    'advances.period_hint'                         => 'La date de fin n\'est PAS comprise dans le bilan : « du 01/01 au 01/07 » couvre janvier à juin, soit six mois et six prélèvements. Pour inclure une journée, indiquez le lendemain. Cette période est mémorisée et vous sera proposée à votre prochaine visite.',
     'advances.no_data'                             => 'Aucun acompte saisi et aucune consommation calculable sur cette période.',
     'advances.invalid_period'                      => 'Période invalide : indiquez deux dates, la fin après le début.',
 

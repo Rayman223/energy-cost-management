@@ -142,6 +142,11 @@ CREATE TABLE IF NOT EXISTS user_profiles (
     -- lorsqu'aucune ligne spot_offset n'existe en grille (#228).
     supplier_markup_per_kwh DECIMAL(12,7) NOT NULL DEFAULT 0.0000000 COMMENT 'Marge fournisseur EUR/kWh ajoutee au prix spot TTC (repli sans ligne spot_offset)',
     locale       VARCHAR(8)  NOT NULL DEFAULT 'fr',
+    -- Période du bilan d'acomptes mémorisée (#241) : restituée telle quelle au
+    -- retour de l'utilisateur, jusqu'à ce qu'il en choisisse une autre. NULL =
+    -- aucune mémorisée, la page retombe sur son défaut.
+    advances_period_from DATE NULL COMMENT 'Début du bilan d''acomptes mémorisé (#241)',
+    advances_period_to   DATE NULL COMMENT 'Fin (exclue) du bilan d''acomptes mémorisé (#241)',
     CONSTRAINT fk_user_profiles_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 

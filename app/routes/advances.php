@@ -150,6 +150,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $note = mb_substr(trim((string) ($_POST['note'] ?? '')), 0, 255);
 
             if ($editId !== null) {
+                // Sans ce contrôle, une édition ne visant aucune ligne — barème
+                // supprimé depuis un autre onglet, identifiant appartenant à
+                // quelqu'un d'autre — afficherait « ✓ enregistré » sans rien écrire.
+                if (!$advanceRepo->owns($editId)) {
+                    throw new \InvalidArgumentException($view->t('advances.invalid_schedule'));
+                }
+
                 $advanceRepo->update($editId, $energyType, $amount, $validFrom, $validTo, $dueDay, $note);
             } else {
                 $advanceRepo->insert($energyType, $amount, $validFrom, $validTo, $dueDay, $note);
@@ -161,6 +168,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($action === 'delete') {
             $id = filter_var($_POST['schedule_id'] ?? null, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
             if ($id === false) {
+                throw new \InvalidArgumentException($view->t('advances.invalid_schedule'));
+            }
+
+            // Même garde qu'à l'édition : une suppression sans cible ne doit pas
+            // se féliciter d'un travail qu'elle n'a pas fait.
+            if (!$advanceRepo->owns($id)) {
                 throw new \InvalidArgumentException($view->t('advances.invalid_schedule'));
             }
 
@@ -198,12 +211,23 @@ $timezone = $profile->timezone ?? 'UTC';
 
 // Période par défaut : l'année écoulée jusqu'à aujourd'hui, fenêtre d'un cycle de
 // facturation complet — celle sur laquelle porte la régularisation annuelle.
-$today          = new DateTimeImmutable('today', Dates::utc());
-$defaultTo      = $today->format('Y-m-d');
-$defaultFrom    = $today->modify('-1 year')->format('Y-m-d');
+$today       = new DateTimeImmutable('today', Dates::utc());
+$defaultTo   = $today->format('Y-m-d');
+$defaultFrom = $today->modify('-1 year')->format('Y-m-d');
 
-$periodFrom = trim((string) ($_GET['from'] ?? $defaultFrom));
-$periodTo   = trim((string) ($_GET['to'] ?? $defaultTo));
+// Période mémorisée au profil : l'utilisateur qui revient retrouve SA fenêtre —
+// souvent son cycle de facturation — plutôt qu'un défaut à retaper. Les deux
+// dates vont par paire : une seule enregistrée ne dit rien d'exploitable.
+$storedFrom = $profile->advancesPeriodFrom ?? null;
+$storedTo   = $profile->advancesPeriodTo ?? null;
+if ($storedFrom !== null && $storedTo !== null) {
+    $defaultFrom = $storedFrom;
+    $defaultTo   = $storedTo;
+}
+
+$periodRequested = isset($_GET['from']) || isset($_GET['to']);
+$periodFrom      = trim((string) ($_GET['from'] ?? $defaultFrom));
+$periodTo        = trim((string) ($_GET['to'] ?? $defaultTo));
 
 $balance      = null;
 $periodError  = null;
@@ -228,6 +252,16 @@ try {
         throw new \InvalidArgumentException($view->t('advances.period_too_long', [
             'max' => (string) CostCalculationService::MAX_PERIOD_DAYS,
         ]));
+    }
+
+    // Mémorisation de la période VALIDÉE seulement : une saisie refusée plus haut
+    // n'a pas à devenir le défaut du prochain passage. On enregistre les dates
+    // telles que demandées, avant le clamp au présent — c'est le choix de
+    // l'utilisateur qu'on restitue, pas notre correction.
+    if ($periodRequested
+        && ($periodFrom !== $storedFrom || $periodTo !== $storedTo)
+    ) {
+        $users->setAdvancesPeriod($userId, $from->format('Y-m-d'), $to->format('Y-m-d'));
     }
 
     // Un acompte à échoir n'a pas été débité : compter les prélèvements du futur

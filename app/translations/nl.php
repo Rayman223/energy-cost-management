@@ -644,6 +644,8 @@ return [
     'advances.period_from'                         => 'Van',
     'advances.period_to'                           => 'Tot',
     'advances.compute'                             => 'Balans berekenen',
+    'advances.period_to_exclusive'                 => 'niet inbegrepen',
+    'advances.period_hint'                         => 'De einddatum valt NIET binnen de balans: « van 01/01 tot 01/07 » dekt januari tot juni, dus zes maanden en zes afschrijvingen. Wilt u een dag meetellen, geef dan de dag erna op. Deze periode wordt onthouden en bij uw volgende bezoek opnieuw voorgesteld.',
     'advances.no_data'                             => 'Geen voorschot ingevoerd en geen verbruik berekenbaar voor deze periode.',
     'advances.invalid_period'                      => 'Ongeldige periode: geef twee datums op, met het einde na het begin.',
 

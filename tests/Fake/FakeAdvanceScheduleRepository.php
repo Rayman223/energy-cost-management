@@ -44,6 +44,17 @@ final class FakeAdvanceScheduleRepository implements AdvanceScheduleRepositoryIn
         ));
     }
 
+    public function owns(int $id): bool
+    {
+        foreach ($this->schedules as $schedule) {
+            if ($schedule->id === $id) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     public function insert(
         string $energyType,
         float $amountMonthly,

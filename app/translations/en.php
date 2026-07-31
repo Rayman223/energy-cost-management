@@ -645,6 +645,8 @@ return [
     'advances.period_from'                         => 'From',
     'advances.period_to'                           => 'To',
     'advances.compute'                             => 'Compute balance',
+    'advances.period_to_exclusive'                 => 'not included',
+    'advances.period_hint'                         => 'The end date is NOT part of the balance: "from 01/01 to 01/07" covers January to June — six months and six instalments. To include a given day, enter the day after. This period is remembered and offered again on your next visit.',
     'advances.no_data'                             => 'No advance recorded and no consumption computable over this period.',
     'advances.invalid_period'                      => 'Invalid period: provide two dates, the end after the start.',
 

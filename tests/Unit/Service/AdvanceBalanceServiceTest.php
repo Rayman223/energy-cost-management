@@ -383,6 +383,80 @@ final class AdvanceBalanceServiceTest extends TestCase
         self::assertFalse($r['has_partial_data']);
     }
 
+    /**
+     * Fenêtre NON alignée sur les mois — celle que la page propose par défaut
+     * (« il y a un an → aujourd'hui »). Elle traverse treize mois calendaires pour
+     * douze prélèvements : compter les mois au lieu de mesurer la couverture
+     * ferait crier au loup à chaque visite, sur un barème pourtant complet.
+     */
+    public function testUnalignedDefaultWindowDoesNotFlagACompleteSchedule(): void
+    {
+        $svc = new AdvanceBalanceService(
+            new FakeAdvanceScheduleRepository([$this->schedule(validFrom: '2020-01-01')]),
+            $this->costService(
+                new FakeLegacyDailyRepository(deltasBetween: $this->elecDeltas(
+                    '2025-07-31 00:00:00',
+                    '2026-07-31 00:00:00',
+                    10000.0,
+                )),
+                new FakeTariffRepository($this->electricityGrid()),
+            ),
+        );
+
+        $r = $svc->balanceFor($this->at('2025-07-31'), $this->at('2026-07-31'));
+
+        self::assertSame(12, $r['balances'][0]->dueCount);
+        self::assertFalse($r['balances'][0]->partialAdvances);
+        self::assertFalse($r['has_partial_advances']);
+    }
+
+    /** Deux barèmes qui se recollent couvrent la fenêtre : aucune lacune. */
+    public function testConsecutiveSchedulesTogetherCoverTheWindow(): void
+    {
+        $svc = new AdvanceBalanceService(
+            new FakeAdvanceScheduleRepository([
+                $this->schedule(amount: 100.0, validFrom: '2026-01-01', validTo: '2026-06-30', id: 1),
+                $this->schedule(amount: 150.0, validFrom: '2026-07-01', validTo: null, id: 2),
+            ]),
+            $this->costService(
+                new FakeLegacyDailyRepository(deltasBetween: $this->elecDeltas(
+                    '2026-01-01 00:00:00',
+                    '2026-12-31 00:00:00',
+                    10000.0,
+                )),
+                new FakeTariffRepository($this->electricityGrid()),
+            ),
+        );
+
+        $r = $svc->balanceFor($this->at('2026-01-01'), $this->at('2026-12-31'));
+
+        self::assertFalse($r['has_partial_advances']);
+    }
+
+    /** Un trou entre deux barèmes est une lacune, même si les deux existent. */
+    public function testGapBetweenTwoSchedulesIsFlagged(): void
+    {
+        $svc = new AdvanceBalanceService(
+            new FakeAdvanceScheduleRepository([
+                $this->schedule(amount: 100.0, validFrom: '2026-01-01', validTo: '2026-03-31', id: 1),
+                // Rien en avril : trou d'un mois.
+                $this->schedule(amount: 150.0, validFrom: '2026-05-01', validTo: null, id: 2),
+            ]),
+            $this->costService(
+                new FakeLegacyDailyRepository(deltasBetween: $this->elecDeltas(
+                    '2026-01-01 00:00:00',
+                    '2026-12-31 00:00:00',
+                    10000.0,
+                )),
+                new FakeTariffRepository($this->electricityGrid()),
+            ),
+        );
+
+        $r = $svc->balanceFor($this->at('2026-01-01'), $this->at('2026-12-31'));
+
+        self::assertTrue($r['has_partial_advances']);
+    }
+
     public function testScheduleCoveringTheWholePeriodIsNotFlagged(): void
     {
         $svc = new AdvanceBalanceService(

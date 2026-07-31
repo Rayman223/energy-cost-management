@@ -39,6 +39,16 @@ interface AdvanceScheduleRepositoryInterface
         ?int $exceptId = null,
     ): array;
 
+    /**
+     * Ce barème existe-t-il ET appartient-il à l'utilisateur courant ?
+     *
+     * Distinct de `rowCount()` après écriture : sans `MYSQL_ATTR_FOUND_ROWS`, un
+     * UPDATE qui ne change aucune valeur rapporte zéro ligne affectée bien que la
+     * cible existe — s'y fier confondrait « barème introuvable » et
+     * « réenregistré à l'identique ».
+     */
+    public function owns(int $id): bool;
+
     public function insert(
         string $energyType,
         float $amountMonthly,
