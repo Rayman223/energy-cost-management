@@ -239,7 +239,12 @@ final class CostCalculationServiceTest extends TestCase
         string $tariffTimezone = 'Europe/Brussels',
         string $pricingMode = 'dynamic_hourly',
     ): CostCalculationService {
-        // Pas de taux de TVA ici : il vient de la grille du segment (#232).
+        // Ni TVA (#232) ni mode de tarification (#245) ici : tous deux viennent de la
+        // grille du segment. Le mode demandé est donc reporté sur les grilles du fake,
+        // ce qui laisse à chaque test l'intention qu'il exprimait avec l'ancien
+        // réglage de service.
+        $tariff = self::withPricingMode($tariff, $pricingMode);
+
         return new CostCalculationService(
             legacyRepo: $legacy,
             tariffRepo: $tariff,
@@ -247,9 +252,42 @@ final class CostCalculationServiceTest extends TestCase
             calculator: new TariffCalculatorService(),
             dynamicPriceRepo: $dynamic,
             dynamicEnabled: $enabled,
-            pricingMode: $pricingMode,
             supplierMarkupPerKwh: $supplierMarkupPerKwh,
             tariffTimezone: $tariffTimezone,
+        );
+    }
+
+    /** Recopie les grilles du fake en leur imposant un mode de tarification. */
+    private static function withPricingMode(FakeTariffRepository $repo, string $mode): FakeTariffRepository
+    {
+        $out = new FakeTariffRepository(
+            grid: $repo->grid !== null ? self::gridWithMode($repo->grid, $mode) : null,
+            mostRecentPcs: $repo->mostRecentPcs,
+        );
+        $out->gridsBetween = array_map(
+            static fn (TariffGrid $g): TariffGrid => self::gridWithMode($g, $mode),
+            $repo->gridsBetween,
+        );
+        $out->allGrids = $repo->allGrids;
+
+        return $out;
+    }
+
+    private static function gridWithMode(TariffGrid $g, string $mode): TariffGrid
+    {
+        return new TariffGrid(
+            id: $g->id,
+            energyType: $g->energyType,
+            name: $g->name,
+            validFrom: $g->validFrom,
+            validTo: $g->validTo,
+            lines: $g->lines,
+            pcsCoefficient: $g->pcsCoefficient,
+            userId: $g->userId,
+            country: $g->country,
+            currency: $g->currency,
+            vatRate: $g->vatRate,
+            pricingMode: $mode,
         );
     }
 

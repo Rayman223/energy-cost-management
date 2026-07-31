@@ -11,7 +11,7 @@ use App\Domain\User;
  * @var User|null   $user
  * @var list<array{id:int,provider:string,label:string,is_primary:bool,created_at:string}> $identities
  * @var list<array{key:string,label:string}> $linkableProviders
- * @var array{country:?string,timezone:string,currency:string,bidding_zone:?string,pricing_mode:string,supplier_markup_per_kwh:float,locale:string} $profile
+ * @var array{country:?string,timezone:string,currency:string,bidding_zone:?string,supplier_markup_per_kwh:float,locale:string} $profile
  * @var list<array{id:int,name:string,prefix:string,scopes:string,last_used_at:?string,created_at:string,revoked_at:?string}> $tokens
  * @var list<array{key:string,enabled:bool,status:\App\Integration\IntegrationStatus}> $integrations
  * @var list<string> $available
@@ -130,14 +130,9 @@ $csrf = \App\Security\Csrf::field();
       <?php if (!empty($dynamicEnabled)): ?>
       <label><?= $this->te('account.bidding_zone') ?></label>
       <input type="text" name="bidding_zone" value="<?= $this->e($profile->biddingZone ?? '') ?>" placeholder="10YBE----------2">
-      <?php $pricingMode = $profile->pricingMode; ?>
-      <label><?= $this->te('account.pricing_mode') ?></label>
-      <select name="pricing_mode">
-        <option value="fixed"<?= $pricingMode === 'fixed' ? ' selected' : '' ?>><?= $this->te('account.pricing_mode_fixed') ?></option>
-        <option value="dynamic_hourly"<?= $pricingMode === 'dynamic_hourly' ? ' selected' : '' ?>><?= $this->te('account.pricing_mode_dynamic_hourly') ?></option>
-        <option value="dynamic_quarter"<?= $pricingMode === 'dynamic_quarter' ? ' selected' : '' ?>><?= $this->te('account.pricing_mode_dynamic_quarter') ?></option>
-      </select>
-      <p class="hint"><?= $this->te('account.pricing_mode_hint') ?></p>
+      <?php // Plus de sélecteur fixe/dynamique ici : le mode est porté par la grille
+            // tarifaire, où il est versionné par période de validité (#245). ?>
+      <p class="hint"><?= $this->te('account.pricing_mode_moved') ?></p>
       <?php
         // Format décimal fixe puis retrait des zéros de fin : évite la notation
         // scientifique du cast (string) d'un petit float (0.0000001 → "1.0E-7"),
@@ -150,10 +145,8 @@ $csrf = \App\Security\Csrf::field();
       <input type="number" name="supplier_markup_per_kwh" step="0.0000001" min="-1" max="1" value="<?= $this->e($num($profile->supplierMarkupPerKwh, 7)) ?>">
       <p class="hint"><?= $this->te('account.supplier_markup_hint') ?></p>
       <?php else: ?>
-      <?php // Zone de marché et mode tarifaire masqués et non soumis : la route reconduit
-            // les valeurs en base (préservation), pas besoin de champ caché ici. ?>
-      <label><?= $this->te('account.pricing_mode') ?></label>
-      <p><?= $this->te('account.pricing_mode_fixed') ?></p>
+      <?php // Zone de marché et marge fournisseur masquées et non soumises : la route
+            // reconduit les valeurs en base (préservation), pas besoin de champ caché. ?>
       <p class="hint"><?= $this->te('account.pricing_mode_dynamic_disabled') ?></p>
       <?php endif; ?>
       <button type="submit"><?= $this->te('account.save_profile') ?></button>

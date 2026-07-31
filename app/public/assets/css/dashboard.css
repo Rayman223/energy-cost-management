@@ -124,6 +124,20 @@
   }
   .cost-formula-note--fallback { color: var(--amber); }
 
+  /* Comparatif « et si j'étais en dynamique ? » (#245) : replié par défaut pour un
+     utilisateur dont aucune grille du mois n'est indexée — c'est une projection, pas
+     son coût. Déplié, il retrouve exactement la section dynamique habituelle. */
+  .dynamic-simulation > summary {
+    cursor: pointer; list-style: none;
+    font-size: .76rem; font-weight: 700; letter-spacing: .13em;
+    text-transform: uppercase; color: var(--muted);
+    padding: 14px 0 6px; border-bottom: 1px solid var(--border2);
+  }
+  .dynamic-simulation > summary::-webkit-details-marker { display: none; }
+  .dynamic-simulation > summary:hover { color: var(--text); }
+  .dynamic-simulation > summary::after { content: ' ▾'; }
+  .dynamic-simulation[open] > summary::after { content: ' ▴'; }
+
   .cost-group-label {
     font-size: .76rem; font-weight: 700; letter-spacing: .13em;
     text-transform: uppercase; color: var(--muted);

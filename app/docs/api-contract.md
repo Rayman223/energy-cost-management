@@ -60,7 +60,7 @@
 | `gas_cost` | — | `estimateLastGasPeriod()`. |
 | `gas_month_cost` | `year`, `month` (mêmes défauts/validations que `month_cost`) | `estimateMonthGas(year, month)`. |
 | `water_month_cost` | `year`, `month` (mêmes défauts/validations que `month_cost`) | `estimateMonthWater(year, month)` — **volume m³ uniquement** (pas de coût : aucun tarif eau). |
-| `tariffs` | — | `{ electricity: [...], gas: [...] }` ; chaque grille : `{ id, name, valid_from (Y-m-d), valid_to (Y-m-d|null), lines }`. |
+| `tariffs` | — | `{ electricity: [...], gas: [...] }` ; chaque grille : `{ id, name, valid_from (Y-m-d), valid_to (Y-m-d|null), lines, pricing_mode }`. |
 | *(autre)* | — | `400 { ok:false, error:"Unknown action" }`. |
 
 ### Forme d'une estimation électricité (`cost_estimate`, `month_cost`)
@@ -111,7 +111,7 @@ comme `{}`.
 |----------|---------------|----------------|---------------------|
 | `gas_entry` | `{ counter_m3: float>0, reading_at?: date }` | `{ ok:true, saved_at (ISO), counter_m3 }` | `counter_m3` invalide/≤0 ; date invalide ; date ≤ dernier relevé ; `counter_m3` < dernier relevé. |
 | `water_entry` | `{ counter_m3: float>0, reading_at?: date }` | `{ ok:true, saved_at (ISO), counter_m3 }` | idem `gas_entry`. |
-| `save_tariff` | `{ energy_type: "electricity"\|"gas", name, valid_from: date, valid_to?: date, lines: object }` | `{ ok:true, id }` | champ requis manquant (`energy_type`, `name`, `valid_from`, `lines`) ; `energy_type` hors énum ; `valid_from`/`valid_to` invalides. |
+| `save_tariff` | `{ energy_type: "electricity"\|"gas", name, valid_from: date, valid_to?: date, lines: object, pricing_mode?: string }` | `{ ok:true, id }` | champ requis manquant (`energy_type`, `name`, `valid_from`, `lines`) ; `energy_type` hors énum ; `valid_from`/`valid_to` invalides. |
 | *(autre)* | — | — | `400 { ok:false, error:"Unknown POST action" }`. |
 
 `reading_at` absent ⇒ horodatage `now`. Les bornes anti-régression compteur
@@ -129,6 +129,28 @@ inertes, alors que le repli `per_kwh` facturerait un coefficient 1,08 comme
 Contrairement à la saisie web, l'API ne rejette pas un coefficient hors bornes
 (`]0 ; 5]`) : il est neutralisé à 1,0 au calcul (`SpotFormulaResolver`) et signalé
 par `dynamic.formula.coefficient_rejected` dans les réponses de coût.
+
+`pricing_mode` (#245) porte le mode du contrat de la grille : `fixed` (défaut,
+comportement des intégrations existantes), `dynamic_hourly` ou `dynamic_quarter`.
+Non validé côté API, comme le reste : une valeur hors énum retombe sur `fixed`, et
+le champ est forcé à `fixed` hors électricité. Il apparaît en retour dans `tariffs`.
+
+### Champs de mode dans les réponses de coût (#245)
+
+`cost_estimate` et `month_cost` exposent, à la racine comme dans `dynamic` :
+
+| Champ | Sens |
+|-------|------|
+| `pricing_mode` | Mode de la sous-période dynamique dominante, `fixed` si aucune. |
+| `pricing_modes` | `[{from, to, days, mode}]` — mode **effectivement appliqué** à chaque sous-période. |
+| `is_mixed` | La période mêle-t-elle plusieurs modes (bascule de contrat) ? |
+| `dynamic_days` | Nombre de jours réellement facturés au prix de marché. |
+| `dynamic_unavailable_reason` | Présent seulement si des sous-périodes dynamiques ont dû retomber sur le tarif fournisseur faute de prix. |
+| `dynamic.is_simulation` | `true` quand la projection tout-dynamique ne correspond à aucun contrat en vigueur sur la période. |
+
+Clés additionnelles, non cassantes. Les sous-périodes sont rendues dans l'ordre
+chronologique, et `dynamic_days` vaut toujours 0 quand `dynamic_prices.enabled` est
+faux côté serveur.
 
 ---
 

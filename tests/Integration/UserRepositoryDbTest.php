@@ -100,7 +100,6 @@ final class UserRepositoryDbTest extends TestCase
             timezone: 'Europe/Paris',
             currency: 'SEK',
             biddingZone: '10YFR-RTE------C',
-            pricingMode: 'dynamic_hourly',
             supplierMarkupPerKwh: 0.0123456,
             locale: 'en',
         ));
@@ -112,7 +111,6 @@ final class UserRepositoryDbTest extends TestCase
         self::assertSame('SEK', $profile->currency);
         self::assertSame('10YFR-RTE------C', $profile->biddingZone);
         self::assertSame('en', $profile->locale);
-        self::assertSame('dynamic_hourly', $profile->pricingMode);
         self::assertEqualsWithDelta(0.0123456, $profile->supplierMarkupPerKwh, 0.0000001);
 
         // supplier_markup ∈ [-1,1] borné côté repository.
@@ -121,7 +119,6 @@ final class UserRepositoryDbTest extends TestCase
             timezone: 'Europe/Paris',
             currency: 'EUR',
             biddingZone: null,
-            pricingMode: 'dynamic_hourly',
             supplierMarkupPerKwh: 5.0,
             locale: 'fr',
         ));
@@ -134,7 +131,6 @@ final class UserRepositoryDbTest extends TestCase
             timezone: 'Europe/Paris',
             currency: 'EUR',
             biddingZone: null,
-            pricingMode: 'dynamic_hourly',
             supplierMarkupPerKwh: -5.0,
             locale: 'fr',
         ));
@@ -224,7 +220,6 @@ final class UserRepositoryDbTest extends TestCase
             timezone: 'Europe/Brussels',
             currency: 'EUR',
             biddingZone: null,
-            pricingMode: 'fixed',
             supplierMarkupPerKwh: 0.0,
             locale: 'fr',
         ));

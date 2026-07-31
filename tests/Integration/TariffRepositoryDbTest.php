@@ -328,6 +328,107 @@ final class TariffRepositoryDbTest extends TestCase
         self::assertSame([], $grids);
     }
 
+    /**
+     * Le mode de tarification fait l'aller-retour, y compris à la mise à jour (#245).
+     * C'est ce qui permet de dater une bascule de contrat : deux grilles successives,
+     * deux modes, les périodes passées restant calculées comme elles l'étaient.
+     */
+    public function testPricingModeRoundTrips(): void
+    {
+        $user = new TariffRepository($this->pdo(), $this->userId, false);
+
+        $id = $user->saveGrid(
+            'electricity',
+            'Dynamique',
+            new DateTimeImmutable('2026-01-01'),
+            null,
+            $this->lines(['energy_t1' => 0.10]),
+            pricingMode: 'dynamic_quarter',
+        );
+
+        $grid = $user->findById($id);
+        self::assertNotNull($grid);
+        self::assertSame('dynamic_quarter', $grid->pricingMode);
+        self::assertTrue($grid->isDynamic());
+
+        $user->updateGrid(
+            $id,
+            'electricity',
+            'Repassée en fixe',
+            new DateTimeImmutable('2026-01-01'),
+            null,
+            $this->lines(['energy_t1' => 0.10]),
+            pricingMode: 'fixed',
+        );
+
+        $updated = $user->findById($id);
+        self::assertNotNull($updated);
+        self::assertSame('fixed', $updated->pricingMode);
+        self::assertFalse($updated->isDynamic());
+    }
+
+    /**
+     * Normalisation en écriture : valeur hors liste blanche → 'fixed', et mode forcé à
+     * 'fixed' hors électricité. L'API accepte des grilles importées sans valider ce
+     * champ, et un ENUM MySQL sans STRICT_TRANS_TABLES tronquerait en silence.
+     */
+    public function testPricingModeIsNormalisedOnWrite(): void
+    {
+        $user = new TariffRepository($this->pdo(), $this->userId, false);
+
+        $bogus = $user->saveGrid(
+            'electricity',
+            'Mode inconnu',
+            new DateTimeImmutable('2026-01-01'),
+            null,
+            $this->lines(['energy_t1' => 0.10]),
+            pricingMode: 'dynamic',
+        );
+        self::assertSame('fixed', $user->findById($bogus)?->pricingMode);
+
+        $water = $user->saveGrid(
+            'water',
+            'Eau dynamique ?',
+            new DateTimeImmutable('2026-01-01'),
+            null,
+            $this->lines(['water_variable' => 3.0]),
+            pricingMode: 'dynamic_hourly',
+        );
+        self::assertSame('fixed', $user->findById($water)?->pricingMode);
+    }
+
+    /**
+     * `hasDynamicGrid()` décide de l'accès à /reconciliation : il doit voir les
+     * grilles du catalogue partagé comme les personnelles, et ne pas confondre les
+     * énergies.
+     */
+    public function testHasDynamicGridSeesPersonalAndSharedGrids(): void
+    {
+        $user  = new TariffRepository($this->pdo(), $this->userId, false);
+        $admin = new TariffRepository($this->pdo(), $this->adminId, true);
+
+        self::assertFalse($user->hasDynamicGrid());
+
+        $user->saveGrid('electricity', 'Fixe', new DateTimeImmutable('2026-01-01'), null, $this->lines(['energy_t1' => 0.10]));
+        self::assertFalse($user->hasDynamicGrid());
+
+        $admin->saveGrid(
+            'electricity',
+            'Catalogue dynamique',
+            new DateTimeImmutable('2026-02-01'),
+            null,
+            $this->lines(['energy_t1' => 0.10]),
+            null,
+            'BE',
+            'EUR',
+            true,
+            21.0,
+            'dynamic_hourly',
+        );
+        self::assertTrue($user->hasDynamicGrid());
+        self::assertFalse($user->hasDynamicGrid('gas'));
+    }
+
     private function pdo(): PDO
     {
         if ($this->pdo === null) {

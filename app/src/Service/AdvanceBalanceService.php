@@ -28,12 +28,6 @@ final class AdvanceBalanceService
     public function __construct(
         private readonly AdvanceScheduleRepositoryInterface $scheduleRepo,
         private readonly CostCalculationService $costService,
-        /**
-         * Le tarif dynamique est-il actif pour cet utilisateur ? En dynamique, la
-         * part énergie du coût classique reposerait sur le prix fixe de la grille,
-         * qui n'est pas celui facturé — le bilan serait faux du plus gros poste.
-         */
-        private readonly bool $dynamicPricing = false,
     ) {
     }
 
@@ -257,14 +251,18 @@ final class AdvanceBalanceService
     /**
      * Estimation de coût de l'énergie sur la période.
      *
+     * L'électricité n'a plus qu'un seul point d'entrée depuis #245 : le mode vit dans
+     * la grille, donc `estimatePeriodElectricity()` facture chaque sous-période dans le
+     * sien. Un bilan couvrant un changement de contrat additionne les deux régimes, là
+     * où l'ancien aiguillage devait trancher pour toute la période — et se trompait
+     * forcément sur la moitié.
+     *
      * @return array<string, mixed>
      */
     private function estimate(string $energyType, DateTimeImmutable $from, DateTimeImmutable $to): array
     {
         return match ($energyType) {
-            'electricity' => $this->dynamicPricing
-                ? $this->costService->estimatePeriodElectricityDynamic($from, $to)
-                : $this->costService->estimatePeriodElectricity($from, $to),
+            'electricity' => $this->costService->estimatePeriodElectricity($from, $to),
             'gas'         => $this->costService->estimatePeriodGas($from, $to),
             'water'       => $this->costService->estimatePeriodWater($from, $to),
             default       => ['available' => false, 'reason' => 'unknown_energy'],

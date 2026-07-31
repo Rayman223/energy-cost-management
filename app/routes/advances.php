@@ -278,25 +278,22 @@ try {
         ? $zone
         : (string) ($config['dynamic_prices']['bidding_zone'] ?? DynamicPriceRepository::DEFAULT_ZONE);
 
-    // Même prédicat que /reconciliation : le kill-switch global ET le mode choisi
-    // par l'utilisateur doivent tous deux désigner le tarif dynamique.
-    $isDynamic = DynamicPricing::isEnabled($config)
-        && ($profile->pricingMode ?? 'fixed') !== 'fixed';
-
+    // Plus de prédicat dynamique ici (#245) : le mode vit dans la grille, donc le
+    // service facture chaque sous-période du bilan dans le sien. Seul le kill-switch
+    // serveur reste à passer.
     $costSvc = new CostCalculationService(
         legacyRepo: new ElectricityReadingRepository($pdo, $userId, $timezone),
         tariffRepo: new TariffRepository($pdo, $userId, $isAdmin),
         gasRepo: new UtilityReadingRepository($pdo, $userId, 'gas'),
         calculator: new TariffCalculatorService(),
         dynamicPriceRepo: new DynamicPriceRepository($pdo, $zone),
-        dynamicEnabled: $isDynamic,
+        dynamicEnabled: DynamicPricing::isEnabled($config),
         waterRepo: new UtilityReadingRepository($pdo, $userId, 'water'),
-        pricingMode: $profile->pricingMode ?? 'fixed',
         supplierMarkupPerKwh: $profile->supplierMarkupPerKwh ?? 0.0,
         tariffTimezone: $timezone,
     );
 
-    $balance = (new AdvanceBalanceService($advanceRepo, $costSvc, $isDynamic))->balanceFor($from, $to);
+    $balance = (new AdvanceBalanceService($advanceRepo, $costSvc))->balanceFor($from, $to);
 } catch (\Throwable $e) {
     $periodError = $e->getMessage();
 }

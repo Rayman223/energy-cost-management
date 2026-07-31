@@ -112,7 +112,6 @@ try {
     $syncState  = new WebhookSyncStateRepository($pdo, $userId);
     $tariffRepo = new TariffRepository($pdo, $userId, $isAdmin);
     $dynPriceRepo = new DynamicPriceRepository($pdo, $zone);
-    $pricingMode  = $profile->pricingMode ?? 'fixed';
     $costSvc    = new CostCalculationService(
         legacyRepo: $elecRepo,
         tariffRepo: $tariffRepo,
@@ -121,7 +120,6 @@ try {
         dynamicPriceRepo: $dynPriceRepo,
         dynamicEnabled: DynamicPricing::isEnabled($config),
         waterRepo: $waterRepo,
-        pricingMode: $pricingMode,
         supplierMarkupPerKwh: $profile->supplierMarkupPerKwh ?? 0.0,
         tariffTimezone: $profile->timezone ?? 'UTC',
     );

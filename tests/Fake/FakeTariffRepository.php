@@ -69,20 +69,33 @@ final class FakeTariffRepository implements TariffRepositoryInterface
         string $currency = 'EUR',
         bool $shared = false,
         float $vatRate = 21.0,
+        string $pricingMode = TariffGrid::PRICING_MODE_DEFAULT,
     ): int {
         $this->savedGrid = [
-            'energy_type' => $energyType,
-            'name'        => $name,
-            'valid_from'  => $validFrom,
-            'valid_to'    => $validTo,
-            'lines'       => $lines,
-            'pcs'         => $pcsCoefficient,
-            'country'     => $country,
-            'currency'    => $currency,
-            'shared'      => $shared,
-            'vat_rate'    => $vatRate,
+            'energy_type'  => $energyType,
+            'name'         => $name,
+            'valid_from'   => $validFrom,
+            'valid_to'     => $validTo,
+            'lines'        => $lines,
+            'pcs'          => $pcsCoefficient,
+            'country'      => $country,
+            'currency'     => $currency,
+            'shared'       => $shared,
+            'vat_rate'     => $vatRate,
+            'pricing_mode' => $pricingMode,
         ];
 
         return $this->nextId;
+    }
+
+    public function hasDynamicGrid(string $energyType = 'electricity'): bool
+    {
+        foreach ($this->allGrids !== [] ? $this->allGrids : array_filter([$this->grid]) as $g) {
+            if ($g->energyType === $energyType && $g->isDynamic()) {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

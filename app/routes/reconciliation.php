@@ -52,10 +52,12 @@ $error   = null;
 $success = null;
 
 // Le rapprochement n'a de sens qu'en tarif dynamique : sans prix de marché, la part
-// énergie ne dépend d'aucun coefficient à retrouver. Même prédicat que le grisage des
-// lignes fournisseur dans /tariffs.
-$isDynamic = DynamicPricing::isEnabled($config)
-    && ($profile->pricingMode ?? 'fixed') !== 'fixed';
+// énergie ne dépend d'aucun coefficient à retrouver. Depuis #245, le mode vient des
+// grilles : la page s'ouvre dès qu'UNE grille électricité visible est indexée au spot,
+// sans exiger qu'elle couvre la période — l'utilisateur doit pouvoir rapprocher une
+// facture d'un contrat dynamique passé, y compris après être repassé au fixe.
+$tariffRepo = new TariffRepository($pdo, $userId, $isAdmin);
+$isDynamic  = DynamicPricing::isEnabled($config) && $tariffRepo->hasDynamicGrid();
 
 $billRepo = new EnergyBillRepository($pdo, $userId);
 
@@ -170,12 +172,11 @@ if ($isDynamic) {
 
     $costSvc = new CostCalculationService(
         legacyRepo: new ElectricityReadingRepository($pdo, $userId, $timezone),
-        tariffRepo: new TariffRepository($pdo, $userId, $isAdmin),
+        tariffRepo: $tariffRepo,
         gasRepo: new UtilityReadingRepository($pdo, $userId, 'gas'),
         calculator: new TariffCalculatorService(),
         dynamicPriceRepo: new DynamicPriceRepository($pdo, $zone),
         dynamicEnabled: true,
-        pricingMode: $profile->pricingMode ?? 'fixed',
         supplierMarkupPerKwh: $profile->supplierMarkupPerKwh ?? 0.0,
         tariffTimezone: $timezone,
     );

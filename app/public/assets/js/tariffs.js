@@ -70,6 +70,54 @@
     });
   }
 
+  // ── Mode tarifaire de la grille → grisage des lignes sans effet (#245) ────
+  // Le mode appartient à la grille : changer le sélecteur doit regriser les lignes
+  // immédiatement, sans enregistrer ni recharger. Les lignes grisées restent
+  // soumises — rebasculer en fixe ne doit rien faire re-saisir.
+  var modeSelect = document.querySelector('[data-pricing-mode]');
+  var linesWrap = document.querySelector('.lines-wrap');
+  if (modeSelect && linesWrap && scriptEl) {
+    var splitKinds = function (raw) {
+      return (raw || '').split(',').filter(function (k) { return k !== ''; });
+    };
+    var supplierKinds = splitKinds(scriptEl.dataset.supplierKinds);
+    var spotKinds = splitKinds(scriptEl.dataset.spotKinds);
+    var hintDynamic = linesWrap.dataset.hintDynamic || '';
+    var hintFixed = linesWrap.dataset.hintFixed || '';
+
+    var refreshIgnored = function () {
+      var dynamic = modeSelect.value !== 'fixed';
+      var ignoredKinds = dynamic ? supplierKinds : spotKinds;
+      var hintText = dynamic ? hintDynamic : hintFixed;
+
+      linesWrap.querySelectorAll('.line-item').forEach(function (item) {
+        var kindSelect = item.querySelector('.line-kind-select');
+        var ignored = kindSelect ? ignoredKinds.indexOf(kindSelect.value) !== -1 : false;
+        item.classList.toggle('is-dynamic-ignored', ignored);
+
+        var hint = item.querySelector('.dynamic-ignored-hint');
+        if (!ignored) {
+          if (hint) hint.remove();
+          return;
+        }
+        if (!hint) {
+          hint = document.createElement('p');
+          hint.className = 'dynamic-ignored-hint';
+          item.appendChild(hint);
+        }
+        hint.textContent = hintText;
+      });
+    };
+
+    modeSelect.addEventListener('change', refreshIgnored);
+    // Délégué : couvre aussi les lignes ajoutées après le rendu initial.
+    linesWrap.addEventListener('change', function (e) {
+      if (e.target && e.target.classList && e.target.classList.contains('line-kind-select')) {
+        refreshIgnored();
+      }
+    });
+  }
+
   // ── Panneau « Point de départ » : filtre les templates selon le pays ──────
   // Les templates génériques (sans pays) sont toujours visibles ; ceux liés à un
   // pays n'apparaissent QUE si ce pays est sélectionné (issue #187). Sans pays

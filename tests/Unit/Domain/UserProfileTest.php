@@ -16,7 +16,6 @@ final class UserProfileTest extends TestCase
             timezone: 'Europe/Paris',
             currency: 'EUR',
             biddingZone: '10YFR-RTE------C',
-            pricingMode: 'dynamic_hourly',
             supplierMarkupPerKwh: 0.0123456,
             locale: 'fr',
         );
@@ -25,7 +24,6 @@ final class UserProfileTest extends TestCase
         self::assertSame('Europe/Paris', $profile->timezone);
         self::assertSame('EUR', $profile->currency);
         self::assertSame('10YFR-RTE------C', $profile->biddingZone);
-        self::assertSame('dynamic_hourly', $profile->pricingMode);
         self::assertSame(0.0123456, $profile->supplierMarkupPerKwh);
         self::assertSame('fr', $profile->locale);
     }
@@ -40,18 +38,19 @@ final class UserProfileTest extends TestCase
         self::assertSame('UTC', $profile->timezone);
         self::assertSame('EUR', $profile->currency);
         self::assertNull($profile->biddingZone);
-        self::assertSame('fixed', $profile->pricingMode);
         self::assertSame(0.0, $profile->supplierMarkupPerKwh);
         self::assertSame('fr', $profile->locale);
     }
 
-    public function testPricingModesWhitelistIsClosed(): void
+    /**
+     * Le mode de tarification a quitté le profil pour la grille (#245) : il est
+     * versionné par période de validité et n'a plus rien à faire ici. Garde
+     * anti-régression — le réintroduire recréerait la double source que l'issue a
+     * supprimée, comme l'avait été `vat_rate` avant lui (#232).
+     */
+    public function testPricingModeNoLongerLivesOnTheProfile(): void
     {
-        self::assertSame(
-            ['fixed', 'dynamic_hourly', 'dynamic_quarter'],
-            UserProfile::PRICING_MODES,
-        );
-        // Le mode par défaut est toujours un mode valide.
-        self::assertContains(UserProfile::defaults()->pricingMode, UserProfile::PRICING_MODES);
+        self::assertFalse(property_exists(UserProfile::class, 'pricingMode'));
+        self::assertFalse(defined(UserProfile::class . '::PRICING_MODES'));
     }
 }

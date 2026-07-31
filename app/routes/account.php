@@ -127,12 +127,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $chosenLocale = (string) ($config['i18n']['default_locale'] ?? 'fr');
             }
 
-            // updateProfile valide et normalise pricing_mode (liste blanche unique côté repository).
             // Fallback sur les défauts (profil absent) pour reconduire des valeurs sûres.
             $storedProfile = $profileForLocale ?? UserProfile::defaults();
             if (DynamicPricing::isEnabled($config)) {
-                $zone        = trim((string) ($_POST['bidding_zone'] ?? '')) ?: null;
-                $pricingMode = (string) ($_POST['pricing_mode'] ?? 'fixed');
+                $zone = trim((string) ($_POST['bidding_zone'] ?? '')) ?: null;
 
                 // Marge fournisseur (€/kWh) par utilisateur — vit dans le garde
                 // $dynamicEnabled comme les champs zone/mode (#153). Un champ absent ou
@@ -145,15 +143,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     throw new \InvalidArgumentException($view->t('account.invalid_markup'));
                 }
             } else {
-                // Tarif dynamique désactivé : zone de marché et mode tarifaire sont masqués
-                // et non éditables. On reconduit les valeurs déjà en base plutôt que de les
-                // lire du POST : relire les effacerait (champs absents du formulaire), alors
-                // qu'un pricing_mode/bidding_zone dynamique doit être préservé le temps que le
-                // flag revienne. Neutralise aussi tout POST forgé (ni modif, ni activation).
-                $storedZone    = $storedProfile->biddingZone;
-                $zone          = (is_string($storedZone) && $storedZone !== '') ? $storedZone : null;
-                $pricingMode   = $storedProfile->pricingMode;
-                $markup        = $storedProfile->supplierMarkupPerKwh;
+                // Tarif dynamique désactivé : zone de marché et marge fournisseur sont
+                // masquées et non éditables. On reconduit les valeurs déjà en base plutôt
+                // que de les lire du POST : relire les effacerait (champs absents du
+                // formulaire), alors qu'une bidding_zone renseignée doit être préservée le
+                // temps que le flag revienne. Neutralise aussi tout POST forgé (ni modif,
+                // ni activation). Le mode tarifaire, lui, a quitté le profil pour la
+                // grille (#245) — cf. /tariffs.
+                $storedZone = $storedProfile->biddingZone;
+                $zone       = (is_string($storedZone) && $storedZone !== '') ? $storedZone : null;
+                $markup     = $storedProfile->supplierMarkupPerKwh;
             }
 
             $users->updateProfile($userId, new UserProfile(
@@ -161,7 +160,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 timezone: $timezone,
                 currency: $currency,
                 biddingZone: $zone,
-                pricingMode: $pricingMode,
                 supplierMarkupPerKwh: $markup,
                 locale: $chosenLocale,
             ));

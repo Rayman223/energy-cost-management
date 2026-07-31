@@ -32,7 +32,12 @@ use App\Domain\TariffLineCatalog;
  * @var array<string,array<string,string>>                                   $kindOptions  groupe => (value kind => libellé), rendu en <optgroup>
 
  * @var bool                                                                 $isAdmin
- * @var bool                                                                 $isDynamic  Tarif dynamique actif → lignes d'énergie fournisseur ignorées
+ * @var bool                                                                 $isDynamic  Grille éditée en tarif dynamique → lignes d'énergie fournisseur ignorées
+ * @var bool                                                                 $modeEditable  Le mode est-il choisissable (électricité + dynamique activé serveur) ?
+ * @var string                                                               $formMode   Mode de la grille éditée (#245)
+ * @var array<string,string>                                                 $pricingModeOptions  value mode => libellé
+ * @var list<string>                                                         $supplierEnergyKinds  kinds grisés en dynamique
+ * @var list<string>                                                         $spotFormulaKinds     kinds grisés en fixe
  * @var ?string                                                              $discordUrl
  * @var ?string                                                              $adsenseClient Identifiant éditeur AdSense (#185)
  */
@@ -123,6 +128,13 @@ $energyLabels = [
         <span class="grid-meta">· <?= $this->e($g->currency) ?> · TVA <?= $this->e(rtrim(rtrim(number_format($g->vatRate, 2, '.', ''), '0'), '.')) ?>%<?= $g->country ? ' · ' . $this->e($g->country) : '' ?></span>
         <?php if ($g->pcsCoefficient ?? null): ?>
           <span class="grid-meta grid-meta--blue">· PCS <?= number_format($g->pcsCoefficient, 4) ?> kWh/m³</span>
+        <?php endif; ?>
+        <?php // Mode du contrat (#245) : signalé seulement quand il est dynamique — le
+              // tarif fixe est le cas ordinaire, l'annoncer sur chaque ligne n'apprend
+              // rien. Voir d'un coup d'œil QUELLES périodes sont indexées est justement
+              // ce que l'ancien réglage global rendait impossible. ?>
+        <?php if ($g->isDynamic()): ?>
+          <span class="grid-meta grid-meta--blue">· <?= $this->e($this->t('tariffs.pricing_mode_' . $g->pricingMode)) ?></span>
         <?php endif; ?>
       </div>
     </div>
@@ -323,6 +335,28 @@ $energyLabels = [
         <input type="number" name="vat_rate" step="0.01" min="0" max="100" class="form-input" data-vat-input
                value="<?= $this->e(rtrim(rtrim(number_format($formVat, 2, '.', ''), '0'), '.')) ?>">
       </div>
+      <?php if ($modeEditable): ?>
+      <?php // Mode du contrat porté par CETTE grille (#245) : il vaut pour sa seule
+            // période de validité, ce qui permet de dater une bascule fixe ↔ dynamique
+            // sans toucher aux périodes déjà facturées. ?>
+      <div class="form-row full">
+        <label class="form-label"><?= $this->te('tariffs.pricing_mode') ?></label>
+        <select name="pricing_mode" class="form-select" data-pricing-mode>
+          <?php foreach ($pricingModeOptions as $mv => $mlabel): ?>
+          <option value="<?= $this->e($mv) ?>" <?= $formMode === $mv ? 'selected' : '' ?>><?= $this->e($mlabel) ?></option>
+          <?php endforeach; ?>
+        </select>
+        <p class="dates-hint"><?= $this->te('tariffs.pricing_mode_hint') ?></p>
+      </div>
+      <?php elseif ($energy === 'electricity'): ?>
+      <?php // Tarif dynamique coupé côté serveur : le select est absent (donc non
+            // soumis) et la route reconduit le mode enregistré. Dire pourquoi évite de
+            // faire croire que le contrat a été perdu. ?>
+      <div class="form-row full">
+        <label class="form-label"><?= $this->te('tariffs.pricing_mode') ?></label>
+        <p class="dates-hint"><?= $this->te('tariffs.pricing_mode_server_disabled') ?></p>
+      </div>
+      <?php endif; ?>
       <?php if ($isAdmin && !$editGrid): ?>
       <div class="form-row">
         <label class="form-label">
@@ -345,7 +379,11 @@ $energyLabels = [
       }
       $anyFilled = array_sum($filledByGroup) > 0;
     ?>
-    <div class="lines-wrap" data-edit-field="<?= $this->e($this->t('tariffs.edit_field')) ?>">
+    <?php // Les deux textes de grisage sont exportés au JS : il les repose sur les
+          // lignes concernées quand le mode change, sans recharger la page. ?>
+    <div class="lines-wrap" data-edit-field="<?= $this->e($this->t('tariffs.edit_field')) ?>"
+         data-hint-dynamic="<?= $this->e($this->t('tariffs.energy_ignored_dynamic')) ?>"
+         data-hint-fixed="<?= $this->e($this->t('tariffs.spot_ignored_fixed')) ?>">
       <?php foreach ($groupOrder as $group): ?>
         <?php // Catégorie vide et non pertinente pour cette énergie (ex. Injection en gaz/eau) : masquée.
               if (empty($grouped[$group]) && !in_array($group, $relevantCategories, true)) continue; ?>
@@ -485,6 +523,8 @@ $energyLabels = [
 <script defer src="<?= \App\Support\Assets::url('assets/js/header.js') ?>"></script>
 <script defer src="<?= \App\Support\Assets::url('assets/js/lang-switcher.js') ?>"></script>
 <script defer src="<?= \App\Support\Assets::url('assets/js/confirm.js') ?>"></script>
-<script defer src="<?= \App\Support\Assets::url('assets/js/tariffs.js') ?>" data-next-index="<?= $nextIndex ?>"></script>
+<script defer src="<?= \App\Support\Assets::url('assets/js/tariffs.js') ?>" data-next-index="<?= $nextIndex ?>"
+        data-supplier-kinds="<?= $this->e(implode(',', $supplierEnergyKinds)) ?>"
+        data-spot-kinds="<?= $this->e(implode(',', $spotFormulaKinds)) ?>"></script>
 </body>
 </html>

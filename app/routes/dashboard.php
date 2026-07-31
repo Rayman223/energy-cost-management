@@ -111,7 +111,6 @@ try {
     $waterRepo  = new UtilityReadingRepository($pdo, $userId, 'water');
     $tariffRepo = new TariffRepository($pdo, $userId, $isAdmin);
     $dynPriceRepo = new DynamicPriceRepository($pdo, $zone);
-    $pricingMode  = $profile->pricingMode ?? 'fixed';
     $costSvc    = new CostCalculationService(
         legacyRepo: $elecRepo,
         tariffRepo: $tariffRepo,
@@ -120,7 +119,6 @@ try {
         dynamicPriceRepo: $dynPriceRepo,
         dynamicEnabled: DynamicPricing::isEnabled($config),
         waterRepo: $waterRepo,
-        pricingMode: $pricingMode,
         supplierMarkupPerKwh: $profile->supplierMarkupPerKwh ?? 0.0,
         tariffTimezone: $timezone,
     );
@@ -130,9 +128,13 @@ try {
     // service pour ne pas refaire l'interpolation du mois en cours (#215).
     $cards       = (new DashboardCardsService($elecRepo, $costSvc))
         ->build($deltas, (int) date('Y'), (int) date('n'));
+    // Coût du mois : chaque sous-période dans le mode de sa grille (#245).
     $cost        = $costSvc->estimateCurrentMonthElectricity();
     // Tarif dynamique désactivé côté serveur ⇒ on n'expose pas la section (le JS
-    // ne rend « ⚡ Tarif dynamique » que si data.dynamic est présent).
+    // ne rend « ⚡ Tarif dynamique » que si data.dynamic est présent). Sinon la
+    // projection tout-dynamique est toujours calculée : elle détaille le mois d'un
+    // utilisateur réellement en dynamique, et sert de comparatif « et si ? » aux
+    // autres — que `is_simulation` fait alors replier côté JS.
     if (DynamicPricing::isEnabled($config)) {
         $cost['dynamic'] = $costSvc->estimateCurrentMonthElectricityDynamic();
     }

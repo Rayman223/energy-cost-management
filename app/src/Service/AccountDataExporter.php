@@ -29,7 +29,7 @@ final class AccountDataExporter
         $head = [
             '"exported_at":' . self::enc((new \DateTimeImmutable('now'))->format('c')),
             '"user":' . self::enc($this->one('SELECT id, oidc_iss, oidc_sub, provider, display_name, role, status, terms_accepted_at, created_at, last_login_at FROM users WHERE id = :uid', $userId)),
-            '"profile":' . self::enc($this->one('SELECT country, timezone, currency, bidding_zone, pricing_mode, supplier_markup_per_kwh, locale FROM user_profiles WHERE user_id = :uid', $userId)),
+            '"profile":' . self::enc($this->one('SELECT country, timezone, currency, bidding_zone, supplier_markup_per_kwh, locale FROM user_profiles WHERE user_id = :uid', $userId)),
             '"meters":' . self::enc($this->all('SELECT id, energy_type, label, country, timezone, created_at FROM meters WHERE user_id = :uid ORDER BY id', $userId)),
         ];
         echo '{' . implode(',', $head);
@@ -54,7 +54,7 @@ final class AccountDataExporter
         );
 
         $tail = [
-            '"tariff_grids":' . self::enc($this->all('SELECT id, energy_type, country, currency, name, valid_from, valid_to, pcs_coefficient FROM tariff_grids WHERE user_id = :uid ORDER BY id', $userId)),
+            '"tariff_grids":' . self::enc($this->all('SELECT id, energy_type, pricing_mode, country, currency, name, valid_from, valid_to, pcs_coefficient FROM tariff_grids WHERE user_id = :uid ORDER BY id', $userId)),
             // Barèmes d'acomptes (#241) : saisis à la main par l'utilisateur, donc
             // exportables au même titre que ses grilles tarifaires.
             '"energy_advances":' . self::enc($this->all('SELECT id, energy_type, amount_monthly, valid_from, valid_to, due_day, note FROM energy_advances WHERE user_id = :uid ORDER BY energy_type, valid_from', $userId)),

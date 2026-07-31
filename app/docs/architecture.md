@@ -102,6 +102,21 @@ Transformation du site mono-utilisateur belge en plateforme **multi-tenant**,
   auparavant le même taux (profil + grille), ce qui produisait un calcul mixte
   silencieux quand elles divergeaient. Vivant dans la grille, le taux est
   versionné : un passage de 21 % à 6 % s'applique à partir de sa date.
+- **Mode fixe / dynamique : porté par la grille** (#245) —
+  `tariff_grids.pricing_mode` (`fixed` | `dynamic_hourly` | `dynamic_quarter`),
+  même raisonnement que la TVA ci-dessus. Au profil, le mode était global et non
+  versionné : basculer en dynamique recalculait tout l'historique en dynamique, y
+  compris les mois encore sous contrat fixe. `CostCalculationService` facture donc
+  **chaque sous-période tarifaire dans le mode de sa grille** — un mois de bascule
+  additionne les deux régimes au lieu d'être reclassé en bloc. Deux garde-fous
+  conservés : le kill-switch serveur `dynamic_prices.enabled` neutralise toute
+  grille dynamique sans rien réécrire en base, et une sous-période dynamique privée
+  de prix retombe sur le tarif fournisseur de sa grille, motif à l'appui
+  (`dynamic_unavailable_reason`), plutôt que de rendre la période indisponible.
+  `estimate*ElectricityDynamic()` reste une **projection tout-dynamique** —
+  comparatif du dashboard et rapprochement de facture — et se signale via
+  `is_simulation`. La zone de marché, elle, reste au profil : elle est
+  géographique, pas contractuelle.
 - **API d'ingestion** (`api.php`) : jetons Bearer par utilisateur (`api_tokens`,
   hachés SHA-256, scope `ingest`, rate-limit à fenêtre fixe, révocables). Un
   jeton Bearer est restreint aux routes d'ingestion ; le reste exige une session.

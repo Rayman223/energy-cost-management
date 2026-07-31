@@ -8,6 +8,19 @@ use DateTimeImmutable;
 
 final class TariffGrid
 {
+    /**
+     * Modes de tarification électricité valides (colonne `tariff_grids.pricing_mode`).
+     *
+     * Le mode appartient à la grille, donc au contrat, et non plus au profil (#245) :
+     * il est ainsi versionné par valid_from/valid_to, et une bascule fixe ↔ dynamique
+     * ne réécrit plus les périodes antérieures.
+     *
+     * @var list<string>
+     */
+    public const PRICING_MODES = ['fixed', 'dynamic_hourly', 'dynamic_quarter'];
+
+    public const PRICING_MODE_DEFAULT = 'fixed';
+
     /** @param array<string,TariffLine> $lines  line_key => ligne (montant + kind + libellé) */
     public function __construct(
         public readonly int $id,
@@ -21,7 +34,27 @@ final class TariffGrid
         public readonly ?string $country = null,
         public readonly string $currency = 'EUR',
         public readonly float $vatRate = 21.0,
+        public readonly string $pricingMode = self::PRICING_MODE_DEFAULT,
     ) {
+    }
+
+    /**
+     * Le contrat de CETTE grille indexe-t-il l'énergie sur le prix de marché ?
+     *
+     * Ne dit rien du kill-switch serveur (`dynamic_prices.enabled`) ni de la
+     * disponibilité des prix : l'appelant doit toujours combiner avec
+     * `DynamicPricing::isEnabled()`, faute de quoi une grille dynamique serait
+     * calculée sans prix sur un serveur qui n'en importe pas.
+     */
+    public function isDynamic(): bool
+    {
+        return $this->pricingMode !== self::PRICING_MODE_DEFAULT;
+    }
+
+    /** Mode normalisé : toute valeur hors liste blanche retombe sur 'fixed'. */
+    public static function normalizePricingMode(string $mode): string
+    {
+        return in_array($mode, self::PRICING_MODES, true) ? $mode : self::PRICING_MODE_DEFAULT;
     }
 
     /** Grille du catalogue communautaire partagé (gérée par un admin). */

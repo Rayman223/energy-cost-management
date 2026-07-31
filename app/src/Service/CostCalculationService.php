@@ -67,12 +67,8 @@ final class CostCalculationService
 
     /**
      * @param bool $dynamicEnabled Kill-switch global du tarif dynamique (config
-     *        `dynamic_prices.enabled`). false = tarif dynamique désactivé.
-     * @param string $pricingMode Mode de tarification choisi par l'utilisateur
-     *        ('fixed' | 'dynamic_hourly' | 'dynamic_quarter'). Sélectionne la
-     *        résolution des prix dynamiques : 'dynamic_quarter' facture au MTU de
-     *        15 min quand la zone publie des prix PT15M ET que les relevés sont au
-     *        pas de 15 min, sinon repli sur l'horaire (cf. buildDynamicResponse).
+     *        `dynamic_prices.enabled`). false = tarif dynamique désactivé, toute
+     *        grille dynamique est alors calculée comme une grille fixe.
      * @param float $supplierMarkupPerKwh Marge fournisseur €/kWh ajoutée au prix
      *        spot TTC, par utilisateur (user_profiles.supplier_markup_per_kwh).
      *        Sert de REPLI depuis #228 : une grille portant des lignes spot_coefficient
@@ -93,7 +89,6 @@ final class CostCalculationService
         private readonly ?DynamicPriceRepositoryInterface $dynamicPriceRepo = null,
         private readonly bool $dynamicEnabled = false,
         private readonly ?MeterReadingRepositoryInterface $waterRepo = null,
-        private readonly string $pricingMode = 'fixed',
         private readonly float $supplierMarkupPerKwh = 0.0,
         private readonly string $tariffTimezone = 'Europe/Brussels',
         private readonly TariffPeriodSplitter $splitter = new TariffPeriodSplitter(),
@@ -154,7 +149,14 @@ final class CostCalculationService
     }
 
     /**
-     * Estimation « tarif dynamique » du mois courant (part énergie indexée au spot).
+     * Coût « tout dynamique » du mois courant : toutes les sous-périodes sont
+     * indexées au spot, quel que soit le mode de leur grille.
+     *
+     * Depuis #245, ce n'est plus le pendant de {@see estimateCurrentMonthElectricity()}
+     * — qui applique désormais à chaque sous-période SON propre mode — mais une
+     * PROJECTION : le comparatif « et si j'étais en dynamique ? » du dashboard, et la
+     * base du rapprochement de facture. La réponse porte `is_simulation` pour dire si
+     * elle correspond, ou non, au contrat réellement en vigueur sur la période.
      *
      * @return array<string, mixed>
      */
@@ -178,7 +180,7 @@ final class CostCalculationService
     }
 
     /**
-     * Estimation « tarif dynamique » pour un mois calendaire donné.
+     * Pendant de {@see estimateCurrentMonthElectricityDynamic()} pour un mois donné.
      *
      * @return array<string, mixed>
      */
@@ -209,30 +211,18 @@ final class CostCalculationService
      * doit être facturé sur cette fenêtre-là, pas sur les treize mois qu'elle
      * effleure.
      *
+     * Chaque sous-période est facturée dans le mode de SA grille (#245) : l'appelant
+     * n'a plus à choisir entre les deux calculs, ni à connaître le contrat.
+     *
      * @return array<string, mixed>
      */
     public function estimatePeriodElectricity(DateTimeImmutable $from, DateTimeImmutable $to): array
     {
-        return $this->electricityBetween($from, $to, dynamic: false);
+        return $this->electricityBetween($from, $to);
     }
 
     /**
-     * Pendant « tarif dynamique » de {@see estimatePeriodElectricity()}.
-     *
-     * Le coût est reconstitué créneau par créneau sur toute la fenêtre : sur une
-     * période longue, cela suppose que les prix de marché soient importés sur
-     * l'ensemble de la période, faute de quoi les créneaux non couverts retombent
-     * sur le tarif fournisseur classique (cf. buildDynamicResponse).
-     *
-     * @return array<string, mixed>
-     */
-    public function estimatePeriodElectricityDynamic(DateTimeImmutable $from, DateTimeImmutable $to): array
-    {
-        return $this->electricityBetween($from, $to, dynamic: true);
-    }
-
-    /**
-     * Corps commun des deux estimations de période électricité.
+     * Corps de l'estimation de période électricité.
      *
      * La fenêtre EFFECTIVE est celle que renvoie le repository, pas celle qui est
      * demandée : la borne de fin est clampée sur le dernier relevé disponible.
@@ -241,7 +231,7 @@ final class CostCalculationService
      *
      * @return array<string, mixed>
      */
-    private function electricityBetween(DateTimeImmutable $from, DateTimeImmutable $to, bool $dynamic): array
+    private function electricityBetween(DateTimeImmutable $from, DateTimeImmutable $to): array
     {
         $invalid = self::rejectUnusablePeriod($from, $to);
         if ($invalid !== null) {
@@ -268,9 +258,7 @@ final class CostCalculationService
             ];
         }
 
-        $response = $dynamic
-            ? $this->buildDynamicResponse($deltas, $segments, $days)
-            : $this->buildElectricityResponse($deltas, $segments, $days);
+        $response = $this->buildElectricityResponse($deltas, $segments, $days);
 
         // Les bornes de relevés sont clampées sur le relevé le plus proche : un flux
         // arrêté en mars donne un coût qui s'arrête en mars, sans que le montant le
@@ -813,12 +801,17 @@ final class CostCalculationService
      * la formule dynamique exposée (#228) désigne la même sous-période que `tariff_rates`.
      *
      * @param list<TariffSegment> $segments
+     * @param list<int>|null $among Restreint le choix à ces sous-périodes (#245) : la
+     *        formule d'indexation ne doit désigner qu'une grille dynamique. Une liste
+     *        vide se comporte comme null — il faut bien renvoyer un index valide.
      */
-    private function dominantIndex(array $segments): int
+    private function dominantIndex(array $segments, ?array $among = null): int
     {
-        $best = 0;
-        foreach ($segments as $i => $segment) {
-            if ($segment->days > $segments[$best]->days) {
+        $candidates = ($among === null || $among === []) ? array_keys($segments) : $among;
+
+        $best = $candidates[0];
+        foreach ($candidates as $i) {
+            if ($segments[$i]->days > $segments[$best]->days) {
                 $best = $i;
             }
         }
@@ -874,13 +867,14 @@ final class CostCalculationService
     }
 
     /**
-     * Construit le tableau de résultat électricité à partir des deltas, des
-     * sous-périodes tarifaires et du nombre de jours. Factorise la logique commune
-     * à estimateCurrentMonthElectricity() et estimateMonthElectricity().
+     * Résultat électricité de la période : chaque sous-période est facturée dans le
+     * mode de SA grille (#245).
      *
-     * Chaque sous-période reçoit sa part des quantités (prorata des jours, #196) ;
-     * les décomptes sont ensuite agrégés. Une seule grille sur la période → un seul
-     * segment couvrant tout : résultat identique au calcul mono-grille historique.
+     * Un mois à cheval sur une bascule de contrat additionne donc les deux régimes —
+     * les jours sous grille fixe au tarif fournisseur, les jours sous grille dynamique
+     * au prix de marché — au lieu de reclasser toute la période dans un mode unique.
+     * Sans aucune grille dynamique sur la période, le résultat est celui du calcul
+     * classique historique, aux métadonnées de mode près.
      *
      * @param array<string, mixed> $deltas
      * @param list<TariffSegment> $segments
@@ -888,50 +882,21 @@ final class CostCalculationService
      */
     private function buildElectricityResponse(array $deltas, array $segments, int $days): array
     {
-        $breakdowns = [];
-        foreach ($segments as $segment) {
-            $share = $segment->fraction($days);
-
-            $breakdowns[] = $this->calculator->calculateElectricityCost(
-                kwhT1:          (float) ($deltas['prelev_jour'] ?? 0.0) * $share,
-                kwhT2:          (float) ($deltas['prelev_nuit'] ?? 0.0) * $share,
-                kwhExportT1:    (float) ($deltas['injec_jour']  ?? 0.0) * $share,
-                kwhExportT2:    (float) ($deltas['injec_nuit']  ?? 0.0) * $share,
-                days:           $segment->days,
-                tariff:         $segment->grid->toCalculationTariff(),
-                kwhSolar:       (float) ($deltas['solar'] ?? 0.0) * $share,
-                monthsOverride: $this->monthsOverride($segments, $days, $segment),
-            );
-        }
-
-        return [
-            'available'       => true,
-            'period_from'     => $deltas['from'],
-            'period_to'       => $deltas['to'],
-            'days'            => $days,
-            'tariff_name'     => $this->tariffName($segments),
-            'currency'        => $segments[0]->grid->currency,
-            'tariff_rates'    => $this->dominantGrid($segments)->toTariffArray(),
-            'tariff_segments' => $this->segmentsMeta($segments, $breakdowns),
-            'deltas'          => $deltas,
-            'cost'            => $this->aggregator->aggregate($breakdowns),
-        ];
+        return $this->buildResponse($deltas, $segments, $days, $this->dynamicSegmentIndexes($segments));
     }
 
     /**
-     * Construit la réponse « tarif dynamique » : croise la conso avec les prix de
-     * marché, indexe la part énergie et réutilise tous les composants fixes du tarif
-     * classique. Repli sur le tarif classique pour les créneaux sans prix dynamique
-     * (couverture exposée via coverage_pct).
+     * Projection « tout dynamique » : toutes les sous-périodes sont indexées au spot,
+     * y compris celles dont la grille est fixe.
      *
-     * Le pas de calcul est celui de {@see resolveDynamicSeries()} : quart d'heure en
-     * mode 'dynamic_quarter' quand les données le permettent, heure sinon. Le reste
-     * de la méthode est indifférent au pas — un « créneau » est une clé de période
-     * UTC et une quantité.
+     * Alimente le comparatif du dashboard et le rapprochement de facture, pas la
+     * facturation elle-même — celle-ci passe par {@see buildElectricityResponse()}.
+     * `is_simulation` distingue les deux cas pour l'UI : à `true`, le montant ne
+     * correspond à aucun contrat réellement en vigueur sur la période.
      *
-     * Le prix spot brut n'est jamais facturé tel quel : la formule du contrat
-     * (coefficient × spot + marge) est appliquée créneau par créneau via SpotFormula
-     * (#228), avec des paramètres résolus par sous-période tarifaire.
+     * Contrairement à la voie hybride, l'indisponibilité des prix est ici une réponse
+     * légitime (`available: false`) : une projection dynamique sans prix de marché n'a
+     * rien à montrer, là où la facturation, elle, doit toujours rendre un montant.
      *
      * @param array<string, mixed> $deltas
      * @param list<TariffSegment> $segments
@@ -943,12 +908,56 @@ final class CostCalculationService
             return ['available' => false, 'reason' => 'Tarif dynamique non configuré.'];
         }
 
-        $from = new DateTimeImmutable($deltas['from']);
-        $to   = new DateTimeImmutable($deltas['to']);
+        $all      = array_keys($segments);
+        $response = $this->buildResponse($deltas, $segments, $days, $all, strict: true);
 
-        $series = $this->resolveDynamicSeries($from, $to);
+        if (($response['available'] ?? false) === true) {
+            $response['is_simulation'] = $this->dynamicSegmentIndexes($segments) === [];
+        }
+
+        return $response;
+    }
+
+    /**
+     * Corps commun des deux constructions : croise la conso avec les prix de marché
+     * sur les sous-périodes `$dynamicIndexes`, applique le tarif fournisseur classique
+     * sur les autres, et agrège le tout. Les composants non-énergie (abonnement,
+     * distribution, taxes, injection) sont pris dans la grille de chaque sous-période
+     * quel que soit son mode.
+     *
+     * Le pas de calcul est celui de {@see resolveDynamicSeries()} : quart d'heure quand
+     * les données le permettent, heure sinon. Le reste est indifférent au pas — un
+     * « créneau » est une clé de période UTC et une quantité.
+     *
+     * Le prix spot brut n'est jamais facturé tel quel : la formule du contrat
+     * (coefficient × spot + marge) est appliquée créneau par créneau via SpotFormula
+     * (#228), avec des paramètres résolus par sous-période tarifaire.
+     *
+     * @param array<string, mixed> $deltas
+     * @param list<TariffSegment> $segments
+     * @param list<int> $dynamicIndexes Sous-périodes à indexer au spot (vide = tout classique).
+     * @param bool $strict true : une série de prix inexploitable rend `available: false`.
+     *                     false : elle fait retomber les sous-périodes dynamiques sur le
+     *                     tarif fournisseur, la réponse restant disponible et motivée.
+     * @return array<string, mixed>
+     */
+    private function buildResponse(array $deltas, array $segments, int $days, array $dynamicIndexes, bool $strict = false): array
+    {
+        if ($dynamicIndexes === []) {
+            return $this->classicResponse($deltas, $segments, $days, null);
+        }
+
+        $isDynamic = array_fill_keys($dynamicIndexes, true);
+        $window    = $this->dynamicWindow($deltas, $segments, $dynamicIndexes);
+
+        $series = $this->resolveDynamicSeries($window[0], $window[1], $this->requestedResolutionMode($segments, $dynamicIndexes));
         if (isset($series['reason'])) {
-            return ['available' => false, 'reason' => $series['reason']];
+            // Aucune série exploitable : en facturation, la période reste due — elle
+            // repasse intégralement au tarif fournisseur, motif à l'appui, plutôt que
+            // de disparaître du dashboard le temps qu'un cron rattrape les prix.
+            return $strict
+                ? ['available' => false, 'reason' => $series['reason']]
+                : $this->classicResponse($deltas, $segments, $days, (string) $series['reason']);
         }
 
         /** @var list<array{slot: string, import_kwh: float}> $slots */
@@ -983,9 +992,18 @@ final class CostCalculationService
         foreach ($slots as $row) {
             $slot = $row['slot'];
             $kwh  = $row['import_kwh'];
-            $totalKwh += $kwh;
 
             $segmentIndex = $this->segmentIndexForHour($segments, $slot);
+
+            // Créneau d'une sous-période restée au tarif fournisseur : son coût vient
+            // du prorata classique, pas du prix de marché. L'ignorer ici évite aussi
+            // de diluer coverage_pct et avg_price_kwh, qui ne décrivent que la part
+            // réellement indexée.
+            if (!isset($isDynamic[$segmentIndex])) {
+                continue;
+            }
+
+            $totalKwh += $kwh;
 
             if (isset($prices[$slot])) {
                 // TVA de la grille de CETTE sous-période (#232) : source unique du taux,
@@ -1015,21 +1033,36 @@ final class CostCalculationService
             $daily[$day]['energy_dynamic'] += $lineCost;
         }
 
+        // Chaque sous-période dans son mode : la variante dynamique remplace les lignes
+        // d'énergie fournisseur par le montant indexé, la classique les conserve. Tout
+        // le reste de la grille (abonnement, distribution, taxes, injection) est traité
+        // identiquement dans les deux cas.
         $breakdowns = [];
         foreach ($segments as $i => $segment) {
             $share = $segment->fraction($days);
 
-            $breakdowns[] = $this->calculator->calculateElectricityCostDynamic(
-                kwhT1:            (float) ($deltas['prelev_jour'] ?? 0.0) * $share,
-                kwhT2:            (float) ($deltas['prelev_nuit'] ?? 0.0) * $share,
-                kwhExportT1:      (float) ($deltas['injec_jour']  ?? 0.0) * $share,
-                kwhExportT2:      (float) ($deltas['injec_nuit']  ?? 0.0) * $share,
-                days:             $segment->days,
-                tariff:           $segment->grid->toCalculationTariff(),
-                dynamicEnergyTtc: $energyBySegment[$i],
-                kwhSolar:         (float) ($deltas['solar'] ?? 0.0) * $share,
-                monthsOverride:   $this->monthsOverride($segments, $days, $segment),
-            );
+            $breakdowns[] = isset($isDynamic[$i])
+                ? $this->calculator->calculateElectricityCostDynamic(
+                    kwhT1:            (float) ($deltas['prelev_jour'] ?? 0.0) * $share,
+                    kwhT2:            (float) ($deltas['prelev_nuit'] ?? 0.0) * $share,
+                    kwhExportT1:      (float) ($deltas['injec_jour']  ?? 0.0) * $share,
+                    kwhExportT2:      (float) ($deltas['injec_nuit']  ?? 0.0) * $share,
+                    days:             $segment->days,
+                    tariff:           $segment->grid->toCalculationTariff(),
+                    dynamicEnergyTtc: $energyBySegment[$i],
+                    kwhSolar:         (float) ($deltas['solar'] ?? 0.0) * $share,
+                    monthsOverride:   $this->monthsOverride($segments, $days, $segment),
+                )
+                : $this->calculator->calculateElectricityCost(
+                    kwhT1:          (float) ($deltas['prelev_jour'] ?? 0.0) * $share,
+                    kwhT2:          (float) ($deltas['prelev_nuit'] ?? 0.0) * $share,
+                    kwhExportT1:    (float) ($deltas['injec_jour']  ?? 0.0) * $share,
+                    kwhExportT2:    (float) ($deltas['injec_nuit']  ?? 0.0) * $share,
+                    days:           $segment->days,
+                    tariff:         $segment->grid->toCalculationTariff(),
+                    kwhSolar:       (float) ($deltas['solar'] ?? 0.0) * $share,
+                    monthsOverride: $this->monthsOverride($segments, $days, $segment),
+                );
         }
 
         $dailyOut = array_values(array_map(
@@ -1042,20 +1075,30 @@ final class CostCalculationService
         ));
 
         // Sous-période la plus longue : les champs qui ne peuvent porter qu'une valeur
-        // (tariff_rates, formula) désignent tous la même, pour rester cohérents entre eux.
-        $dominant = $this->dominantIndex($segments);
+        // (tariff_rates) en désignent une seule. Pour la formule d'indexation, c'est la
+        // plus longue des sous-périodes DYNAMIQUES — exposer celle d'une grille fixe
+        // afficherait un coefficient qui n'a servi à rien.
+        $dominant    = $this->dominantIndex($segments);
+        $dominantDyn = $this->dominantIndex($segments, $dynamicIndexes);
+        $requested   = $this->requestedResolutionMode($segments, $dynamicIndexes);
 
         return [
             'available'      => true,
             'period_from'    => $deltas['from'],
             'period_to'      => $deltas['to'],
             'days'           => $days,
-            'pricing_mode'   => $this->pricingMode,
+            // Mode de la sous-période dynamique dominante : valeur scalaire attendue
+            // par l'UI. `pricing_modes` porte le détail quand la période en mélange
+            // plusieurs (#245).
+            'pricing_mode'   => $requested,
+            'pricing_modes'  => $this->pricingModesMeta($segments, $dynamicIndexes),
+            'is_mixed'       => count($dynamicIndexes) < count($segments),
+            'dynamic_days'   => $this->daysOf($segments, $dynamicIndexes),
             // Résolution EFFECTIVE du calcul, à distinguer de celle demandée par le
             // mode : un utilisateur en 'dynamic_quarter' doit voir qu'il a été
             // facturé à l'heure, et pourquoi, plutôt que de croire au quart d'heure.
             'resolution'           => $series['resolution'],
-            'resolution_requested' => $this->pricingMode === 'dynamic_quarter' ? 'quarter' : 'hourly',
+            'resolution_requested' => $requested === 'dynamic_quarter' ? 'quarter' : 'hourly',
             'resolution_fallback'  => $series['fallback'],
             'price_source'   => $priceSource,
             'tariff_name'    => $this->tariffName($segments),
@@ -1063,15 +1106,203 @@ final class CostCalculationService
             'tariff_rates'   => $segments[$dominant]->grid->toTariffArray(),
             'tariff_segments' => $this->segmentsMeta($segments, $breakdowns),
             'deltas'         => $deltas,
-            'formula'        => $this->formulaMeta($segments[$dominant], $formulas[$dominant]),
-            'spot_base'      => $this->spotBaseMeta($indexedBaseTtc, $coveredKwh, $uncoveredTtc, $formulas, $segments),
+            'formula'        => $this->formulaMeta($segments[$dominantDyn], $formulas[$dominantDyn]),
+            'spot_base'      => $this->spotBaseMeta($indexedBaseTtc, $coveredKwh, $uncoveredTtc, $formulas, $segments, $dynamicIndexes),
             'energy_dynamic' => round($energyTtc, 2),
+            // Rapportés à la seule consommation des sous-périodes indexées : sur une
+            // période mixte, y inclure les jours au tarif fournisseur ferait passer la
+            // couverture pour lacunaire alors qu'elle est complète.
             'avg_price_kwh'  => $totalKwh > 0.0 ? round($energyTtc / $totalKwh, 6) : null,
             'coverage_pct'   => $totalKwh > 0.0 ? round($coveredKwh / $totalKwh * 100.0, 1) : 0.0,
             'matched_kwh'    => round($totalKwh, 3),
             'cost'           => $this->aggregator->aggregate($breakdowns),
             'daily'          => $dailyOut,
         ];
+    }
+
+    /**
+     * Réponse sans aucune part indexée : toutes les sous-périodes au tarif fournisseur.
+     *
+     * @param array<string, mixed> $deltas
+     * @param list<TariffSegment> $segments
+     * @param ?string $dynamicUnavailableReason Motif quand des sous-périodes étaient
+     *        bien dynamiques mais qu'aucun prix n'était exploitable — la période est
+     *        alors facturée au tarif fournisseur, ce que l'UI doit pouvoir dire.
+     * @return array<string, mixed>
+     */
+    private function classicResponse(array $deltas, array $segments, int $days, ?string $dynamicUnavailableReason): array
+    {
+        $breakdowns = [];
+        foreach ($segments as $segment) {
+            $share = $segment->fraction($days);
+
+            $breakdowns[] = $this->calculator->calculateElectricityCost(
+                kwhT1:          (float) ($deltas['prelev_jour'] ?? 0.0) * $share,
+                kwhT2:          (float) ($deltas['prelev_nuit'] ?? 0.0) * $share,
+                kwhExportT1:    (float) ($deltas['injec_jour']  ?? 0.0) * $share,
+                kwhExportT2:    (float) ($deltas['injec_nuit']  ?? 0.0) * $share,
+                days:           $segment->days,
+                tariff:         $segment->grid->toCalculationTariff(),
+                kwhSolar:       (float) ($deltas['solar'] ?? 0.0) * $share,
+                monthsOverride: $this->monthsOverride($segments, $days, $segment),
+            );
+        }
+
+        $response = [
+            'available'       => true,
+            'period_from'     => $deltas['from'],
+            'period_to'       => $deltas['to'],
+            'days'            => $days,
+            'pricing_mode'    => TariffGrid::PRICING_MODE_DEFAULT,
+            'pricing_modes'   => $this->pricingModesMeta($segments, []),
+            'is_mixed'        => false,
+            'dynamic_days'    => 0,
+            'tariff_name'     => $this->tariffName($segments),
+            'currency'        => $segments[0]->grid->currency,
+            'tariff_rates'    => $this->dominantGrid($segments)->toTariffArray(),
+            'tariff_segments' => $this->segmentsMeta($segments, $breakdowns),
+            'deltas'          => $deltas,
+            'cost'            => $this->aggregator->aggregate($breakdowns),
+        ];
+
+        if ($dynamicUnavailableReason !== null) {
+            $response['dynamic_unavailable_reason'] = $dynamicUnavailableReason;
+        }
+
+        return $response;
+    }
+
+    /**
+     * Sous-périodes dont la grille indexe l'énergie sur le prix de marché, ET pour
+     * lesquelles le calcul dynamique est réellement possible.
+     *
+     * Le kill-switch serveur et l'absence de dépôt de prix ramènent la liste à vide :
+     * une grille dynamique est alors calculée comme une grille fixe, sans que rien ne
+     * soit modifié en base — le mode ressort intact si le serveur réactive les prix.
+     *
+     * @param list<TariffSegment> $segments
+     * @return list<int>
+     */
+    private function dynamicSegmentIndexes(array $segments): array
+    {
+        if (!$this->dynamicEnabled || $this->dynamicPriceRepo === null) {
+            return [];
+        }
+
+        $indexes = [];
+        foreach ($segments as $i => $segment) {
+            if ($segment->grid->isDynamic()) {
+                $indexes[] = $i;
+            }
+        }
+
+        return $indexes;
+    }
+
+    /**
+     * Fenêtre sur laquelle chercher des prix : l'intersection des relevés et des
+     * sous-périodes dynamiques, plutôt que la période entière.
+     *
+     * Sans cette restriction, les jours au tarif fournisseur compteraient dans les
+     * seuils de couverture de {@see resolveDynamicSeries()} : un mois passé en
+     * dynamique le 20 serait déclaré « sans prix » à cause de ses 19 premiers jours,
+     * qui n'en ont pourtant aucun besoin.
+     *
+     * Approximation assumée quand les sous-périodes dynamiques ne sont pas contiguës
+     * (dynamique → fixe → dynamique, ce qui suppose deux changements de contrat) : la
+     * fenêtre englobe alors le segment fixe intercalé. Cela ne peut influer que sur le
+     * CHOIX de la série de prix ; la valorisation, elle, reste filtrée segment par
+     * segment.
+     *
+     * @param array<string, mixed> $deltas
+     * @param list<TariffSegment> $segments
+     * @param list<int> $dynamicIndexes  Non vide.
+     * @return array{DateTimeImmutable, DateTimeImmutable}
+     */
+    private function dynamicWindow(array $deltas, array $segments, array $dynamicIndexes): array
+    {
+        $first = $segments[$dynamicIndexes[0]];
+        $last  = $segments[$dynamicIndexes[count($dynamicIndexes) - 1]];
+
+        $from = new DateTimeImmutable((string) $deltas['from']);
+        $to   = new DateTimeImmutable((string) $deltas['to']);
+
+        return [
+            max($from, $first->from->setTime(0, 0, 0)),
+            min($to, $last->to->setTime(23, 59, 59)),
+        ];
+    }
+
+    /**
+     * Mode dictant la résolution demandée : celui de la plus longue sous-période
+     * dynamique. Une période mêlant 'dynamic_hourly' et 'dynamic_quarter' — deux
+     * contrats dynamiques successifs de granularités différentes — est donc résolue
+     * dans le mode majoritaire, comme `tariff_rates` l'est déjà pour la grille.
+     *
+     * @param list<TariffSegment> $segments
+     * @param list<int> $dynamicIndexes
+     */
+    private function requestedResolutionMode(array $segments, array $dynamicIndexes): string
+    {
+        return self::projectedMode($segments[$this->dominantIndex($segments, $dynamicIndexes)]->grid->pricingMode);
+    }
+
+    /**
+     * Mode exposé pour une sous-période indexée au spot.
+     *
+     * Une sous-période indexée dont la grille est pourtant 'fixed' ne peut venir que
+     * d'une projection forcée ({@see buildDynamicResponse()}) : elle est alors annoncée
+     * — et résolue — au pas horaire, le seul qui ne présuppose rien des données. Rendre
+     * 'fixed' ici ferait mentir `pricing_mode` sur un montant qui, lui, est bien indexé.
+     */
+    private static function projectedMode(string $gridMode): string
+    {
+        return $gridMode === TariffGrid::PRICING_MODE_DEFAULT ? 'dynamic_hourly' : $gridMode;
+    }
+
+    /**
+     * Détail des modes appliqués, sous-période par sous-période : ce qui permet à
+     * l'UI d'annoncer « N jours en dynamique » sur un mois de bascule.
+     *
+     * @param list<TariffSegment> $segments
+     * @param list<int> $dynamicIndexes
+     * @return list<array{from: string, to: string, days: int, mode: string}>
+     */
+    private function pricingModesMeta(array $segments, array $dynamicIndexes): array
+    {
+        $isDynamic = array_fill_keys($dynamicIndexes, true);
+
+        $meta = [];
+        foreach ($segments as $i => $segment) {
+            $meta[] = [
+                'from' => $segment->from->format('Y-m-d'),
+                'to'   => $segment->to->format('Y-m-d'),
+                'days' => $segment->days,
+                // Mode EFFECTIVEMENT appliqué : une grille dynamique sur un serveur
+                // qui n'importe pas de prix ressort 'fixed', comme elle est calculée.
+                'mode' => isset($isDynamic[$i])
+                    ? self::projectedMode($segment->grid->pricingMode)
+                    : TariffGrid::PRICING_MODE_DEFAULT,
+            ];
+        }
+
+        return $meta;
+    }
+
+    /**
+     * Nombre de jours couverts par une sélection de sous-périodes.
+     *
+     * @param list<TariffSegment> $segments
+     * @param list<int> $indexes
+     */
+    private function daysOf(array $segments, array $indexes): int
+    {
+        $days = 0;
+        foreach ($indexes as $i) {
+            $days += $segments[$i]->days;
+        }
+
+        return $days;
     }
 
     /**
@@ -1093,11 +1324,12 @@ final class CostCalculationService
      * Le mode 'dynamic_hourly' court-circuite tout cela et garde son comportement
      * historique, prix horaire natif d'abord, moyenne des 15 min ensuite.
      *
+     * @param string $requestedMode Mode de la sous-période dynamique dominante (#245).
      * @return array{resolution: string, price_source: string, prices: array<string, float>,
      *               slots: list<array{slot: string, import_kwh: float}>, fallback: ?string}
      *         |array{reason: string} Motif d'indisponibilité si la série est inexploitable.
      */
-    private function resolveDynamicSeries(DateTimeImmutable $from, DateTimeImmutable $to): array
+    private function resolveDynamicSeries(DateTimeImmutable $from, DateTimeImmutable $to, string $requestedMode): array
     {
         // +1 h : la borne haute des deltas est le dernier relevé, dont le créneau de
         // prix commence avant lui — l'élargir garantit de couvrir ce dernier créneau.
@@ -1105,7 +1337,7 @@ final class CostCalculationService
         $repo     = $this->dynamicPriceRepo;
         $fallback = null;
 
-        if ($this->pricingMode === 'dynamic_quarter' && $repo !== null) {
+        if ($requestedMode === 'dynamic_quarter' && $repo !== null) {
             $quarterPrices = $repo->getQuarterPrices($from, $to1);
             $quarterSlots  = $quarterPrices === [] ? [] : $this->legacyRepo->getQuarterImportDeltas($from, $to);
 
@@ -1256,8 +1488,13 @@ final class CostCalculationService
      * même formule mais de TVA différente (passage de 21 % à 6 % en cours de mois) rendent
      * cette conversion ambiguë, même si la résolution, elle, resterait exacte.
      *
+     * Seules les sous-périodes INDEXÉES entrent dans cette comparaison (#245) : sur un
+     * mois de bascule, la formule inexistante d'une grille fixe n'a pas à faire passer
+     * la partie dynamique pour non uniforme.
+     *
      * @param list<SpotFormula>   $formulas
      * @param list<TariffSegment> $segments Même indexation que $formulas.
+     * @param list<int>           $dynamicIndexes Sous-périodes réellement indexées (non vide).
      * @return array{indexed_ttc: float, covered_kwh: float, uncovered_ttc: float, formula_uniform: bool}
      */
     private function spotBaseMeta(
@@ -1266,17 +1503,19 @@ final class CostCalculationService
         float $uncoveredTtc,
         array $formulas,
         array $segments,
+        array $dynamicIndexes,
     ): array {
         $uniform = true;
-        foreach ($formulas as $i => $formula) {
+        $ref     = $dynamicIndexes[0];
+        foreach ($dynamicIndexes as $i) {
             // Comparaison à tolérance plutôt que stricte : deux grilles portant le même
             // coefficient peuvent le composer différemment (une ligne 1,08 d'un côté,
             // 1,04 × 1,0385 de l'autre) et différer sur le dernier bit sans que les
             // contrats diffèrent réellement. Le seuil est très en dessous de ce qu'un
             // utilisateur peut saisir (7 décimales en base).
-            if (!$this->sameParameter($formula->coefficient, $formulas[0]->coefficient)
-                || !$this->sameParameter($formula->offsetTtc, $formulas[0]->offsetTtc)
-                || !$this->sameParameter($segments[$i]->grid->vatRate, $segments[0]->grid->vatRate)
+            if (!$this->sameParameter($formulas[$i]->coefficient, $formulas[$ref]->coefficient)
+                || !$this->sameParameter($formulas[$i]->offsetTtc, $formulas[$ref]->offsetTtc)
+                || !$this->sameParameter($segments[$i]->grid->vatRate, $segments[$ref]->grid->vatRate)
             ) {
                 $uniform = false;
                 break;

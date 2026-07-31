@@ -16,6 +16,11 @@ CREATE TABLE IF NOT EXISTS tariff_grids (
     id               BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     user_id          BIGINT UNSIGNED NULL COMMENT 'NULL = grille du catalogue partagé (admin) ; sinon surcharge personnelle',
     energy_type      ENUM('electricity', 'gas', 'water') NOT NULL,
+    -- Électricité : le contrat est fixe ou dynamique, et ce choix est VERSIONNÉ par
+    -- valid_from/valid_to comme le reste de la grille (#245). Une bascule de contrat
+    -- ne réécrit donc plus les périodes antérieures. Ignoré pour gaz/eau.
+    pricing_mode     ENUM('fixed', 'dynamic_hourly', 'dynamic_quarter') NOT NULL DEFAULT 'fixed'
+                     COMMENT 'Electricite : mode de tarification du contrat (fixe / dynamique 1h / dynamique 15min)',
     country          VARCHAR(2) NULL COMMENT 'ISO 3166-1 alpha-2 (NULL = générique)',
     currency         CHAR(3) NOT NULL DEFAULT 'EUR' COMMENT 'Devise ISO 4217 (pas de conversion automatique)',
     vat_rate         DECIMAL(5,2) NOT NULL DEFAULT 21.00 COMMENT 'Taux de TVA de la grille en % (montants saisis TTC)',
@@ -136,10 +141,10 @@ CREATE TABLE IF NOT EXISTS user_profiles (
     timezone     VARCHAR(64) NOT NULL DEFAULT 'UTC' COMMENT 'Préférence d''affichage (IANA) ; UI pré-remplit le fuseau navigateur (#200)',
     currency     CHAR(3)     NOT NULL DEFAULT 'EUR' COMMENT 'Devise ISO 4217',
     bidding_zone VARCHAR(32) NULL COMMENT 'Zone de marché ENTSO-E',
-    pricing_mode ENUM('fixed', 'dynamic_hourly', 'dynamic_quarter') NOT NULL DEFAULT 'fixed' COMMENT 'Type de tarification électricité (fixe / dynamique 1h / dynamique 15min)',
-    -- Pas de vat_rate ici : source unique = tariff_grids.vat_rate, versionnee par
-    -- valid_from/valid_to (#232). supplier_markup_per_kwh subsiste comme REPLI
-    -- lorsqu'aucune ligne spot_offset n'existe en grille (#228).
+    -- Ni vat_rate ni pricing_mode ici : source unique = tariff_grids, versionnee par
+    -- valid_from/valid_to (#232, #245). supplier_markup_per_kwh subsiste comme REPLI
+    -- lorsqu'aucune ligne spot_offset n'existe en grille (#228), et bidding_zone
+    -- reste au profil : la zone de marche est geographique, pas contractuelle.
     supplier_markup_per_kwh DECIMAL(12,7) NOT NULL DEFAULT 0.0000000 COMMENT 'Marge fournisseur EUR/kWh ajoutee au prix spot TTC (repli sans ligne spot_offset)',
     locale       VARCHAR(8)  NOT NULL DEFAULT 'fr',
     -- Période du bilan d'acomptes mémorisée (#241) : restituée telle quelle au

@@ -52,6 +52,7 @@ interface TariffRepositoryInterface
      * Crée une grille tarifaire et ses lignes. Renvoie l'identifiant créé.
      *
      * @param list<array{key: string, amount: float, kind: string, label: ?string}> $lines
+     * @param string $pricingMode Électricité : mode du contrat porté par CETTE grille (#245).
      */
     public function saveGrid(
         string $energyType,
@@ -64,5 +65,13 @@ interface TariffRepositoryInterface
         string $currency = 'EUR',
         bool $shared = false,
         float $vatRate = 21.0,
+        string $pricingMode = TariffGrid::PRICING_MODE_DEFAULT,
     ): int;
+
+    /**
+     * L'utilisateur dispose-t-il d'au moins une grille (perso ou catalogue) dont le
+     * contrat est indexé sur le prix de marché ? Sert à décider de l'accès aux pages
+     * qui n'ont de sens qu'en tarif dynamique (#245).
+     */
+    public function hasDynamicGrid(string $energyType = 'electricity'): bool;
 }

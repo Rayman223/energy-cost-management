@@ -53,7 +53,7 @@ final class AdvanceBalanceServiceTest extends TestCase
     }
 
     /** Grille élec simple : 0,10 €/kWh T1, sans poste fixe, pour un coût lisible. */
-    private function electricityGrid(): TariffGrid
+    private function electricityGrid(string $pricingMode = TariffGrid::PRICING_MODE_DEFAULT): TariffGrid
     {
         return new TariffGrid(
             id: 1,
@@ -62,6 +62,7 @@ final class AdvanceBalanceServiceTest extends TestCase
             validFrom: new DateTimeImmutable('2020-01-01'),
             validTo: null,
             lines: ['energy_t1' => new TariffLine('energy_t1', 0.10, ComponentKind::EnergyT1)],
+            pricingMode: $pricingMode,
         );
     }
 
@@ -497,34 +498,64 @@ final class AdvanceBalanceServiceTest extends TestCase
     }
 
     /**
-     * En tarif dynamique, la part énergie ne peut pas être calculée au prix fixe de
-     * la grille : le service doit emprunter la voie dynamique, quitte à signaler une
-     * indisponibilité quand les prix de marché manquent.
+     * Grille dynamique mais aucun prix de marché importé (#245) : le bilan reste DÛ,
+     * donc rendu — la période retombe sur le tarif fournisseur de la grille plutôt que
+     * de disparaître le temps qu'un cron rattrape les prix.
+     *
+     * C'est le changement de contrat introduit par le mode-en-grille : l'ancien
+     * aiguillage renvoyait ici une indisponibilité, en pleine page d'acomptes, pour un
+     * utilisateur qui a bel et bien consommé.
      */
-    public function testDynamicPricingUsesTheDynamicCostPath(): void
+    public function testDynamicGridWithoutPricesFallsBackToTheSupplierTariff(): void
     {
         $costSvc = new CostCalculationService(
             legacyRepo: new FakeLegacyDailyRepository(
                 deltasBetween: $this->elecDeltas('2026-01-01 00:00:00', '2026-12-31 00:00:00', 10000.0),
             ),
-            tariffRepo: new FakeTariffRepository($this->electricityGrid()),
+            tariffRepo: new FakeTariffRepository($this->electricityGrid('dynamic_hourly')),
             gasRepo: new FakeGasReadingRepository(),
             calculator: new TariffCalculatorService(),
             dynamicPriceRepo: new FakeDynamicPriceRepository(),
             dynamicEnabled: true,
-            pricingMode: 'dynamic_hourly',
         );
 
         $r = (new AdvanceBalanceService(
             new FakeAdvanceScheduleRepository([$this->schedule()]),
             $costSvc,
-            dynamicPricing: true,
         ))->balanceFor($this->at('2026-01-01'), $this->at('2026-12-31'));
 
-        // Aucun prix ni relevé horaire dans le fake : le coût dynamique est
-        // indisponible, ce qui doit être DIT plutôt que remplacé par le calcul fixe.
-        self::assertTrue($r['has_gaps']);
-        self::assertNull($r['balances'][0]->cost);
+        // 10 000 kWh × 0,10 € = 1 000 € au tarif fournisseur, contre 1 440 € versés.
+        self::assertFalse($r['has_gaps']);
+        self::assertNotNull($r['balances'][0]->cost);
+        self::assertEqualsWithDelta(1000.0, $r['balances'][0]->cost, 0.01);
         self::assertEqualsWithDelta(1440.0, $r['balances'][0]->paid, 0.01);
+    }
+
+    /**
+     * Le kill-switch serveur prime sur le mode de la grille : prix dynamiques coupés,
+     * une grille dynamique est facturée exactement comme une grille fixe, sans que
+     * rien ne soit réécrit en base.
+     */
+    public function testServerKillSwitchNeutralisesADynamicGrid(): void
+    {
+        $legacy = new FakeLegacyDailyRepository(
+            deltasBetween: $this->elecDeltas('2026-01-01 00:00:00', '2026-12-31 00:00:00', 10000.0),
+        );
+
+        $withKillSwitch = (new AdvanceBalanceService(
+            new FakeAdvanceScheduleRepository([$this->schedule()]),
+            $this->costService($legacy, new FakeTariffRepository($this->electricityGrid('dynamic_quarter'))),
+        ))->balanceFor($this->at('2026-01-01'), $this->at('2026-12-31'));
+
+        $fixed = (new AdvanceBalanceService(
+            new FakeAdvanceScheduleRepository([$this->schedule()]),
+            $this->costService($legacy, new FakeTariffRepository($this->electricityGrid())),
+        ))->balanceFor($this->at('2026-01-01'), $this->at('2026-12-31'));
+
+        self::assertEqualsWithDelta(
+            (float) $fixed['balances'][0]->cost,
+            (float) $withKillSwitch['balances'][0]->cost,
+            0.001,
+        );
     }
 }

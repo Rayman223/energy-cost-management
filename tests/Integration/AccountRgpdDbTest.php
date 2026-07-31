@@ -120,13 +120,15 @@ final class AccountRgpdDbTest extends TestCase
         self::assertSame($this->userId, $data['user']['id']);
         self::assertSame('rgpd', $data['user']['oidc_sub']);
         self::assertNotNull($data['profile']);
-        // L'export RGPD du profil couvre les 7 colonnes, dont pricing_mode (lacune
-        // préexistante #88) et la marge fournisseur par utilisateur (#153). Plus de
-        // vat_rate : la colonne a été supprimée au profit de la grille (#232) — un
-        // export qui la mentionnerait encore signalerait une migration incomplète.
-        self::assertArrayHasKey('pricing_mode', $data['profile']);
+        // L'export RGPD du profil couvre ses colonnes, dont la marge fournisseur par
+        // utilisateur (#153). Ni vat_rate ni pricing_mode : ces colonnes ont été
+        // supprimées au profit de la grille (#232, #245) — un export qui les
+        // mentionnerait encore signalerait une migration incomplète. Le mode ressort
+        // désormais dans l'export des grilles, où il vit.
         self::assertArrayNotHasKey('vat_rate', $data['profile']);
+        self::assertArrayNotHasKey('pricing_mode', $data['profile']);
         self::assertArrayHasKey('supplier_markup_per_kwh', $data['profile']);
+        self::assertArrayHasKey('pricing_mode', $data['tariff_grids'][0]);
         self::assertCount(1, $data['meters']);
         self::assertCount(1, $data['meter_readings']);
         self::assertSame('import_t1', $data['meter_readings'][0]['register_key']);

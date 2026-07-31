@@ -184,40 +184,35 @@ final class UserRepository implements UserRepositoryInterface
     /**
      * Met à jour le profil de l'utilisateur (crée la ligne si absente).
      *
-     * NOTE d'asymétrie assumée : la normalisation de `pricingMode` (liste blanche
-     * `UserProfile::PRICING_MODES`) et le bornage de `supplierMarkupPerKwh` vivent
-     * ici, côté écriture — dernière ligne de défense avant l'INSERT. Le DTO
-     * `UserProfile` reste un simple porteur de données, et `getProfile` ne borne
-     * PAS la marge en lecture : déplacer ce garde dans le constructeur changerait
-     * le comportement de lecture.
+     * NOTE d'asymétrie assumée : le bornage de `supplierMarkupPerKwh` vit ici, côté
+     * écriture — dernière ligne de défense avant l'INSERT. Le DTO `UserProfile`
+     * reste un simple porteur de données, et `getProfile` ne borne PAS la marge en
+     * lecture : déplacer ce garde dans le constructeur changerait le comportement
+     * de lecture. Le mode de tarification, lui, a quitté le profil pour la grille
+     * (#245) : sa normalisation vit désormais dans `TariffRepository`.
      */
     public function updateProfile(int $userId, UserProfile $profile): void
     {
-        $pricingMode = in_array($profile->pricingMode, UserProfile::PRICING_MODES, true)
-            ? $profile->pricingMode
-            : 'fixed';
         // Bornage côté repository : marge ∈ [-1,1] €/kWh (négatif = remise), pour
         // qu'aucun appelant ne puisse déborder DECIMAL(12,7).
         $supplierMarkupPerKwh = max(-1.0, min(1.0, $profile->supplierMarkupPerKwh));
 
         $stmt = $this->pdo->prepare(
-            'INSERT INTO user_profiles (user_id, country, timezone, currency, bidding_zone, pricing_mode, supplier_markup_per_kwh, locale)
-             VALUES (:uid, :country, :tz, :currency, :zone, :pricing_mode, :markup, :locale)
+            'INSERT INTO user_profiles (user_id, country, timezone, currency, bidding_zone, supplier_markup_per_kwh, locale)
+             VALUES (:uid, :country, :tz, :currency, :zone, :markup, :locale)
              ON DUPLICATE KEY UPDATE
                 country = VALUES(country), timezone = VALUES(timezone),
                 currency = VALUES(currency), bidding_zone = VALUES(bidding_zone),
-                pricing_mode = VALUES(pricing_mode),
                 supplier_markup_per_kwh = VALUES(supplier_markup_per_kwh), locale = VALUES(locale)'
         );
         $stmt->execute([
-            'uid'          => $userId,
-            'country'      => $profile->country,
-            'tz'           => $profile->timezone,
-            'currency'     => $profile->currency,
-            'zone'         => $profile->biddingZone,
-            'pricing_mode' => $pricingMode,
-            'markup'       => $supplierMarkupPerKwh,
-            'locale'       => $profile->locale,
+            'uid'      => $userId,
+            'country'  => $profile->country,
+            'tz'       => $profile->timezone,
+            'currency' => $profile->currency,
+            'zone'     => $profile->biddingZone,
+            'markup'   => $supplierMarkupPerKwh,
+            'locale'   => $profile->locale,
         ]);
     }
 
@@ -294,7 +289,7 @@ final class UserRepository implements UserRepositoryInterface
     public function getProfile(int $userId): ?UserProfile
     {
         $stmt = $this->pdo->prepare(
-            'SELECT country, timezone, currency, bidding_zone, pricing_mode, supplier_markup_per_kwh, locale,
+            'SELECT country, timezone, currency, bidding_zone, supplier_markup_per_kwh, locale,
                     advances_period_from, advances_period_to
              FROM user_profiles WHERE user_id = :id LIMIT 1'
         );
@@ -305,17 +300,11 @@ final class UserRepository implements UserRepositoryInterface
             return null;
         }
 
-        $pricingMode = (string) ($row['pricing_mode'] ?? 'fixed');
-        if (!in_array($pricingMode, UserProfile::PRICING_MODES, true)) {
-            $pricingMode = 'fixed';
-        }
-
         return new UserProfile(
             country: $row['country'] !== null ? (string) $row['country'] : null,
             timezone: (string) $row['timezone'],
             currency: (string) $row['currency'],
             biddingZone: $row['bidding_zone'] !== null ? (string) $row['bidding_zone'] : null,
-            pricingMode: $pricingMode,
             supplierMarkupPerKwh: (float) ($row['supplier_markup_per_kwh'] ?? 0.0),
             locale: (string) $row['locale'],
             advancesPeriodFrom: isset($row['advances_period_from']) ? (string) $row['advances_period_from'] : null,

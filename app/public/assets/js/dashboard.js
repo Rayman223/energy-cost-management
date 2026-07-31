@@ -265,20 +265,37 @@ function tariffSegmentsMeta(data) {
       </div>
     </div>`;
 
-    // ── Comparaison tarif dynamique (day-ahead) ───────────────────────────
+    // ── Tarif dynamique (day-ahead) ───────────────────────────────────────
     if (data.dynamic) {
-      el.innerHTML += renderDynamicSection(data.dynamic, c);
+      el.innerHTML += renderDynamicSection(data.dynamic, c, data);
     }
   }
 
-  function renderDynamicSection(dyn, classic) {
-    const head = `<div class="cost-group-label cost-group-label--solar mt-8">⚡ ${tr('dash.dynamic.group')}</div>`;
+  // `main` est la réponse de facturation : elle dit quelles sous-périodes du mois
+  // sont RÉELLEMENT indexées (#245), là où `dyn` est toujours une projection
+  // tout-dynamique. Sans aucun jour indexé, la section devient un comparatif
+  // « et si ? » — informatif, donc replié plutôt qu'affiché comme un coût dû.
+  function renderDynamicSection(dyn, classic, main) {
+    const dynamicDays = main ? (main.dynamic_days || 0) : 0;
+    const simulated = dyn ? (dyn.is_simulation === true || (!dyn.available && dynamicDays === 0)) : true;
+    const head = simulated ? '' : `<div class="cost-group-label cost-group-label--solar mt-8">⚡ ${tr('dash.dynamic.group')}</div>`;
+
+    // Mois à cheval sur un changement de contrat : dire combien de jours ont été
+    // facturés au prix de marché, sinon l'écart avec le total classique paraît faux.
+    const mixedNote = (main && main.is_mixed && dynamicDays > 0)
+      ? `<div class="cost-formula-note">${tr('dash.dynamic.mixed_period', { dynamic: dynamicDays, total: main.days })}</div>`
+      : '';
+
+    const wrap = (inner) => {
+      const body = `<div class="cost-wrap mt-18"><div class="cost-lines">${inner}</div></div>`;
+      return simulated
+        ? `<details class="dynamic-simulation mt-18"><summary>⚡ ${tr('dash.dynamic.simulation_title')}</summary>${body}</details>`
+        : body;
+    };
 
     if (!dyn || !dyn.available) {
-      return `<div class="cost-wrap mt-18"><div class="cost-lines">
-        ${head}
-        <div class="no-tariff mt-10">${(dyn && dyn.reason) ? dyn.reason : tr('dash.dynamic.unavailable')}</div>
-      </div></div>`;
+      return wrap(`${head}
+        <div class="no-tariff mt-10">${(dyn && dyn.reason) ? dyn.reason : tr('dash.dynamic.unavailable')}</div>`);
     }
 
     const dc            = dyn.cost || {};
@@ -350,8 +367,9 @@ function tariffSegmentsMeta(data) {
         cur: CURRENCY_SYMBOL,
       })}</div>` : '';
 
-    return `<div class="cost-wrap mt-18"><div class="cost-lines">
+    return wrap(`
       ${head}
+      ${mixedNote}
       ${line(tr('dash.dynamic.energy_dynamic'),
             tr('dash.dynamic.energy_detail', {
               kwh: Number(dyn.matched_kwh ?? 0).toFixed(2),
@@ -367,8 +385,7 @@ function tariffSegmentsMeta(data) {
       ${line(tr('dash.dynamic.total_dynamic'), '', dynTotal, 'total')}
       ${line(tr('dash.dynamic.total_classic'), '', classicTotal)}
       ${diff != null ? line(diffLabel, diffPct != null ? `${diffPct > 0 ? '+' : ''}${diffPct.toFixed(1)} %` : '', diff, diff <= 0 ? 'credit' : '') : ''}
-      ${dailyTable}
-    </div></div>`;
+      ${dailyTable}`);
   }
 
   async function loadMonthCost(year, month) {

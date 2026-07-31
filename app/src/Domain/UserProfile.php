@@ -6,26 +6,20 @@ namespace App\Domain;
 
 /**
  * Profil de préférences d'un utilisateur (table `user_profiles`) : localisation,
- * devise, zone de marché et paramètres de tarification électricité.
+ * devise, zone de marché et marge fournisseur.
  *
  * Objet-valeur immuable couvrant la lecture ET l'écriture du profil
  * (`UserRepository::getProfile` / `updateProfile`). Simple porteur de données :
- * le bornage (marge) et la normalisation du mode de tarification restent du
- * ressort du repository — voir la note sur l'asymétrie lecture/écriture dans
- * `UserRepository::updateProfile`.
+ * le bornage de la marge reste du ressort du repository — voir la note sur
+ * l'asymétrie lecture/écriture dans `UserRepository::updateProfile`.
  *
- * Pas de taux de TVA ici : sa source unique est `tariff_grids.vat_rate` (#232),
- * ce qui le versionne par période de validité de la grille.
+ * Ni taux de TVA ni mode de tarification ici : leur source unique est
+ * `tariff_grids` (#232, #245), ce qui les versionne par période de validité de la
+ * grille. La zone de marché, elle, reste au profil : elle est géographique et non
+ * contractuelle.
  */
 final class UserProfile
 {
-    /**
-     * Modes de tarification électricité valides (colonne `user_profiles.pricing_mode`).
-     *
-     * @var list<string>
-     */
-    public const PRICING_MODES = ['fixed', 'dynamic_hourly', 'dynamic_quarter'];
-
     /**
      * @param ?string $advancesPeriodFrom Début 'Y-m-d' du dernier bilan d'acomptes
      *        consulté, restitué au retour de l'utilisateur (#241). null = aucun
@@ -40,7 +34,6 @@ final class UserProfile
         public readonly string $timezone,
         public readonly string $currency,
         public readonly ?string $biddingZone,
-        public readonly string $pricingMode,
         public readonly float $supplierMarkupPerKwh,
         public readonly string $locale,
         public readonly ?string $advancesPeriodFrom = null,
@@ -59,7 +52,6 @@ final class UserProfile
             timezone: 'UTC',
             currency: 'EUR',
             biddingZone: null,
-            pricingMode: 'fixed',
             supplierMarkupPerKwh: 0.0,
             locale: 'fr',
         );

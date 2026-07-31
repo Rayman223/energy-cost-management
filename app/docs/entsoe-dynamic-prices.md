@@ -34,9 +34,9 @@ cron_dynamic_prices.php     → orchestration : zones, fenêtre, boucle
 > colonne `resolution_min`. Aucune option de config, aucun argument CLI ne
 > pilote ce choix.
 
-Le seul réglage « 15 min » côté application est le **mode de tarification du
-profil utilisateur** (`pricing_mode = dynamic_quarter`), qui décide si le calcul
-de coût *utilise* ces points quart-horaires — voir l'étape 6.
+Le seul réglage « 15 min » côté application est le **mode de tarification de la
+grille tarifaire** (`tariff_grids.pricing_mode = dynamic_quarter`), qui décide si
+le calcul de coût *utilise* ces points quart-horaires — voir l'étape 6.
 
 ---
 
@@ -201,22 +201,34 @@ Deux conséquences pratiques :
 
 ---
 
-## 6. Régler le profil utilisateur
+## 6. Régler la grille tarifaire et le profil
 
-Dans l'application, page **/account** :
+Deux réglages, à deux endroits **différents depuis #245** :
 
-- **Mode de tarification** → *Tarif dynamique — quart-horaire (15 min)*
-  (`pricing_mode = dynamic_quarter`). Les autres valeurs sont `fixed` et
-  `dynamic_hourly`.
+**Page /tariffs — sur la grille électricité concernée :**
+
+- **Tarif de cette grille** → *Tarif dynamique — quart-horaire (15 min)*
+  (`tariff_grids.pricing_mode = dynamic_quarter`). Les autres valeurs sont `fixed`
+  et `dynamic_hourly`.
+
+Le mode appartient à la grille, donc au contrat, et vaut pour **sa seule période
+de validité**. Pour dater une bascule fixe → dynamique, on ne modifie pas la
+grille en cours : on en crée une nouvelle démarrant à la date de bascule. Les mois
+antérieurs restent alors calculés au tarif qui était réellement le vôtre, et un
+mois à cheval est facturé en deux moitiés — le tarif fournisseur avant, le prix de
+marché après.
+
+**Page /account :**
+
 - **Zone de marché ENTSO-E** → le code EIC **du pays de l'utilisateur** (tableau de
   l'étape 3). Un utilisateur en France saisit `10YFR-RTE------C`, un utilisateur
   en Belgique `10YBE----------2`. Laisser vide revient à utiliser la zone par
   défaut du site.
 
-C'est ce champ, et non la config, qui détermine les prix appliqués à un
-utilisateur donné. Cascade de repli : profil →
-`config.dynamic_prices.bidding_zone` → `DynamicPriceRepository::DEFAULT_ZONE`
-(`10YBE----------2`).
+La zone reste au profil : elle est géographique, pas contractuelle. C'est ce champ,
+et non la config, qui détermine les prix appliqués à un utilisateur donné. Cascade
+de repli : profil → `config.dynamic_prices.bidding_zone` →
+`DynamicPriceRepository::DEFAULT_ZONE` (`10YBE----------2`).
 
 Côté récupération, le cron lit `SELECT DISTINCT bidding_zone FROM user_profiles`
 et fusionne le résultat avec la zone de la config : **une seule exécution couvre

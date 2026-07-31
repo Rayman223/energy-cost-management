@@ -20,7 +20,7 @@ use RuntimeException;
  */
 final class TariffRepository implements TariffRepositoryInterface
 {
-    private const COLUMNS = 'id, user_id, energy_type, country, currency, vat_rate, name, valid_from, valid_to, pcs_coefficient';
+    private const COLUMNS = 'id, user_id, energy_type, pricing_mode, country, currency, vat_rate, name, valid_from, valid_to, pcs_coefficient';
 
     public function __construct(
         private readonly PDO $pdo,
@@ -148,18 +148,20 @@ final class TariffRepository implements TariffRepositoryInterface
         string $currency = 'EUR',
         bool $shared = false,
         float $vatRate = 21.0,
+        string $pricingMode = TariffGrid::PRICING_MODE_DEFAULT,
     ): int {
         $this->assertCanManageShared($shared);
 
         $this->pdo->beginTransaction();
         try {
             $stmt = $this->pdo->prepare(
-                'INSERT INTO tariff_grids (user_id, energy_type, country, currency, vat_rate, name, valid_from, valid_to, pcs_coefficient)
-                 VALUES (:user_id, :type, :country, :currency, :vat, :name, :from, :to, :pcs)'
+                'INSERT INTO tariff_grids (user_id, energy_type, pricing_mode, country, currency, vat_rate, name, valid_from, valid_to, pcs_coefficient)
+                 VALUES (:user_id, :type, :mode, :country, :currency, :vat, :name, :from, :to, :pcs)'
             );
             $stmt->execute([
                 'user_id'  => $shared ? null : $this->userId,
                 'type'     => $energyType,
+                'mode'     => self::pricingModeFor($energyType, $pricingMode),
                 'country'  => $country,
                 'currency' => $currency,
                 'vat'      => $vatRate,
@@ -193,6 +195,7 @@ final class TariffRepository implements TariffRepositoryInterface
         ?string $country = null,
         string $currency = 'EUR',
         float $vatRate = 21.0,
+        string $pricingMode = TariffGrid::PRICING_MODE_DEFAULT,
     ): void {
         $this->assertCanModify($id);
 
@@ -201,6 +204,7 @@ final class TariffRepository implements TariffRepositoryInterface
             $stmt = $this->pdo->prepare(
                 'UPDATE tariff_grids
                  SET energy_type = :type,
+                     pricing_mode = :mode,
                      country = :country,
                      currency = :currency,
                      vat_rate = :vat,
@@ -213,6 +217,7 @@ final class TariffRepository implements TariffRepositoryInterface
             $stmt->execute([
                 'id'       => $id,
                 'type'     => $energyType,
+                'mode'     => self::pricingModeFor($energyType, $pricingMode),
                 'country'  => $country,
                 'currency' => $currency,
                 'vat'      => $vatRate,
@@ -303,9 +308,46 @@ final class TariffRepository implements TariffRepositoryInterface
         return $val !== false ? (float) $val : null;
     }
 
+    public function hasDynamicGrid(string $energyType = 'electricity'): bool
+    {
+        $stmt = $this->pdo->prepare(
+            'SELECT 1
+             FROM tariff_grids
+             WHERE energy_type = :type
+               AND (user_id = :uid OR user_id IS NULL)
+               AND pricing_mode <> :fixed
+             LIMIT 1'
+        );
+        $stmt->execute([
+            'type'  => $energyType,
+            'uid'   => $this->userId,
+            'fixed' => TariffGrid::PRICING_MODE_DEFAULT,
+        ]);
+
+        return $stmt->fetchColumn() !== false;
+    }
+
     // -------------------------------------------------------------------------
     // Privé
     // -------------------------------------------------------------------------
+
+    /**
+     * Mode à persister : liste blanche, et 'fixed' forcé hors électricité.
+     *
+     * Normaliser ICI plutôt que dans la route, comme l'ancienne normalisation du
+     * profil : l'API accepte des grilles importées sans validation de ce champ
+     * (cf. app/docs/api-contract.md), et une valeur hors ENUM y serait sinon
+     * tronquée en silence par MySQL sans STRICT_TRANS_TABLES. Le mode n'a par
+     * ailleurs aucun sens pour le gaz ou l'eau : aucun prix de marché n'existe
+     * pour ces énergies, une grille eau « dynamique » ne serait jamais qu'un
+     * réglage mort qui ferait mentir /reconciliation.
+     */
+    private static function pricingModeFor(string $energyType, string $pricingMode): string
+    {
+        return $energyType === 'electricity'
+            ? TariffGrid::normalizePricingMode($pricingMode)
+            : TariffGrid::PRICING_MODE_DEFAULT;
+    }
 
     private function assertCanManageShared(bool $shared): void
     {
@@ -429,6 +471,7 @@ final class TariffRepository implements TariffRepositoryInterface
             country: $row['country'] !== null ? (string) $row['country'] : null,
             currency: (string) $row['currency'],
             vatRate: isset($row['vat_rate']) ? (float) $row['vat_rate'] : 21.0,
+            pricingMode: TariffGrid::normalizePricingMode((string) ($row['pricing_mode'] ?? TariffGrid::PRICING_MODE_DEFAULT)),
         );
     }
 }

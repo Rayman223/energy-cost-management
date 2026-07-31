@@ -4,6 +4,7 @@ declare(strict_types=1);
 use App\Domain\ComponentKind;
 use App\Domain\EuropeanCountries;
 use App\Domain\TariffCategory;
+use App\Domain\TariffGrid;
 use App\Domain\TariffLineCatalog;
 use App\Domain\TariffTemplateCatalog;
 use App\Http\SecurityHeaders;
@@ -195,6 +196,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             $shared = $isAdmin && ($_POST['shared'] ?? '') === '1';
 
+            // Mode tarifaire porté par la grille (#245). Le repository normalise la
+            // valeur et la force à 'fixed' hors électricité — ici on se contente de
+            // décider CE QU'ON LIT. Tarif dynamique désactivé côté serveur : le select
+            // est absent du formulaire, on reconduit donc le mode déjà enregistré au
+            // lieu de le remettre à 'fixed', qui effacerait le contrat d'un utilisateur
+            // le temps que le flag revienne (même garde que /account pour la zone de
+            // marché). Neutralise aussi un POST forgé qui activerait le dynamique sur
+            // un serveur qui n'en importe pas les prix.
+            if (DynamicPricing::isEnabled($config)) {
+                $pricingMode = (string) ($_POST['pricing_mode'] ?? TariffGrid::PRICING_MODE_DEFAULT);
+            } else {
+                $stored      = $editId !== null ? $tariffRepo->findById($editId) : null;
+                $pricingMode = $stored->pricingMode ?? TariffGrid::PRICING_MODE_DEFAULT;
+            }
+
             // Sauvegarde optionnelle comme template : on valide le nom AVANT de
             // persister la grille, pour ne pas laisser une grille enregistrée alors
             // que l'action signale une erreur.
@@ -210,14 +226,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $editId, $energyType, $name,
                     new \DateTimeImmutable($validFrom),
                     $validTo ? new \DateTimeImmutable($validTo) : null,
-                    $lines, $pcs, $country, $currency, $vatRate,
+                    $lines, $pcs, $country, $currency, $vatRate, $pricingMode,
                 );
             } else {
                 $tariffRepo->saveGrid(
                     $energyType, $name,
                     new \DateTimeImmutable($validFrom),
                     $validTo ? new \DateTimeImmutable($validTo) : null,
-                    $lines, $pcs, $country, $currency, $shared, $vatRate,
+                    $lines, $pcs, $country, $currency, $shared, $vatRate, $pricingMode,
                 );
 
                 // Compteur de popularité : une nouvelle grille issue d'un template
@@ -356,6 +372,7 @@ if ($editGrid !== null) {
     $formValidFrom = $editGrid->validFrom->format('Y-m-d');
     $formValidTo   = $editGrid->validTo?->format('Y-m-d');
     $formPcs       = $editGrid->pcsCoefficient;
+    $formMode      = $editGrid->pricingMode;
 } elseif ($duplicateGrid !== null) {
     $formCountry  = $duplicateGrid->country;
     $formCurrency = $duplicateGrid->currency;
@@ -364,12 +381,18 @@ if ($editGrid !== null) {
     // Nom tronqué à la largeur de la colonne (tariff_grids.name VARCHAR(120)).
     $formName = mb_substr($view->t('tariffs.duplicate_name', ['name' => $duplicateGrid->name]), 0, 120);
     $formPcs  = $duplicateGrid->pcsCoefficient;
+    $formMode = $duplicateGrid->pricingMode;
 } else {
     // #189 : continuité avec la reprise de structure/montants depuis $latest — le
     // pays de la dernière grille prime, le profil ne sert qu'à la toute première.
     $formCountry  = $latest !== null ? $latest->country : $profile?->country;
     $formCurrency = $profile->currency ?? 'EUR';
     $formVat      = ($formCountry !== null ? EuropeanCountries::vatRate($formCountry) : null) ?? 21.0;
+    // Nouvelle grille : on reprend le mode de la dernière grille de l'énergie (#245).
+    // Créer la grille du contrat suivant, c'est presque toujours prolonger le même
+    // régime ; forcer 'fixed' ferait retomber en tarif fixe à chaque renouvellement,
+    // silencieusement.
+    $formMode     = $latest !== null ? $latest->pricingMode : TariffGrid::PRICING_MODE_DEFAULT;
 }
 
 $buildFieldsFromSpecs = static function (array $specs, array $amounts, string $energy) use ($fieldLabel): array {
@@ -475,13 +498,33 @@ foreach (ComponentKind::forEnergy($energy) as $k) {
     $kindOptions[$k->group()][$k->value] = $view->t('tariffs.kind.' . $k->value);
 }
 
-// Tarif dynamique (profil) : les lignes d'énergie fournisseur de la grille sont
-// alors ignorées au calcul (prix ENTSO-E) → on les grise dans le formulaire.
-// Ne concerne que l'électricité, et seulement si le tarif dynamique est activé
-// côté serveur (sinon le calcul retombe en fixe : griser induirait en erreur).
-$isDynamic = $energy === 'electricity'
-    && DynamicPricing::isEnabled($config)
-    && ($profile->pricingMode ?? 'fixed') !== 'fixed';
+// Le mode appartient désormais à la grille (#245) : le grisage des lignes suit donc
+// CELLE qu'on édite, et non plus un réglage global. Le sélecteur n'est proposé que
+// pour l'électricité (aucun prix de marché ailleurs) et si le tarif dynamique est
+// activé côté serveur — sinon le calcul retombe en fixe et proposer le choix, comme
+// griser des lignes, induirait en erreur.
+$modeEditable = $energy === 'electricity' && DynamicPricing::isEnabled($config);
+$isDynamic    = $modeEditable && $formMode !== TariffGrid::PRICING_MODE_DEFAULT;
+
+// Modes proposés par le sélecteur, libellés traduits.
+$pricingModeOptions = [];
+foreach (TariffGrid::PRICING_MODES as $mode) {
+    $pricingModeOptions[$mode] = $view->t('tariffs.pricing_mode_' . $mode);
+}
+
+// Kinds concernés par le grisage, exportés vers le JS pour qu'il suive le mode en
+// direct : ComponentKind reste la source unique, plutôt qu'une liste recopiée dans
+// le script — une nouvelle composante spot y serait sinon oubliée en silence.
+$supplierEnergyKinds = [];
+$spotFormulaKinds    = [];
+foreach (ComponentKind::cases() as $k) {
+    if ($k->isSupplierEnergy()) {
+        $supplierEnergyKinds[] = $k->value;
+    }
+    if ($k->isSpotFormula()) {
+        $spotFormulaKinds[] = $k->value;
+    }
+}
 
 echo $view->render('tariffs', [
     'oidcEnabled'      => AuthGuard::isOidcEnabled($config),
@@ -514,6 +557,11 @@ echo $view->render('tariffs', [
     'kindOptions'         => $kindOptions,
     'isAdmin'          => $isAdmin,
     'isDynamic'        => $isDynamic,
+    'modeEditable'     => $modeEditable,
+    'formMode'         => $formMode,
+    'pricingModeOptions' => $pricingModeOptions,
+    'supplierEnergyKinds' => $supplierEnergyKinds,
+    'spotFormulaKinds'    => $spotFormulaKinds,
     'available'        => Locale::available($config),
     // Fuseau BRUT du profil pour l'horloge (null ⇒ repli navigateur).
     'timezone'         => $profile->timezone ?? null,

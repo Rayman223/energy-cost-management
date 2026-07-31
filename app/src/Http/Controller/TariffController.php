@@ -53,6 +53,12 @@ final class TariffController
             throw new ValidationException('vat_rate must be between 0 and 100');
         }
 
+        // Mode tarifaire (#245) : facultatif et non validé ici, comme le reste des
+        // champs de grille importés par l'API — le repository applique la liste
+        // blanche et ignore le champ hors électricité. Absent ⇒ 'fixed', qui
+        // reconduit le comportement des intégrations existantes.
+        $pricingMode = (string) ($request->input('pricing_mode') ?? TariffGrid::PRICING_MODE_DEFAULT);
+
         $id = $this->tariffRepo->saveGrid(
             energyType: $energyType,
             name: (string) $request->input('name'),
@@ -60,6 +66,7 @@ final class TariffController
             validTo: $validTo,
             lines: $this->normalizeLines($energyType, (array) $request->input('lines')),
             vatRate: $vatRate,
+            pricingMode: $pricingMode,
         );
 
         return JsonResponse::ok(['ok' => true, 'id' => $id]);
@@ -97,15 +104,16 @@ final class TariffController
     private function mapGrid(TariffGrid $g): array
     {
         return [
-            'id'         => $g->id,
-            'name'       => $g->name,
-            'valid_from' => $g->validFrom->format('Y-m-d'),
-            'valid_to'   => $g->validTo?->format('Y-m-d'),
-            'lines'      => $g->toTariffArray(),
-            'country'    => $g->country,
-            'currency'   => $g->currency,
-            'vat_rate'   => $g->vatRate,
-            'shared'     => $g->isShared(),
+            'id'           => $g->id,
+            'name'         => $g->name,
+            'valid_from'   => $g->validFrom->format('Y-m-d'),
+            'valid_to'     => $g->validTo?->format('Y-m-d'),
+            'lines'        => $g->toTariffArray(),
+            'country'      => $g->country,
+            'currency'     => $g->currency,
+            'vat_rate'     => $g->vatRate,
+            'pricing_mode' => $g->pricingMode,
+            'shared'       => $g->isShared(),
         ];
     }
 }
