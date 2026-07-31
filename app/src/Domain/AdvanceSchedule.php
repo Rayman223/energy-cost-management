@@ -132,6 +132,34 @@ final class AdvanceSchedule
         return true;
     }
 
+    /**
+     * Ce barème court-il à la date donnée ? Les deux bornes sont INCLUSES, comme
+     * pour une grille tarifaire ({@see TariffGrid::isActiveOn()}) : `valid_to`
+     * désigne le dernier jour couvert par le contrat, tel que saisi.
+     *
+     * Une plage ouverte (`validTo === null`) court indéfiniment.
+     */
+    public function isActiveOn(DateTimeImmutable $date): bool
+    {
+        $day = $date->setTime(0, 0, 0);
+
+        if ($day < $this->validFrom->setTime(0, 0, 0)) {
+            return false;
+        }
+
+        return $this->validTo === null || $day <= $this->validTo->setTime(0, 0, 0);
+    }
+
+    /**
+     * Barème dont le terme est passé. Distinct de `!isActiveOn()` : un barème à
+     * venir n'est pas actif non plus, mais il n'est pas échu pour autant.
+     */
+    public function isExpiredOn(DateTimeImmutable $date): bool
+    {
+        return $this->validTo !== null
+            && $this->validTo->setTime(0, 0, 0) < $date->setTime(0, 0, 0);
+    }
+
     /** Jour de prélèvement du mois de $monthStart, clampé sur la fin du mois. */
     private function dueDateIn(DateTimeImmutable $monthStart): DateTimeImmutable
     {

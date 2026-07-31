@@ -38,4 +38,29 @@ final class Dates
     {
         return new DateTimeZone('UTC');
     }
+
+    /**
+     * Jour civil courant de l'utilisateur, ramené à minuit UTC — le référentiel
+     * des bornes de validité stockées en DATE (ex. `energy_advances.valid_from`,
+     * relue par {@see \App\Domain\AdvanceSchedule::fromRow()}).
+     *
+     * Comparer ces bornes au « today » du serveur décalerait le résultat d'un jour
+     * entier de part et d'autre de minuit local : un barème s'afficherait comme
+     * échu la veille de son terme, ou encore actif le lendemain.
+     *
+     * Un fuseau illisible (donnée héritée, base éditée à la main) retombe sur UTC :
+     * un profil corrompu ne doit pas rendre la page inaccessible.
+     */
+    public static function todayIn(string $timezone): DateTimeImmutable
+    {
+        try {
+            $zone = new DateTimeZone($timezone);
+        } catch (\Throwable) {
+            $zone = self::utc();
+        }
+
+        $localDay = (new DateTimeImmutable('now', $zone))->format('Y-m-d');
+
+        return new DateTimeImmutable($localDay . ' 00:00:00', self::utc());
+    }
 }

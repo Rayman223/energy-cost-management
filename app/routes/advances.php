@@ -209,6 +209,11 @@ if ($editId !== false && $editId !== null) {
 // ── Bilan de la période ────────────────────────────────────────────────────
 $timezone = $profile->timezone ?? 'UTC';
 
+// Jour civil de l'utilisateur (#252) : sert à marquer le barème en cours dans la
+// liste. Distinct du `$today` ci-dessous, qui reste en UTC parce qu'il borne la
+// période de calcul du solde — deux usages, deux référentiels assumés.
+$todayLocal = Dates::todayIn($timezone);
+
 // Période par défaut : l'année écoulée jusqu'à aujourd'hui, fenêtre d'un cycle de
 // facturation complet — celle sur laquelle porte la régularisation annuelle.
 $today       = new DateTimeImmutable('today', Dates::utc());
@@ -314,6 +319,7 @@ echo $view->render('advances', [
     'periodTo'       => $periodTo,
     'energyTypes'    => AdvanceSchedule::ENERGY_TYPES,
     'maxAmount'      => AdvanceSchedule::MAX_AMOUNT,
+    'today'          => $todayLocal,
     'currency'       => $profile->currency ?? 'EUR',
     'available'      => Locale::available($config),
     'timezone'       => $profile->timezone ?? null,

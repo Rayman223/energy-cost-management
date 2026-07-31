@@ -177,6 +177,57 @@ final class AdvanceScheduleTest extends TestCase
         self::assertFalse($s->overlaps($this->at('2025-01-01'), $this->at('2025-12-31')));
     }
 
+    /**
+     * Marquage du barème en cours sur /advances (#252). Les deux bornes sont
+     * incluses : `valid_to` est le dernier jour couvert par le contrat, un barème
+     * affiché comme échu le jour même de son terme serait faux.
+     */
+    public function testIsActiveOnIncludesBothBounds(): void
+    {
+        $s = $this->schedule(validFrom: '2026-01-01', validTo: '2026-12-31');
+
+        self::assertTrue($s->isActiveOn($this->at('2026-01-01')));
+        self::assertTrue($s->isActiveOn($this->at('2026-06-15')));
+        self::assertTrue($s->isActiveOn($this->at('2026-12-31')));
+        self::assertFalse($s->isActiveOn($this->at('2025-12-31')));
+        self::assertFalse($s->isActiveOn($this->at('2027-01-01')));
+    }
+
+    public function testOpenEndedScheduleStaysActiveIndefinitely(): void
+    {
+        $s = $this->schedule(validFrom: '2026-01-01', validTo: null);
+
+        self::assertTrue($s->isActiveOn($this->at('2026-01-01')));
+        self::assertTrue($s->isActiveOn($this->at('2099-12-31')));
+        self::assertFalse($s->isActiveOn($this->at('2025-12-31')));
+    }
+
+    /** L'heure du jour ne doit pas décider : seule la date civile compte. */
+    public function testIsActiveOnIgnoresTimeOfDay(): void
+    {
+        $s   = $this->schedule(validFrom: '2026-01-01', validTo: '2026-12-31');
+        $end = new DateTimeImmutable('2026-12-31 23:59:59', new DateTimeZone('UTC'));
+
+        self::assertTrue($s->isActiveOn($end));
+    }
+
+    /**
+     * « Pas actif » ne veut pas dire « échu » : un barème à venir n'est ni l'un ni
+     * l'autre, et ne doit pas être affiché en retrait comme un contrat terminé.
+     */
+    public function testIsExpiredOnSeparatesPastFromFutureSchedules(): void
+    {
+        $past   = $this->schedule(validFrom: '2025-01-01', validTo: '2025-12-31');
+        $future = $this->schedule(validFrom: '2027-01-01', validTo: '2027-12-31');
+        $open   = $this->schedule(validFrom: '2020-01-01', validTo: null);
+        $today  = $this->at('2026-06-15');
+
+        self::assertTrue($past->isExpiredOn($today));
+        self::assertFalse($future->isExpiredOn($today));
+        self::assertFalse($open->isExpiredOn($today));
+        self::assertFalse($past->isExpiredOn($this->at('2025-12-31')));
+    }
+
     public function testFromRowParsesDatesAndNullableEnd(): void
     {
         $s = AdvanceSchedule::fromRow([

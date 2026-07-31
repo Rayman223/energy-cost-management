@@ -18,6 +18,7 @@ use App\Domain\AdvanceSchedule;
  * @var bool                     $futureClamped Fin ramenée à aujourd'hui (acompte à échoir)
  * @var string                   $periodFrom    'YYYY-MM-DD' du formulaire de période
  * @var string                   $periodTo      'YYYY-MM-DD' du formulaire de période
+ * @var DateTimeImmutable        $today         Jour civil de l'utilisateur (barème en cours)
  * @var list<string>             $energyTypes
  * @var float                    $maxAmount     Plafond de saisie (capacité de la colonne)
  * @var string                   $currency      Devise du profil
@@ -293,7 +294,21 @@ $currency = $balance['currency'] ?? $currency;
     </thead>
     <tbody>
     <?php foreach ($schedules as $schedule): ?>
-      <tr class="<?= $editing !== null && $editing->id === $schedule->id ? 'is-editing' : '' ?>">
+      <?php
+        // #252 : le barème qui court aujourd'hui porte un liseré ET un badge — la
+        // couleur seule ne dirait rien à qui ne la perçoit pas. Les barèmes échus
+        // passent en retrait pour que le « en cours » ressorte dans un historique
+        // long. Le fond ambré de `is-editing` n'entre pas en concurrence : le
+        // liseré est un box-shadow, pas un background.
+        $isCurrent = $schedule->isActiveOn($today);
+        $isExpired = $schedule->isExpiredOn($today);
+        $rowClass  = array_filter([
+            $editing !== null && $editing->id === $schedule->id ? 'is-editing' : '',
+            $isCurrent ? 'is-current' : '',
+            $isExpired ? 'is-expired' : '',
+        ]);
+      ?>
+      <tr class="<?= $this->e(implode(' ', $rowClass)) ?>">
         <td>
           <?= $this->te('advances.energy.' . $schedule->energyType) ?>
           <?php if ($schedule->note !== ''): ?>
@@ -301,7 +316,12 @@ $currency = $balance['currency'] ?? $currency;
           <?php endif; ?>
         </td>
         <td class="num"><?= $this->e($this->money($schedule->amountMonthly, $currency)) ?></td>
-        <td><?= $this->e($schedule->validityLabel()) ?></td>
+        <td>
+          <?= $this->e($schedule->validityLabel()) ?>
+          <?php if ($isCurrent): ?>
+          <span class="adv-badge"><?= $this->te('common.active') ?></span>
+          <?php endif; ?>
+        </td>
         <td class="num"><?= $this->e((string) $schedule->dueDay) ?></td>
         <td class="actions">
           <a class="btn btn-ghost btn-sm" href="<?= $this->e($this->url('advances')) ?>?edit=<?= $this->e((string) $schedule->id) ?>&amp;from=<?= rawurlencode($periodFrom) ?>&amp;to=<?= rawurlencode($periodTo) ?>#adv-energy"><?= $this->te('advances.edit') ?></a>
