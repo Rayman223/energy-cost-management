@@ -146,8 +146,15 @@ $csrf = \App\Security\Csrf::field();
       <p class="hint"><?= $this->te('account.supplier_markup_hint') ?></p>
       <?php else: ?>
       <?php // Zone de marché et marge fournisseur masquées et non soumises : la route
-            // reconduit les valeurs en base (préservation), pas besoin de champ caché. ?>
+            // reconduit les valeurs en base (préservation), pas besoin de champ caché.
+            // Deux raisons possibles de masquer, deux messages : le tarif dynamique est
+            // coupé sur le serveur, ou l'utilisateur n'a aucune grille indexée au marché
+            // — auquel cas ces réglages ne pèsent sur aucun calcul (#253). ?>
+      <?php if (empty($dynamicServerEnabled)): ?>
       <p class="hint"><?= $this->te('account.pricing_mode_dynamic_disabled') ?></p>
+      <?php else: ?>
+      <p class="hint"><?= $this->te('account.no_dynamic_grid_hint') ?></p>
+      <?php endif; ?>
       <?php endif; ?>
       <button type="submit"><?= $this->te('account.save_profile') ?></button>
     </form>

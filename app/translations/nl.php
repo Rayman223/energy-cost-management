@@ -53,7 +53,7 @@ return [
     'account.title'        => 'Mijn account',
     'account.admin'        => 'beheerder',
     'account.profile'      => 'Profiel',
-    'account.profile_hint' => 'Land, valuta, tijdzone en marktzone bepalen tarieven en dynamische prijzen.',
+    'account.profile_hint' => 'Land, valuta, tijdzone en taal gelden voor uw tarieven en voor de weergave.',
     'account.country'      => 'Land',
     'account.country_none' => '— Geen / generiek —',
     'account.currency'     => 'Valuta',
@@ -65,6 +65,7 @@ return [
     'account.supplier_markup_hint' => 'Toegevoegd aan de spotprijs incl. btw. Negatief = korting.',
     'account.invalid_markup' => 'Ongeldige leveranciersmarge (verwacht tussen -1 en 1 €/kWh).',
     'account.pricing_mode_dynamic_disabled' => 'Dynamische tarieven zijn uitgeschakeld op deze server: het vaste tarief wordt toegepast.',
+    'account.no_dynamic_grid_hint' => 'Marktzone en leveranciersmarge verschijnen pas zodra een tariefraster op dynamisch staat: bij een vast (klassiek) tarief spelen ze in geen enkele berekening mee. De modus kiest u op het betrokken raster, onder Tarieven.',
     'account.save_profile' => 'Profiel opslaan',
     'account.profile_saved' => 'Profiel opgeslagen.',
 

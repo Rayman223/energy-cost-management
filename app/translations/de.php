@@ -53,7 +53,7 @@ return [
     'account.title'        => 'Mein Konto',
     'account.admin'        => 'Admin',
     'account.profile'      => 'Profil',
-    'account.profile_hint' => 'Land, Währung, Zeitzone und Marktzone bestimmen Tarife und dynamische Preise.',
+    'account.profile_hint' => 'Land, Währung, Zeitzone und Sprache gelten für Ihre Tarife und für die Anzeige.',
     'account.country'      => 'Land',
     'account.country_none' => '— Keins / generisch —',
     'account.currency'     => 'Währung',
@@ -65,6 +65,7 @@ return [
     'account.supplier_markup_hint' => 'Zum Spotpreis inkl. MwSt. hinzugefügt. Negativ = Rabatt.',
     'account.invalid_markup' => 'Ungültiger Lieferantenaufschlag (erwartet zwischen -1 und 1 €/kWh).',
     'account.pricing_mode_dynamic_disabled' => 'Der dynamische Tarif ist auf diesem Server deaktiviert: Es gilt der Festtarif.',
+    'account.no_dynamic_grid_hint' => 'Marktzone und Lieferantenaufschlag erscheinen erst, wenn ein Tarifraster auf dynamisch steht: Bei einem festen (klassischen) Tarif fließen sie in keine Berechnung ein. Den Modus wählen Sie am betreffenden Raster unter Tarife.',
     'account.save_profile' => 'Profil speichern',
     'account.profile_saved' => 'Profil gespeichert.',
 

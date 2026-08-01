@@ -17,6 +17,7 @@ use App\I18n\Locale;
 use App\Infrastructure\Database;
 use App\Integration\ModuleRegistry;
 use App\Repository\ApiTokenRepository;
+use App\Repository\TariffRepository;
 use App\Repository\UserIdentityRepository;
 use App\Repository\UserIntegrationRepository;
 use App\Repository\UserRepository;
@@ -77,6 +78,27 @@ if (($_GET['export'] ?? '') === '1') {
     exit;
 }
 
+// Lu une seule fois, après le court-circuit de l'export : aucune action POST de cette
+// page ne modifie la table `users` (`delete_account` sort par exit), la valeur reste
+// donc valable au rendu.
+$user = $users->findById($userId);
+
+// Zone de marché et marge fournisseur ne pilotent que le prix spot : sans grille
+// électricité indexée au marché, elles n'ont aucun effet sur le calcul et n'ajoutent
+// que de la confusion sur la page compte (#253). Depuis #245 le mode fixe/dynamique
+// vit sur la grille, d'où l'interrogation du dépôt tarifaire plutôt que du profil.
+// Calculé avant le POST : le garde conditionne aussi la validation de la saisie.
+//
+// `hasDynamicGrid()` est volontairement large — toute grille visible, y compris une
+// grille partagée du catalogue et une grille dont la période est révolue. Le critère
+// exact (« la grille effective d'au moins une période est dynamique ») demanderait de
+// rejouer la résolution période par période ; à défaut, on préfère le faux positif
+// (deux champs inutiles affichés) au faux négatif, qui rendrait la marge inaccessible
+// à qui en a besoin. Même sémantique que le garde de /reconciliation.
+$tariffRepo     = new TariffRepository($pdo, $userId, $user?->isAdmin() ?? false);
+$dynamicServer  = DynamicPricing::isEnabled($config);
+$dynamicVisible = $dynamicServer && $tariffRepo->hasDynamicGrid();
+
 // ── Traitement des actions (POST) ───────────────────────────────────────────
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     try {
@@ -129,11 +151,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             // Fallback sur les défauts (profil absent) pour reconduire des valeurs sûres.
             $storedProfile = $profileForLocale ?? UserProfile::defaults();
-            if (DynamicPricing::isEnabled($config)) {
+            if ($dynamicVisible) {
                 $zone = trim((string) ($_POST['bidding_zone'] ?? '')) ?: null;
 
                 // Marge fournisseur (€/kWh) par utilisateur — vit dans le garde
-                // $dynamicEnabled comme les champs zone/mode (#153). Un champ absent ou
+                // $dynamicVisible comme le champ zone (#153, #253). Un champ absent ou
                 // vide RECONDUIT la valeur stockée (pas de reset silencieux à 0.0) ; une
                 // valeur effectivement fournie hors bornes est rejetée. La TVA, elle, a
                 // quitté le profil : sa source unique est la grille tarifaire (#232).
@@ -143,13 +165,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     throw new \InvalidArgumentException($view->t('account.invalid_markup'));
                 }
             } else {
-                // Tarif dynamique désactivé : zone de marché et marge fournisseur sont
-                // masquées et non éditables. On reconduit les valeurs déjà en base plutôt
-                // que de les lire du POST : relire les effacerait (champs absents du
-                // formulaire), alors qu'une bidding_zone renseignée doit être préservée le
-                // temps que le flag revienne. Neutralise aussi tout POST forgé (ni modif,
-                // ni activation). Le mode tarifaire, lui, a quitté le profil pour la
-                // grille (#245) — cf. /tariffs.
+                // Tarif dynamique hors service (coupé serveur) ou sans usage (aucune grille
+                // électricité indexée au marché, #253) : zone de marché et marge fournisseur
+                // sont masquées et non éditables. On reconduit les valeurs déjà en base
+                // plutôt que de les lire du POST : relire les effacerait (champs absents du
+                // formulaire), alors qu'une marge saisie doit survivre à un repassage en
+                // tarif fixe et se retrouver intacte au retour au dynamique. Neutralise
+                // aussi tout POST forgé (ni modif, ni activation). Le mode tarifaire, lui,
+                // a quitté le profil pour la grille (#245) — cf. /tariffs.
                 $storedZone = $storedProfile->biddingZone;
                 $zone       = (is_string($storedZone) && $storedZone !== '') ? $storedZone : null;
                 $markup     = $storedProfile->supplierMarkupPerKwh;
@@ -261,7 +284,7 @@ if ($success === null && $error === null) {
 }
 
 // ── Données pour l'affichage ────────────────────────────────────────────────
-$user     = $users->findById($userId);
+// `$user` est lu plus haut (avant le POST) : il alimente aussi le garde tarifaire.
 
 // Identités OIDC liées + fournisseurs encore liables (#137). Libellés issus de
 // la config (source unique OidcClientFactory). Carte gardée par oidcEnabled côté vue.
@@ -311,7 +334,11 @@ $timezoneOptions = Timezones::options($profile->timezone);
 
 echo $view->render('account', [
     'oidcEnabled' => AuthGuard::isOidcEnabled($config),
-    'dynamicEnabled' => DynamicPricing::isEnabled($config),
+    // Deux drapeaux distincts : `dynamicEnabled` ouvre la saisie (garde combiné),
+    // `dynamicServerEnabled` sert au seul choix du message d'explication — kill-switch
+    // serveur ou simple absence de grille dynamique (#253).
+    'dynamicEnabled' => $dynamicVisible,
+    'dynamicServerEnabled' => $dynamicServer,
     'discordUrl'  => DiscordLink::inviteUrl($config),
     'adsenseClient' => Adsense::clientId($config),
     'error'      => $error,

@@ -60,7 +60,7 @@ return [
     'account.title'        => 'Mon compte',
     'account.admin'        => 'admin',
     'account.profile'      => 'Profil',
-    'account.profile_hint' => 'Pays, devise, fuseau et zone de marché servent aux tarifs et aux prix dynamiques.',
+    'account.profile_hint' => 'Pays, devise, fuseau et langue s’appliquent à vos tarifs et à l’affichage.',
     'account.country'      => 'Pays',
     'account.country_none' => '— Aucun / générique —',
     'account.currency'     => 'Devise',
@@ -72,6 +72,7 @@ return [
     'account.supplier_markup_hint' => 'Ajoutée au prix spot TTC. Négatif = remise.',
     'account.invalid_markup' => 'Marge fournisseur invalide (attendue entre -1 et 1 €/kWh).',
     'account.pricing_mode_dynamic_disabled' => 'Le tarif dynamique est désactivé sur ce serveur : le tarif fixe est appliqué.',
+    'account.no_dynamic_grid_hint' => 'Zone de marché et marge fournisseur n’apparaissent qu’avec une grille en tarif dynamique : en tarif fixe (classique), elles n’interviennent dans aucun calcul. Le mode se choisit sur la grille concernée, dans Tarifs.',
     'account.save_profile' => 'Enregistrer le profil',
     'account.profile_saved' => 'Profil enregistré.',
 
