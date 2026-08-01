@@ -706,7 +706,11 @@ return [
     'advances.excluded_from_total'                 => 'hors total',
     'advances.no_advance_for_energy'               => 'Aucun acompte saisi',
     'advances.cost_without_advance_warning'        => 'Une énergie au moins est chiffrée sans acompte correspondant : sa consommation est affichée à titre indicatif mais reste hors du solde, faute de montant payé auquel la comparer. Ajoutez-lui un barème pour l\'inclure.',
+    'advances.no_instalment_in_period'             => 'Aucune échéance sur la période',
+    'advances.no_instalment_warning'               => 'Un barème d\'acompte couvre bien cette période, mais aucune de ses dates de prélèvement n\'y tombe : sur une fenêtre plus courte qu\'un mois, ou tombant entre deux prélèvements, le montant payé est nul et la consommation reste hors du solde. Élargissez la période pour y inclure au moins une échéance.',
+    'advances.short_advance_no_instalment_warning' => 'Un barème d\'acompte ne couvre qu\'une partie de cette période, et aucune de ses dates de prélèvement n\'y tombe : le montant payé est nul et la consommation reste hors du solde. Élargir la période n\'y changera rien — c\'est la plage de validité du barème qui limite. Vérifiez sa plage de validité et son jour de prélèvement, ou attendez le premier prélèvement effectif.',
     'advances.verdict_unavailable'                 => 'Aucune consommation n\'a pu être chiffrée sur cette période : le solde ne peut pas être établi.',
+    'advances.verdict_not_comparable'              => 'Aucune énergie n\'a pu être rapprochée d\'un acompte sur cette période : le solde ne peut pas être établi.',
     'advances.partial_advances_warning'            => 'Vos barèmes ne couvrent pas tous les mois de la période : le coût porte sur la période entière alors que les acomptes n\'y sont comptés qu\'en partie. Le solde penche donc du côté du complément à payer.',
     'advances.future_clamped'                      => 'La période a été ramenée à aujourd\'hui : les acomptes à échoir n\'ont pas encore été prélevés, les compter gonflerait le montant payé.',
 

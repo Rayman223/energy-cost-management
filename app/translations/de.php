@@ -696,7 +696,11 @@ return [
     'advances.excluded_from_total'                 => 'nicht in der Summe',
     'advances.no_advance_for_energy'               => 'Kein Abschlag erfasst',
     'advances.cost_without_advance_warning'        => 'Mindestens eine Energie ist beziffert, ohne dass ein Abschlag dazu erfasst wäre: Ihr Verbrauch wird zur Information angezeigt, bleibt aber außerhalb des Saldos, da kein gezahlter Betrag zum Vergleich vorliegt. Legen Sie dafür einen Abschlagsplan an, damit sie einbezogen wird.',
+    'advances.no_instalment_in_period'             => 'Keine Fälligkeit im Zeitraum',
+    'advances.no_instalment_warning'               => 'Ein Abschlagsplan deckt diesen Zeitraum durchaus ab, doch fällt keiner seiner Abbuchungstermine hinein: Bei einem Fenster von weniger als einem Monat – oder einem, das zwischen zwei Abbuchungen liegt – ist der gezahlte Betrag null und der Verbrauch bleibt außerhalb des Saldos. Erweitern Sie den Zeitraum, sodass er mindestens eine Fälligkeit umfasst.',
+    'advances.short_advance_no_instalment_warning' => 'Ein Abschlagsplan deckt nur einen Teil dieses Zeitraums ab, und keiner seiner Abbuchungstermine fällt hinein: Der gezahlte Betrag ist null und der Verbrauch bleibt außerhalb des Saldos. Den Zeitraum zu erweitern hilft hier nicht – die Begrenzung liegt am Gültigkeitszeitraum des Plans. Prüfen Sie dessen Gültigkeitszeitraum und den Abbuchungstag, oder warten Sie die erste tatsächliche Abbuchung ab.',
     'advances.verdict_unavailable'                 => 'Für diesen Zeitraum konnte kein Verbrauch beziffert werden: Der Saldo lässt sich nicht ermitteln.',
+    'advances.verdict_not_comparable'              => 'Für diesen Zeitraum konnte keine Energie einem Abschlag zugeordnet werden: Der Saldo lässt sich nicht ermitteln.',
     'advances.partial_advances_warning'            => 'Ihre Abschlagspläne decken nicht alle Monate des Zeitraums ab: Die Kosten laufen über den gesamten Zeitraum, während die Abschläge nur teilweise gezählt werden. Der Saldo neigt daher zu einer Nachzahlung.',
     'advances.future_clamped'                      => 'Der Zeitraum wurde auf heute gekürzt: Noch nicht fällige Abschläge wurden nicht abgebucht und würden den gezahlten Betrag aufblähen.',
 

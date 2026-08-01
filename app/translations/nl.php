@@ -696,7 +696,11 @@ return [
     'advances.excluded_from_total'                 => 'buiten totaal',
     'advances.no_advance_for_energy'               => 'Geen voorschot ingevoerd',
     'advances.cost_without_advance_warning'        => 'Minstens één energie is berekend zonder bijhorend voorschot: het verbruik wordt ter informatie getoond maar blijft buiten het saldo, omdat er geen betaald bedrag is om mee te vergelijken. Voeg er een schema aan toe om het op te nemen.',
+    'advances.no_instalment_in_period'             => 'Geen vervaldag in de periode',
+    'advances.no_instalment_warning'               => 'Er loopt wel degelijk een voorschotschema over deze periode, maar geen enkele afhoudingsdatum valt erbinnen: bij een venster korter dan een maand, of dat tussen twee afhoudingen valt, is het betaalde bedrag nul en blijft het verbruik buiten het saldo. Verruim de periode zodat ze minstens één vervaldag omvat.',
+    'advances.short_advance_no_instalment_warning' => 'Een voorschotschema dekt slechts een deel van deze periode, en geen enkele afhoudingsdatum valt erbinnen: het betaalde bedrag is nul en het verbruik blijft buiten het saldo. De periode verruimen helpt niet — het is de geldigheidsperiode van het schema die de beperking vormt. Controleer die geldigheidsperiode en de afhoudingsdag, of wacht op de eerste effectieve afhouding.',
     'advances.verdict_unavailable'                 => 'Voor deze periode kon geen enkel verbruik worden berekend: het saldo kan niet worden bepaald.',
+    'advances.verdict_not_comparable'              => 'Geen enkele energie kon voor deze periode aan een voorschot worden gekoppeld: het saldo kan niet worden bepaald.',
     'advances.partial_advances_warning'            => 'Uw schema\'s dekken niet alle maanden van de periode: de kost loopt over de volledige periode terwijl de voorschotten er slechts gedeeltelijk in worden geteld. Het saldo neigt daardoor naar een bij te betalen bedrag.',
     'advances.future_clamped'                      => 'De periode is teruggebracht tot vandaag: nog niet vervallen voorschotten zijn niet afgeschreven en zouden het betaalde bedrag opblazen.',
 

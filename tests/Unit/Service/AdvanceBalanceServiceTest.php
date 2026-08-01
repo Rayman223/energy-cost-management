@@ -263,7 +263,7 @@ final class AdvanceBalanceServiceTest extends TestCase
      * hors du total : l'y inclure retrancherait son coût de 0 € payé et
      * annoncerait une dette imaginaire.
      */
-    public function testEnergyWithACostButNoInstalmentIsShownYetExcludedFromTheTotal(): void
+    public function testEnergyWithACostButNoScheduleIsShownYetExcludedFromTheTotal(): void
     {
         $gasGrid = new TariffGrid(
             id: 2,
@@ -304,6 +304,157 @@ final class AdvanceBalanceServiceTest extends TestCase
         self::assertEqualsWithDelta(0.0, $r['total_cost'], 0.01);
         self::assertEqualsWithDelta(0.0, $r['total_balance'], 0.01);
         self::assertTrue($r['has_cost_without_advance']);
+
+        // Aucun barème gaz n'existe : le conseil « ajoutez-lui un barème » est ici
+        // le bon, et le drapeau de la fenêtre sans échéance ne doit pas se lever.
+        self::assertFalse($gas->hasSchedule);
+        self::assertFalse($r['has_advance_without_instalment']);
+        self::assertFalse($r['has_short_advance_without_instalment']);
+    }
+
+    /**
+     * #254 — Un barème court sur toute la fenêtre, mais son jour de prélèvement
+     * n'y tombe pas : sur deux jours de fin de mois, un acompte prélevé le 1er ne
+     * produit aucune échéance. Le montant payé est nul SANS qu'aucun acompte ne
+     * manque, et l'écran ne doit pas réclamer un barème déjà saisi.
+     */
+    public function testScheduleWithoutADueDateInTheWindowIsNotReportedAsMissing(): void
+    {
+        $svc = new AdvanceBalanceService(
+            // 166,36 €/mois prélevés le 1er, plage ouverte : le contrat court.
+            new FakeAdvanceScheduleRepository([$this->schedule(amount: 166.36, validFrom: '2026-07-01')]),
+            $this->costService(
+                new FakeLegacyDailyRepository(deltasBetween: $this->elecDeltas('2026-07-28 00:00:00', '2026-07-29 00:00:00', 40.0)),
+                new FakeTariffRepository($this->electricityGrid()),
+            ),
+        );
+
+        $r = $svc->balanceFor($this->at('2026-07-28'), $this->at('2026-07-29'));
+
+        $elec = $r['balances'][0];
+        self::assertSame(0, $elec->dueCount);
+        self::assertEqualsWithDelta(0.0, $elec->paid, 0.01);
+        self::assertEqualsWithDelta(4.0, (float) $elec->cost, 0.01);
+
+        // Le barème est reconnu : c'est la fenêtre qui est trop étroite, pas
+        // l'acompte qui manque.
+        self::assertTrue($elec->hasSchedule);
+        self::assertTrue($elec->hasScheduleWithoutInstalment());
+        self::assertTrue($r['has_advance_without_instalment']);
+        self::assertFalse($r['has_cost_without_advance']);
+
+        // Le barème couvre toute la fenêtre : c'est bien elle qu'il faut élargir,
+        // et non la plage de validité qu'il faut corriger.
+        self::assertFalse($r['has_short_advance_without_instalment']);
+
+        // Le calcul, lui, ne bouge pas : la ligne reste hors du solde.
+        self::assertEqualsWithDelta(0.0, $r['total_cost'], 0.01);
+        self::assertEqualsWithDelta(0.0, $r['total_balance'], 0.01);
+    }
+
+    /**
+     * Un barème échu avant la période n'est pas « un barème qui couvre la
+     * fenêtre » : le conseil d'en ajouter un redevient légitime.
+     */
+    public function testScheduleExpiredBeforeTheWindowStillCountsAsMissing(): void
+    {
+        $svc = new AdvanceBalanceService(
+            new FakeAdvanceScheduleRepository([
+                $this->schedule(validFrom: '2025-01-01', validTo: '2026-07-27'),
+            ]),
+            $this->costService(
+                new FakeLegacyDailyRepository(deltasBetween: $this->elecDeltas('2026-07-28 00:00:00', '2026-07-29 00:00:00', 40.0)),
+                new FakeTariffRepository($this->electricityGrid()),
+            ),
+        );
+
+        $r = $svc->balanceFor($this->at('2026-07-28'), $this->at('2026-07-29'));
+
+        self::assertFalse($r['balances'][0]->hasSchedule);
+        self::assertTrue($r['has_cost_without_advance']);
+        self::assertFalse($r['has_advance_without_instalment']);
+    }
+
+    /**
+     * La fin de fenêtre est EXCLUE, celle de la validité d'un barème est INCLUSE :
+     * `hasSchedule` doit se mesurer sur la veille de `to`. Un barème valable le seul
+     * 29/07 est donc hors d'une fenêtre `[28/07, 29/07[` — sans le décalage d'un
+     * jour, il compterait comme couvrant, et l'écran promettrait un élargissement de
+     * période inutile. Fixture volontairement adjacente : disjointe d'un jour franc,
+     * elle passerait avec ou sans la correction.
+     */
+    public function testScheduleStartingOnTheExcludedEndBoundIsOutsideTheWindow(): void
+    {
+        $svc = new AdvanceBalanceService(
+            new FakeAdvanceScheduleRepository([
+                $this->schedule(validFrom: '2026-07-29', validTo: '2026-07-29'),
+            ]),
+            $this->costService(
+                new FakeLegacyDailyRepository(deltasBetween: $this->elecDeltas('2026-07-28 00:00:00', '2026-07-29 00:00:00', 40.0)),
+                new FakeTariffRepository($this->electricityGrid()),
+            ),
+        );
+
+        $r = $svc->balanceFor($this->at('2026-07-28'), $this->at('2026-07-29'));
+
+        self::assertFalse($r['balances'][0]->hasSchedule);
+        self::assertTrue($r['has_cost_without_advance']);
+    }
+
+    /**
+     * #254 — Le conseil « élargissez la période » n'a de sens que si le barème
+     * couvre DÉJÀ toute la fenêtre : c'est alors elle, et elle seule, qui est trop
+     * étroite. Quand le barème n'en couvre qu'une fraction, c'est sa plage de
+     * validité qui borne l'intersection, et l'élargir ne fera apparaître aucune
+     * échéance — cas d'un barème saisi le 30 alors que le prélèvement tombe le 1er.
+     */
+    public function testScheduleCoveringOnlyPartOfTheWindowGetsItsOwnAdvice(): void
+    {
+        $svc = new AdvanceBalanceService(
+            // Créé le 30/07, prélevé le 1er : la première échéance sera le 1er août.
+            new FakeAdvanceScheduleRepository([$this->schedule(validFrom: '2026-07-30')]),
+            $this->costService(
+                new FakeLegacyDailyRepository(deltasBetween: $this->elecDeltas('2026-07-01 00:00:00', '2026-08-01 00:00:00', 40.0)),
+                new FakeTariffRepository($this->electricityGrid()),
+            ),
+        );
+
+        $r = $svc->balanceFor($this->at('2026-07-01'), $this->at('2026-08-01'));
+
+        $elec = $r['balances'][0];
+        self::assertSame(0, $elec->dueCount);
+        self::assertTrue($elec->hasSchedule);
+
+        // Le barème est reconnu, mais on ne promet pas qu'élargir la fenêtre aidera.
+        self::assertTrue($r['has_short_advance_without_instalment']);
+        self::assertFalse($r['has_advance_without_instalment']);
+        self::assertFalse($r['has_cost_without_advance']);
+    }
+
+    /**
+     * Même impasse par l'autre bout : la plage de validité est plus courte qu'un
+     * mois et ne contient pas le jour de prélèvement. Aucune fenêtre, si large
+     * soit-elle, ne fera tomber une échéance dans cet intervalle — le barème
+     * lui-même est à corriger.
+     */
+    public function testScheduleTooShortToEverHoldItsDueDayGetsItsOwnAdvice(): void
+    {
+        $svc = new AdvanceBalanceService(
+            // Valable du 1er au 10 juillet, mais prélevé le 15 : jamais d'échéance.
+            new FakeAdvanceScheduleRepository([
+                $this->schedule(validFrom: '2026-07-01', validTo: '2026-07-10', dueDay: 15),
+            ]),
+            $this->costService(
+                new FakeLegacyDailyRepository(deltasBetween: $this->elecDeltas('2026-07-01 00:00:00', '2026-08-01 00:00:00', 40.0)),
+                new FakeTariffRepository($this->electricityGrid()),
+            ),
+        );
+
+        $r = $svc->balanceFor($this->at('2026-07-01'), $this->at('2026-08-01'));
+
+        self::assertSame(0, $r['balances'][0]->dueCount);
+        self::assertTrue($r['has_short_advance_without_instalment']);
+        self::assertFalse($r['has_advance_without_instalment']);
     }
 
     /**

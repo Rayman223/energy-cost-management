@@ -31,6 +31,12 @@ final class AdvanceBalance
      * @param bool        $partialAdvances Le déséquilibre inverse : les barèmes ne
      *        couvrent qu'une partie des mois de la période (contrat démarré en cours
      *        de route), et un coût de douze mois est comparé à sept prélèvements.
+     * @param bool        $hasSchedule Un barème de cette énergie couvre au moins un
+     *        jour de la fenêtre. Distinct de `dueCount > 0` : une fenêtre plus courte
+     *        qu'un mois — ou tombant entre deux prélèvements — n'attrape aucune
+     *        échéance alors que le contrat court bel et bien (#254). Sans cette
+     *        nuance, les deux cas se confondent en « aucun acompte saisi », et l'écran
+     *        conseille d'ajouter un barème qui existe déjà.
      */
     public function __construct(
         public readonly string $energyType,
@@ -41,6 +47,7 @@ final class AdvanceBalance
         public readonly ?string $currency = null,
         public readonly bool $partialData = false,
         public readonly bool $partialAdvances = false,
+        public readonly bool $hasSchedule = false,
     ) {
     }
 
@@ -57,5 +64,15 @@ final class AdvanceBalance
     public function isComparable(): bool
     {
         return $this->cost !== null;
+    }
+
+    /**
+     * Barème actif sur la fenêtre, mais aucune date de prélèvement n'y tombe : le
+     * montant payé est nul sans qu'aucun acompte ne manque. Le remède n'est pas
+     * d'en saisir un — il existe — mais d'élargir la période (#254).
+     */
+    public function hasScheduleWithoutInstalment(): bool
+    {
+        return $this->hasSchedule && $this->dueCount === 0;
     }
 }

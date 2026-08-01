@@ -51,6 +51,8 @@ final class AdvanceBalanceService
      *     has_partial_data: bool,
      *     has_partial_advances: bool,
      *     has_cost_without_advance: bool,
+     *     has_advance_without_instalment: bool,
+     *     has_short_advance_without_instalment: bool,
      *     mixed_currency: bool
      * }
      */
@@ -66,6 +68,8 @@ final class AdvanceBalanceService
         $hasPartial    = false;
         $hasPartialAdv = false;
         $hasCostOnly   = false;
+        $hasNoInstal   = false;
+        $hasShortSched = false;
         $mixed         = false;
 
         foreach (AdvanceSchedule::ENERGY_TYPES as $energyType) {
@@ -83,12 +87,32 @@ final class AdvanceBalanceService
                 continue;
             }
 
-            // Énergie chiffrée mais sans acompte saisi : la ligne est AFFICHÉE — vous
-            // avez bien des index et une grille, les taire donnerait l'impression
+            // Énergie chiffrée mais sans prélèvement compté : la ligne est AFFICHÉE —
+            // vous avez bien des index et une grille, les taire donnerait l'impression
             // qu'ils ne sont pas lus — mais elle reste hors du solde. L'inclure
             // retrancherait son coût de 0 € payé et annoncerait une dette imaginaire.
+            //
+            // Trois causes très différentes derrière le même 0 €, d'où trois drapeaux
+            // (#254) — les confondre fait donner un conseil inapplicable :
+            //
+            //  1. aucun barème saisi → en créer un ;
+            //  2. un barème couvre TOUTE la fenêtre sans qu'aucune échéance n'y tombe :
+            //     seule la fenêtre est en cause (plus courte qu'un mois, ou tombant
+            //     entre deux prélèvements) → l'élargir suffit ;
+            //  3. un barème n'en couvre qu'une fraction, et son jour de prélèvement
+            //     n'y tombe pas : c'est sa PLAGE DE VALIDITÉ qui borne l'intersection,
+            //     pas la fenêtre. L'élargir ne changerait rien — un barème saisi le 30
+            //     alors qu'on prélève le 1er, ou dont la plage est plus courte qu'un
+            //     mois, ne produira pas d'échéance pour autant.
             if ($balance->dueCount === 0) {
-                $hasCostOnly = true;
+                if (!$balance->hasSchedule) {
+                    $hasCostOnly = true;
+                } elseif ($balance->partialAdvances) {
+                    $hasShortSched = true;
+                } else {
+                    $hasNoInstal = true;
+                }
+
                 continue;
             }
 
@@ -118,6 +142,8 @@ final class AdvanceBalanceService
             'has_partial_data'     => $hasPartial,
             'has_partial_advances' => $hasPartialAdv,
             'has_cost_without_advance' => $hasCostOnly,
+            'has_advance_without_instalment' => $hasNoInstal,
+            'has_short_advance_without_instalment' => $hasShortSched,
             'mixed_currency'       => $mixed,
         ];
     }
@@ -131,9 +157,15 @@ final class AdvanceBalanceService
         DateTimeImmutable $from,
         DateTimeImmutable $to,
     ): AdvanceBalance {
-        $paid     = 0.0;
-        $dueCount = 0;
-        $ofEnergy = [];
+        $paid        = 0.0;
+        $dueCount    = 0;
+        $ofEnergy    = [];
+        $hasSchedule = false;
+
+        // Fin de fenêtre exclue, alors qu'`overlaps()` raisonne sur une borne
+        // INCLUSE (`valid_to` = dernier jour du contrat) : on lui passe la veille,
+        // comme le fait `advancesCoverWindow()` plus bas.
+        $lastDay = $to->setTime(0, 0, 0)->modify('-1 day');
 
         foreach ($schedules as $schedule) {
             if ($schedule->energyType !== $energyType) {
@@ -144,6 +176,11 @@ final class AdvanceBalanceService
             $dates      = $schedule->dueDatesWithin($from, $to);
             $dueCount  += count($dates);
             $paid      += count($dates) * $schedule->amountMonthly;
+
+            // Un contrat qui court sur la fenêtre sans y voir tomber d'échéance
+            // n'est PAS un contrat manquant (#254) : la distinction se joue sur la
+            // plage de validité, pas sur le comptage de prélèvements.
+            $hasSchedule = $hasSchedule || $schedule->overlaps($from, $lastDay);
         }
 
         // Barème ne couvrant qu'une partie de la fenêtre (contrat démarré en cours
@@ -168,6 +205,7 @@ final class AdvanceBalanceService
                 dueCount:    $dueCount,
                 unavailable: is_string($estimate['reason'] ?? null) ? $estimate['reason'] : null,
                 partialAdvances: $partialAdvances,
+                hasSchedule: $hasSchedule,
             );
         }
 
@@ -182,6 +220,7 @@ final class AdvanceBalanceService
                 dueCount:    $dueCount,
                 unavailable: 'no_tariff',
                 partialAdvances: $partialAdvances,
+                hasSchedule: $hasSchedule,
             );
         }
 
@@ -195,6 +234,7 @@ final class AdvanceBalanceService
             // de PÉRIODE la posent, et seules celles-ci sont censées arriver ici.
             partialData: ($estimate['coverage_complete'] ?? false) !== true,
             partialAdvances: $partialAdvances,
+            hasSchedule: $hasSchedule,
         );
     }
 

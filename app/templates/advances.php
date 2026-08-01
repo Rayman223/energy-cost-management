@@ -13,7 +13,7 @@ use App\Domain\AdvanceSchedule;
  * @var bool                     $isAdmin
  * @var list<AdvanceSchedule>    $schedules     Barèmes saisis, toutes énergies
  * @var AdvanceSchedule|null     $editing       Barème rouvert pour modification
- * @var array{from:DateTimeImmutable,to:DateTimeImmutable,balances:list<AdvanceBalance>,total_paid:float,total_cost:float,total_balance:float,currency:?string,has_gaps:bool,has_partial_data:bool,has_partial_advances:bool,has_cost_without_advance:bool,mixed_currency:bool}|null $balance
+ * @var array{from:DateTimeImmutable,to:DateTimeImmutable,balances:list<AdvanceBalance>,total_paid:float,total_cost:float,total_balance:float,currency:?string,has_gaps:bool,has_partial_data:bool,has_partial_advances:bool,has_cost_without_advance:bool,has_advance_without_instalment:bool,has_short_advance_without_instalment:bool,mixed_currency:bool}|null $balance
  * @var string|null              $periodError   Période demandée invalide
  * @var bool                     $futureClamped Fin ramenée à aujourd'hui (acompte à échoir)
  * @var string                   $periodFrom    'YYYY-MM-DD' du formulaire de période
@@ -129,8 +129,15 @@ $currency = $balance['currency'] ?? $currency;
           <?php endif; ?>
         </td>
         <?php else: ?>
-        <?php // Consommation chiffrée, mais aucun acompte saisi : pas de solde à établir. ?>
-        <td class="adv-gap"><?= $this->te('advances.no_advance_for_energy') ?></td>
+        <?php // Consommation chiffrée, mais aucun prélèvement à comparer : pas de solde
+              // à établir. Le motif est distingué (#254) — barème absent, ou barème
+              // bien présent dont aucune échéance ne tombe dans la fenêtre — sinon
+              // l'écran réclame un acompte que l'utilisateur a déjà saisi. ?>
+        <td class="adv-gap">
+          <?= $row->hasScheduleWithoutInstalment()
+              ? $this->te('advances.no_instalment_in_period')
+              : $this->te('advances.no_advance_for_energy') ?>
+        </td>
         <?php endif; ?>
         <?php else: ?>
         <?php // La raison technique est AFFICHÉE : sans elle, « non calculable » est un
@@ -148,7 +155,7 @@ $currency = $balance['currency'] ?? $currency;
     </tbody>
     <tfoot>
       <tr>
-        <td colspan="2"><?= ($balance['has_gaps'] || $balance['has_cost_without_advance']) ? $this->te('advances.col_total_partial') : $this->te('advances.col_total') ?></td>
+        <td colspan="2"><?= ($balance['has_gaps'] || $balance['has_cost_without_advance'] || $balance['has_advance_without_instalment'] || $balance['has_short_advance_without_instalment']) ? $this->te('advances.col_total_partial') : $this->te('advances.col_total') ?></td>
         <td class="num"><?= $this->e($this->money($balance['total_paid'], $currency)) ?></td>
         <td class="num"><?= $this->e($this->money($balance['total_cost'], $currency)) ?></td>
         <td class="num <?= $balance['total_balance'] >= 0.0 ? 'adv-balance-credit' : 'adv-balance-debit' ?>">
@@ -174,9 +181,19 @@ $currency = $balance['currency'] ?? $currency;
       <?= $this->e($this->money($balance['total_balance'], $currency)) ?>
     </span>
   </div>
-  <?php $hasComparable = false; foreach ($balance['balances'] as $row) { $hasComparable = $hasComparable || ($row->isComparable() && $row->dueCount > 0); } ?>
+  <?php // Deux impasses distinctes derrière l'absence de solde (#254) : rien n'a pu
+        // être chiffré, ou bien des coûts existent mais aucun n'a d'acompte en face.
+        // Le second verdict ne peut pas dire « aucune consommation chiffrée » sans
+        // contredire le montant affiché juste au-dessus. ?>
+  <?php $hasComparable = false; $hasCosted = false;
+        foreach ($balance['balances'] as $row) {
+            $hasComparable = $hasComparable || ($row->isComparable() && $row->dueCount > 0);
+            $hasCosted     = $hasCosted || $row->isComparable();
+        } ?>
   <p class="adv-verdict">
-    <?php if (!$hasComparable): ?>
+    <?php if (!$hasComparable && $hasCosted): ?>
+    <?= $this->te('advances.verdict_not_comparable') ?>
+    <?php elseif (!$hasComparable): ?>
     <?= $this->te('advances.verdict_unavailable') ?>
     <?php elseif ($balance['total_balance'] >= 0.0): ?>
     <?= $this->te('advances.verdict_refund', ['amount' => $this->money($balance['total_balance'], $currency)]) ?>
@@ -192,6 +209,15 @@ $currency = $balance['currency'] ?? $currency;
   <?php endif; ?>
   <?php if ($balance['has_cost_without_advance']): ?>
   <p class="adv-warn"><?= $this->te('advances.cost_without_advance_warning') ?></p>
+  <?php endif; ?>
+  <?php // Deux conseils distincts (#254) : élargir la fenêtre n'aide que si le
+        // barème la couvre déjà entièrement. Sinon c'est sa plage de validité qui
+        // borne l'intersection, et l'élargissement ne produira aucune échéance. ?>
+  <?php if ($balance['has_advance_without_instalment']): ?>
+  <p class="adv-warn"><?= $this->te('advances.no_instalment_warning') ?></p>
+  <?php endif; ?>
+  <?php if ($balance['has_short_advance_without_instalment']): ?>
+  <p class="adv-warn"><?= $this->te('advances.short_advance_no_instalment_warning') ?></p>
   <?php endif; ?>
   <?php if ($balance['has_partial_advances']): ?>
   <p class="adv-warn"><?= $this->te('advances.partial_advances_warning') ?></p>

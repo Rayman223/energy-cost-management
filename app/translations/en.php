@@ -697,7 +697,11 @@ return [
     'advances.excluded_from_total'                 => 'excluded from total',
     'advances.no_advance_for_energy'               => 'No advance recorded',
     'advances.cost_without_advance_warning'        => 'At least one energy is costed without a matching advance: its consumption is shown for information but stays out of the balance, as there is no amount paid to compare it with. Add a schedule for it to be included.',
+    'advances.no_instalment_in_period'             => 'No instalment in the period',
+    'advances.no_instalment_warning'               => 'An advance schedule does cover this period, but none of its payment dates falls within it: over a window shorter than a month, or one landing between two payments, the amount paid is nil and the consumption stays out of the balance. Widen the period so that it includes at least one instalment.',
+    'advances.short_advance_no_instalment_warning' => 'An advance schedule covers only part of this period, and none of its payment dates falls within it: the amount paid is nil and the consumption stays out of the balance. Widening the period will not help — it is the schedule\'s validity range that is the limit. Check its validity range and its payment day, or wait for the first actual payment.',
     'advances.verdict_unavailable'                 => 'No consumption could be costed for this period: the balance cannot be established.',
+    'advances.verdict_not_comparable'              => 'No energy could be matched with an advance for this period: the balance cannot be established.',
     'advances.partial_advances_warning'            => 'Your schedules do not cover every month of the period: the cost spans the whole period while only part of the advances are counted. The balance therefore leans towards an amount still due.',
     'advances.future_clamped'                      => 'The period was cut back to today: advances not yet due have not been debited, and counting them would inflate the amount paid.',
 
