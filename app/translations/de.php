@@ -65,6 +65,7 @@ return [
     'account.supplier_markup_hint' => 'Zum Spotpreis inkl. MwSt. hinzugefügt. Negativ = Rabatt.',
     'account.invalid_markup' => 'Ungültiger Lieferantenaufschlag (erwartet zwischen -1 und 1 €/kWh).',
     'account.pricing_mode_dynamic_disabled' => 'Der dynamische Tarif ist auf diesem Server deaktiviert: Es gilt der Festtarif.',
+    'account.dynamic_fields_readonly' => 'Marktzone und Lieferantenaufschlag lassen sich nicht mehr ändern: Kein Stromraster steht noch auf dynamisch. Es wurde nichts gespeichert — laden Sie die Seite neu, um vom aktuellen Stand auszugehen.',
     'account.no_dynamic_grid_hint' => 'Marktzone und Lieferantenaufschlag erscheinen erst, wenn ein Tarifraster auf dynamisch steht: Bei einem festen (klassischen) Tarif fließen sie in keine Berechnung ein. Den Modus wählen Sie am betreffenden Raster unter Tarife.',
     'account.save_profile' => 'Profil speichern',
     'account.profile_saved' => 'Profil gespeichert.',

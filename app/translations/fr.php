@@ -72,6 +72,7 @@ return [
     'account.supplier_markup_hint' => 'Ajoutée au prix spot TTC. Négatif = remise.',
     'account.invalid_markup' => 'Marge fournisseur invalide (attendue entre -1 et 1 €/kWh).',
     'account.pricing_mode_dynamic_disabled' => 'Le tarif dynamique est désactivé sur ce serveur : le tarif fixe est appliqué.',
+    'account.dynamic_fields_readonly' => 'Zone de marché et marge fournisseur ne sont plus modifiables : plus aucune grille électricité n’est en tarif dynamique. Rien n’a été enregistré — rechargez la page pour repartir de l’état à jour.',
     'account.no_dynamic_grid_hint' => 'Zone de marché et marge fournisseur n’apparaissent qu’avec une grille en tarif dynamique : en tarif fixe (classique), elles n’interviennent dans aucun calcul. Le mode se choisit sur la grille concernée, dans Tarifs.',
     'account.save_profile' => 'Enregistrer le profil',
     'account.profile_saved' => 'Profil enregistré.',

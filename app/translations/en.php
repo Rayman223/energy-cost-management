@@ -65,6 +65,7 @@ return [
     'account.supplier_markup_hint' => 'Added to the VAT-inclusive spot price. Negative = discount.',
     'account.invalid_markup' => 'Invalid supplier markup (expected between -1 and 1 €/kWh).',
     'account.pricing_mode_dynamic_disabled' => 'Dynamic pricing is disabled on this server: the fixed tariff applies.',
+    'account.dynamic_fields_readonly' => 'Market zone and supplier markup can no longer be edited: no electricity grid uses dynamic pricing any more. Nothing was saved — reload the page to start from the current state.',
     'account.no_dynamic_grid_hint' => 'Market zone and supplier markup only appear once a tariff grid uses dynamic pricing: on a fixed (classic) tariff they play no part in any calculation. Pick the mode on the relevant grid, under Tariffs.',
     'account.save_profile' => 'Save profile',
     'account.profile_saved' => 'Profile saved.',

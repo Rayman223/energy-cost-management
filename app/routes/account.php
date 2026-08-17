@@ -78,9 +78,11 @@ if (($_GET['export'] ?? '') === '1') {
     exit;
 }
 
-// Lu une seule fois, après le court-circuit de l'export : aucune action POST de cette
-// page ne modifie la table `users` (`delete_account` sort par exit), la valeur reste
-// donc valable au rendu.
+// Lu avant le POST parce que le garde tarifaire ci-dessous en a besoin. Une seule
+// action de cette page réécrit la table `users` — `unlink_provider`, qui promeut une
+// autre identité primaire — et celle-là relit `$user` sur place : sinon le badge
+// « primaire » serait calculé contre une identité qui vient d'être supprimée, et
+// n'apparaîtrait plus sur aucune ligne. (`delete_account` sort par exit.)
 $user = $users->findById($userId);
 
 // Zone de marché et marge fournisseur ne pilotent que le prix spot : sans grille
@@ -176,6 +178,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $storedZone = $storedProfile->biddingZone;
                 $zone       = (is_string($storedZone) && $storedZone !== '') ? $storedZone : null;
                 $markup     = $storedProfile->supplierMarkupPerKwh;
+
+                // Depuis #253 ce garde dépend d'un état que l'utilisateur change
+                // ailleurs : un formulaire ouvert alors qu'une grille dynamique
+                // existait reposte ces deux champs après un retour au tarif fixe sur
+                // /tariffs. Reconduire en silence annoncerait « Profil enregistré »
+                // sur une saisie jetée. On refuse donc la demande, sans rien écrire.
+                //
+                // Comparé aux valeurs en place, et non à la simple présence des
+                // champs : un POST forgé qui reposte l'existant ne change rien et n'a
+                // pas à déclencher d'erreur, et le formulaire d'un onglet resté
+                // ouvert sans modification passe sans bruit.
+                $postedZone = $_POST['bidding_zone'] ?? null;
+                if (is_string($postedZone) && (trim($postedZone) ?: null) !== $zone) {
+                    throw new \InvalidArgumentException($view->t('account.dynamic_fields_readonly'));
+                }
+
+                $postedMarkup = $_POST['supplier_markup_per_kwh'] ?? null;
+                if (is_numeric($postedMarkup) && abs((float) $postedMarkup - $markup) > 1e-9) {
+                    throw new \InvalidArgumentException($view->t('account.dynamic_fields_readonly'));
+                }
             }
 
             $users->updateProfile($userId, new UserProfile(
@@ -215,6 +237,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($status === IdentityUnlinker::NOT_FOUND) {
                 throw new \RuntimeException($view->t('account.identity_not_found'));
             }
+            // Retirer la primaire en promeut une autre dans `users` : la valeur lue
+            // avant le POST ne désigne plus une identité existante, et la liste
+            // rendue plus bas n'afficherait le badge « primaire » sur aucune ligne.
+            $user    = $users->findById($userId);
             $success = $view->t('account.identity_unlinked');
         } elseif ($action === 'integration_enable' || $action === 'integration_disable') {
             $moduleKey = (string) ($_POST['module_key'] ?? '');
