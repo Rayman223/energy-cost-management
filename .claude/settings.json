@@ -14,10 +14,8 @@
       "Edit(/.claude/skills/fix-issue/**)",
       "Bash(php -r ' *)",
       "Bash(php -S 127.0.0.1:8899 index.php)",
-      "Bash(curl -s -o /tmp/claude-1000/-var-www-Manage-energy-costs/620e26bb-82f7-46c1-8540-bef58a354d2b/scratchpad/out.html -w \"HTTP %{http_code}\\\\n\" http://127.0.0.1:8899/reconciliation)",
       "Bash(xargs -I{} git log --oneline -1 {})",
-      "Bash(sudo systemctl start mariadb)",
-      "Bash(rm -f .git/config.lock && rtk ls .git/config.lock 2>/dev/null || echo \"lock supprimé\"; git config --local --get remote.origin.url)"
+      "Bash(sudo systemctl start mariadb)"
     ],
     "deny": [],
     "ask": [],
