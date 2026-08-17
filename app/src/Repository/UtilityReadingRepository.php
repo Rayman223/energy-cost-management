@@ -122,30 +122,85 @@ final class UtilityReadingRepository implements GasReadingRepositoryInterface, M
              ORDER BY reading_at ASC'
         );
         $stmt->execute(['uid' => $this->userId, 'etype' => $this->energyType]);
-        $rowsAsc = $stmt->fetchAll();
 
-        if (empty($rowsAsc)) {
-            return [];
+        return array_reverse($this->withDeltas($stmt->fetchAll()));
+    }
+
+    /** Nombre total de relevés du fluide (dénominateur de la pagination, #257). */
+    public function countReadings(): int
+    {
+        $stmt = $this->pdo->prepare(
+            'SELECT COUNT(*) FROM utility_readings WHERE user_id = :uid AND energy_type = :etype'
+        );
+        $stmt->execute(['uid' => $this->userId, 'etype' => $this->energyType]);
+
+        return (int) $stmt->fetchColumn();
+    }
+
+    /**
+     * Une page de relevés, DESC (le plus récent d'abord), même forme que
+     * getAllReadings() (#257).
+     *
+     * On lit $perPage + 1 lignes : la ligne excédentaire est le relevé
+     * immédiatement plus ancien que la page, nécessaire au delta de la dernière
+     * ligne — sans elle, la ligne de frontière afficherait « — » alors qu'un
+     * précédent existe. Elle est écartée du résultat. `delta_m3` ne reste donc
+     * null que pour le tout premier relevé de l'historique.
+     *
+     * @return list<array{id:int,reading_at:string,counter_m3:float,delta_m3:float|null}>
+     */
+    public function getReadingsPage(int $perPage, int $offset): array
+    {
+        $perPage = max(1, $perPage);
+        $offset  = max(0, $offset);
+        // Interpolés (entiers castés) plutôt que liés : PDO en mode émulation
+        // désactivée passerait LIMIT/OFFSET en chaînes, que MySQL rejette.
+        $limit = $perPage + 1;
+
+        $stmt = $this->pdo->prepare(
+            "SELECT id, reading_at, counter_m3 FROM utility_readings
+             WHERE user_id = :uid AND energy_type = :etype
+             ORDER BY reading_at DESC, id DESC
+             LIMIT $limit OFFSET $offset"
+        );
+        $stmt->execute(['uid' => $this->userId, 'etype' => $this->energyType]);
+        $rowsDesc = $stmt->fetchAll();
+
+        // withDeltas() attend un ordre croissant : on lui donne la page renversée
+        // (la ligne excédentaire, la plus ancienne, se retrouve en tête et sert
+        // de base au delta suivant), puis on la retire et on repasse en DESC.
+        $withDeltas = $this->withDeltas(array_reverse($rowsDesc));
+        if (count($rowsDesc) > $perPage) {
+            array_shift($withDeltas);
         }
 
+        return array_reverse($withDeltas);
+    }
+
+    /**
+     * Ajoute à chaque relevé son delta par rapport au précédent. Attend des
+     * lignes triées par horodatage CROISSANT ; renvoie le même ordre.
+     *
+     * @param  list<array<string,mixed>> $rowsAsc
+     * @return list<array{id:int,reading_at:string,counter_m3:float,delta_m3:float|null}>
+     */
+    private function withDeltas(array $rowsAsc): array
+    {
         $result = [];
         $prev   = null;
 
         foreach ($rowsAsc as $row) {
-            $delta = $prev !== null
-                ? round((float) $row['counter_m3'] - (float) $prev['counter_m3'], 3)
-                : null;
-
+            $counter = (float) $row['counter_m3'];
             $result[] = [
                 'id'         => (int) $row['id'],
-                'reading_at' => $row['reading_at'],
-                'counter_m3' => (float) $row['counter_m3'],
-                'delta_m3'   => $delta,
+                'reading_at' => (string) $row['reading_at'],
+                'counter_m3' => $counter,
+                'delta_m3'   => $prev !== null ? round($counter - $prev, 3) : null,
             ];
-            $prev = $row;
+            $prev = $counter;
         }
 
-        return array_reverse($result);
+        return $result;
     }
 
     /** @return array<string, mixed>|null */

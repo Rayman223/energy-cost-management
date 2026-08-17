@@ -214,6 +214,15 @@
   .gas-history > .form-feedback { margin-top: 8px; padding: 0 16px 12px; }
   .gas-history-wide { overflow-x: auto; }
 
+  /* Pagination des historiques de relevés (#257) : masquée par l'attribut
+     `hidden` tant qu'une seule page existe. `display: flex` l'emporterait sur
+     `hidden`, d'où la règle explicite. Les boutons portent .btn-xs (défini plus
+     bas, comme les boutons de plage du dashboard) : pas de dimensionnement propre
+     au pager. */
+  .pager { display: flex; align-items: center; justify-content: center; gap: 12px; margin-top: 10px; }
+  .pager[hidden] { display: none; }
+  .pager-status { font-family: var(--mono); font-size: .78rem; color: var(--muted); }
+
   .gas-form { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 22px 24px; }
   .form-row { margin-bottom: 16px; }
   .form-label { display: block; font-size: .75rem; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); margin-bottom: 8px; }

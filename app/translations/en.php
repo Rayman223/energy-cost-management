@@ -283,6 +283,10 @@ return [
     'meter.deleted' => '✓ Deleted.',
     'meter.delete_none' => 'No reading deleted.',
     'meter.delete_error' => 'Deletion failed.',
+    'meter.page_prev' => 'Previous',
+    'meter.page_next' => 'Next',
+    'meter.page_status' => 'Page {page} / {pages} ({total} readings)',
+    'meter.saved_elsewhere' => '✓ Saved — the reading is back-dated, it appears on a later page.',
 
     'common.theme' => 'Toggle theme',
 'common.discord' => 'Join us on Discord',

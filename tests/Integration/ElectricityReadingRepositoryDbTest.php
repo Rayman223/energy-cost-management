@@ -467,6 +467,56 @@ final class ElectricityReadingRepositoryDbTest extends TestCase
         );
     }
 
+    // ── Pagination de l'historique (#257) ───────────────────────────────────
+
+    public function testCountHistoryCountsDistinctTimestamps(): void
+    {
+        self::assertSame(11, $this->repo()->countHistory());
+    }
+
+    public function testCountHistoryIsZeroWithoutRegisters(): void
+    {
+        $otherId = (new UserRepository($this->pdo()))->create('https://iss.test', 'no-meter', 'test', 'Sans compteur')->id;
+
+        self::assertSame(0, (new ElectricityReadingRepository($this->pdo(), $otherId))->countHistory());
+    }
+
+    public function testGetHistoryPageWalksBackToTheOldestReadings(): void
+    {
+        $all = array_column($this->repo()->getHistory(), 'reading_at');
+
+        $page2 = $this->repo()->getHistoryPage(4, 4);
+        self::assertSame(array_slice($all, 4, 4), array_column($page2['items'], 'reading_at'));
+
+        $lastPage = $this->repo()->getHistoryPage(4, 8);
+        self::assertCount(3, $lastPage['items'], 'dernière page partielle');
+        self::assertSame('2025-11-30 23:00:00', $lastPage['items'][2]['reading_at']);
+    }
+
+    /**
+     * `previous` porte le relevé immédiatement plus ancien que la page — hors
+     * liste — pour que le client calcule le delta de la dernière ligne affichée.
+     */
+    public function testGetHistoryPageExposesTheReadingBeforeThePage(): void
+    {
+        $all = array_column($this->repo()->getHistory(), 'reading_at');
+
+        $page = $this->repo()->getHistoryPage(4, 0);
+        self::assertNotNull($page['previous']);
+        self::assertSame($all[4], $page['previous']['reading_at']);
+
+        $lastPage = $this->repo()->getHistoryPage(4, 8);
+        self::assertNull($lastPage['previous'], 'aucun relevé plus ancien que la dernière page');
+    }
+
+    public function testGetHistoryPageBeyondTheEndIsEmpty(): void
+    {
+        $page = $this->repo()->getHistoryPage(25, 100);
+
+        self::assertSame([], $page['items']);
+        self::assertNull($page['previous']);
+    }
+
     public function testInsertIndexesReplaceOverwritesExistingIndex(): void
     {
         $repo = $this->repo();

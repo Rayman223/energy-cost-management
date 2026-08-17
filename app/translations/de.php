@@ -283,6 +283,10 @@ return [
     'meter.deleted' => '✓ Gelöscht.',
     'meter.delete_none' => 'Kein Zählerstand gelöscht.',
     'meter.delete_error' => 'Löschen fehlgeschlagen.',
+    'meter.page_prev' => 'Zurück',
+    'meter.page_next' => 'Weiter',
+    'meter.page_status' => 'Seite {page} / {pages} ({total} Ablesungen)',
+    'meter.saved_elsewhere' => '✓ Gespeichert — die Ablesung ist rückdatiert und steht auf einer späteren Seite.',
     'common.theme' => 'Thema umschalten',
 'common.discord' => 'Discord beitreten',
 

@@ -78,6 +78,9 @@ final class ElectricityReadingRepository implements LegacyDailyRepositoryInterfa
     /** @var array<string, array<string, mixed>> Cache requête-scopé des deltas par intervalle libre (clé "from|to"). */
     private array $rangeDeltasCache = [];
 
+    /** Cache requête-scopé du total d'horodatages de l'historique (pagination, #257). */
+    private ?int $historyCount = null;
+
     /**
      * @param string $timezone Fuseau IANA de l'utilisateur (user_profiles.timezone).
      *        Sert à délimiter les « jours locaux » des lectures dashboard
@@ -230,7 +233,8 @@ final class ElectricityReadingRepository implements LegacyDailyRepositoryInterfa
     /**
      * Invalide les deltas mémoïsés (mensuels et par intervalle libre) : une
      * suppression rend obsolètes les agrégats calculés (comme une insertion).
-     * Cf. insertIndexes.
+     * Cf. insertIndexes. Le total d'horodatages de l'historique (#257) suit la
+     * même règle : insérer ou supprimer change le nombre de pages.
      */
     private function invalidateMonthlyDeltaCaches(): void
     {
@@ -238,6 +242,7 @@ final class ElectricityReadingRepository implements LegacyDailyRepositoryInterfa
         $this->monthlyDeltasCache         = [];
         $this->monthlyDeltasForMonthCache = [];
         $this->rangeDeltasCache           = [];
+        $this->historyCount               = null;
     }
 
     /**
@@ -386,25 +391,75 @@ final class ElectricityReadingRepository implements LegacyDailyRepositoryInterfa
      */
     public function getHistory(int $limit = 100): array
     {
-        $limit = max(1, $limit);
+        return $this->getHistoryPage($limit, 0)['items'];
+    }
 
-        $idToKey = [];
-        foreach (ElectricityIngestionInterface::REGISTERS as $key) {
-            $rid = $this->registerId($key);
-            if ($rid !== null) {
-                $idToKey[$rid] = $key;
-            }
+    /**
+     * Nombre d'horodatages distincts de l'historique — dénominateur de la
+     * pagination (#257). 0 si l'utilisateur n'a aucun registre connu.
+     *
+     * Le dédoublonnage passe par une sous-requête `SELECT DISTINCT` plutôt que
+     * par `COUNT(DISTINCT …)` : c'est la forme que l'optimiseur sait résoudre en
+     * balayage d'index seul (« Using index for group-by ») sur l'unique
+     * uq_meter_readings (register_id, reading_at), qui couvre exactement le
+     * prédicat et la colonne dédoublonnée — aucune lecture de table.
+     *
+     * Le coût reste proportionnel à la profondeur d'historique : c'est le prix
+     * d'un compteur de pages exact (« Page 2 / 14 »). Mémoïsé pour la requête,
+     * l'historique et son total étant servis par le même appel HTTP.
+     */
+    public function countHistory(): int
+    {
+        if ($this->historyCount !== null) {
+            return $this->historyCount;
         }
+
+        $ids = array_keys($this->historyRegisterMap());
+        if ($ids === []) {
+            return $this->historyCount = 0;
+        }
+
+        $placeholders = implode(', ', array_fill(0, count($ids), '?'));
+        $stmt = $this->pdo->prepare(
+            "SELECT COUNT(*) FROM (
+                 SELECT DISTINCT reading_at FROM meter_readings WHERE register_id IN ($placeholders)
+             ) distinct_readings"
+        );
+        $stmt->execute($ids);
+
+        return $this->historyCount = (int) $stmt->fetchColumn();
+    }
+
+    /**
+     * Une page d'historique (#257) : $perPage horodatages distincts à partir de
+     * $offset, du plus récent au plus ancien.
+     *
+     * `previous` porte le relevé immédiatement plus ancien que la page (null s'il
+     * n'y en a pas) : les deltas par registre sont calculés côté client, qui a
+     * besoin de cette ligne pour la première ligne affichée d'une page suivante.
+     *
+     * @return array{items: list<array{reading_at: string, import_t1: float|null, import_t2: float|null, export_t1: float|null, export_t2: float|null, production: float|null}>, previous: array{reading_at: string, import_t1: float|null, import_t2: float|null, export_t1: float|null, export_t2: float|null, production: float|null}|null}
+     */
+    public function getHistoryPage(int $perPage, int $offset): array
+    {
+        $perPage = max(1, $perPage);
+        $offset  = max(0, $offset);
+
+        $idToKey = $this->historyRegisterMap();
         if ($idToKey === []) {
-            return [];
+            return ['items' => [], 'previous' => null];
         }
 
         $ids = array_keys($idToKey);
         $placeholders = implode(', ', array_fill(0, count($ids), '?'));
 
-        // $limit casté en int et interpolé : sûr (entier), et évite la limitation
-        // MySQL « LIMIT paramétré dans une sous-requête IN ». Le sous-SELECT
-        // dérivé « recent » contourne « LIMIT dans une sous-requête IN ».
+        // Un horodatage de plus que la page : il sert de base au delta de la
+        // dernière ligne affichée et n'est pas rendu comme une ligne.
+        $limit = $perPage + 1;
+
+        // $limit / $offset castés en int et interpolés : sûr (entiers), et évite
+        // la limitation MySQL « LIMIT paramétré dans une sous-requête IN ». Le
+        // sous-SELECT dérivé « recent » contourne « LIMIT dans une sous-requête IN ».
         $stmt = $this->pdo->prepare(
             "SELECT reading_at, register_id, index_value
              FROM meter_readings
@@ -415,7 +470,7 @@ final class ElectricityReadingRepository implements LegacyDailyRepositoryInterfa
                        FROM meter_readings
                        WHERE register_id IN ($placeholders)
                        ORDER BY reading_at DESC
-                       LIMIT $limit
+                       LIMIT $limit OFFSET $offset
                    ) recent
                )
              ORDER BY reading_at DESC"
@@ -439,7 +494,28 @@ final class ElectricityReadingRepository implements LegacyDailyRepositoryInterfa
             }
         }
 
-        return array_values($rows);
+        $items    = array_values($rows);
+        $previous = count($items) > $perPage ? array_pop($items) : null;
+
+        return ['items' => $items, 'previous' => $previous];
+    }
+
+    /**
+     * Registres de l'utilisateur exposés par l'historique, indexés par id.
+     *
+     * @return array<int, string>
+     */
+    private function historyRegisterMap(): array
+    {
+        $idToKey = [];
+        foreach (ElectricityIngestionInterface::REGISTERS as $key) {
+            $rid = $this->registerId($key);
+            if ($rid !== null) {
+                $idToKey[$rid] = $key;
+            }
+        }
+
+        return $idToKey;
     }
 
     // -------------------------------------------------------------------------

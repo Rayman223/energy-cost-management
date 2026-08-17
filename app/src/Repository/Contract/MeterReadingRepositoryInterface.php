@@ -18,6 +18,18 @@ interface MeterReadingRepositoryInterface
     /** @return array<int,array{id:int,reading_at:string,counter_m3:float,delta_m3:float|null}> */
     public function getAllReadings(): array;
 
+    /** Nombre total de relevés du fluide (pagination, #257). */
+    public function countReadings(): int;
+
+    /**
+     * Une page de relevés, du plus récent au plus ancien, même forme que
+     * getAllReadings(). Le delta de la dernière ligne tient compte du relevé
+     * immédiatement plus ancien, hors page (#257).
+     *
+     * @return list<array{id:int,reading_at:string,counter_m3:float,delta_m3:float|null}>
+     */
+    public function getReadingsPage(int $perPage, int $offset): array;
+
     /** @return array<string, mixed>|null */
     public function getLatest(): ?array;
 

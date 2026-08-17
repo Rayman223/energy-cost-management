@@ -227,6 +227,69 @@ final class UtilityReadingRepositoryDbTest extends TestCase
         self::assertCount(1, $water->getAllReadings(), 'l\'eau est intacte');
     }
 
+    // ── Pagination de l'historique (#257) ───────────────────────────────────
+
+    /** Enregistre $count relevés journaliers, index croissant de 10 en 10. */
+    private function seedGas(int $count): UtilityReadingRepository
+    {
+        $gas = new UtilityReadingRepository($this->pdo(), $this->userId, 'gas');
+        for ($day = 1; $day <= $count; $day++) {
+            $gas->save(new DateTimeImmutable(sprintf('2026-06-%02d 10:00:00', $day)), 100.0 + 10.0 * $day);
+        }
+
+        return $gas;
+    }
+
+    public function testCountReadingsIsScopedToTheFlow(): void
+    {
+        $gas   = $this->seedGas(3);
+        $water = new UtilityReadingRepository($this->pdo(), $this->userId, 'water');
+        $water->save(new DateTimeImmutable('2026-06-01 10:00:00'), 40.0);
+
+        self::assertSame(3, $gas->countReadings());
+        self::assertSame(1, $water->countReadings());
+    }
+
+    public function testGetReadingsPageSlicesFromMostRecent(): void
+    {
+        $gas = $this->seedGas(7);
+
+        $page = $gas->getReadingsPage(3, 0);
+        self::assertCount(3, $page);
+        self::assertSame('2026-06-07 10:00:00', $page[0]['reading_at']);
+        self::assertSame('2026-06-05 10:00:00', $page[2]['reading_at']);
+
+        $last = $gas->getReadingsPage(3, 6);
+        self::assertCount(1, $last, 'dernière page partielle');
+        self::assertSame('2026-06-01 10:00:00', $last[0]['reading_at']);
+        self::assertNull($last[0]['delta_m3'], 'le tout premier relevé n\'a pas de précédent');
+    }
+
+    /**
+     * Le delta de la ligne de frontière doit être celui de l'historique complet :
+     * c'est ce que garantit la lecture d'une ligne de plus que la page.
+     */
+    public function testPageDeltasMatchFullHistory(): void
+    {
+        $gas = $this->seedGas(7);
+        $all = $gas->getAllReadings();
+
+        $paginated = [];
+        foreach ([0, 3, 6] as $offset) {
+            foreach ($gas->getReadingsPage(3, $offset) as $row) {
+                $paginated[] = $row;
+            }
+        }
+
+        self::assertSame($all, $paginated);
+        self::assertSame(10.0, $paginated[2]['delta_m3'], 'dernière ligne de la page 1');
+    }
+
+    public function testGetReadingsPageBeyondTheEndIsEmpty(): void
+    {
+        self::assertSame([], $this->seedGas(3)->getReadingsPage(25, 100));
+    }
+
     private function pdo(): PDO
     {
         if ($this->pdo === null) {

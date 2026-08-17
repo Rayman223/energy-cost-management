@@ -291,6 +291,10 @@ return [
     'meter.deleted' => '✓ Supprimé.',
     'meter.delete_none' => 'Aucun relevé supprimé.',
     'meter.delete_error' => 'Échec de la suppression.',
+    'meter.page_prev' => 'Précédent',
+    'meter.page_next' => 'Suivant',
+    'meter.page_status' => 'Page {page} / {pages} ({total} relevés)',
+    'meter.saved_elsewhere' => '✓ Enregistré — le relevé est antidaté, il figure sur une page suivante.',
 
     'common.theme' => 'Changer de thème',
 'common.discord' => 'Rejoindre le Discord',

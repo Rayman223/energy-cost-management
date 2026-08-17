@@ -33,8 +33,16 @@
 ### Conventions de réponse
 
 - Les actions **« données »** (`today`, `monthly_delta`, `chart_data`,
-  `gas_history`, `water_history`, `*_monthly_series`, `tariffs`) renvoient
-  directement l'objet/tableau métier, **sans** enveloppe `{ ok }`.
+  `*_monthly_series`, `tariffs`) renvoient directement l'objet/tableau métier,
+  **sans** enveloppe `{ ok }`.
+- Les actions **« historique paginé »** (`gas_history`, `water_history`,
+  `electricity_history`) renvoient une page :
+  `{ items, total, page, per_page }` (#257). `page` est celle réellement servie :
+  une page au-delà du dernier relevé est ramenée à la dernière page non vide.
+  Paramètres communs : `page` (défaut 1, minimum 1) et `per_page` (défaut 25,
+  plafonné à 200). Un `per_page` inutilisable (absent, vide, non numérique, ≤ 0)
+  retombe sur le défaut ; `per_page` est toujours répété dans la réponse, qui
+  fait foi.
 - Les actions **« estimation de coût »** (`month_cost`, `cost_estimate`,
   `gas_cost`, `gas_month_cost`) renvoient un objet avec `available: bool` ; si
   `false`, un champ `reason` explique pourquoi (voir `CostCalculationService`).
@@ -51,8 +59,9 @@
 | `monthly_delta` | — | Deltas du mois courant (`getMonthlyDeltas`). |
 | `chart_data` | `days` (défaut 30) | Séries journalières pour le graphique (`getDailyDeltasForChart`). |
 | `month_cost` | `year` (défaut année courante), `month` (défaut mois courant) | `estimateMonthElectricity(year, month)`. `422` si `year ∉ [2000,2100]` ou `month ∉ [1,12]`. |
-| `gas_history` | — | Tous les relevés gaz (`GasRepository::getAllReadings`). |
-| `water_history` | — | Tous les relevés eau (`WaterRepository::getAllReadings`). |
+| `gas_history` | `page`, `per_page` | Page de relevés gaz (`UtilityReadingRepository::getReadingsPage`) : `{ items:[{ id, reading_at, counter_m3, delta_m3:number\|null }], total, page, per_page }`, du plus récent au plus ancien. `delta_m3` de la dernière ligne tient compte du relevé précédent, hors page. |
+| `water_history` | `page`, `per_page` | Page de relevés eau, même forme que `gas_history`. |
+| `electricity_history` | `page`, `per_page` | Page d'index élec (`ElectricityReadingRepository::getHistoryPage`) : `{ items:[{ reading_at, import_t1, import_t2, export_t1, export_t2, production }], previous, total, page, per_page }`. Une page = `per_page` horodatages distincts ; `previous` est le relevé immédiatement plus ancien (ou `null`), fourni pour le calcul des deltas côté client. |
 | `electricity_monthly_series` | `months` (défaut 12, borné 1–60) | Consommation mensuelle pour le graphique (`getMonthlyDeltaSeries`) : `[{ month:"YYYY-MM", import_t1, import_t2, export_t1, export_t2, solar:number\|null, partial:bool }]`. |
 | `gas_monthly_series` | `months` (défaut 12, borné 1–60) | Volume gaz mensuel (`UtilityConsumptionSeriesService`) : `[{ month:"YYYY-MM", delta_m3, partial:bool }]`. |
 | `water_monthly_series` | `months` (défaut 12, borné 1–60) | Volume eau mensuel, même forme que `gas_monthly_series`. |

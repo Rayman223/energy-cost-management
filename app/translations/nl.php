@@ -283,6 +283,10 @@ return [
     'meter.deleted' => '✓ Verwijderd.',
     'meter.delete_none' => 'Geen meterstand verwijderd.',
     'meter.delete_error' => 'Verwijderen mislukt.',
+    'meter.page_prev' => 'Vorige',
+    'meter.page_next' => 'Volgende',
+    'meter.page_status' => 'Pagina {page} / {pages} ({total} metingen)',
+    'meter.saved_elsewhere' => '✓ Opgeslagen — de meting is terugwerkend, ze staat op een volgende pagina.',
     'common.theme' => 'Thema wisselen',
 'common.discord' => 'Word lid van Discord',
 

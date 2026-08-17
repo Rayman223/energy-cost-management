@@ -43,6 +43,23 @@ final class FakeMeterReadingRepository implements MeterReadingRepositoryInterfac
         return $this->all;
     }
 
+    public function countReadings(): int
+    {
+        return count($this->all);
+    }
+
+    /**
+     * Découpe `$all` (déjà trié du plus récent au plus ancien, deltas inclus) :
+     * le vrai repository recalcule le delta de frontière depuis la base, ce dont
+     * une liste préfabriquée n'a pas besoin.
+     *
+     * @return list<array{id:int,reading_at:string,counter_m3:float,delta_m3:float|null}>
+     */
+    public function getReadingsPage(int $perPage, int $offset): array
+    {
+        return array_values(array_slice($this->all, $offset, $perPage));
+    }
+
     /** @return array<string, mixed>|null */
     public function getLatest(): ?array
     {

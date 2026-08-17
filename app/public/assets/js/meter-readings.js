@@ -9,7 +9,17 @@ const METER_I18N = (() => {
   if (d && d.timezone) window.APP_TIMEZONE = d.timezone;
   return (d && d.i18n) || {};
 })();
-const tr = (key, fallback) => METER_I18N[key] || fallback;
+// `params` substitue les jetons `{nom}` du libellé, comme Translator::t() côté
+// PHP et tr() dans dashboard.js. Passe unique : une valeur substituée qui
+// contiendrait « {autre} » n'est pas resubstituée.
+function tr(key, fallback, params) {
+  const message = METER_I18N[key] || fallback;
+  if (!params) return message;
+
+  return message.replace(/\{(\w+)\}/g, (placeholder, name) => (
+    Object.prototype.hasOwnProperty.call(params, name) ? String(params[name]) : placeholder
+  ));
+}
 
 // Un index de compteur valide : nombre fini et non négatif. `Number.isFinite`
 // (et non `!isNaN`) rejette aussi Infinity — que `JSON.stringify` sérialiserait
@@ -59,11 +69,101 @@ function renderReadings(tbodyId, rows, emptyLabel) {
   ).join('');
 }
 
-async function loadHistory(action, tbodyId, emptyLabel, render = renderReadings) {
+// ── Pagination des historiques (#257) ───────────────────────────────────────
+// L'API renvoie une page ({ items, total, page, per_page }) : sans elle,
+// l'historique électricité était plafonné à 100 relevés côté serveur et les
+// index les plus anciens restaient inatteignables.
+
+const PER_PAGE = 25;
+const pageState = { electricity: 1, gas: 1, water: 1 };
+// Numéro du dernier chargement lancé par fluide : une réponse dont le numéro
+// n'est plus le courant est obsolète (cf. loadHistory).
+const loadSeq = { electricity: 0, gas: 0, water: 0 };
+
+// Met à jour le libellé et l'état des boutons sous un tableau. `perPage` vient de
+// la réponse : c'est le serveur qui borne réellement la taille de page, la
+// constante locale n'est qu'un repli. Masqué tant qu'un seul écran de relevés
+// existe : le contrôle n'apporterait rien.
+function renderPager(prefix, total, perPage) {
+  const pager = document.getElementById(`${prefix}-pager`);
+  if (!pager) return;
+  const size = perPage > 0 ? perPage : PER_PAGE;
+  const pages = Math.max(1, Math.ceil(total / size));
+  const page = pageState[prefix];
+
+  const status = pager.querySelector('[data-page-status]');
+  if (status) status.textContent = tr('pageStatus', 'Page {page} / {pages} ({total})', { page, pages, total });
+  const prev = pager.querySelector('[data-page-prev]');
+  const next = pager.querySelector('[data-page-next]');
+  if (prev) prev.disabled = page <= 1;
+  if (next) next.disabled = page >= pages;
+
+  pager.hidden = total <= size;
+  keepFocusInPager(prev, next);
+}
+
+// Le bouton qu'on vient d'actionner peut devenir `disabled` (dernière page, ou
+// retour en page 1) : le focus retomberait sur <body> et la navigation clavier
+// serait perdue en plein milieu du parcours. On le déplace sur l'autre bouton,
+// qui est forcément actif — un pager dont les deux boutons sont désactivés tient
+// sur un seul écran, donc vient d'être masqué.
+function keepFocusInPager(prev, next) {
+  const active = document.activeElement;
+  // `active` peut être null (document en cours de déchargement) et prev/next
+  // absents d'un pager tronqué : on ne compare qu'un focus réellement posé sur
+  // l'un des deux boutons.
+  if (!active || (active !== prev && active !== next)) return;
+  if (!active.disabled) return;
+
+  const fallback = active === next ? prev : next;
+  if (fallback && !fallback.disabled) fallback.focus();
+}
+
+// Charge une page et rend le tableau. `page` par défaut : celle affichée
+// (rechargement en place) ; la navigation passe la page visée. Renvoie la
+// réponse, ou null si le chargement a échoué ou a été dépassé par un plus récent.
+async function loadHistory(prefix, action, emptyLabel, render = renderReadings, page = pageState[prefix]) {
+  const seq = ++loadSeq[prefix];
   try {
-    const res = await fetch(`api?action=${action}`);
-    render(tbodyId, await res.json(), emptyLabel);
-  } catch (e) { /* keep placeholder */ }
+    const res = await fetch(`api?action=${action}&page=${page}&per_page=${PER_PAGE}`);
+    const data = await res.json();
+    // Deux clics rapprochés sur « Suivant » lancent deux chargements concurrents :
+    // sans ce test, la réponse la plus lente écraserait la plus récente et le
+    // tableau afficherait une page en arrière. On ignore tout ce qui n'est plus
+    // le dernier chargement demandé — ni rendu, ni mémorisation.
+    if (seq !== loadSeq[prefix]) return null;
+
+    // Le serveur ramène une page hors borne à la dernière page non vide (dernier
+    // relevé d'une page supprimé, p. ex.) : l'état local se réaligne dessus,
+    // sinon la navigation resterait bloquée sur une page fantôme. L'état n'est
+    // validé qu'ici : un « Suivant » qui échoue laisse la page courante affichée
+    // ET mémorisée, sinon le clic suivant sauterait un cran.
+    const served = Number(data.page) || 1;
+    const moved  = served !== pageState[prefix];
+    pageState[prefix] = served;
+
+    render(`${prefix}-tbody`, Array.isArray(data.items) ? data.items : [], emptyLabel, data);
+    renderPager(prefix, Number(data.total) || 0, Number(data.per_page) || PER_PAGE);
+
+    // Le tableau vit dans une boîte scrollable (max-height 420px) : sans remise à
+    // zéro, la page suivante s'ouvrirait au milieu de la liste. Uniquement sur
+    // changement de page — un rechargement en place garde la position de lecture.
+    const box = document.getElementById(`${prefix}-tbody`)?.closest('.gas-history');
+    if (moved && box) box.scrollTop = 0;
+
+    return data;
+  } catch (e) {
+    return null; /* keep placeholder */
+  }
+}
+
+// Un relevé antidaté n'atterrit pas forcément sur la première page : sans ce
+// signal, l'enregistrement paraîtrait sans effet (« ✓ Enregistré » et un tableau
+// inchangé). `rows` est la page rechargée après la saisie.
+function feedbackForSavedReading(feedbackId, rows, readingAt) {
+  if (Array.isArray(rows) && !rows.some((r) => r.reading_at === readingAt)) {
+    setFeedback(feedbackId, tr('savedElsewhere', '✓ Saved — the reading is older than this page.'), 'ok');
+  }
 }
 
 const ELEC_KEYS = ['import_t1', 'import_t2', 'export_t1', 'export_t2', 'production'];
@@ -75,9 +175,20 @@ const ELEC_KEYS = ['import_t1', 'import_t2', 'export_t1', 'export_t2', 'producti
 // `rows` où deltas[i][key] vaut le delta (arrondi à 3 déc.) ou null (pas de
 // précédent, ou valeur courante nulle). L'arrondi évite qu'un résidu flottant
 // affiche un « -0.000 » rouge trompeur.
-function elecDeltas(rows) {
+//
+// `previous` (#257) est le relevé immédiatement plus ancien que la page, renvoyé
+// hors liste par l'API : il amorce `lastSeen` pour que la dernière ligne d'une
+// page affiche son vrai delta plutôt qu'un « — ». Un registre absent de
+// `previous` reste sans delta sur cette ligne, comme en tête d'historique.
+function elecDeltas(rows, previous) {
   const deltas = rows.map(() => ({}));
   const lastSeen = {};
+  if (previous) {
+    for (const key of ELEC_KEYS) {
+      const seed = previous[key];
+      if (seed !== null && seed !== undefined) lastSeen[key] = parseFloat(seed);
+    }
+  }
   for (let i = rows.length - 1; i >= 0; i--) {
     for (const key of ELEC_KEYS) {
       const cur = rows[i][key];
@@ -90,14 +201,14 @@ function elecDeltas(rows) {
   return deltas;
 }
 
-function renderElectricityReadings(tbodyId, rows, emptyLabel) {
+function renderElectricityReadings(tbodyId, rows, emptyLabel, data) {
   const tbody = document.getElementById(tbodyId);
   if (!tbody) return;
   if (!Array.isArray(rows) || rows.length === 0) {
     tbody.innerHTML = `<tr><td colspan="7" class="td-empty">${emptyLabel}</td></tr>`;
     return;
   }
-  const deltas = elecDeltas(rows);
+  const deltas = elecDeltas(rows, data && data.previous);
   const fmtDelta = (d) => `${d >= 0 ? '+' : ''}${fmtIndex(d)} kWh`;
   // Cellule = valeur d'index + delta « en petit dessous » (bleu, rouge si négatif).
   const cell = (i, key) => {
@@ -113,8 +224,8 @@ function renderElectricityReadings(tbodyId, rows, emptyLabel) {
   ).join('');
 }
 
-const loadElectricityHistory = () =>
-  loadHistory('electricity_history', 'electricity-tbody', tr('emptyElectricity', 'No electricity reading recorded.'), renderElectricityReadings);
+const loadElectricityHistory = (page) =>
+  loadHistory('electricity', 'electricity_history', tr('emptyElectricity', 'No electricity reading recorded.'), renderElectricityReadings, page);
 
 async function submitUtility(prefix, action) {
   const btn = document.getElementById(`${prefix}-btn`);
@@ -141,7 +252,9 @@ async function submitUtility(prefix, action) {
     if (data.ok) {
       setFeedback(feedbackId, tr('saved', '✓ Saved.'), 'ok');
       document.getElementById(`${prefix}-value`).value = '';
-      await loadHistory(`${prefix}_history`, `${prefix}-tbody`, prefix === 'gas' ? tr('emptyGas', 'No gas reading recorded.') : tr('emptyWater', 'No water reading recorded.'));
+      // Retour en page 1 : le cas courant est un relevé du jour, donc en tête.
+      const reloaded = await RELOADERS[prefix](1);
+      feedbackForSavedReading(feedbackId, reloaded && reloaded.items, at);
     } else {
       setFeedback(feedbackId, `✗ ${data.error || tr('unknownError', 'Unknown error.')}`, 'err');
     }
@@ -198,7 +311,8 @@ async function submitElectricity() {
       ELEC_KEYS.forEach((key) => {
         document.getElementById(`electricity-${key}`).value = '';
       });
-      await loadElectricityHistory();
+      const reloaded = await loadElectricityHistory(1);
+      feedbackForSavedReading('electricity-feedback', reloaded && reloaded.items, at);
     } else {
       setFeedback('electricity-feedback', `✗ ${data.error || tr('unknownError', 'Unknown error.')}`, 'err');
     }
@@ -251,8 +365,10 @@ async function deleteAndReload(action, payload, feedbackId, reloadFn) {
   }
 }
 
-const reloadGas = () => loadHistory('gas_history', 'gas-tbody', tr('emptyGas', 'No gas reading recorded.'));
-const reloadWater = () => loadHistory('water_history', 'water-tbody', tr('emptyWater', 'No water reading recorded.'));
+const reloadGas = (page) => loadHistory('gas', 'gas_history', tr('emptyGas', 'No gas reading recorded.'), renderReadings, page);
+const reloadWater = (page) => loadHistory('water', 'water_history', tr('emptyWater', 'No water reading recorded.'), renderReadings, page);
+
+const RELOADERS = { electricity: loadElectricityHistory, gas: reloadGas, water: reloadWater };
 
 // Délégation sur le <tbody> : les lignes sont re-rendues à chaque rechargement,
 // mais le tbody persiste, donc un seul écouteur suffit.
@@ -270,7 +386,23 @@ function wireRowDeletion(tbodyId, action, payloadFromBtn, feedbackId, reloadFn) 
 function wireDeleteAll(btnId, action, feedbackId, reloadFn) {
   document.getElementById(btnId)?.addEventListener('click', () => {
     confirmDelete(tr('deleteAllConfirm', 'Delete all readings for this utility?'), tr('deleteAll', 'Delete all'),
-      () => deleteAndReload(action, {}, feedbackId, reloadFn));
+      // L'historique est vidé : toute page au-delà de la première disparaîtrait.
+      () => deleteAndReload(action, {}, feedbackId, () => reloadFn(1)));
+  });
+}
+
+// Navigation entre pages (#257) : délégation sur le conteneur, dont le contenu
+// (libellé, boutons désactivés) est réécrit à chaque rechargement.
+function wirePager(prefix) {
+  const pager = document.getElementById(`${prefix}-pager`);
+  if (!pager) return;
+  pager.addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-page-prev], [data-page-next]');
+    if (!btn || btn.disabled) return;
+    const target = pageState[prefix] + (btn.hasAttribute('data-page-next') ? 1 : -1);
+    if (target < 1) return;
+    // La page visée n'est mémorisée qu'une fois la réponse reçue (cf. loadHistory).
+    RELOADERS[prefix](target);
   });
 }
 
@@ -281,6 +413,10 @@ wireRowDeletion('electricity-tbody', 'delete_electricity_reading', (btn) => ({ r
 wireDeleteAll('gas-delete-all', 'delete_gas_all', 'gas-del-feedback', reloadGas);
 wireDeleteAll('water-delete-all', 'delete_water_all', 'water-del-feedback', reloadWater);
 wireDeleteAll('electricity-delete-all', 'delete_electricity_meter', 'electricity-del-feedback', loadElectricityHistory);
+
+wirePager('electricity');
+wirePager('gas');
+wirePager('water');
 
 loadElectricityHistory();
 reloadGas();

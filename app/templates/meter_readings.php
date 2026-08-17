@@ -83,6 +83,7 @@ $now = date('H:i');
     </table>
     <div class="form-feedback" id="electricity-del-feedback"></div>
   </div>
+  <?= $this->partial('_pager', ['id' => 'electricity-pager']) ?>
 
   <div class="section-header"><span class="section-title"><?= $this->te('dash.gas') ?></span><span class="section-line"></span><button type="button" class="btn btn-red btn-sm" id="gas-delete-all"><?= $this->te('meter.delete_all') ?></button></div>
   <div class="gas-grid">
@@ -92,7 +93,10 @@ $now = date('H:i');
       <div class="form-row"><label class="form-label" for="gas-value"><?= $this->te('meter.counter_m3') ?></label><input id="gas-value" type="number" step="0.001" min="0" class="form-input" placeholder="8523.456"></div>
       <button class="btn btn-amber" id="gas-btn"><?= $this->te('common.save') ?></button><div class="form-feedback" id="gas-feedback"></div>
     </div>
-    <div class="gas-history"><table><thead><tr><th><?= $this->te('meter.date_time') ?></th><th><?= $this->te('meter.index_m3') ?></th><th>Delta</th><th aria-label="<?= $this->e($this->t('meter.actions')) ?>"></th></tr></thead><tbody id="gas-tbody"><tr><td colspan="4" class="td-empty">…</td></tr></tbody></table><div class="form-feedback" id="gas-del-feedback"></div></div>
+    <div>
+      <div class="gas-history"><table><thead><tr><th><?= $this->te('meter.date_time') ?></th><th><?= $this->te('meter.index_m3') ?></th><th>Delta</th><th aria-label="<?= $this->e($this->t('meter.actions')) ?>"></th></tr></thead><tbody id="gas-tbody"><tr><td colspan="4" class="td-empty">…</td></tr></tbody></table><div class="form-feedback" id="gas-del-feedback"></div></div>
+      <?= $this->partial('_pager', ['id' => 'gas-pager']) ?>
+    </div>
   </div>
 
   <div class="section-header"><span class="section-title"><?= $this->te('dash.water') ?></span><span class="section-line"></span><button type="button" class="btn btn-red btn-sm" id="water-delete-all"><?= $this->te('meter.delete_all') ?></button></div>
@@ -103,7 +107,10 @@ $now = date('H:i');
       <div class="form-row"><label class="form-label" for="water-value"><?= $this->te('meter.counter_m3') ?></label><input id="water-value" type="number" step="0.001" min="0" class="form-input" placeholder="1234.567"></div>
       <button class="btn btn-amber" id="water-btn"><?= $this->te('common.save') ?></button><div class="form-feedback" id="water-feedback"></div>
     </div>
-    <div class="gas-history"><table><thead><tr><th><?= $this->te('meter.date_time') ?></th><th><?= $this->te('meter.index_m3') ?></th><th>Delta</th><th aria-label="<?= $this->e($this->t('meter.actions')) ?>"></th></tr></thead><tbody id="water-tbody"><tr><td colspan="4" class="td-empty">…</td></tr></tbody></table><div class="form-feedback" id="water-del-feedback"></div></div>
+    <div>
+      <div class="gas-history"><table><thead><tr><th><?= $this->te('meter.date_time') ?></th><th><?= $this->te('meter.index_m3') ?></th><th>Delta</th><th aria-label="<?= $this->e($this->t('meter.actions')) ?>"></th></tr></thead><tbody id="water-tbody"><tr><td colspan="4" class="td-empty">…</td></tr></tbody></table><div class="form-feedback" id="water-del-feedback"></div></div>
+      <?= $this->partial('_pager', ['id' => 'water-pager']) ?>
+    </div>
   </div>
 </div>
 <?php
@@ -133,6 +140,10 @@ $now = date('H:i');
             'deleted' => $this->t('meter.deleted'),
             'deleteNone' => $this->t('meter.delete_none'),
             'deleteError' => $this->t('meter.delete_error'),
+            // Statut de pagination (#257) : jetons {page} / {pages} / {total}
+            // substitués côté client, comme Translator::t() côté PHP.
+            'pageStatus' => $this->t('meter.page_status'),
+            'savedElsewhere' => $this->t('meter.saved_elsewhere'),
         ],
     ];
 ?>
