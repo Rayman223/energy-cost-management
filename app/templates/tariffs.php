@@ -515,7 +515,7 @@ $energyLabels = [
 </template>
 
 <div class="page-footer">
-  <span>Manage Energy — <?= $this->te('tariffs.title') ?></span>
+  <span><?= $this->appName() ?> — <?= $this->te('tariffs.title') ?></span>
 </div>
 
 </div>

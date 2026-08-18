@@ -71,7 +71,7 @@ Provider* sur certaines versions) : un assistant en quatre étapes s'ouvre.
 
 | Champ | Valeur |
 | --- | --- |
-| **Name** | `Manage Energy Costs` (libre) |
+| **Name** | `Energy cost management` (libre) |
 | **Slug** | `manage-energy` — **il apparaîtra dans l'issuer**, choisissez-le maintenant : le changer plus tard change l'issuer et invalide les comptes déjà provisionnés. |
 | **Launch URL** | L'URL publique de l'application (facultatif, pour le portail) |
 
@@ -83,7 +83,7 @@ Sélectionnez **OAuth2/OpenID Provider**.
 
 | Champ | Valeur à saisir |
 | --- | --- |
-| **Name** | `Manage Energy Costs — OIDC` (libre) |
+| **Name** | `Energy cost management — OIDC` (libre) |
 | **Authorization flow** | `default-provider-authorization-explicit-consent` (écran de consentement) ou `…-implicit-consent` (sans écran). Les deux conviennent. |
 | **Invalidation flow** | `default-provider-invalidation-flow` |
 | **Client type** | **Confidential** — obligatoire : l'application est un client serveur qui s'authentifie avec un secret. |

@@ -16,7 +16,7 @@ covers registering the application in Entra and filling in `config.php`. See
 Portal: <https://entra.microsoft.com/> → **Identity → Applications → App
 registrations → New registration**.
 
-1. **Name**: anything (e.g. *Manage Energy Costs*).
+1. **Name**: anything (e.g. *Energy cost management*).
 2. **Supported account types** — this choice drives the `issuer` (see step 3):
    - *Accounts in this organizational directory only* → single tenant.
    - *Accounts in any organizational directory* → `organizations`.

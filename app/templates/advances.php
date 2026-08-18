@@ -366,7 +366,7 @@ $currency = $balance['currency'] ?? $currency;
 <?php endif; ?>
 
 <div class="page-footer">
-  <span>Manage Energy — <?= $this->te('advances.title') ?></span>
+  <span><?= $this->appName() ?> — <?= $this->te('advances.title') ?></span>
 </div>
 
 </div>

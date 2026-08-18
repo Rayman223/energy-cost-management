@@ -15,7 +15,7 @@ the full deployment; this is the detail behind step 2 ("Community mode").
 
 1. Go to <https://console.cloud.google.com/> and sign in.
 2. Top bar → project selector → **New project** (or reuse an existing one).
-3. Give it a name (e.g. *Manage Energy Costs*) and create it.
+3. Give it a name (e.g. *Energy cost management*) and create it.
 
 ---
 
@@ -67,7 +67,7 @@ the full deployment; this is the detail behind step 2 ("Community mode").
 **APIs & Services → Credentials → Create credentials → OAuth client ID**.
 
 1. **Application type**: **Web application**.
-2. **Name**: anything (e.g. *Manage Energy web*).
+2. **Name**: anything (e.g. *Energy cost management web*).
 3. **Authorized redirect URIs** — add the callback, which is the `/auth/login`
    route of your site:
 

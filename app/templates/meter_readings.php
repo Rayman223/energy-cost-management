@@ -14,7 +14,7 @@ $now = date('H:i');
 <html lang="<?= $this->e($this->locale()) ?>" data-confirm-title="<?= $this->e($this->t('common.confirm_title')) ?>" data-confirm-ok="<?= $this->e($this->t('common.confirm')) ?>" data-confirm-cancel="<?= $this->e($this->t('common.cancel')) ?>">
 <head>
 <?= $this->partial('_head', [
-    'title' => $this->t('meter.title') . ' — Manage Energy',
+    'title' => $this->t('meter.title') . ' — ' . \App\Support\AppName::NAME,
     'css'   => ['assets/css/app-header.css', 'assets/css/lang-switcher.css', 'assets/css/dashboard.css', 'assets/css/confirm.css'],
     'adsenseClient' => $adsenseClient ?? null,
 ]) ?>

@@ -262,7 +262,7 @@ $cur = $this->currencySymbol($currency);
 <?php endif; /* $isDynamic */ ?>
 
 <div class="page-footer">
-  <span>Manage Energy — <?= $this->te('reconciliation.title') ?></span>
+  <span><?= $this->appName() ?> — <?= $this->te('reconciliation.title') ?></span>
 </div>
 
 </div>

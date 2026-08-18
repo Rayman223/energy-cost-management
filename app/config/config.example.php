@@ -23,7 +23,7 @@ return [
         'timeout'             => 15,
         'device'              => [
             'deviceId'       => 'manage-energy-costs-1',
-            'deviceName'     => 'Manage Energy Costs Device',
+            'deviceName'     => 'Energy cost management Device',
             'firmwareVersion'=> '2.0.0',
             'ipAddress'      => '127.0.0.1',
             'macAddress'     => '00:00:00:00:00:00',

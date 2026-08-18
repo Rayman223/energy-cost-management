@@ -26,7 +26,7 @@
     <div class="logo">
       <div class="logo-icon">⚡</div>
       <div>
-        <div class="logo-text">Manage Energy</div>
+        <div class="logo-text"><?= $this->appName() ?></div>
         <div class="logo-sub"><?= $this->te('app.title') ?></div>
       </div>
     </div>

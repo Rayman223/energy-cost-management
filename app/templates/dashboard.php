@@ -64,7 +64,7 @@ $deltaBadge = function (?float $pct, bool $lowerIsBetter, bool $isNew = false): 
 <html lang="<?= $this->e($this->locale()) ?>">
 <head>
 <?= $this->partial('_head', [
-    'title'       => 'Manage Energy',
+    'title'       => \App\Support\AppName::NAME,
     'css'         => ['assets/css/app-header.css', 'assets/css/lang-switcher.css', 'assets/css/dashboard.css'],
     'preconnects' => ['https://cdn.jsdelivr.net'],
     'adsenseClient' => $adsenseClient ?? null,
@@ -284,7 +284,7 @@ $deltaBadge = function (?float $pct, bool $lowerIsBetter, bool $isNew = false): 
   </div>
 
   <div class="page-footer">
-    <span>Manage Energy v3 — Brussels</span>
+    <span><?= $this->appName() ?></span>
   </div>
 
 </div><!-- /wrap -->

@@ -6,6 +6,7 @@ namespace App\View;
 
 use App\I18n\Formatter;
 use App\I18n\Translator;
+use App\Support\AppName;
 use App\Support\Dates;
 use App\Support\Url;
 
@@ -166,6 +167,14 @@ final class View
         }
 
         return $this->e($dt->format('Y-m-d H:i'));
+    }
+
+    /**
+     * Nom du produit, échappé, pour les logos et titres. Voir {@see AppName}.
+     */
+    public function appName(): string
+    {
+        return $this->e(AppName::NAME);
     }
 
     /**

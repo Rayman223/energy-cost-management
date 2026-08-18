@@ -1,6 +1,6 @@
 {
-  "name": "Manage Energy",
-  "short_name": "Manage Energy",
+  "name": "Energy cost management",
+  "short_name": "Energy cost",
   "start_url": ".",
   "scope": ".",
   "display": "standalone",

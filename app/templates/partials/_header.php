@@ -4,7 +4,7 @@
  * En-tête applicatif commun : bandeau logo + horloge + navigation en icônes,
  * mutualisé entre toutes les pages de la coquille app (#193).
  *
- * Calqué sur le design du dashboard : logo « ⚡ Manage Energy » cliquable vers le
+ * Calqué sur le design du dashboard : logo « ⚡ Energy cost management » cliquable vers le
  * tableau de bord, sous-titre propre à la page, horloge live (alimentée par
  * header.js) et navigation en icônes. L'icône de la page courante est marquée
  * active. L'icône Admin n'apparaît que pour les administrateurs.
@@ -39,7 +39,7 @@ $navlink = function (string $page, string $url, string $icon, string $title) use
   <a class="logo" href="<?= $this->url() ?>">
     <div class="logo-icon">⚡</div>
     <div>
-      <div class="logo-text">Manage Energy</div>
+      <div class="logo-text"><?= $this->appName() ?></div>
       <div class="logo-sub"><?= $this->e($subtitle) ?></div>
     </div>
   </a>

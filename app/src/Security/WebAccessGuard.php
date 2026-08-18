@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Security;
 
+use App\Support\AppName;
+
 final class WebAccessGuard
 {
     /** @param array<string, mixed> $security */
@@ -55,7 +57,9 @@ final class WebAccessGuard
             self::redirectToLogin($lang);
         }
 
-        $realm = $lang === 'fr' ? 'Accès sécurisé Manage Energy' : 'Manage Energy secure access';
+        $realm = $lang === 'fr'
+            ? 'Accès sécurisé ' . AppName::NAME
+            : AppName::NAME . ' secure access';
         header('WWW-Authenticate: Basic realm="' . addslashes($realm) . '", charset="UTF-8"');
         self::deny(401, self::message($lang, 'auth_required'), $jsonResponse);
     }
