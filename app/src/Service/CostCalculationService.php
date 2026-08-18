@@ -352,13 +352,10 @@ final class CostCalculationService
      */
     public function estimateMonthGas(int $year, int $month): array
     {
-        $interp = $this->interpolator->interpolateMonth(
-            $this->toSeries($this->gasRepo->getReadingsForInterpolation($year, $month)),
-            $year,
-            $month,
-        );
+        $series = $this->toSeries($this->gasRepo->getReadingsForInterpolation($year, $month));
+        $interp = $this->interpolator->interpolateMonth($series, $year, $month);
 
-        return $this->gasResponse($interp, sprintf('%04d-%02d', $year, $month));
+        return $this->gasResponse($interp, sprintf('%04d-%02d', $year, $month), $series);
     }
 
     /**
@@ -374,13 +371,10 @@ final class CostCalculationService
             return $invalid;
         }
 
-        $interp = $this->interpolator->interpolateRange(
-            $this->toSeries($this->gasRepo->getReadingsForRange(Dates::toDbString($from), Dates::toDbString($to))),
-            $from,
-            $to,
-        );
+        $series = $this->toSeries($this->gasRepo->getReadingsForRange(Dates::toDbString($from), Dates::toDbString($to)));
+        $interp = $this->interpolator->interpolateRange($series, $from, $to);
 
-        $response = $this->gasResponse($interp, $from->format('Y-m-d') . ' → ' . $to->format('Y-m-d'));
+        $response = $this->gasResponse($interp, $from->format('Y-m-d') . ' → ' . $to->format('Y-m-d'), $series);
         $response['coverage_complete'] = self::boundsAreMeasured($interp);
 
         return $response;
@@ -392,10 +386,12 @@ final class CostCalculationService
      * Corps commun au mois calendaire et à la période libre : seule la façon
      * d'obtenir les deux bornes les distingue.
      *
-     * @param string $label Période, telle qu'affichée dans le message d'indisponibilité.
+     * @param string                          $label  Période, telle qu'affichée dans le message d'indisponibilité.
+     * @param list<array{ts:int,value:float}> $series Relevés ayant servi à l'interpolation, pour
+     *                                                répartir le volume entre sous-périodes (#255).
      * @return array<string, mixed>
      */
-    private function gasResponse(MonthInterpolation $interp, string $label): array
+    private function gasResponse(MonthInterpolation $interp, string $label, array $series): array
     {
         if (!$interp->available) {
             return ['available' => false, 'reason' => $interp->reason];
@@ -412,7 +408,15 @@ final class CostCalculationService
             ];
         }
 
-        $gas = $this->buildGasCost($segments, $interp->monthlyDelta, $interp->days, $startDt);
+        $gas = $this->buildGasCost(
+            $segments,
+            $interp->monthlyDelta,
+            $interp->days,
+            $startDt,
+            $series,
+            $interp->startTs,
+            $interp->endTs,
+        );
 
         return [
             'available'       => true,
@@ -483,11 +487,9 @@ final class CostCalculationService
             return ['available' => false, 'reason' => 'Relevés eau indisponibles.'];
         }
 
-        return $this->waterResponse($this->interpolator->interpolateMonth(
-            $this->toSeries($this->waterRepo->getReadingsForInterpolation($year, $month)),
-            $year,
-            $month,
-        ));
+        $series = $this->toSeries($this->waterRepo->getReadingsForInterpolation($year, $month));
+
+        return $this->waterResponse($this->interpolator->interpolateMonth($series, $year, $month), $series);
     }
 
     /**
@@ -507,13 +509,10 @@ final class CostCalculationService
             return $invalid;
         }
 
-        $interp = $this->interpolator->interpolateRange(
-            $this->toSeries($this->waterRepo->getReadingsForRange(Dates::toDbString($from), Dates::toDbString($to))),
-            $from,
-            $to,
-        );
+        $series = $this->toSeries($this->waterRepo->getReadingsForRange(Dates::toDbString($from), Dates::toDbString($to)));
+        $interp = $this->interpolator->interpolateRange($series, $from, $to);
 
-        $response = $this->waterResponse($interp);
+        $response = $this->waterResponse($interp, $series);
         $response['coverage_complete'] = self::boundsAreMeasured($interp);
 
         return $response;
@@ -568,9 +567,10 @@ final class CostCalculationService
      * Habille un résultat d'interpolation eau : volume seul, plus le coût si une
      * grille « eau » couvre la période. Corps commun au mois et à la période libre.
      *
+     * @param  list<array{ts:int,value:float}> $series Relevés ayant servi à l'interpolation (#255).
      * @return array<string, mixed>
      */
-    private function waterResponse(MonthInterpolation $interp): array
+    private function waterResponse(MonthInterpolation $interp, array $series): array
     {
         if (!$interp->available) {
             return ['available' => false, 'reason' => $interp->reason];
@@ -593,9 +593,18 @@ final class CostCalculationService
 
         if ($segments !== []) {
             $breakdowns = [];
-            foreach ($segments as $segment) {
+            $volumes    = $this->volumesPerSegment(
+                $segments,
+                $interp->days,
+                $interp->monthlyDelta,
+                $interp->startTs,
+                $interp->endTs,
+                $series,
+            );
+
+            foreach ($segments as $i => $segment) {
                 $breakdowns[] = $this->calculator->calculateWaterCost(
-                    $interp->monthlyDelta * $segment->fraction($interp->days),
+                    $volumes[$i],
                     $segment->days,
                     $segment->grid->toCalculationTariff(),
                     $this->monthsOverride($segments, $interp->days, $segment),
@@ -720,24 +729,116 @@ final class CostCalculationService
     }
 
     /**
-     * Coût gaz d'une période découpée en sous-périodes : le volume est réparti au
-     * prorata des jours et chaque sous-période applique le PCS de SA grille
-     * (repli sur le dernier PCS connu puis sur la constante par défaut).
+     * Volume attribué à chaque sous-période tarifaire, interpolé sur SES PROPRES
+     * bornes plutôt que réparti au prorata des jours (#255).
+     *
+     * Le prorata au jour suppose une consommation uniforme. C'est faux pour le gaz,
+     * fortement saisonnier : sur janvier→juin, une grille qui démarre au 1er avril
+     * recevait la moitié du volume alors que la moitié hivernale en concentre les
+     * trois quarts. La somme mensuelle du dashboard ne souffrait pas de ce biais
+     * (chaque mois porte son propre volume interpolé), d'où l'écart constaté avec
+     * la page advances sur une même fenêtre.
+     *
+     * Les deltas bruts télescopent vers `indexEnd - indexStart` NON arrondi, alors
+     * que `$totalDelta` l'est à 3 décimales : la renormalisation finale absorbe cet
+     * écart au lieu de le propager, ce qui préserve `delta_m3`, le PCS effectif et
+     * l'égalité `Σ tariff_segments[*].total ≈ cost.total`.
+     *
+     * @param  list<TariffSegment>             $segments
+     * @param  list<array{ts:int,value:float}> $series
+     * @return list<float> Volumes par segment, de somme exactement $totalDelta.
+     */
+    private function volumesPerSegment(
+        array $segments,
+        int $totalDays,
+        float $totalDelta,
+        int $startTs,
+        int $endTs,
+        array $series,
+    ): array {
+        if (count($segments) < 2) {
+            return [$totalDelta];
+        }
+
+        // Les deux voies (mois calendaire et période libre) produisent des minuits
+        // UTC, et un jour UTC vaut toujours 86400 s : aucun piège d'heure d'été.
+        $raw    = [];
+        $offset = 0;
+        foreach ($segments as $segment) {
+            $a       = $startTs + $offset * 86400;
+            $offset += $segment->days;
+            $b       = min($startTs + $offset * 86400, $endTs);
+
+            $indexA = $this->interpolator->interpolateValueAt($series, $a);
+            $indexB = $this->interpolator->interpolateValueAt($series, $b);
+
+            if ($indexA === null || $indexB === null) {
+                return $this->dayProrataVolumes($segments, $totalDays, $totalDelta);
+            }
+
+            $raw[] = max(0.0, $indexB - $indexA);
+        }
+
+        // Série dégénérée (compteur remis à zéro, relevés insuffisants) : on garde
+        // l'ancien comportement plutôt que de rendre des volumes tous nuls.
+        $sum = array_sum($raw);
+        if ($sum <= 0.0) {
+            return $this->dayProrataVolumes($segments, $totalDays, $totalDelta);
+        }
+
+        return array_map(static fn (float $v): float => $totalDelta * $v / $sum, $raw);
+    }
+
+    /**
+     * Répartition historique du volume : au prorata des jours de chaque sous-période.
+     * Sert de repli quand les relevés ne permettent pas d'interpoler (#255).
      *
      * @param  list<TariffSegment> $segments
+     * @return list<float>
+     */
+    private function dayProrataVolumes(array $segments, int $totalDays, float $totalDelta): array
+    {
+        return array_map(
+            static fn (TariffSegment $s): float => $totalDelta * $s->fraction($totalDays),
+            $segments,
+        );
+    }
+
+    /**
+     * Coût gaz d'une période découpée en sous-périodes : chaque sous-période porte
+     * le volume réellement consommé sur ses bornes (#255) et applique le PCS de SA
+     * grille (repli sur le dernier PCS connu puis sur la constante par défaut).
+     *
+     * Sans `$series` (voie « deux derniers relevés », qui part d'index bruts à des
+     * heures quelconques et non de bornes interpolées), on garde la répartition au
+     * prorata des jours.
+     *
+     * @param  list<TariffSegment>                  $segments
+     * @param  list<array{ts:int,value:float}>|null $series
      * @return array{kwh: float, pcs: float, cost: array<string, mixed>, segments: list<array<string, mixed>>}
      */
-    private function buildGasCost(array $segments, float $deltaM3, int $days, DateTimeImmutable $from): array
-    {
+    private function buildGasCost(
+        array $segments,
+        float $deltaM3,
+        int $days,
+        DateTimeImmutable $from,
+        ?array $series = null,
+        ?int $startTs = null,
+        ?int $endTs = null,
+    ): array {
         $breakdowns = [];
         $totalKwh   = 0.0;
 
-        foreach ($segments as $segment) {
+        $volumes = ($series !== null && $startTs !== null && $endTs !== null)
+            ? $this->volumesPerSegment($segments, $days, $deltaM3, $startTs, $endTs, $series)
+            : $this->dayProrataVolumes($segments, $days, $deltaM3);
+
+        foreach ($segments as $i => $segment) {
             $pcs = $segment->grid->pcsCoefficient
                 ?? $this->tariffRepo->findMostRecentPcs('gas', $segment->from)
                 ?? self::DEFAULT_PCS;
 
-            $kWh       = $this->calculator->m3ToKwh($deltaM3 * $segment->fraction($days), $pcs);
+            $kWh       = $this->calculator->m3ToKwh($volumes[$i], $pcs);
             $totalKwh += $kWh;
 
             $breakdowns[] = $this->calculator->calculateGasCost(

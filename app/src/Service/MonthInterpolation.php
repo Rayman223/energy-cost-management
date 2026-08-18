@@ -15,6 +15,12 @@ namespace App\Service;
  *   - 'extrapolated' : minuit est hors de la plage des relevés (pente du segment
  *                      de bord). `isProjection` = true uniquement quand la borne de
  *                      FIN est extrapolée en avant (mois en cours projeté).
+ *
+ * `startTs` / `endTs` portent les DEUX MÊMES bornes en epoch UTC. Elles font
+ * doublon avec `monthStart`/`monthEnd` en apparence seulement : ces dernières sont
+ * formatées sans fuseau (`format('Y-m-d H:i:s')`) alors qu'elles ont été construites
+ * en UTC, si bien que les re-parser rend un instant décalé du fuseau applicatif.
+ * Tout calcul qui redécoupe la période doit partir de `startTs`/`endTs` (#255).
  */
 final class MonthInterpolation
 {
@@ -31,12 +37,14 @@ final class MonthInterpolation
         public readonly string $startKind,
         public readonly string $endKind,
         public readonly bool $isProjection,
+        public readonly int $startTs,
+        public readonly int $endTs,
     ) {
     }
 
     public static function unavailable(string $reason): self
     {
-        return new self(false, $reason, 0.0, 0.0, 0.0, 0, 0, '', '', '', '', false);
+        return new self(false, $reason, 0.0, 0.0, 0.0, 0, 0, '', '', '', '', false, 0, 0);
     }
 
     public static function of(
@@ -50,6 +58,8 @@ final class MonthInterpolation
         string $startKind,
         string $endKind,
         bool $isProjection,
+        int $startTs,
+        int $endTs,
     ): self {
         return new self(
             true,
@@ -64,6 +74,8 @@ final class MonthInterpolation
             $startKind,
             $endKind,
             $isProjection,
+            $startTs,
+            $endTs,
         );
     }
 }

@@ -380,4 +380,78 @@ final class MonthlyConsumptionInterpolatorTest extends TestCase
         self::assertTrue($r->isProjection);
         self::assertSame('extrapolated', $r->endKind);
     }
+
+    /**
+     * Les bornes doivent être exposées en epoch UTC, et non redérivées des chaînes
+     * `monthStart`/`monthEnd` : celles-ci sont formatées sans fuseau alors qu'elles
+     * ont été construites en UTC, donc les re-parser décale l'instant du fuseau
+     * applicatif. C'est ce que consomme `volumesPerSegment()` (#255).
+     */
+    public function testRangeExposesItsBoundsAsUtcTimestamps(): void
+    {
+        $readings = $this->readings([['2026-01-01 00:00:00', 0.0], ['2026-07-01 00:00:00', 600.0]]);
+
+        $range = $this->interp->interpolateRange(
+            $readings,
+            new DateTimeImmutable('2026-03-05 00:00:00', new DateTimeZone('UTC')),
+            new DateTimeImmutable('2026-04-11 00:00:00', new DateTimeZone('UTC')),
+        );
+
+        self::assertSame(
+            (new DateTimeImmutable('2026-03-05 00:00:00', new DateTimeZone('UTC')))->getTimestamp(),
+            $range->startTs,
+        );
+        self::assertSame(
+            (new DateTimeImmutable('2026-04-11 00:00:00', new DateTimeZone('UTC')))->getTimestamp(),
+            $range->endTs,
+        );
+
+        // Un mois calendaire complet : l'écart des bornes vaut exactement ses jours.
+        $month = $this->interp->interpolateMonth($readings, 2026, 3);
+        self::assertSame(31 * 86400, $month->endTs - $month->startTs);
+        self::assertSame($month->days * 86400, $month->endTs - $month->startTs);
+    }
+
+    /**
+     * Découper la période en sous-périodes contiguës et sommer leurs deltas redonne
+     * le delta global : c'est ce qui rend sûre la répartition du volume par segment
+     * tarifaire (#255), interpolation linéaire par morceaux oblige.
+     */
+    public function testSegmentBoundsTelescopeToTheWholeRange(): void
+    {
+        // Relevés irréguliers : les sous-bornes tombent en plein milieu des segments.
+        $readings = $this->readings([
+            ['2026-01-01 00:00:00', 0.0],
+            ['2026-02-17 00:00:00', 520.0],
+            ['2026-05-03 00:00:00', 780.0],
+            ['2026-07-01 00:00:00', 900.0],
+        ]);
+
+        $start = (new DateTimeImmutable('2026-01-01 00:00:00', new DateTimeZone('UTC')))->getTimestamp();
+        $end   = (new DateTimeImmutable('2026-07-01 00:00:00', new DateTimeZone('UTC')))->getTimestamp();
+
+        // Partition arbitraire, non alignée sur les relevés.
+        $cuts = [$start];
+        foreach (['2026-02-01', '2026-04-01', '2026-06-14'] as $day) {
+            $cuts[] = (new DateTimeImmutable($day . ' 00:00:00', new DateTimeZone('UTC')))->getTimestamp();
+        }
+        $cuts[] = $end;
+
+        $sum = 0.0;
+        for ($i = 0, $n = count($cuts) - 1; $i < $n; $i++) {
+            $a = $this->interp->interpolateValueAt($readings, $cuts[$i]);
+            $b = $this->interp->interpolateValueAt($readings, $cuts[$i + 1]);
+            self::assertNotNull($a);
+            self::assertNotNull($b);
+            $sum += $b - $a;
+        }
+
+        $indexEnd   = $this->interp->interpolateValueAt($readings, $end);
+        $indexStart = $this->interp->interpolateValueAt($readings, $start);
+        self::assertNotNull($indexEnd);
+        self::assertNotNull($indexStart);
+
+        self::assertEqualsWithDelta($indexEnd - $indexStart, $sum, 0.000001);
+        self::assertEqualsWithDelta(900.0, $sum, 0.000001);
+    }
 }

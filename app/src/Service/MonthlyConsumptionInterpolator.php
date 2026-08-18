@@ -248,6 +248,8 @@ final class MonthlyConsumptionInterpolator
             $startKind,
             $endKind,
             $endKind === 'extrapolated' && $endTs > $lastTs,
+            $startTs,
+            $endTs,
         );
     }
 

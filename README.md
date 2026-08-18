@@ -72,7 +72,7 @@ app/
 ├── docs/                          ← installation.md · architecture.md · import.md · security-review.md · plan/ · …
 ├── public/                        ← index · tariffs · account · admin · login · privacy · terms · api · auth/
 │   └── assets/                    ← versioned CSS/JS (cache-busting)
-├── scripts/                       ← migrate · import_* · cron_*
+├── scripts/                       ← migrate · import_* · cron_* · gas_cost_audit
 ├── sql/                           ← schema.sql · migrations/
 ├── templates/ · translations/     ← HTML views · i18n catalogs (fr/en/nl/de)
 └── src/                           ← Domain · Http · I18n · Infrastructure · Repository · Security · Service · Support · View
@@ -210,6 +210,21 @@ Idempotent CSV/JSON import of meter indexes with a per-row report
 (`app/scripts/import_readings.php`, plus the `import_gaz.php` / `import_eau.php`
 wrappers). The batch **ingestion API** covers programmatic loads. Details and
 column mapping: [`app/docs/import.md`](app/docs/import.md).
+
+---
+
+## Cost audit
+
+The dashboard bills **calendar months** while the advances page bills a **free
+date range** whose `to` bound is *exclusive*. When both disagree on the same
+window, `app/scripts/gas_cost_audit.php` puts them side by side — active tariff
+grids in resolution order, readings with their implied m³/day, both paths line
+by line, and the resulting gap with its probable cause. Read-only.
+
+```bash
+php app/scripts/gas_cost_audit.php --from=2026-01-01 --to=2026-07-01
+php app/scripts/gas_cost_audit.php --from=2026-01-01 --to=2026-07-01 --user=2 --energy=water --json
+```
 
 ---
 

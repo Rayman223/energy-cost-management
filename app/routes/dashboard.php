@@ -138,12 +138,19 @@ try {
     if (DynamicPricing::isEnabled($config)) {
         $cost['dynamic'] = $costSvc->estimateCurrentMonthElectricityDynamic();
     }
-    $gasCostData = $costSvc->estimateLastGasPeriod();
-    if (!empty($gasCostData['period_from'])) {
-        $gasPeriodFrom = new DateTimeImmutable($gasCostData['period_from']);
+    // Le dernier intervalle de relevés ne sert qu'à choisir le mois affiché par
+    // défaut : son mois de début est le dernier dont on ait une mesure des deux
+    // bornes. Le COÛT amorcé doit, lui, être celui de ce mois calendaire (#255) —
+    // le bloc gaz s'intitule « janvier 2026 », et le JS réutilise cette valeur
+    // aussi bien pour le panneau détail que pour la card de la vue année, où elle
+    // est sommée avec onze mois calendaires.
+    $gasLastPeriod = $costSvc->estimateLastGasPeriod();
+    if (!empty($gasLastPeriod['period_from'])) {
+        $gasPeriodFrom = new DateTimeImmutable($gasLastPeriod['period_from']);
         $gasInitYear   = (int) $gasPeriodFrom->format('Y');
         $gasInitMonth  = (int) $gasPeriodFrom->format('n');
     }
+    $gasCostData = $costSvc->estimateMonthGas($gasInitYear, $gasInitMonth);
     $gasLatest   = $gasRepo->getLatest();
     $waterLatest = $waterRepo->getLatest();
     if ($waterLatest !== null && !empty($waterLatest['reading_at'])) {

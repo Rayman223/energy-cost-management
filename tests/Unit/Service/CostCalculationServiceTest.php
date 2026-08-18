@@ -1604,7 +1604,11 @@ final class CostCalculationServiceTest extends TestCase
         self::assertEqualsWithDelta(80.0, $r['cost']['total'], 0.01);
     }
 
-    /** Eau : volume réparti au prorata des jours entre les deux grilles. */
+    /**
+     * Eau : volume réparti entre les deux grilles. Consommation régulière ici, donc
+     * la part de chacune vaut sa part de jours — cf.
+     * {@see testWaterSegmentVolumeFollowsRealConsumption()} pour le cas irrégulier.
+     */
     public function testMonthWaterSplitsAcrossGrids(): void
     {
         $waterGrid = static fn (int $id, string $name, string $from, ?string $to, float $rate): TariffGrid => new TariffGrid(
@@ -1844,5 +1848,225 @@ final class CostCalculationServiceTest extends TestCase
 
         self::assertSame($byMonth['days'], $byPeriod['days']);
         self::assertEqualsWithDelta($byMonth['cost']['total'], $byPeriod['cost']['total'], 0.001);
+    }
+
+    // ── Répartition du volume entre grilles tarifaires (#255) ────────────────
+
+    /**
+     * Deux grilles gaz encadrant une consommation SAISONNIÈRE, plus l'abonnement.
+     * Relevés : 900 m³ sur le trimestre d'hiver (90 j), 100 m³ sur celui de
+     * printemps (91 j).
+     *
+     * @return array{0: FakeTariffRepository, 1: FakeGasReadingRepository}
+     */
+    private function seasonalGasFixture(): array
+    {
+        $gasGrid = static fn (int $id, string $name, string $from, ?string $to, float $rate): TariffGrid => new TariffGrid(
+            id: $id,
+            energyType: 'gas',
+            name: $name,
+            validFrom: new DateTimeImmutable($from),
+            validTo: $to !== null ? new DateTimeImmutable($to) : null,
+            lines: [
+                'energy'       => new TariffLine('energy', $rate, ComponentKind::EnergyFlat),
+                'subscription' => new TariffLine('subscription', 3.0, ComponentKind::FixedMonthly),
+            ],
+            pcsCoefficient: 10.0,
+        );
+
+        $tariffs = new FakeTariffRepository();
+        $tariffs->gridsBetween = [
+            $gasGrid(8, 'Gaz printemps', '2026-04-01', null, 0.15),
+            $gasGrid(7, 'Gaz hiver', '2026-01-01', '2026-03-31', 0.05),
+        ];
+
+        $readings = new FakeGasReadingRepository(forInterpolation: [
+            ['reading_at' => '2026-01-01 00:00:00', 'counter_m3' => 0.0],
+            ['reading_at' => '2026-04-01 00:00:00', 'counter_m3' => 900.0],
+            ['reading_at' => '2026-07-01 00:00:00', 'counter_m3' => 1000.0],
+        ]);
+
+        return [$tariffs, $readings];
+    }
+
+    /**
+     * Le volume d'une sous-période tarifaire suit la consommation RÉELLE de ses
+     * bornes, pas sa part de jours (#255). Le prorata au jour attribuait ~497 m³ à
+     * chaque grille (90 j contre 91) alors que l'hiver en concentre 900 sur 1000.
+     */
+    public function testGasSegmentVolumeFollowsRealConsumptionNotDayCount(): void
+    {
+        [$tariffs, $readings] = $this->seasonalGasFixture();
+
+        $r = $this->makeService(new FakeLegacyDailyRepository(), $tariffs, $readings)
+            ->estimatePeriodGas(
+                new DateTimeImmutable('2026-01-01 00:00:00'),
+                new DateTimeImmutable('2026-07-01 00:00:00'),
+            );
+
+        self::assertTrue($r['available']);
+        self::assertSame('Gaz hiver + Gaz printemps', $r['tariff_name']);
+        self::assertCount(2, $r['tariff_segments']);
+        self::assertEqualsWithDelta(1000.0, $r['delta_m3'], 0.001);
+        self::assertEqualsWithDelta(10000.0, $r['kwh'], 0.1);
+
+        // Hiver : 9000 kWh × 0,05 = 450 € + ~2,98 abonnement ; printemps :
+        // 1000 kWh × 0,15 = 150 € + ~3,02. Au prorata des jours on obtenait
+        // ~248 € et ~754 €.
+        self::assertEqualsWithDelta(459.0, $r['tariff_segments'][0]['total'], 0.5);
+        self::assertEqualsWithDelta(159.0, $r['tariff_segments'][1]['total'], 0.5);
+
+        // 450 + 150 d'énergie + 6 abonnements de 3 €.
+        self::assertEqualsWithDelta(618.0, $r['cost']['total'], 0.05);
+        self::assertEqualsWithDelta(
+            $r['cost']['total'],
+            array_sum(array_column($r['tariff_segments'], 'total')),
+            0.02,
+        );
+    }
+
+    /**
+     * Le test d'acceptation de #255 : la somme des coûts mensuels du dashboard et
+     * le coût de la période libre d'advances doivent converger sur une même
+     * fenêtre, consommation saisonnière et changement de grille compris.
+     *
+     * La borne de fin est le 1er juillet — `to` est EXCLUSIVE côté période libre,
+     * donc c'est la seule façon de couvrir les mêmes 181 jours que janvier→juin.
+     */
+    public function testGasMonthlySumMatchesFreeRangeOnSeasonalConsumptionAcrossGrids(): void
+    {
+        [$tariffs, $readings] = $this->seasonalGasFixture();
+        $svc = $this->makeService(new FakeLegacyDailyRepository(), $tariffs, $readings);
+
+        $monthlyTotal = 0.0;
+        $monthlyM3    = 0.0;
+        for ($month = 1; $month <= 6; $month++) {
+            $m = $svc->estimateMonthGas(2026, $month);
+            self::assertTrue($m['available'], sprintf('Mois %d indisponible', $month));
+            $monthlyTotal += (float) $m['cost']['total'];
+            $monthlyM3    += (float) $m['delta_m3'];
+        }
+
+        $period = $svc->estimatePeriodGas(
+            new DateTimeImmutable('2026-01-01 00:00:00'),
+            new DateTimeImmutable('2026-07-01 00:00:00'),
+        );
+
+        // 6 arrondis à 2 décimales d'un côté contre 1 de l'autre.
+        self::assertEqualsWithDelta($monthlyTotal, (float) $period['cost']['total'], 0.05);
+        self::assertEqualsWithDelta($monthlyM3, (float) $period['delta_m3'], 0.01);
+    }
+
+    /**
+     * Compteur qui recule sur la seconde sous-période : le volume négatif est
+     * plafonné à 0 pour cette grille sans contaminer la première, et la somme des
+     * sous-périodes reste égale au volume total.
+     */
+    public function testGasSegmentVolumesStayConsistentWhenCounterGoesBackwards(): void
+    {
+        [$tariffs] = $this->seasonalGasFixture();
+
+        $readings = new FakeGasReadingRepository(forInterpolation: [
+            ['reading_at' => '2026-01-01 00:00:00', 'counter_m3' => 0.0],
+            ['reading_at' => '2026-04-01 00:00:00', 'counter_m3' => 900.0],
+            ['reading_at' => '2026-07-01 00:00:00', 'counter_m3' => 800.0],
+        ]);
+
+        $r = $this->makeService(new FakeLegacyDailyRepository(), $tariffs, $readings)
+            ->estimatePeriodGas(
+                new DateTimeImmutable('2026-01-01 00:00:00'),
+                new DateTimeImmutable('2026-07-01 00:00:00'),
+            );
+
+        self::assertTrue($r['available']);
+        self::assertEqualsWithDelta(800.0, $r['delta_m3'], 0.001);
+        self::assertEqualsWithDelta(8000.0, $r['kwh'], 0.1);
+        self::assertEqualsWithDelta(
+            $r['cost']['total'],
+            array_sum(array_column($r['tariff_segments'], 'total')),
+            0.02,
+        );
+    }
+
+    /**
+     * Série plate : aucune sous-période ne peut être départagée par interpolation.
+     * On retombe sur le prorata des jours sans NaN ni division par zéro.
+     */
+    public function testGasFallsBackToDayProrataWhenReadingsCannotBeInterpolated(): void
+    {
+        [$tariffs] = $this->seasonalGasFixture();
+
+        $readings = new FakeGasReadingRepository(forInterpolation: [
+            ['reading_at' => '2026-01-01 00:00:00', 'counter_m3' => 500.0],
+            ['reading_at' => '2026-07-01 00:00:00', 'counter_m3' => 500.0],
+        ]);
+
+        $r = $this->makeService(new FakeLegacyDailyRepository(), $tariffs, $readings)
+            ->estimatePeriodGas(
+                new DateTimeImmutable('2026-01-01 00:00:00'),
+                new DateTimeImmutable('2026-07-01 00:00:00'),
+            );
+
+        self::assertTrue($r['available']);
+        self::assertEqualsWithDelta(0.0, $r['delta_m3'], 0.001);
+        self::assertEqualsWithDelta(0.0, $r['kwh'], 0.001);
+        // Plus d'énergie : restent les 6 abonnements de 3 €.
+        self::assertEqualsWithDelta(18.0, $r['cost']['total'], 0.05);
+    }
+
+    /** Une seule grille gaz active → résultat strictement identique au mono-grille. */
+    public function testSingleGridGasResultIsUnchanged(): void
+    {
+        $readings = static fn (): FakeGasReadingRepository => new FakeGasReadingRepository(forInterpolation: [
+            ['reading_at' => '2026-01-01 00:00:00', 'counter_m3' => 0.0],
+            ['reading_at' => '2026-02-01 00:00:00', 'counter_m3' => 300.0],
+        ]);
+
+        $single = new FakeTariffRepository(grid: $this->gasGrid(10.0));
+        $multi  = new FakeTariffRepository();
+        $multi->gridsBetween = [$this->gasGrid(10.0)];
+
+        $a = $this->makeService(new FakeLegacyDailyRepository(), $single, $readings())->estimateMonthGas(2026, 1);
+        $b = $this->makeService(new FakeLegacyDailyRepository(), $multi, $readings())->estimateMonthGas(2026, 1);
+
+        self::assertSame($a['cost'], $b['cost']);
+        self::assertCount(1, $a['tariff_segments']);
+    }
+
+    /** Eau : le volume d'une sous-période suit lui aussi la consommation réelle. */
+    public function testWaterSegmentVolumeFollowsRealConsumption(): void
+    {
+        $waterGrid = static fn (int $id, string $name, string $from, ?string $to, float $rate): TariffGrid => new TariffGrid(
+            id: $id,
+            energyType: 'water',
+            name: $name,
+            validFrom: new DateTimeImmutable($from),
+            validTo: $to !== null ? new DateTimeImmutable($to) : null,
+            lines: ['water' => new TariffLine('water', $rate, ComponentKind::PerM3)],
+        );
+
+        $tariffs = new FakeTariffRepository();
+        $tariffs->gridsBetween = [
+            $waterGrid(6, 'Eau B', '2026-04-16', null, 4.0),
+            $waterGrid(5, 'Eau A', '2026-04-01', '2026-04-15', 2.0),
+        ];
+
+        // 27 m³ sur la première quinzaine, 3 sur la seconde (et non 15/15).
+        $svc = $this->makeService(
+            new FakeLegacyDailyRepository(),
+            $tariffs,
+            new FakeGasReadingRepository(),
+            new FakeMeterReadingRepository(forInterpolation: [
+                ['reading_at' => '2026-04-01 00:00:00', 'counter_m3' => 100.0],
+                ['reading_at' => '2026-04-16 00:00:00', 'counter_m3' => 127.0],
+                ['reading_at' => '2026-05-01 00:00:00', 'counter_m3' => 130.0],
+            ]),
+        );
+
+        $r = $svc->estimateMonthWater(2026, 4);
+
+        self::assertTrue($r['available']);
+        // 27 × 2 € + 3 × 4 € = 66,00 € (le prorata des jours donnait 90,00 €).
+        self::assertEqualsWithDelta(66.0, $r['cost']['total'], 0.01);
     }
 }
