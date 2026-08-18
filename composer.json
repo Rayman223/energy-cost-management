@@ -1,8 +1,8 @@
 {
-    "name": "rayman223/manage-energy-costs",
+    "name": "rayman223/energy-cost-management",
     "description": "Tracking and estimation of energy costs (electricity, gas and water).",
     "type": "project",
-    "license": "proprietary",
+    "license": "MIT",
     "require": {
         "php": ">=8.4",
         "ext-mbstring": "*",
