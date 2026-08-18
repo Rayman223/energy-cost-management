@@ -22,7 +22,6 @@
     "defaultMode": "plan",
     "additionalDirectories": [
       "/tmp",
-      "/var/www/Manage-energy-costs/.claude/skills",
       "/var/www/Manage-energy-costs/backups",
       "/var/www/Manage-energy-costs/.claude",
       "/var/www/Manage-energy-costs/.git"
