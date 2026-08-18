@@ -1,4 +1,4 @@
-## energy.domain.com — Manage-energy-costs (servi par le PHP-FPM de SWAG).
+## energy.domain.com — energy-cost-management (servi par le PHP-FPM de SWAG).
 ##
 ## Bloc « site-conf » : l'app est hébergée DANS le container SWAG
 ## (/config/www/energyv3, cf. app/scripts/deploy_unraid.sh) et servie

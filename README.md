@@ -1,10 +1,13 @@
 # Manage Energy Costs
 
-A PHP application to track and estimate energy costs (electricity, gas, water).
-Originally a **single-home Belgian** tracker (Sibelga grid), it has grown into a
-**multi-tenant, public, European community platform**:
-members sign in with OpenID Connect, push their own meter readings (manually or
-via an API), and get full tariff-based cost estimates across Europe.
+[![CI](https://github.com/Rayman223/energy-cost-management/actions/workflows/ci.yml/badge.svg)](https://github.com/Rayman223/energy-cost-management/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![PHP 8.4+](https://img.shields.io/badge/PHP-8.4%2B-777bb4.svg)](https://www.php.net/)
+
+A self-hostable **multi-tenant European platform** to track and estimate energy
+costs (electricity, gas, water). Members sign in with OpenID Connect, push their
+own meter readings (manually or via an API), and get full tariff-based cost
+estimates — including day-ahead dynamic prices.
 
 No framework — vanilla PHP with a small in-house autoloader; Composer is used for
 dev tooling and the OIDC library only.
@@ -28,6 +31,8 @@ dev tooling and the OIDC library only.
 - [Security](#security)
 - [EnergyID](#energyid)
 - [Documentation](#documentation)
+- [Contributing](#contributing)
+- [License](#license)
 
 ---
 
@@ -69,7 +74,7 @@ routes JSON through `Router` → controllers → `JsonResponse`.
 app/
 ├── autoload.php / bootstrap.php   ← App\ autoloader + config loading
 ├── config/                        ← config.example.php · config.php (⚠ gitignored)
-├── docs/                          ← installation.md · architecture.md · import.md · security-review.md · plan/ · …
+├── docs/                          ← installation.md · architecture.md · import.md · api-contract.md · security-review.md · …
 ├── public/                        ← index · tariffs · account · admin · login · privacy · terms · api · auth/
 │   └── assets/                    ← versioned CSS/JS (cache-busting)
 ├── scripts/                       ← migrate · import_* · cron_* · gas_cost_audit
@@ -100,8 +105,8 @@ Full design notes: [`app/docs/architecture.md`](app/docs/architecture.md).
 Quick local setup:
 
 ```bash
-git clone https://github.com/Rayman223/Manage-energy-costs.git
-cd Manage-energy-costs
+git clone https://github.com/Rayman223/energy-cost-management.git
+cd energy-cost-management
 
 cp app/config/config.example.php app/config/config.php    # then edit credentials
 composer install --no-dev                                 # OIDC runtime lib
@@ -111,8 +116,8 @@ php app/scripts/migrate.php                               # apply versioned migr
 ```
 
 For a full production install on **Unraid (SWAG)** — including creating the owner
-account, promoting it to admin, migrating data from the old project, and seeding
-the first Belgian tariff templates — see the step-by-step guide:
+account, promoting it to admin and seeding the first Belgian tariff templates —
+see the step-by-step guide:
 **[`app/docs/installation.md`](app/docs/installation.md)**.
 
 ---
@@ -283,7 +288,7 @@ electricity) applies from its date onwards instead of rewriting the past.
 | `/admin.php` | Admin: members (role/status) + import on behalf of a user |
 | `/login.php`, `/auth/login.php`, `/auth/logout.php` | Authentication (Basic / OIDC) |
 | `/privacy`, `/terms`, `/cookies`, `/legal-notice` | Legal pages (localized): GDPR notice, terms, cookie policy, publisher identity |
-| `/api.php` | JSON API — ingestion (`ingest_*`) and read/cost endpoints. See [`app/docs/plan/api-ingestion.md`](app/docs/plan/api-ingestion.md) |
+| `/api.php` | JSON API — ingestion (`ingest_*`) and read/cost endpoints. See [`app/docs/api-contract.md`](app/docs/api-contract.md) |
 
 ---
 
@@ -292,8 +297,9 @@ electricity) applies from its date onwards instead of rewriting the past.
 UI, validation messages and legal pages are fully translatable via catalogs in
 `app/translations/{fr,en,nl,de}.php`. Locale resolution order is
 `?lang` > profile > cookie > `Accept-Language` > default; the choice is persisted
-per user. Adding a language = adding a catalog. See
-[`app/docs/plan/i18n.md`](app/docs/plan/i18n.md).
+per user. Adding a language = adding a catalog — see
+[`CONTRIBUTING.md`](CONTRIBUTING.md#adding-a-language). Translation help is
+welcome.
 
 ---
 
@@ -328,6 +334,9 @@ Access control is handled by `AuthGuard` / `WebAccessGuard` and configured in
 
 Full posture and follow-ups (CSP, tokens, GDPR): [`app/docs/security-review.md`](app/docs/security-review.md).
 
+Found a vulnerability? Please **do not open a public issue** — report it privately,
+see [`SECURITY.md`](SECURITY.md).
+
 ---
 
 ## EnergyID
@@ -343,7 +352,7 @@ connector card is hidden from the account page and the nightly push is skipped.
 
 ## Documentation
 
-- [`app/docs/installation.md`](app/docs/installation.md) — production install on Unraid, owner account, data migration, tariff templates.
+- [`app/docs/installation.md`](app/docs/installation.md) — production install on Unraid, owner account, tariff templates.
 - [`app/docs/oidc-google.md`](app/docs/oidc-google.md) — sign in with Google, step by step.
 - [`app/docs/oidc-microsoft.md`](app/docs/oidc-microsoft.md) — sign in with Microsoft / Entra ID.
 - [`app/docs/oidc-authentik.md`](app/docs/oidc-authentik.md) — sign in with authentik *(written in French)*.
@@ -352,4 +361,20 @@ connector card is hidden from the account page and the nightly push is skipped.
 - [`app/docs/import.md`](app/docs/import.md) — bulk import formats, mapping, idempotence.
 - [`app/docs/entsoe-dynamic-prices.md`](app/docs/entsoe-dynamic-prices.md) — ENTSO-E setup, 15-min prices, cron & Unraid script *(written in French)*.
 - [`app/docs/security-review.md`](app/docs/security-review.md) — security checklist.
-- [`app/docs/plan/`](app/docs/plan/) — per-phase design notes (P0–P8) and the API contract.
+- [`app/docs/api-contract.md`](app/docs/api-contract.md) — JSON API contract (ingestion, read/cost endpoints).
+
+---
+
+## Contributing
+
+Contributions are welcome — bug reports, translations, tariff templates for a new
+country, or code. Start with [`CONTRIBUTING.md`](CONTRIBUTING.md): local setup,
+project conventions (vanilla PHP, layered architecture, PHPStan level 6) and the
+issue → branch → PR workflow. By participating you agree to the
+[Code of Conduct](CODE_OF_CONDUCT.md).
+
+---
+
+## License
+
+Released under the [MIT License](LICENSE).

@@ -290,6 +290,7 @@ return [
 
     'common.theme' => 'Toggle theme',
 'common.discord' => 'Join us on Discord',
+    'common.github' => 'Source code on GitHub',
 
     'dash.subtitle'        => 'Consumption tracking',
     'dash.month'           => 'Consumption — current month',

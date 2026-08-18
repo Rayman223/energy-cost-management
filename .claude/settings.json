@@ -15,16 +15,17 @@
       "Bash(php -r ' *)",
       "Bash(php -S 127.0.0.1:8899 index.php)",
       "Bash(xargs -I{} git log --oneline -1 {})",
-      "Bash(sudo systemctl start mariadb)"
+      "Bash(sudo systemctl start mariadb)",
+      "Bash(xargs -0 -n1 php -l)"
     ],
     "deny": [],
     "ask": [],
     "defaultMode": "plan",
     "additionalDirectories": [
       "/tmp",
-      "/var/www/Manage-energy-costs/backups",
-      "/var/www/Manage-energy-costs/.claude",
-      "/var/www/Manage-energy-costs/.git"
+      "/var/www/energy-cost-management/backups",
+      "/var/www/energy-cost-management/.claude",
+      "/var/www/energy-cost-management/.git"
     ]
   },
   "model": "claude-opus-5"

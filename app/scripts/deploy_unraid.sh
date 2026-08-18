@@ -48,7 +48,7 @@ set -euo pipefail
 APP_NAME="${APP_NAME:-energyv3}"
 
 # Dépôt privé → accès SSH via deploy key. Repasser en https://… pour un repo public.
-REPO_URL="${REPO_URL:-git@github.com:Rayman223/Manage-energy-costs.git}"
+REPO_URL="${REPO_URL:-git@github.com:Rayman223/energy-cost-management.git}"
 # Emplacements persistants de la deploy key sur /boot (survivent aux reboots).
 SSH_KEY_SRC="${SSH_KEY_SRC:-/boot/config/ssh/github_deploy_ed25519}"
 SSH_KNOWN_HOSTS_SRC="${SSH_KNOWN_HOSTS_SRC:-/boot/config/ssh/github_known_hosts}"

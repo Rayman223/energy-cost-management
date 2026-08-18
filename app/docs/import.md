@@ -101,7 +101,7 @@ réelle (contrairement au web, qui assainit le message).
 ### 3. API batch (programmatique, P4 #55)
 Pour l'ingestion automatisée volumineuse : `POST ?action=ingest_electricity|
 ingest_gas|ingest_water`, ≤ 1000 lectures/requête, jeton Bearer. Voir
-[plan/api-ingestion.md](plan/api-ingestion.md).
+[api-contract.md](api-contract.md).
 
 ## Sécurité & limites (upload web)
 

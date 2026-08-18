@@ -57,6 +57,7 @@ $navlink = function (string $page, string $url, string $icon, string $title) use
     <?= $navlink('account', $this->url('account'), '👤', $this->t('nav.account')) ?>
     <form method="post" action="<?= $this->url('auth/logout') ?>" class="logout-form"><?= \App\Security\Csrf::field() ?><button type="submit" class="theme-toggle" title="<?= $this->te('auth.sign_out') ?>">🚪</button></form>
     <?= $this->partial('discord-link', ['url' => $discordUrl ?? null]) ?>
+    <?= $this->partial('github-link') ?>
     <?= $this->partial('_lang-switcher', ['available' => $available]) ?>
     <button type="button" class="theme-toggle" id="theme-toggle" aria-label="<?= $this->te('common.theme') ?>">🌙</button>
   </div>

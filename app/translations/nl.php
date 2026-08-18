@@ -289,6 +289,7 @@ return [
     'meter.saved_elsewhere' => '✓ Opgeslagen — de meting is terugwerkend, ze staat op een volgende pagina.',
     'common.theme' => 'Thema wisselen',
 'common.discord' => 'Word lid van Discord',
+    'common.github' => 'Broncode op GitHub',
 
     'dash.subtitle'        => 'Verbruiksopvolging',
     'dash.month'           => 'Verbruik — huidige maand',

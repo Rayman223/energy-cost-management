@@ -289,6 +289,7 @@ return [
     'meter.saved_elsewhere' => '✓ Gespeichert — die Ablesung ist rückdatiert und steht auf einer späteren Seite.',
     'common.theme' => 'Thema umschalten',
 'common.discord' => 'Discord beitreten',
+    'common.github' => 'Quellcode auf GitHub',
 
     'dash.subtitle'        => 'Verbrauchsverfolgung',
     'dash.month'           => 'Verbrauch — laufender Monat',

@@ -1,7 +1,6 @@
 # Architecture & décisions
 
-Vue d'ensemble de l'architecture en couches issue de l'épopée
-[#25](https://github.com/Rayman223/Manage-energy-costs/issues/25)
+Vue d'ensemble de l'architecture en couches issue de la refonte initiale
 (refactorisation, optimisation, découplage front/back). Reste un projet **PHP
 vanilla**, sans framework, avec **Composer uniquement pour les outils de dev**.
 
@@ -123,7 +122,7 @@ Transformation du site mono-utilisateur belge en plateforme **multi-tenant**,
 - **i18n complète** (`App\I18n\*`, `App\View\ViewFactory`) : résolution de locale
   (`?lang` > profil > cookie > Accept-Language > défaut), catalogues
   `fr/en/nl/de` extensibles, formatage localisé (`Formatter`, ext-intl optionnel
-  avec repli). Voir [plan/i18n.md](plan/i18n.md).
+  avec repli).
 - **Self-service & RGPD** (`account.php`) : profil, jetons, EnergyID **opt-in**
   (BE/NL), export JSON et suppression de compte en cascade.
 - **Administration** (`admin.php`, réservé aux `role=admin`) : gestion des
@@ -131,7 +130,7 @@ Transformation du site mono-utilisateur belge en plateforme **multi-tenant**,
   effet **dès la requête suivante** (`AuthGuard` revérifie le statut, pas
   seulement à la connexion). Le catalogue partagé se gère depuis la page Tarifs.
 - **Durcissement public** : CSRF sur les formulaires, en-têtes de sécurité
-  (`App\Http\SecurityHeaders` — CSP en Report-Only, enforcement à venir), cookies
+  (`App\Http\SecurityHeaders` — CSP appliquée, `img-src 'self' data:`), cookies
   de session durcis (`App\Security\Session`), secrets hors dépôt (config.php).
   Checklist : [security-review.md](security-review.md).
 
@@ -141,5 +140,4 @@ Transformation du site mono-utilisateur belge en plateforme **multi-tenant**,
 - [security-review.md](security-review.md) — checklist de revue sécurité (P7).
 - [sql-audit.md](sql-audit.md) — audit SQL & optimisation.
 - [page-states.md](page-states.md) — états de référence des pages (anti-régression).
-- [plan/](plan/) — plan détaillé de chaque incrément de l'épopée #25.
 - [energyid-v2-model.md](energyid-v2-model.md) — protocole EnergyID V2.

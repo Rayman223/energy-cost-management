@@ -1,6 +1,6 @@
 # États des pages web — référence de non-régression (Phase 0)
 
-> **Référence figée — Phase 0 de l'épopée [#25](https://github.com/Rayman223/Manage-energy-costs/issues/25).**
+> **Référence figée — Phase 0 de la refonte initiale.**
 > Inventaire des **états visibles actuels** des pages `app/public/*.php` (branche
 > `main`), à comparer manuellement après le découplage front/back (Phases 1‑3)
 > pour garantir l'absence de régression visuelle/fonctionnelle.

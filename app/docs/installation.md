@@ -88,7 +88,7 @@ delegates to the versioned script (always current):
 # User Script — pulls the latest repo, then delegates to the versioned deploy.
 set -euo pipefail
 APP_DIR="/mnt/user/appdata/swag/www/energyv3"
-REPO_URL="git@github.com:Rayman223/Manage-energy-costs.git"
+REPO_URL="git@github.com:Rayman223/energy-cost-management.git"
 
 SSH_RUN_DIR="$(mktemp -d)"; trap 'rm -rf "$SSH_RUN_DIR"' EXIT
 install -m 600 /boot/config/ssh/github_deploy_ed25519 "$SSH_RUN_DIR/id"

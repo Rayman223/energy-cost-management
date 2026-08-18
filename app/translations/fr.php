@@ -298,6 +298,7 @@ return [
 
     'common.theme' => 'Changer de thème',
 'common.discord' => 'Rejoindre le Discord',
+    'common.github' => 'Code source sur GitHub',
 
     // Dashboard (titres de sections rendues côté serveur)
     'dash.subtitle'        => 'Suivi de consommation',

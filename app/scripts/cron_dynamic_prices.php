@@ -15,7 +15,7 @@ use App\Service\EntsoePriceParser;
  *
  * À planifier après la publication day-ahead (~13h CET), avec une passe de
  * rattrapage si la publication est en retard — l'upsert étant idempotent :
- *   30 13,18 * * *  php /var/www/Manage-energy-costs/app/scripts/cron_dynamic_prices.php
+ *   30 13,18 * * *  php /var/www/energy-cost-management/app/scripts/cron_dynamic_prices.php
  *
  * Sur Unraid, passer par app/scripts/cron_dynamic_prices_unraid.sh.
  * Guide complet : app/docs/entsoe-dynamic-prices.md

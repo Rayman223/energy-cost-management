@@ -1,6 +1,6 @@
 ---
 name: fix-issue
-description: Workflow complet pour fix d'une issue GitHub Manage-energy-costs — lecture de l'issue, plan de travail, implémentation (PHP vanilla, autoloader App\ → app/src/), commit, puis création de la PR associée (Closes #X). À utiliser quand l'utilisateur demande "fix issue #X" ou "résous l'issue #X".
+description: Workflow complet pour fix d'une issue GitHub energy-cost-management — lecture de l'issue, plan de travail, implémentation (PHP vanilla, autoloader App\ → app/src/), commit, puis création de la PR associée (Closes #X). À utiliser quand l'utilisateur demande "fix issue #X" ou "résous l'issue #X".
 ---
 
 # Fix Issue Workflow

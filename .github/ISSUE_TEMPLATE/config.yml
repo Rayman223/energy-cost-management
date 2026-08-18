@@ -1,0 +1,11 @@
+# Blank issues stay enabled on purpose: the maintainers use short free-form
+# issues for their own tracking, and forcing a form on them adds friction with
+# no benefit. External reports are steered to the forms above by the labels.
+blank_issues_enabled: true
+contact_links:
+  - name: Report a security vulnerability
+    url: https://github.com/Rayman223/energy-cost-management/security/advisories/new
+    about: Never report a vulnerability in a public issue — use private reporting.
+  - name: Installation & configuration guide
+    url: https://github.com/Rayman223/energy-cost-management/blob/main/app/docs/installation.md
+    about: Production install, OIDC providers, tariff templates — check here before opening an issue.

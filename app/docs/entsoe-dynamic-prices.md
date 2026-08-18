@@ -249,7 +249,7 @@ de prix — sans configuration supplémentaire.
 Sur l'hôte (installation classique) :
 
 ```bash
-php /var/www/Manage-energy-costs/app/scripts/cron_dynamic_prices.php
+php /var/www/energy-cost-management/app/scripts/cron_dynamic_prices.php
 ```
 
 Dans un conteneur (Unraid / SWAG) :

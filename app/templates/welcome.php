@@ -32,6 +32,7 @@
     </div>
     <div class="landing-header-right">
       <?= $this->partial('discord-link', ['url' => $discordUrl ?? null]) ?>
+      <?= $this->partial('github-link') ?>
       <?= $this->partial('_lang-switcher', ['available' => $available]) ?>
       <button type="button" class="theme-toggle" id="theme-toggle" aria-label="<?= $this->te('common.theme') ?>">🌙</button>
     </div>
