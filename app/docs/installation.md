@@ -44,6 +44,10 @@ OIDC config. `git clean` runs **without `-x`**, so `app/config/config.php` and
 
 ### Private repository access (SSH deploy key)
 
+> This repository is **public**: `REPO_URL` is an `https://…` URL and the deploy
+> needs no credentials at all. This section only applies if you host your own
+> private fork — the bootstrap above then needs the `GIT_SSH_COMMAND` lines back.
+
 If the repo is **private**, the deploy needs SSH auth. The script uses a
 per-repo **deploy key** and sets it up itself (step 0) whenever `REPO_URL` is an
 SSH URL (`git@github.com:…`); with an `https://…` URL the block is skipped
@@ -88,11 +92,7 @@ delegates to the versioned script (always current):
 # User Script — pulls the latest repo, then delegates to the versioned deploy.
 set -euo pipefail
 APP_DIR="/mnt/user/appdata/swag/www/energyv3"
-REPO_URL="git@github.com:Rayman223/energy-cost-management.git"
-
-SSH_RUN_DIR="$(mktemp -d)"; trap 'rm -rf "$SSH_RUN_DIR"' EXIT
-install -m 600 /boot/config/ssh/github_deploy_ed25519 "$SSH_RUN_DIR/id"
-export GIT_SSH_COMMAND="ssh -i $SSH_RUN_DIR/id -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new"
+REPO_URL="https://github.com/Rayman223/energy-cost-management.git"
 
 mkdir -p "$APP_DIR"; cd "$APP_DIR"
 [ -d .git ] || git init -q

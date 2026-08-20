@@ -25,11 +25,12 @@
 # déploiement (clean sans -x). Ne jamais committer de secret : config.php reste
 # la source de vérité unique, lue par ce script sans rien coder en dur.
 #
-# Dépôt privé : le script installe lui-même la deploy key SSH (Étape 0) avant tout
-# git — il copie la clé depuis /boot en RAM avec chmod 600 (rootfs Unraid en RAM +
-# /boot FAT32 ne conservant pas les permissions), puis exporte GIT_SSH_COMMAND.
-# Emplacements surchargeables : SSH_KEY_SRC, SSH_KNOWN_HOSTS_SRC. Repasser REPO_URL
-# en https://… désactive ce bloc (repo public).
+# Le dépôt est public : REPO_URL est en HTTPS et aucune authentification n'est
+# requise. S'il redevenait privé, repasser REPO_URL en git@… suffit : le script
+# installe alors lui-même la deploy key SSH (Étape 0) avant tout git — il copie la
+# clé depuis /boot en RAM avec chmod 600 (rootfs Unraid en RAM + /boot FAT32 ne
+# conservant pas les permissions), puis exporte GIT_SSH_COMMAND. Emplacements
+# surchargeables : SSH_KEY_SRC, SSH_KNOWN_HOSTS_SRC.
 #
 # Usage (SSH ou plugin Unraid « User Scripts ») :
 #   ./deploy_unraid.sh              # déploie le dernier commit de main
@@ -47,8 +48,9 @@ set -euo pipefail
 #   APP_NAME=energyv4 ./deploy_unraid.sh
 APP_NAME="${APP_NAME:-energyv3}"
 
-# Dépôt privé → accès SSH via deploy key. Repasser en https://… pour un repo public.
-REPO_URL="${REPO_URL:-git@github.com:Rayman223/energy-cost-management.git}"
+# Dépôt public → HTTPS anonyme, aucune clé nécessaire. Repasser en git@… (deploy
+# key) si le dépôt redevient privé : l'étape 0 ci-dessous se réactive alors seule.
+REPO_URL="${REPO_URL:-https://github.com/Rayman223/energy-cost-management.git}"
 # Emplacements persistants de la deploy key sur /boot (survivent aux reboots).
 SSH_KEY_SRC="${SSH_KEY_SRC:-/boot/config/ssh/github_deploy_ed25519}"
 SSH_KNOWN_HOSTS_SRC="${SSH_KNOWN_HOSTS_SRC:-/boot/config/ssh/github_known_hosts}"
