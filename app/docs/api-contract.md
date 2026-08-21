@@ -69,7 +69,7 @@
 | `gas_cost` | — | `estimateLastGasPeriod()`. |
 | `gas_month_cost` | `year`, `month` (mêmes défauts/validations que `month_cost`) | `estimateMonthGas(year, month)`. |
 | `water_month_cost` | `year`, `month` (mêmes défauts/validations que `month_cost`) | `estimateMonthWater(year, month)` — **volume m³ uniquement** (pas de coût : aucun tarif eau). |
-| `tariffs` | — | `{ electricity: [...], gas: [...] }` ; chaque grille : `{ id, name, valid_from (Y-m-d), valid_to (Y-m-d|null), lines, pricing_mode }`. |
+| `tariffs` | — | `{ electricity: [...], gas: [...] }` ; chaque grille : `{ id, name, valid_from (Y-m-d), valid_to (Y-m-d|null, **exclue**), lines, pricing_mode }`. |
 | *(autre)* | — | `400 { ok:false, error:"Unknown action" }`. |
 
 ### Forme d'une estimation électricité (`cost_estimate`, `month_cost`)
@@ -120,7 +120,7 @@ comme `{}`.
 |----------|---------------|----------------|---------------------|
 | `gas_entry` | `{ counter_m3: float>=0, reading_at?: date }` | `{ ok:true, saved_at (ISO), counter_m3 }` | `counter_m3` invalide/<0 ; date invalide ; relevé déjà existant à cette date ; `counter_m3` < relevé précédent ou > relevé suivant. |
 | `water_entry` | `{ counter_m3: float>=0, reading_at?: date }` | `{ ok:true, saved_at (ISO), counter_m3 }` | idem `gas_entry`. |
-| `save_tariff` | `{ energy_type: "electricity"\|"gas"\|"water", name, valid_from: date, valid_to?: date, lines: object, pricing_mode?: string }` | `{ ok:true, id }` | champ requis manquant (`energy_type`, `name`, `valid_from`, `lines`) ; `energy_type` hors énum ; `valid_from`/`valid_to` invalides ; clé de ligne hors format ; montant de ligne illisible ; aucune ligne exploitable. |
+| `save_tariff` | `{ energy_type: "electricity"\|"gas"\|"water", name, valid_from: date, valid_to?: date (**exclue**), lines: object, pricing_mode?: string }` | `{ ok:true, id }` | champ requis manquant (`energy_type`, `name`, `valid_from`, `lines`) ; `energy_type` hors énum ; `valid_from`/`valid_to` invalides ; clé de ligne hors format ; montant de ligne illisible ; aucune ligne exploitable. |
 | *(autre)* | — | — | `400 { ok:false, error:"Unknown POST action" }`. |
 
 Un champ `date` (`reading_at`, `valid_from`, `valid_to`) doit porter une **date
@@ -129,6 +129,11 @@ calendaire réelle** : `2026-07-31`, `2026-07-31 12:00:00`, ISO 8601 avec offset
 (`2026-02-31`, `2026-02-29` hors année bissextile), que le parseur décalerait
 sinon en silence, et les valeurs sans date qui se résoudraient sur l'horloge du
 serveur (`2026`, `12:00`, `now`, `tomorrow`).
+
+**Bornes de fin exclues** (#1) : `valid_to` désigne le premier jour **non** couvert
+par la grille — une grille valable sur juin 2026 s'écrit
+`valid_from: "2026-06-01", valid_to: "2026-07-01"`. Deux grilles successives se
+recollent sur la même date. Cf. [`date-bounds.md`](date-bounds.md).
 
 `reading_at` absent ⇒ horodatage `now`. Un index de 0 est accepté (compteur
 neuf) ; seule une valeur négative est refusée. L'insertion rétroactive est
