@@ -7,11 +7,10 @@ namespace Tests\Integration;
 use App\Domain\TariffLineCatalog;
 use App\Infrastructure\MigrationRunner;
 use PDO;
-use PHPUnit\Framework\TestCase;
 
 /**
  * Test d'intégration de la migration 2026-07-31_purge_malformed_line_keys.sql (#269).
- * S'auto-skippe sans base ; refuse une base non-test.
+ * S'auto-skippe sans base de test joignable.
  *
  * Le prédicat SQL de la migration est le miroir de
  * {@see TariffLineCatalog::KEY_PATTERN}, avec deux subtilités faciles à casser sans
@@ -20,60 +19,15 @@ use PHPUnit\Framework\TestCase;
  * tolère un `\n` final). D'où ce test : la purge doit supprimer exactement les clés
  * que l'API refuse désormais, ni plus ni moins.
  */
-final class MalformedLineKeyPurgeDbTest extends TestCase
+final class MalformedLineKeyPurgeDbTest extends DatabaseTestCase
 {
     private const MIGRATION = __DIR__ . '/../../app/sql/migrations/2026-07-31_purge_malformed_line_keys.sql';
 
-    private ?PDO $pdo = null;
-
-    protected function setUp(): void
-    {
-        $configPath = __DIR__ . '/../../app/config/config.php';
-        if (!is_file($configPath)) {
-            self::markTestSkipped('app/config/config.php absent — test BDD ignoré.');
-        }
-
-        /** @var array{database: array<string, mixed>} $config */
-        $config = require $configPath;
-        $db = $config['database'];
-
-        if (!str_contains((string) $db['name'], 'test')) {
-            self::markTestSkipped('Base "' . $db['name'] . '" non-test — seed destructif refusé.');
-        }
-
-        try {
-            $this->pdo = new PDO(
-                sprintf('mysql:host=%s;port=%d;dbname=%s;charset=%s', $db['host'], $db['port'], $db['name'], $db['charset'] ?? 'utf8mb4'),
-                (string) $db['user'],
-                (string) $db['password'],
-                [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION, PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC],
-            );
-        } catch (\Throwable $e) {
-            self::markTestSkipped('Base injoignable — test BDD ignoré : ' . $e->getMessage());
-        }
-
-        $this->clean();
-    }
-
-    protected function tearDown(): void
-    {
-        if ($this->pdo !== null) {
-            $this->clean();
-        }
-    }
-
-    private function clean(): void
+    protected function clean(): void
     {
         foreach (['tariff_grid_lines', 'tariff_grids'] as $table) {
             $this->pdo()->exec('DELETE FROM ' . $table);
         }
-    }
-
-    private function pdo(): PDO
-    {
-        self::assertNotNull($this->pdo);
-
-        return $this->pdo;
     }
 
     /** Rejoue la migration telle que le runner l'exécuterait. */

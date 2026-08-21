@@ -9,48 +9,19 @@ use App\Infrastructure\MeterTopology;
 use App\Repository\ElectricityReadingRepository;
 use App\Repository\UserRepository;
 use App\Support\Dates;
-use PDO;
-use PHPUnit\Framework\TestCase;
 
 /**
  * Test d'intégration de l'interpolation à minuit sur le modèle à registres
- * (port des scénarios de l'ancien test Data_Dries). S'auto-skippe sans base ;
- * refuse une base dont le nom ne contient pas « test ».
+ * (port des scénarios de l'ancien test Data_Dries). S'auto-skippe sans base de test
+ * joignable.
  */
-final class ElectricityReadingRepositoryDbTest extends TestCase
+final class ElectricityReadingRepositoryDbTest extends DatabaseTestCase
 {
-    private ?PDO $pdo = null;
-
     private int $userId = 0;
 
     protected function setUp(): void
     {
-        $configPath = __DIR__ . '/../../app/config/config.php';
-        if (!is_file($configPath)) {
-            self::markTestSkipped('app/config/config.php absent — test BDD ignoré.');
-        }
-
-        /** @var array{database: array<string, mixed>} $config */
-        $config = require $configPath;
-        $db = $config['database'];
-
-        if (!str_contains((string) $db['name'], 'test')) {
-            self::markTestSkipped('Base "' . $db['name'] . '" non-test — seed destructif refusé.');
-        }
-
-        try {
-            $this->pdo = new PDO(
-                sprintf('mysql:host=%s;port=%d;dbname=%s;charset=%s', $db['host'], $db['port'], $db['name'], $db['charset'] ?? 'utf8mb4'),
-                (string) $db['user'],
-                (string) $db['password'],
-                [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION, PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC, PDO::MYSQL_ATTR_INIT_COMMAND => "SET time_zone = '+00:00'"],
-            );
-        } catch (\Throwable $e) {
-            self::markTestSkipped('Base injoignable — test BDD ignoré : ' . $e->getMessage());
-        }
-
-        $this->clean();
-
+        parent::setUp();
         $users = new UserRepository($this->pdo());
         $this->userId = $users->create('https://iss.test', 'elec-test', 'test', 'Elec Tester')->id;
 
@@ -84,14 +55,7 @@ final class ElectricityReadingRepositoryDbTest extends TestCase
         }
     }
 
-    protected function tearDown(): void
-    {
-        if ($this->pdo !== null) {
-            $this->clean();
-        }
-    }
-
-    private function clean(): void
+    protected function clean(): void
     {
         foreach (['meter_readings', 'meter_registers', 'meters', 'user_profiles', 'users'] as $table) {
             $this->pdo()->exec('DELETE FROM ' . $table);
@@ -698,14 +662,5 @@ final class ElectricityReadingRepositoryDbTest extends TestCase
                 $ins->execute(['rid' => $registers[$key], 'at' => $ts, 'val' => $value]);
             }
         }
-    }
-
-    private function pdo(): PDO
-    {
-        if ($this->pdo === null) {
-            self::fail('PDO non initialisé.');
-        }
-
-        return $this->pdo;
     }
 }

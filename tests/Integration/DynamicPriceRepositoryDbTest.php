@@ -6,59 +6,19 @@ namespace Tests\Integration;
 
 use App\Repository\DynamicPriceRepository;
 use DateTimeImmutable;
-use PDO;
-use PHPUnit\Framework\TestCase;
 
 /**
  * Test d'intégration des lectures de `dynamic_prices` : la séparation des deux
  * résolutions natives (PT60M / PT15M) ne tient qu'au SQL — un `resolution_min`
  * oublié dans un WHERE ferait servir des points 15 min comme prix horaire, sans
- * qu'aucun test unitaire ne le voie. S'auto-skippe sans base ; refuse une base
- * dont le nom ne contient pas « test ».
+ * qu'aucun test unitaire ne le voie. S'auto-skippe sans base de test
+ * joignable.
  */
-final class DynamicPriceRepositoryDbTest extends TestCase
+final class DynamicPriceRepositoryDbTest extends DatabaseTestCase
 {
     private const ZONE = '10YBE----------2';
 
-    private ?PDO $pdo = null;
-
-    protected function setUp(): void
-    {
-        $configPath = __DIR__ . '/../../app/config/config.php';
-        if (!is_file($configPath)) {
-            self::markTestSkipped('app/config/config.php absent — test BDD ignoré.');
-        }
-
-        /** @var array{database: array<string, mixed>} $config */
-        $config = require $configPath;
-        $db = $config['database'];
-
-        if (!str_contains((string) $db['name'], 'test')) {
-            self::markTestSkipped('Base "' . $db['name'] . '" non-test — seed destructif refusé.');
-        }
-
-        try {
-            $this->pdo = new PDO(
-                sprintf('mysql:host=%s;port=%d;dbname=%s;charset=%s', $db['host'], $db['port'], $db['name'], $db['charset'] ?? 'utf8mb4'),
-                (string) $db['user'],
-                (string) $db['password'],
-                [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION, PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC, PDO::MYSQL_ATTR_INIT_COMMAND => "SET time_zone = '+00:00'"],
-            );
-        } catch (\Throwable $e) {
-            self::markTestSkipped('Base injoignable — test BDD ignoré : ' . $e->getMessage());
-        }
-
-        $this->clean();
-    }
-
-    protected function tearDown(): void
-    {
-        if ($this->pdo !== null) {
-            $this->clean();
-        }
-    }
-
-    private function clean(): void
+    protected function clean(): void
     {
         $this->pdo()->exec('DELETE FROM dynamic_prices');
     }
@@ -155,14 +115,5 @@ final class DynamicPriceRepositoryDbTest extends TestCase
             new DateTimeImmutable('2026-08-01 00:00:00'),
             new DateTimeImmutable('2026-08-02 00:00:00'),
         ));
-    }
-
-    private function pdo(): PDO
-    {
-        if ($this->pdo === null) {
-            self::fail('PDO non initialisé.');
-        }
-
-        return $this->pdo;
     }
 }

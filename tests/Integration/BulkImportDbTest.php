@@ -9,55 +9,20 @@ use App\Repository\UserRepository;
 use App\Repository\UtilityReadingRepository;
 use App\Service\BulkImportService;
 use App\Service\Import\ImportMapping;
-use PDO;
-use PHPUnit\Framework\TestCase;
 
 /**
  * Import en masse de bout en bout contre une vraie base MariaDB/MySQL.
  *
- * S'AUTO-SKIPPE sans base joignable. Garde anti-destruction : refuse toute base
- * dont le nom ne contient pas « test ».
+ * S'AUTO-SKIPPE sans base de test joignable.
  */
-final class BulkImportDbTest extends TestCase
+final class BulkImportDbTest extends DatabaseTestCase
 {
-    private ?PDO $pdo = null;
     private BulkImportService $service;
 
     protected function setUp(): void
     {
-        $configPath = __DIR__ . '/../../app/config/config.php';
-        if (!is_file($configPath)) {
-            self::markTestSkipped('app/config/config.php absent — test BDD ignoré.');
-        }
-
-        /** @var array{database: array<string, mixed>} $config */
-        $config = require $configPath;
-        $db = $config['database'];
-
-        if (!str_contains((string) $db['name'], 'test')) {
-            self::markTestSkipped('Base "' . $db['name'] . '" non-test — seed destructif refusé.');
-        }
-
-        try {
-            $this->pdo = new PDO(
-                sprintf('mysql:host=%s;port=%d;dbname=%s;charset=%s', $db['host'], $db['port'], $db['name'], $db['charset'] ?? 'utf8mb4'),
-                (string) $db['user'],
-                (string) $db['password'],
-                [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION, PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC, PDO::MYSQL_ATTR_INIT_COMMAND => "SET time_zone = '+00:00'"],
-            );
-        } catch (\Throwable $e) {
-            self::markTestSkipped('Base injoignable — test BDD ignoré : ' . $e->getMessage());
-        }
-
-        $this->clean();
+        parent::setUp();
         $this->service = new BulkImportService();
-    }
-
-    protected function tearDown(): void
-    {
-        if ($this->pdo !== null) {
-            $this->clean();
-        }
     }
 
     public function testGasImportThenReimportIsIdempotent(): void
@@ -113,7 +78,7 @@ final class BulkImportDbTest extends TestCase
         return (int) $stmt->fetchColumn();
     }
 
-    private function clean(): void
+    protected function clean(): void
     {
         $pdo = $this->pdo();
         $pdo->exec('DELETE FROM meter_readings');
@@ -122,14 +87,5 @@ final class BulkImportDbTest extends TestCase
         $pdo->exec('DELETE FROM utility_readings');
         $pdo->exec('DELETE FROM user_profiles');
         $pdo->exec('DELETE FROM users');
-    }
-
-    private function pdo(): PDO
-    {
-        if ($this->pdo === null) {
-            self::fail('PDO non initialisé.');
-        }
-
-        return $this->pdo;
     }
 }
