@@ -283,6 +283,37 @@ php app/scripts/migrate.php                            # versioned migrations (t
 php app/scripts/migrate.php --dry-run                  # preview pending migrations
 ```
 
+### The test database (`<database.name>_test`)
+
+The integration suite (`tests/Integration`) seeds destructively — `DELETE FROM
+users`, `DELETE FROM tariff_grids`… before every test. It therefore **never**
+connects to `database.name`: it derives a throwaway database by appending
+`_test` to it, and connects there instead.
+
+```
+database.name = "energy"   →   integration suite uses "energy_test"
+```
+
+Nothing to add to `config.php`: the derivation *is* the safeguard — the name the
+suite opens always ends in `_test`, so a destructive seed cannot reach your
+working database. The test database must live on the same server, with the same
+credentials.
+
+Create it once (same server, same user), then import the schema into it:
+
+```bash
+mariadb -u root -p -e "CREATE DATABASE energy_test CHARACTER SET utf8mb4;
+                       GRANT ALL PRIVILEGES ON energy_test.* TO 'energy_user'@'%';"
+mariadb -u energy_user -p energy_test < app/sql/schema.sql
+vendor/bin/phpunit --testsuite integration            # runs for real, config.php untouched
+```
+
+Without it, every integration test skips itself with a message naming the
+database it expected — `Base « energy_test » introuvable (ou droits manquants
+pour l'utilisateur « energy_user »)`. The same message covers a database that
+exists but that your user has no `GRANT` on: `information_schema.SCHEMATA` hides
+both cases identically.
+
 ---
 
 ## 4. Create the owner account

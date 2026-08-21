@@ -318,10 +318,15 @@ welcome.
 
 ```bash
 composer install                                    # dev tooling (PHPUnit)
-vendor/bin/phpunit                                  # integration tests auto-skip without a DB
+vendor/bin/phpunit                                  # integration tests auto-skip without a test DB
 phpstan analyse --configuration=phpstan.dist.neon   # static analysis (level 6)
 find app -name '*.php' -print0 | xargs -0 -n1 php -l # syntax lint
 ```
+
+The integration suite runs against a **derived** database — `database.name` plus
+`_test` (`energy` → `energy_test`) — never against your working one, so no config
+change is needed to run it. Creating it:
+[`app/docs/installation.md`](app/docs/installation.md#the-test-database-databasename_test).
 
 CI ([.github/workflows/ci.yml](.github/workflows/ci.yml)) runs on every push/PR:
 PHP lint (8.4), **PHPStan level 6**, **PHPUnit** (unit + integration
