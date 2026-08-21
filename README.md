@@ -1,5 +1,16 @@
 # Energy cost management
 
+### 👉 [**Use the app: energy.lauray.net**](https://energy.lauray.net) 👈
+
+> **[energy.lauray.net](https://energy.lauray.net) is the official production
+> instance — free, hosted and ready to use.**
+> Sign in with OpenID Connect and start tracking your electricity, gas and water
+> costs in minutes: nothing to install, no server to maintain.
+>
+> The rest of this README is for people who want to **self-host** or **contribute**.
+
+[![Live app](https://img.shields.io/badge/Live%20app-energy.lauray.net-2ea44f?style=for-the-badge)](https://energy.lauray.net)
+
 [![CI](https://github.com/Rayman223/energy-cost-management/actions/workflows/ci.yml/badge.svg)](https://github.com/Rayman223/energy-cost-management/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![PHP 8.4+](https://img.shields.io/badge/PHP-8.4%2B-777bb4.svg)](https://www.php.net/)
