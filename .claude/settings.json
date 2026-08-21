@@ -16,7 +16,9 @@
       "Bash(php -S 127.0.0.1:8899 index.php)",
       "Bash(xargs -I{} git log --oneline -1 {})",
       "Bash(sudo systemctl start mariadb)",
-      "Bash(xargs -0 -n1 php -l)"
+      "Bash(xargs -0 -n1 php -l)",
+      "WebFetch(domain:api.github.com)",
+      "WebFetch(domain:github.com)"
     ],
     "deny": [],
     "ask": [],
