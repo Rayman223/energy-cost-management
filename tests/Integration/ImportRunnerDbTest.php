@@ -8,51 +8,17 @@ use App\Repository\UserRepository;
 use App\Service\BulkImportService;
 use App\Service\Import\ImportMapping;
 use App\Service\Import\ImportRunner;
-use PDO;
-use PHPUnit\Framework\TestCase;
 
 /**
  * Orchestration transactionnelle {@see ImportRunner::run()} contre une vraie
  * base : plafond stop-and-report + commit/rollback (dry-run).
  *
- * S'AUTO-SKIPPE sans base joignable. Garde anti-destruction : refuse toute base
- * dont le nom ne contient pas « test ».
+ * S'AUTO-SKIPPE sans base de test joignable.
  */
-final class ImportRunnerDbTest extends TestCase
+final class ImportRunnerDbTest extends DatabaseTestCase
 {
-    private ?PDO $pdo = null;
-
     /** @var list<string> Fichiers CSV temporaires à purger. */
     private array $tempFiles = [];
-
-    protected function setUp(): void
-    {
-        $configPath = __DIR__ . '/../../app/config/config.php';
-        if (!is_file($configPath)) {
-            self::markTestSkipped('app/config/config.php absent — test BDD ignoré.');
-        }
-
-        /** @var array{database: array<string, mixed>} $config */
-        $config = require $configPath;
-        $db = $config['database'];
-
-        if (!str_contains((string) $db['name'], 'test')) {
-            self::markTestSkipped('Base "' . $db['name'] . '" non-test — seed destructif refusé.');
-        }
-
-        try {
-            $this->pdo = new PDO(
-                sprintf('mysql:host=%s;port=%d;dbname=%s;charset=%s', $db['host'], $db['port'], $db['name'], $db['charset'] ?? 'utf8mb4'),
-                (string) $db['user'],
-                (string) $db['password'],
-                [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION, PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC, PDO::MYSQL_ATTR_INIT_COMMAND => "SET time_zone = '+00:00'"],
-            );
-        } catch (\Throwable $e) {
-            self::markTestSkipped('Base injoignable — test BDD ignoré : ' . $e->getMessage());
-        }
-
-        $this->clean();
-    }
 
     protected function tearDown(): void
     {
@@ -61,9 +27,7 @@ final class ImportRunnerDbTest extends TestCase
         }
         $this->tempFiles = [];
 
-        if ($this->pdo !== null) {
-            $this->clean();
-        }
+        parent::tearDown();
     }
 
     public function testCapStopsAndReportsWithoutLosingImportedRows(): void
@@ -231,7 +195,7 @@ final class ImportRunnerDbTest extends TestCase
         return (int) $stmt->fetchColumn();
     }
 
-    private function clean(): void
+    protected function clean(): void
     {
         $pdo = $this->pdo();
         $pdo->exec('DELETE FROM meter_readings');
@@ -240,14 +204,5 @@ final class ImportRunnerDbTest extends TestCase
         $pdo->exec('DELETE FROM utility_readings');
         $pdo->exec('DELETE FROM user_profiles');
         $pdo->exec('DELETE FROM users');
-    }
-
-    private function pdo(): PDO
-    {
-        if ($this->pdo === null) {
-            self::fail('PDO non initialisé.');
-        }
-
-        return $this->pdo;
     }
 }

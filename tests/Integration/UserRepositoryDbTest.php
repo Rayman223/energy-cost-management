@@ -6,58 +6,22 @@ namespace Tests\Integration;
 
 use App\Domain\UserProfile;
 use App\Repository\UserRepository;
-use PDO;
-use PHPUnit\Framework\TestCase;
 
 /**
  * Test d'intégration de UserRepository contre une vraie base MySQL/MariaDB.
  *
- * S'AUTO-SKIPPE quand aucune base n'est joignable. Le seed est isolé dans une
- * transaction annulée en tearDown ; on refuse toute base dont le nom ne contient
- * pas « test » (garde anti-destruction).
+ * S'AUTO-SKIPPE sans base de test joignable.
  */
-final class UserRepositoryDbTest extends TestCase
+final class UserRepositoryDbTest extends DatabaseTestCase
 {
-    private ?PDO $pdo = null;
-
-    protected function setUp(): void
+    /**
+     * Nettoyage direct (pas d'isolation par transaction : UserRepository::create()
+     * ouvre la sienne).
+     */
+    protected function clean(): void
     {
-        $configPath = __DIR__ . '/../../app/config/config.php';
-        if (!is_file($configPath)) {
-            self::markTestSkipped('app/config/config.php absent — test BDD ignoré.');
-        }
-
-        /** @var array{database: array<string, mixed>} $config */
-        $config = require $configPath;
-        $db = $config['database'];
-
-        if (!str_contains((string) $db['name'], 'test')) {
-            self::markTestSkipped('Base "' . $db['name'] . '" non-test — seed destructif refusé.');
-        }
-
-        try {
-            $this->pdo = new PDO(
-                sprintf('mysql:host=%s;port=%d;dbname=%s;charset=%s', $db['host'], $db['port'], $db['name'], $db['charset'] ?? 'utf8mb4'),
-                (string) $db['user'],
-                (string) $db['password'],
-                [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION, PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC, PDO::MYSQL_ATTR_INIT_COMMAND => "SET time_zone = '+00:00'"],
-            );
-        } catch (\Throwable $e) {
-            self::markTestSkipped('Base injoignable — test BDD ignoré : ' . $e->getMessage());
-        }
-
-        // Nettoyage direct (pas d'isolation par transaction : UserRepository::create()
-        // ouvre la sienne). La garde « base de test » protège des données réelles.
-        $this->pdo->exec('DELETE FROM user_profiles');
-        $this->pdo->exec('DELETE FROM users');
-    }
-
-    protected function tearDown(): void
-    {
-        if ($this->pdo !== null) {
-            $this->pdo->exec('DELETE FROM user_profiles');
-            $this->pdo->exec('DELETE FROM users');
-        }
+        $this->pdo()->exec('DELETE FROM user_profiles');
+        $this->pdo()->exec('DELETE FROM users');
     }
 
     public function testCreateFindAndProfileDefaults(): void
@@ -231,14 +195,5 @@ final class UserRepositoryDbTest extends TestCase
         // Nouvelle période choisie : elle remplace la précédente.
         $repo->setAdvancesPeriod($user->id, '2025-06-01', '2026-06-01');
         self::assertSame('2025-06-01', $repo->getProfile($user->id)?->advancesPeriodFrom);
-    }
-
-    private function pdo(): PDO
-    {
-        if ($this->pdo === null) {
-            self::fail('PDO non initialisé.');
-        }
-
-        return $this->pdo;
     }
 }

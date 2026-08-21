@@ -17,57 +17,22 @@ use App\Repository\WebhookSyncStateRepository;
 use App\Service\AccountDataExporter;
 use App\Service\AccountEraser;
 use DateTimeImmutable;
-use PDO;
-use PHPUnit\Framework\TestCase;
 
 /**
- * Export + effacement RGPD contre une vraie base. S'auto-skippe sans base ;
- * refuse une base non-test.
+ * Export + effacement RGPD contre une vraie base. S'auto-skippe sans base de test
+ * joignable.
  */
-final class AccountRgpdDbTest extends TestCase
+final class AccountRgpdDbTest extends DatabaseTestCase
 {
-    private ?PDO $pdo = null;
-
     private int $userId = 0;
 
     protected function setUp(): void
     {
-        $configPath = __DIR__ . '/../../app/config/config.php';
-        if (!is_file($configPath)) {
-            self::markTestSkipped('app/config/config.php absent — test BDD ignoré.');
-        }
-
-        /** @var array{database: array<string, mixed>} $config */
-        $config = require $configPath;
-        $db = $config['database'];
-
-        if (!str_contains((string) $db['name'], 'test')) {
-            self::markTestSkipped('Base "' . $db['name'] . '" non-test — seed destructif refusé.');
-        }
-
-        try {
-            $this->pdo = new PDO(
-                sprintf('mysql:host=%s;port=%d;dbname=%s;charset=%s', $db['host'], $db['port'], $db['name'], $db['charset'] ?? 'utf8mb4'),
-                (string) $db['user'],
-                (string) $db['password'],
-                [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION, PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC, PDO::MYSQL_ATTR_INIT_COMMAND => "SET time_zone = '+00:00'"],
-            );
-        } catch (\Throwable $e) {
-            self::markTestSkipped('Base injoignable — test BDD ignoré : ' . $e->getMessage());
-        }
-
-        $this->clean();
+        parent::setUp();
         $this->userId = (new UserRepository($this->pdo()))->create('https://iss.test', 'rgpd', 'test', 'RGPD Tester')->id;
     }
 
-    protected function tearDown(): void
-    {
-        if ($this->pdo !== null) {
-            $this->clean();
-        }
-    }
-
-    private function clean(): void
+    protected function clean(): void
     {
         foreach ([
             'meter_readings', 'meter_registers', 'meters', 'utility_readings',
@@ -205,14 +170,5 @@ final class AccountRgpdDbTest extends TestCase
         $counts = $usage->countsByRef();
         self::assertSame(1, $counts['user:' . $publicId] ?? 0);
         self::assertArrayNotHasKey('user:' . $privateId, $counts);
-    }
-
-    private function pdo(): PDO
-    {
-        if ($this->pdo === null) {
-            self::fail('PDO non initialisé.');
-        }
-
-        return $this->pdo;
     }
 }

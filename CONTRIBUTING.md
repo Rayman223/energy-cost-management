@@ -69,7 +69,7 @@ The three checks the CI runs, in the order it is worth running them locally:
 
 ```bash
 find app -name '*.php' -print0 | xargs -0 -n1 php -l   # syntax lint
-vendor/bin/phpunit                                     # integration tests auto-skip without a DB
+vendor/bin/phpunit                                     # integration tests auto-skip without a test DB
 phpstan analyse --configuration=phpstan.dist.neon      # static analysis, level 6
 ```
 
@@ -77,8 +77,13 @@ phpstan analyse --configuration=phpstan.dist.neon      # static analysis, level 
   findings only — **do not add new code to the baseline**. Type your new
   parameters and return values instead.
 - Add or extend PHPUnit tests whenever you touch domain code. Unit tests live in
-  `tests/Unit`, DB-backed ones in `tests/Integration` (they skip themselves when
-  no database is reachable, and run against MariaDB in the CI).
+  `tests/Unit`, DB-backed ones in `tests/Integration`. The latter extend
+  `Tests\Integration\DatabaseTestCase`, which connects to a **derived** database
+  — `database.name` plus `_test` (`energy` → `energy_test`) — so a destructive
+  seed can never reach your working one, and running them needs no config change.
+  They skip themselves, naming the database they expected, when it is missing;
+  see [`app/docs/installation.md`](app/docs/installation.md#the-test-database-databasename_test)
+  to create it.
 - The CI additionally runs a JS syntax check (`node --check`) on the assets under
   `app/public/assets/js/`.
 

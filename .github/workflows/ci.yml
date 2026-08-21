@@ -115,7 +115,10 @@ jobs:
         image: mariadb:10.11
         env:
           MARIADB_ROOT_PASSWORD: root
-          MARIADB_DATABASE: energy_test
+          # Base « applicative » : celle que nomme config.php et que migrate.php
+          # migre, comme en production. La base jetable des tests (energy_test)
+          # en est dérivée et créée par l'étape dédiée ci-dessous.
+          MARIADB_DATABASE: energy
           MARIADB_USER: energy_user
           MARIADB_PASSWORD: energy_pass
         ports:
@@ -139,12 +142,25 @@ jobs:
       - name: Install dev dependencies
         run: composer install --no-progress --prefer-dist --no-interaction
 
-      - name: Importer le schéma
-        run: mysql -h 127.0.0.1 -P 3306 -u energy_user -penergy_pass energy_test < app/sql/schema.sql
+      - name: Créer la base de test dérivée (energy → energy_test)
+        run: |
+          # La suite d'intégration ne se connecte jamais à `database.name` : elle
+          # en dérive « <name>_test ». MARIADB_DATABASE n'accorde de droits à
+          # energy_user que sur `energy`, d'où le GRANT explicite ici.
+          mysql -h 127.0.0.1 -P 3306 -u root -proot -e \
+            "CREATE DATABASE energy_test CHARACTER SET utf8mb4; \
+             GRANT ALL PRIVILEGES ON energy_test.* TO 'energy_user'@'%'; FLUSH PRIVILEGES;"
+
+      - name: Importer le schéma (base applicative + base de test)
+        run: |
+          mysql -h 127.0.0.1 -P 3306 -u energy_user -penergy_pass energy      < app/sql/schema.sql
+          mysql -h 127.0.0.1 -P 3306 -u energy_user -penergy_pass energy_test < app/sql/schema.sql
 
       - name: Config de test (pointe sur la base du service CI)
         run: |
-          echo "<?php declare(strict_types=1); return ['database' => ['host' => '127.0.0.1', 'port' => 3306, 'name' => 'energy_test', 'user' => 'energy_user', 'password' => 'energy_pass', 'charset' => 'utf8mb4']];" > app/config/config.php
+          # `name` = base APPLICATIVE (energy) : c'est celle que migre migrate.php.
+          # La suite d'intégration en dérive energy_test toute seule.
+          echo "<?php declare(strict_types=1); return ['database' => ['host' => '127.0.0.1', 'port' => 3306, 'name' => 'energy', 'user' => 'energy_user', 'password' => 'energy_pass', 'charset' => 'utf8mb4']];" > app/config/config.php
 
       - name: Vérifier que les migrations rejouables sont idempotentes et convergent (garde C1)
         run: |
@@ -166,4 +182,6 @@ jobs:
           fi
 
       - name: PHPUnit — suite d'intégration (s'exécute contre la base)
-        run: vendor/bin/phpunit --testsuite integration
+        # --fail-on-skipped : sans lui, une base de test absente ou un GRANT
+        # manquant laisserait le job VERT avec les 132 tests auto-skippés.
+        run: vendor/bin/phpunit --testsuite integration --fail-on-skipped
