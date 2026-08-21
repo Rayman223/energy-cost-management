@@ -29,8 +29,10 @@ abstract class DatabaseTestCase extends TestCase
     protected ?PDO $pdo = null;
 
     /**
-     * Config `database` résolue une fois pour toute la suite : la lecture du
-     * fichier et le sondage d'existence ne sont pas payés par chacun des tests.
+     * Config `database` lue une fois pour toute la suite. La connexion et le
+     * sondage d'existence, eux, sont refaits à chaque test : le coût est dans le
+     * bruit (~2 s pour la suite) et une base disparue en cours de route continue
+     * ainsi de donner le skip explicite plutôt qu'une erreur brute.
      *
      * @var array<string, mixed>|null
      */
