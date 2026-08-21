@@ -16,7 +16,9 @@ use DateTimeImmutable;
  * (surcharge personnelle avant catalogue partagé, puis `valid_from` décroissant,
  * cf. TariffRepository::findActiveGridsBetween), l'arbitrage d'un jour couvert par
  * plusieurs grilles est identique à celui de findActiveGrid() : le jour de bascule
- * n'est facturé qu'une fois (bornes `valid_to` incluses, cf. #190).
+ * n'est facturé qu'une fois (#190). Depuis #1 il ne peut d'ailleurs plus être
+ * revendiqué par deux grilles à la fois : `valid_to` est le premier jour NON
+ * couvert, donc deux grilles successives se partagent une frontière, pas un jour.
  *
  * Les jours non couverts par une grille sont rattachés au segment voisin (le
  * précédent, ou le premier segment de la période s'ils sont en tête) : la période

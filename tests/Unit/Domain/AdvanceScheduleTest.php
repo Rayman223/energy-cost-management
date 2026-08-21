@@ -102,11 +102,50 @@ final class AdvanceScheduleTest extends TestCase
 
     public function testValidityRangeClipsThePeriod(): void
     {
-        $s = $this->schedule(validFrom: '2026-02-01', validTo: '2026-04-30', dueDay: 10);
+        $s = $this->schedule(validFrom: '2026-02-01', validTo: '2026-05-01', dueDay: 10);
 
         self::assertSame(
             ['2026-02-10', '2026-03-10', '2026-04-10'],
             $this->dates($s, '2026-01-01', '2026-12-31'),
+        );
+    }
+
+    /**
+     * La borne `valid_to` du barème est EXCLUE au même titre que celle de la
+     * fenêtre (#1) : un barème s'arrêtant le jour même du prélèvement ne le compte
+     * pas. C'est ce qui permet à deux barèmes successifs de partager cette date
+     * sans qu'aucun mois ne soit facturé deux fois.
+     */
+    public function testScheduleEndBoundExcludesADueDateFallingOnIt(): void
+    {
+        $endsOnTheDueDay = $this->schedule(validFrom: '2026-01-01', validTo: '2026-03-10', dueDay: 10);
+
+        self::assertSame(
+            ['2026-01-10', '2026-02-10'],
+            $this->dates($endsOnTheDueDay, '2026-01-01', '2026-12-31'),
+        );
+    }
+
+    /**
+     * Deux barèmes qui se RECOLLENT (révision du montant en cours d'année) : le
+     * mois de bascule revient au nouveau barème et à lui seul. Avec une borne
+     * incluse, le 01/07 aurait été prélevé par les deux.
+     */
+    public function testConsecutiveSchedulesShareTheirBoundWithoutDoubleCounting(): void
+    {
+        $before = $this->schedule(validFrom: '2026-01-01', validTo: '2026-07-01', dueDay: 1);
+        $after  = $this->schedule(validFrom: '2026-07-01', validTo: null, dueDay: 1);
+
+        self::assertFalse($before->overlaps($after->validFrom, $after->validTo));
+
+        $window = ['2026-01-01', '2027-01-01'];
+        self::assertSame(
+            ['2026-01-01', '2026-02-01', '2026-03-01', '2026-04-01', '2026-05-01', '2026-06-01'],
+            $this->dates($before, ...$window),
+        );
+        self::assertSame(
+            ['2026-07-01', '2026-08-01', '2026-09-01', '2026-10-01', '2026-11-01', '2026-12-01'],
+            $this->dates($after, ...$window),
         );
     }
 
@@ -122,7 +161,7 @@ final class AdvanceScheduleTest extends TestCase
 
     public function testScheduleOutsideThePeriodYieldsNothing(): void
     {
-        $s = $this->schedule(validFrom: '2024-01-01', validTo: '2024-12-31');
+        $s = $this->schedule(validFrom: '2024-01-01', validTo: '2025-01-01');
 
         self::assertSame([], $this->dates($s, '2026-01-01', '2026-12-31'));
     }
@@ -151,16 +190,20 @@ final class AdvanceScheduleTest extends TestCase
 
     public function testOverlapDetectedOnIntersectingRanges(): void
     {
-        $s = $this->schedule(validFrom: '2026-01-01', validTo: '2026-06-30');
+        $s = $this->schedule(validFrom: '2026-01-01', validTo: '2026-07-01');
 
-        self::assertTrue($s->overlaps($this->at('2026-06-01'), $this->at('2026-12-31')));
+        self::assertTrue($s->overlaps($this->at('2026-06-01'), $this->at('2027-01-01')));
     }
 
+    /**
+     * Bornes semi-ouvertes (#1) : la plage suivante démarre le jour même où
+     * celle-ci s'arrête, et les deux ne se chevauchent pas pour autant.
+     */
     public function testNoOverlapOnConsecutiveRanges(): void
     {
-        $s = $this->schedule(validFrom: '2026-01-01', validTo: '2026-06-30');
+        $s = $this->schedule(validFrom: '2026-01-01', validTo: '2026-07-01');
 
-        self::assertFalse($s->overlaps($this->at('2026-07-01'), $this->at('2026-12-31')));
+        self::assertFalse($s->overlaps($this->at('2026-07-01'), $this->at('2027-01-01')));
     }
 
     public function testOpenEndedScheduleOverlapsAnyLaterRange(): void
@@ -174,17 +217,17 @@ final class AdvanceScheduleTest extends TestCase
     {
         $s = $this->schedule(validFrom: '2026-01-01', validTo: null);
 
-        self::assertFalse($s->overlaps($this->at('2025-01-01'), $this->at('2025-12-31')));
+        self::assertFalse($s->overlaps($this->at('2025-01-01'), $this->at('2026-01-01')));
     }
 
     /**
-     * Marquage du barème en cours sur /advances (#252). Les deux bornes sont
-     * incluses : `valid_to` est le dernier jour couvert par le contrat, un barème
-     * affiché comme échu le jour même de son terme serait faux.
+     * Marquage du barème en cours sur /advances (#252). Début inclus, fin EXCLUE
+     * (#1) : `valid_to` est le premier jour NON couvert, donc un barème affiché
+     * comme encore en cours ce jour-là serait faux — c'est déjà celui d'après.
      */
-    public function testIsActiveOnIncludesBothBounds(): void
+    public function testIsActiveOnIncludesTheStartAndExcludesTheEnd(): void
     {
-        $s = $this->schedule(validFrom: '2026-01-01', validTo: '2026-12-31');
+        $s = $this->schedule(validFrom: '2026-01-01', validTo: '2027-01-01');
 
         self::assertTrue($s->isActiveOn($this->at('2026-01-01')));
         self::assertTrue($s->isActiveOn($this->at('2026-06-15')));
@@ -205,7 +248,7 @@ final class AdvanceScheduleTest extends TestCase
     /** L'heure du jour ne doit pas décider : seule la date civile compte. */
     public function testIsActiveOnIgnoresTimeOfDay(): void
     {
-        $s   = $this->schedule(validFrom: '2026-01-01', validTo: '2026-12-31');
+        $s   = $this->schedule(validFrom: '2026-01-01', validTo: '2027-01-01');
         $end = new DateTimeImmutable('2026-12-31 23:59:59', new DateTimeZone('UTC'));
 
         self::assertTrue($s->isActiveOn($end));
@@ -217,14 +260,18 @@ final class AdvanceScheduleTest extends TestCase
      */
     public function testIsExpiredOnSeparatesPastFromFutureSchedules(): void
     {
-        $past   = $this->schedule(validFrom: '2025-01-01', validTo: '2025-12-31');
-        $future = $this->schedule(validFrom: '2027-01-01', validTo: '2027-12-31');
+        $past   = $this->schedule(validFrom: '2025-01-01', validTo: '2026-01-01');
+        $future = $this->schedule(validFrom: '2027-01-01', validTo: '2028-01-01');
         $open   = $this->schedule(validFrom: '2020-01-01', validTo: null);
         $today  = $this->at('2026-06-15');
 
         self::assertTrue($past->isExpiredOn($today));
         self::assertFalse($future->isExpiredOn($today));
         self::assertFalse($open->isExpiredOn($today));
+
+        // `valid_to` étant le premier jour non couvert (#1), le barème est échu dès
+        // ce jour-là, et encore en cours la veille.
+        self::assertTrue($past->isExpiredOn($this->at('2026-01-01')));
         self::assertFalse($past->isExpiredOn($this->at('2025-12-31')));
     }
 

@@ -241,7 +241,7 @@ final class AdvanceBalanceServiceTest extends TestCase
     {
         $svc = new AdvanceBalanceService(
             new FakeAdvanceScheduleRepository([
-                $this->schedule(amount: 100.0, validFrom: '2026-01-01', validTo: '2026-06-30', id: 1),
+                $this->schedule(amount: 100.0, validFrom: '2026-01-01', validTo: '2026-07-01', id: 1),
                 $this->schedule(amount: 150.0, validFrom: '2026-07-01', validTo: null, id: 2),
             ]),
             $this->costService(
@@ -360,7 +360,7 @@ final class AdvanceBalanceServiceTest extends TestCase
     {
         $svc = new AdvanceBalanceService(
             new FakeAdvanceScheduleRepository([
-                $this->schedule(validFrom: '2025-01-01', validTo: '2026-07-27'),
+                $this->schedule(validFrom: '2025-01-01', validTo: '2026-07-28'),
             ]),
             $this->costService(
                 new FakeLegacyDailyRepository(deltasBetween: $this->elecDeltas('2026-07-28 00:00:00', '2026-07-29 00:00:00', 40.0)),
@@ -376,18 +376,18 @@ final class AdvanceBalanceServiceTest extends TestCase
     }
 
     /**
-     * La fin de fenêtre est EXCLUE, celle de la validité d'un barème est INCLUSE :
-     * `hasSchedule` doit se mesurer sur la veille de `to`. Un barème valable le seul
-     * 29/07 est donc hors d'une fenêtre `[28/07, 29/07[` — sans le décalage d'un
-     * jour, il compterait comme couvrant, et l'écran promettrait un élargissement de
-     * période inutile. Fixture volontairement adjacente : disjointe d'un jour franc,
-     * elle passerait avec ou sans la correction.
+     * Fenêtre et validité sont désormais toutes deux `[from, to[` (#1), et
+     * `hasSchedule` se mesure sur les bornes telles quelles. Un barème valable le
+     * seul 29/07 commence là où la fenêtre `[28/07, 29/07[` s'arrête : il en est
+     * dehors. Le compter comme couvrant ferait promettre à l'écran un
+     * élargissement de période inutile. Fixture volontairement adjacente :
+     * disjointe d'un jour franc, elle passerait quelle que soit la convention.
      */
     public function testScheduleStartingOnTheExcludedEndBoundIsOutsideTheWindow(): void
     {
         $svc = new AdvanceBalanceService(
             new FakeAdvanceScheduleRepository([
-                $this->schedule(validFrom: '2026-07-29', validTo: '2026-07-29'),
+                $this->schedule(validFrom: '2026-07-29', validTo: '2026-07-30'),
             ]),
             $this->costService(
                 new FakeLegacyDailyRepository(deltasBetween: $this->elecDeltas('2026-07-28 00:00:00', '2026-07-29 00:00:00', 40.0)),
@@ -442,7 +442,7 @@ final class AdvanceBalanceServiceTest extends TestCase
         $svc = new AdvanceBalanceService(
             // Valable du 1er au 10 juillet, mais prélevé le 15 : jamais d'échéance.
             new FakeAdvanceScheduleRepository([
-                $this->schedule(validFrom: '2026-07-01', validTo: '2026-07-10', dueDay: 15),
+                $this->schedule(validFrom: '2026-07-01', validTo: '2026-07-11', dueDay: 15),
             ]),
             $this->costService(
                 new FakeLegacyDailyRepository(deltasBetween: $this->elecDeltas('2026-07-01 00:00:00', '2026-08-01 00:00:00', 40.0)),
@@ -513,7 +513,7 @@ final class AdvanceBalanceServiceTest extends TestCase
     {
         $svc = new AdvanceBalanceService(
             new FakeAdvanceScheduleRepository([
-                $this->schedule(validFrom: '2026-06-01', validTo: '2026-12-31'),
+                $this->schedule(validFrom: '2026-06-01', validTo: '2027-01-01'),
             ]),
             $this->costService(
                 new FakeLegacyDailyRepository(deltasBetween: $this->elecDeltas(
@@ -567,7 +567,7 @@ final class AdvanceBalanceServiceTest extends TestCase
     {
         $svc = new AdvanceBalanceService(
             new FakeAdvanceScheduleRepository([
-                $this->schedule(amount: 100.0, validFrom: '2026-01-01', validTo: '2026-06-30', id: 1),
+                $this->schedule(amount: 100.0, validFrom: '2026-01-01', validTo: '2026-07-01', id: 1),
                 $this->schedule(amount: 150.0, validFrom: '2026-07-01', validTo: null, id: 2),
             ]),
             $this->costService(
@@ -590,7 +590,7 @@ final class AdvanceBalanceServiceTest extends TestCase
     {
         $svc = new AdvanceBalanceService(
             new FakeAdvanceScheduleRepository([
-                $this->schedule(amount: 100.0, validFrom: '2026-01-01', validTo: '2026-03-31', id: 1),
+                $this->schedule(amount: 100.0, validFrom: '2026-01-01', validTo: '2026-04-01', id: 1),
                 // Rien en avril : trou d'un mois.
                 $this->schedule(amount: 150.0, validFrom: '2026-05-01', validTo: null, id: 2),
             ]),

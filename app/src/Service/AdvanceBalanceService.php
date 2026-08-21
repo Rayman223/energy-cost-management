@@ -162,11 +162,6 @@ final class AdvanceBalanceService
         $ofEnergy    = [];
         $hasSchedule = false;
 
-        // Fin de fenêtre exclue, alors qu'`overlaps()` raisonne sur une borne
-        // INCLUSE (`valid_to` = dernier jour du contrat) : on lui passe la veille,
-        // comme le fait `advancesCoverWindow()` plus bas.
-        $lastDay = $to->setTime(0, 0, 0)->modify('-1 day');
-
         foreach ($schedules as $schedule) {
             if ($schedule->energyType !== $energyType) {
                 continue;
@@ -180,7 +175,11 @@ final class AdvanceBalanceService
             // Un contrat qui court sur la fenêtre sans y voir tomber d'échéance
             // n'est PAS un contrat manquant (#254) : la distinction se joue sur la
             // plage de validité, pas sur le comptage de prélèvements.
-            $hasSchedule = $hasSchedule || $schedule->overlaps($from, $lastDay);
+            //
+            // Fenêtre et plage de validité étant toutes deux semi-ouvertes depuis
+            // #1, `overlaps()` reçoit les bornes telles quelles — plus de veille à
+            // lui passer pour rattraper une convention différente.
+            $hasSchedule = $hasSchedule || $schedule->overlaps($from, $to);
         }
 
         // Barème ne couvrant qu'une partie de la fenêtre (contrat démarré en cours
@@ -246,8 +245,9 @@ final class AdvanceBalanceService
      * c'est la présence d'un contrat sur chaque journée de la période qui rend la
      * comparaison avec le coût légitime, pas le nombre de débits tombés.
      *
-     * Les barèmes successifs se recollent (le chevauchement est refusé à la
-     * saisie) ; une plage ouverte (`validTo === null`) court jusqu'au bout.
+     * Les barèmes successifs se recollent — depuis #1, littéralement : la borne de
+     * fin de l'un est la borne de début du suivant, le chevauchement étant refusé à
+     * la saisie. Une plage ouverte (`validTo === null`) court jusqu'au bout.
      *
      * @param list<AdvanceSchedule> $schedules Barèmes de l'énergie considérée.
      */
@@ -262,9 +262,11 @@ final class AdvanceBalanceService
             static fn (AdvanceSchedule $a, AdvanceSchedule $b): int => $a->validFrom <=> $b->validFrom,
         );
 
-        // Dernier jour réellement dans la fenêtre : la borne de fin est exclue.
-        $lastDay = $to->setTime(0, 0, 0)->modify('-1 day');
-        $cursor  = $from->setTime(0, 0, 0);
+        // Curseur = premier jour pas encore couvert. Fenêtre et plages de validité
+        // étant toutes deux semi-ouvertes (#1), il avance jusqu'à `validTo` sans
+        // correctif : la fin d'un barème est le début du suivant.
+        $cursor = $from->setTime(0, 0, 0);
+        $stop   = $to->setTime(0, 0, 0);
 
         foreach ($schedules as $schedule) {
             if ($schedule->validFrom->setTime(0, 0, 0) > $cursor) {
@@ -276,12 +278,12 @@ final class AdvanceBalanceService
             }
 
             $end = $schedule->validTo->setTime(0, 0, 0);
-            if ($end >= $lastDay) {
+            if ($end >= $stop) {
                 return true;
             }
 
-            if ($end >= $cursor) {
-                $cursor = $end->modify('+1 day');
+            if ($end > $cursor) {
+                $cursor = $end;
             }
         }
 

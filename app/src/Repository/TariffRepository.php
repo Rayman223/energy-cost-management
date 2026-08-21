@@ -36,6 +36,9 @@ final class TariffRepository implements TariffRepositoryInterface
      * dernière enregistrée (id DESC). Sans ce dernier critère, dupliquer une
      * grille le jour même laisse deux lignes ex æquo et MySQL peut rendre
      * l'ancienne — le calcul resterait sur les prix d'avant.
+     *
+     * Plage `[valid_from, valid_to[`, borne de fin EXCLUE (#1) : le jour de
+     * bascule entre deux grilles successives revient à la nouvelle seule.
      */
     public function findActiveGrid(string $energyType, ?DateTimeImmutable $on = null): ?TariffGrid
     {
@@ -48,7 +51,7 @@ final class TariffRepository implements TariffRepositoryInterface
              WHERE energy_type = :type
                AND (user_id = :uid OR user_id IS NULL)
                AND valid_from <= :date
-               AND (valid_to IS NULL OR valid_to >= :date)
+               AND (valid_to IS NULL OR valid_to > :date)
              ORDER BY (user_id IS NOT NULL) DESC, valid_from DESC, id DESC
              LIMIT 1'
         );
@@ -59,10 +62,17 @@ final class TariffRepository implements TariffRepositoryInterface
     }
 
     /**
-     * Grilles chevauchant [$from, $to] (bornes incluses), dans l'ordre de
-     * priorité de findActiveGrid() : surcharge personnelle d'abord, puis
-     * `valid_from` décroissant. Les lignes sont chargées en une requête (pas de N+1).
+     * Grilles chevauchant la fenêtre balayée, dans l'ordre de priorité de
+     * findActiveGrid() : surcharge personnelle d'abord, puis `valid_from`
+     * décroissant. Les lignes sont chargées en une requête (pas de N+1).
      *
+     * Ne pas confondre les deux bornes, qui ne suivent pas la même convention :
+     * `$to` est le DERNIER JOUR balayé (inclus) — un paramètre de balayage interne,
+     * ni stocké ni exposé — tandis que `valid_to` est la borne de fin EXCLUE de la
+     * grille (#1). D'où l'asymétrie `valid_from <= :to` / `valid_to > :from` : une
+     * grille qui s'arrête le jour même où la fenêtre commence n'en couvre aucun jour.
+     *
+     * @param DateTimeImmutable $to Dernier jour de la fenêtre, INCLUS.
      * @return list<TariffGrid>
      */
     public function findActiveGridsBetween(string $energyType, DateTimeImmutable $from, DateTimeImmutable $to): array
@@ -73,7 +83,7 @@ final class TariffRepository implements TariffRepositoryInterface
              WHERE energy_type = :type
                AND (user_id = :uid OR user_id IS NULL)
                AND valid_from <= :to
-               AND (valid_to IS NULL OR valid_to >= :from)
+               AND (valid_to IS NULL OR valid_to > :from)
              ORDER BY (user_id IS NOT NULL) DESC, valid_from DESC'
         );
         $stmt->execute([
@@ -264,6 +274,13 @@ final class TariffRepository implements TariffRepositoryInterface
         }
     }
 
+    /**
+     * Clôture une grille en lui posant une borne de fin.
+     *
+     * @param DateTimeImmutable $validTo Premier jour NON couvert (#1) : pour clore
+     *                                   une grille au profit d'une autre, c'est la
+     *                                   date de début de la nouvelle, pas sa veille.
+     */
     public function closeGrid(int $id, DateTimeImmutable $validTo): void
     {
         $this->assertCanModify($id);

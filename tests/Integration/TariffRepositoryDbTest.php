@@ -268,10 +268,12 @@ final class TariffRepositoryDbTest extends DatabaseTestCase
         $admin = new TariffRepository($this->pdo(), $this->adminId, true);
         $user  = new TariffRepository($this->pdo(), $this->userId, false);
 
-        $user->saveGrid('electricity', 'A', new DateTimeImmutable('2026-01-01'), new DateTimeImmutable('2026-01-15'), $this->lines(['energy_t1' => 0.10]));
+        $user->saveGrid('electricity', 'A', new DateTimeImmutable('2026-01-01'), new DateTimeImmutable('2026-01-16'), $this->lines(['energy_t1' => 0.10]));
         $user->saveGrid('electricity', 'B', new DateTimeImmutable('2026-01-16'), null, $this->lines(['energy_t1' => 0.20]));
-        // Hors période : ne doit pas ressortir.
-        $user->saveGrid('electricity', 'Ancienne', new DateTimeImmutable('2025-01-01'), new DateTimeImmutable('2025-12-31'), $this->lines(['energy_t1' => 0.05]));
+        // Hors période : ne doit pas ressortir. Fixture volontairement ADJACENTE —
+        // sa borne de fin exclue tombe pile sur le premier jour de la fenêtre, donc
+        // elle n'en couvre aucun jour (#1). C'est ce que verrouille `valid_to > :from`.
+        $user->saveGrid('electricity', 'Ancienne', new DateTimeImmutable('2025-01-01'), new DateTimeImmutable('2026-01-01'), $this->lines(['energy_t1' => 0.05]));
         // Catalogue partagé : visible, mais après la surcharge personnelle.
         $admin->saveGrid('electricity', 'Catalogue', new DateTimeImmutable('2026-01-01'), null, $this->lines(['energy_t1' => 0.15]), null, 'BE', 'EUR', true);
 
@@ -285,7 +287,7 @@ final class TariffRepositoryDbTest extends DatabaseTestCase
     public function testFindActiveGridsBetweenIsEmptyOutsideAnyValidity(): void
     {
         $user = new TariffRepository($this->pdo(), $this->userId, false);
-        $user->saveGrid('electricity', 'A', new DateTimeImmutable('2026-01-01'), new DateTimeImmutable('2026-01-15'), $this->lines(['energy_t1' => 0.10]));
+        $user->saveGrid('electricity', 'A', new DateTimeImmutable('2026-01-01'), new DateTimeImmutable('2026-01-16'), $this->lines(['energy_t1' => 0.10]));
 
         $grids = $user->findActiveGridsBetween('electricity', new DateTimeImmutable('2026-03-01'), new DateTimeImmutable('2026-03-31'));
 
