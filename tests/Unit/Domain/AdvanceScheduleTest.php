@@ -275,6 +275,40 @@ final class AdvanceScheduleTest extends TestCase
         self::assertFalse($past->isExpiredOn($this->at('2025-12-31')));
     }
 
+    /**
+     * Pendant de `isExpiredOn()` à l'autre bout de la fenêtre (#4). La borne étant
+     * exclue, un barème qui démarre le jour même où la période s'arrête commence
+     * déjà après elle — c'est le cas du barème saisi aujourd'hui, face à une période
+     * par défaut qui s'arrête la veille.
+     */
+    public function testStartsAfterUsesTheExclusiveEndBound(): void
+    {
+        $schedule = $this->schedule(validFrom: '2026-01-01');
+
+        self::assertTrue($schedule->startsAfter($this->at('2026-01-01')));
+        self::assertFalse($schedule->startsAfter($this->at('2026-01-02')));
+        self::assertTrue($schedule->startsAfter($this->at('2025-12-31')));
+    }
+
+    public function testStartsAfterAndIsExpiredOnAreMutuallyExclusive(): void
+    {
+        // Un barème ne peut pas être à la fois clos avant la fenêtre et commencer
+        // après elle : le liseré n'a jamais deux couleurs à porter.
+        $from = $this->at('2025-01-01');
+        $to   = $this->at('2026-01-01');
+
+        foreach ([
+            $this->schedule(validFrom: '2024-01-01', validTo: '2024-06-01'),
+            $this->schedule(validFrom: '2025-06-01', validTo: '2025-09-01'),
+            $this->schedule(validFrom: '2027-01-01'),
+        ] as $schedule) {
+            self::assertFalse(
+                $schedule->isExpiredOn($from) && $schedule->startsAfter($to),
+                $schedule->validityLabel(),
+            );
+        }
+    }
+
     public function testFromRowParsesDatesAndNullableEnd(): void
     {
         $s = AdvanceSchedule::fromRow([

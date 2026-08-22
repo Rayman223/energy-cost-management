@@ -669,6 +669,8 @@ return [
     'advances.col_balance'                         => 'Saldo',
     'advances.col_total'                           => 'Gesamt',
     'advances.col_validity'                        => 'Gültigkeit',
+    'advances.active_in_period'                    => 'Im Zeitraum',
+    'advances.upcoming'                            => 'Bevorstehend',
     'advances.unavailable'                         => 'Kosten für diesen Zeitraum nicht berechenbar.',
     'advances.gaps_warning'                        => 'Mindestens eine Energie konnte nicht beziffert werden und bleibt außerhalb der Summe. Der Saldo gilt nur für die vollständigen Zeilen.',
     'advances.verdict_refund'                      => 'Ihre Abschläge übersteigen Ihren Verbrauch um {amount}: Ihr Versorger sollte Ihnen diesen Betrag erstatten.',

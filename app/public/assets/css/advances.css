@@ -45,13 +45,18 @@
   .adv-summary-value { font-size: 1.25rem; }
 }
 
-/* Barème en cours aujourd'hui (#252) : liseré vert, pas de fond — le fond reste
-   réservé à la ligne en cours d'édition, les deux états pouvant coïncider.
-   Le badge textuel accompagne le liseré : la couleur seule n'est pas une info. */
+/* Barème pesant dans le bilan affiché (#4) : liseré vert, pas de fond — le fond
+   reste réservé à la ligne en cours d'édition, les deux états pouvant coïncider.
+   Le badge textuel accompagne le liseré : la couleur seule n'est pas une info.
+   Le barème qui n'a pas encore commencé prend un liseré bleu et son propre badge :
+   il ne compte pas encore, mais il n'est pas échu pour autant — le retrait des
+   barèmes clos lui irait à contresens. */
 .adv-table tr.is-current td:first-child { box-shadow: inset 3px 0 0 var(--green); }
+.adv-table tr.is-upcoming td:first-child { box-shadow: inset 3px 0 0 var(--blue); }
 .adv-table tr.is-expired { opacity: .6; }
 .adv-badge { display: inline-block; margin-left: 8px; padding: 2px 8px; border-radius: 4px;
              font-size: .72rem; font-weight: 700; background: var(--green-dim); color: var(--green); }
+.adv-badge--upcoming { background: var(--blue-dim); color: var(--blue); }
 
 /* Barème rouvert pour modification : le formulaire en haut de page le reprend. */
 .adv-table tr.is-editing { background: var(--amber-dim, rgba(210,160,60,.15)); }

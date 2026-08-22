@@ -679,6 +679,8 @@ return [
     'advances.col_balance'                         => 'Solde',
     'advances.col_total'                           => 'Total',
     'advances.col_validity'                        => 'Validité',
+    'advances.active_in_period'                    => 'Sur la période',
+    'advances.upcoming'                            => 'À venir',
     'advances.unavailable'                         => 'Coût non calculable sur cette période.',
     'advances.gaps_warning'                        => 'Une énergie au moins n\'a pas pu être chiffrée : elle est exclue du total. Le solde ne porte que sur les lignes complètes.',
     'advances.verdict_refund'                      => 'Vos acomptes dépassent votre consommation de {amount} : votre fournisseur devrait vous rembourser ce montant.',
