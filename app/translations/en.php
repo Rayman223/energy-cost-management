@@ -671,6 +671,7 @@ return [
     'advances.col_total'                           => 'Total',
     'advances.col_validity'                        => 'Validity',
     'advances.active_in_period'                    => 'In period',
+    'advances.upcoming'                            => 'Upcoming',
     'advances.unavailable'                         => 'Cost cannot be computed for this period.',
     'advances.gaps_warning'                        => 'At least one energy could not be costed: it is excluded from the total. The balance only covers complete rows.',
     'advances.verdict_refund'                      => 'Your advances exceed your consumption by {amount}: your supplier should refund that amount.',

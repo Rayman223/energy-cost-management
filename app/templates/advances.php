@@ -330,16 +330,20 @@ $currency = $balance['currency'] ?? $currency;
         // suffit d'un jour commun avec la période : un barème qui n'en couvre
         // qu'une partie compte quand même dans le montant payé. Les barèmes déjà
         // clos AVANT le début de la période passent en retrait pour que les
-        // pertinents ressortent dans un historique long ; ceux entièrement
-        // postérieurs restent neutres — ils ne sont pas échus, ils n'ont pas
-        // commencé. Le fond ambré de `is-editing` n'entre pas en concurrence : le
-        // liseré est un box-shadow, pas un background.
-        $isCurrent = $schedule->overlaps($highlightFrom, $highlightTo);
-        $isExpired = $schedule->isExpiredOn($highlightFrom);
-        $rowClass  = array_filter([
+        // pertinents ressortent dans un historique long ; ceux qui n'ont pas encore
+        // commencé prennent leur propre marque — ils ne sont pas échus, et sans
+        // repère le barème saisi le jour même ressortirait ligne blanche face à une
+        // période par défaut qui s'arrête la veille. Le fond ambré de `is-editing`
+        // n'entre pas en concurrence : le liseré est un box-shadow, pas un
+        // background. Les trois états s'excluent deux à deux.
+        $isCurrent  = $schedule->overlaps($highlightFrom, $highlightTo);
+        $isExpired  = $schedule->isExpiredOn($highlightFrom);
+        $isUpcoming = $schedule->startsAfter($highlightTo);
+        $rowClass   = array_filter([
             $editing !== null && $editing->id === $schedule->id ? 'is-editing' : '',
             $isCurrent ? 'is-current' : '',
             $isExpired ? 'is-expired' : '',
+            $isUpcoming ? 'is-upcoming' : '',
         ]);
       ?>
       <tr class="<?= $this->e(implode(' ', $rowClass)) ?>">
@@ -354,6 +358,8 @@ $currency = $balance['currency'] ?? $currency;
           <?= $this->e($schedule->validityLabel()) ?>
           <?php if ($isCurrent): ?>
           <span class="adv-badge"><?= $this->te('advances.active_in_period') ?></span>
+          <?php elseif ($isUpcoming): ?>
+          <span class="adv-badge adv-badge--upcoming"><?= $this->te('advances.upcoming') ?></span>
           <?php endif; ?>
         </td>
         <td class="num"><?= $this->e((string) $schedule->dueDay) ?></td>

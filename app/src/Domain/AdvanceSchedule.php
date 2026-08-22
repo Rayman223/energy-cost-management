@@ -174,6 +174,19 @@ final class AdvanceSchedule
             && $this->validTo->setTime(0, 0, 0) <= $date->setTime(0, 0, 0);
     }
 
+    /**
+     * Barème qui n'a pas encore commencé au terme de la fenêtre `[…, $end[` —
+     * pendant de {@see isExpiredOn()}, qui regarde l'autre bout.
+     *
+     * `$end` est une borne EXCLUE (#1) : un barème démarrant CE jour-là commence
+     * déjà après la fenêtre, d'où le `>=`. C'est le cas du barème saisi le jour
+     * même, face à une période par défaut qui s'arrête la veille.
+     */
+    public function startsAfter(DateTimeImmutable $end): bool
+    {
+        return $this->validFrom->setTime(0, 0, 0) >= $end->setTime(0, 0, 0);
+    }
+
     /** Jour de prélèvement du mois de $monthStart, clampé sur la fin du mois. */
     private function dueDateIn(DateTimeImmutable $monthStart): DateTimeImmutable
     {

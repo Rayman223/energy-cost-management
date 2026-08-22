@@ -125,13 +125,33 @@ final class AdvancesHighlightTest extends TestCase
         self::assertStringNotContainsString('Sur la période', $row);
     }
 
-    public function testScheduleStartingAfterThePeriodStaysNeutral(): void
+    public function testScheduleStartingAfterThePeriodIsMarkedUpcoming(): void
     {
-        // Ni actif ni échu : il n'a pas commencé.
+        // Ni actif ni échu : il n'a pas commencé, et le dire vaut mieux que de le
+        // laisser en ligne blanche.
         $html = $this->render([$this->schedule(1, 'apres', '2026-06-01')]);
         $row  = $this->rowOf($html, 'apres');
 
+        self::assertStringContainsString('is-upcoming', $row);
+        self::assertStringContainsString('À venir', $row);
         self::assertStringNotContainsString('is-current', $row);
+        self::assertStringNotContainsString('is-expired', $row);
+    }
+
+    public function testScheduleCreatedTodayIsMarkedUpcomingOnTheDefaultPeriod(): void
+    {
+        // La période par défaut est `[aujourd'hui - 1 an, aujourd'hui[`, fin exclue :
+        // elle s'arrête donc la veille. Le barème saisi à l'instant n'y pèse encore
+        // rien — mais il ne doit pas pour autant sortir sans le moindre repère.
+        $today = new DateTimeImmutable('today', new DateTimeZone('UTC'));
+        $html  = $this->render(
+            [$this->schedule(1, 'du-jour', $today->format('Y-m-d'))],
+            $today->modify('-1 year')->format('Y-m-d'),
+            $today->format('Y-m-d'),
+        );
+        $row = $this->rowOf($html, 'du-jour');
+
+        self::assertStringContainsString('is-upcoming', $row);
         self::assertStringNotContainsString('is-expired', $row);
     }
 
