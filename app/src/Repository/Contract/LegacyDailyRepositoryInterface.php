@@ -43,6 +43,29 @@ interface LegacyDailyRepositoryInterface
     public function getDeltasBetween(string $from, string $to): array;
 
     /**
+     * Deltas par registre entre bornes CONSÉCUTIVES, en une passe (#2).
+     *
+     * Sert à répartir la consommation d'une période entre ses sous-périodes
+     * tarifaires selon ce qui a réellement été consommé, plutôt qu'au prorata des
+     * jours — lequel suppose une consommation uniforme, hypothèse fausse dès qu'il
+     * y a du chauffage électrique ou une production solaire saisonnière.
+     *
+     * Une seule passe plutôt que N appels à {@see getDeltasBetween()} : chaque
+     * instant n'est interpolé qu'une fois, et la borne de fin d'un intervalle est
+     * la borne de début du suivant.
+     *
+     * Les quantités rendues sont des deltas BRUTS, non renormalisés : l'appelant
+     * qui connaît déjà le total de la période s'en sert comme poids relatifs, ce
+     * qui absorbe l'écart d'arrondi et le clamp des bornes hors plage.
+     *
+     * @param list<string> $boundaries N+1 instants croissants, format DB 'Y-m-d H:i:s' (UTC).
+     * @return list<array{prelev_jour: float, prelev_nuit: float, injec_jour: float, injec_nuit: float, solar: float}>
+     *         N entrées, une par intervalle `[boundaries[i], boundaries[i+1]]`.
+     *         `[]` si moins de deux bornes ou si aucun registre n'est exploitable.
+     */
+    public function getDeltasByBoundaries(array $boundaries): array;
+
+    /**
      * Consommation IMPORT (T1+T2) ventilée par heure sur [$from, $to], pour
      * croiser avec un prix dynamique horaire (tarif dynamique).
      *

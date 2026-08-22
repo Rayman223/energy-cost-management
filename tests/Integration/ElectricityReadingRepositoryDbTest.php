@@ -99,6 +99,58 @@ final class ElectricityReadingRepositoryDbTest extends DatabaseTestCase
         self::assertSame([], $this->repo()->getMonthlyDeltasForMonth(2026, 3));
     }
 
+    /**
+     * Découpe aux bornes de sous-périodes tarifaires (#2) : chaque intervalle porte
+     * ce qui y a réellement été consommé, et leur somme reste celle de la fenêtre
+     * entière — c'est cette égalité qui autorise le service à s'en servir comme
+     * poids de répartition.
+     */
+    public function testBoundaryDeltasSplitConsumptionAndSumToTheWholeWindow(): void
+    {
+        // 30 kWh sur le seul mois de décembre, 20 sur les quatre mois suivants.
+        $rows = $this->repo()->getDeltasByBoundaries([
+            '2025-12-01 00:00:00',
+            '2026-01-01 00:00:00',
+            '2026-05-01 00:00:00',
+        ]);
+
+        self::assertCount(2, $rows);
+        self::assertEqualsWithDelta(30.0, $rows[0]['prelev_jour'], 0.001); // 81 - 51
+        self::assertEqualsWithDelta(20.0, $rows[1]['prelev_jour'], 0.001); // 101 - 81
+
+        $whole = $this->repo()->getDeltasBetween('2025-12-01 00:00:00', '2026-05-01 00:00:00');
+        self::assertEqualsWithDelta(
+            (float) $whole['prelev_jour'],
+            $rows[0]['prelev_jour'] + $rows[1]['prelev_jour'],
+            0.001,
+        );
+
+        // Registre sans relevé : 0, et non une absence qui casserait la somme.
+        self::assertSame(0.0, $rows[0]['solar']);
+    }
+
+    /**
+     * Bornes écrasées (le découpage tarifaire peut déborder la fenêtre réellement
+     * couverte) : l'intervalle vide rend 0 plutôt qu'un delta négatif ou dupliqué.
+     */
+    public function testBoundaryDeltasAreZeroOnCollapsedInterval(): void
+    {
+        $rows = $this->repo()->getDeltasByBoundaries([
+            '2026-05-01 00:00:00',
+            '2026-06-01 00:00:00',
+            '2026-06-01 00:00:00',
+        ]);
+
+        self::assertCount(2, $rows);
+        self::assertEqualsWithDelta(100.0, $rows[0]['prelev_jour'], 0.001);
+        self::assertSame(0.0, $rows[1]['prelev_jour']);
+    }
+
+    public function testBoundaryDeltasNeedAtLeastTwoBoundaries(): void
+    {
+        self::assertSame([], $this->repo()->getDeltasByBoundaries(['2026-05-01 00:00:00']));
+    }
+
     public function testDataIsScopedPerUser(): void
     {
         // Un second utilisateur, sans compteur : aucune donnée visible.
