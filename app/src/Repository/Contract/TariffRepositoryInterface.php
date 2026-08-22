@@ -18,11 +18,15 @@ interface TariffRepositoryInterface
     /**
      * Grille tarifaire active pour un type d'énergie à une date donnée.
      * Renvoie la grille démarrée le plus récemment et valide à cette date.
+     *
+     * Validité = `[valid_from, valid_to[`, borne de fin exclue (#1).
      */
     public function findActiveGrid(string $energyType, ?DateTimeImmutable $on = null): ?TariffGrid;
 
     /**
-     * Toutes les grilles chevauchant l'intervalle [$from, $to] (bornes incluses),
+     * Toutes les grilles chevauchant la fenêtre balayée `$from`..`$to` (dernier
+     * jour INCLUS — c'est un paramètre de balayage, à ne pas confondre avec la
+     * borne `valid_to` de la grille, elle exclue, cf. #1),
      * triées par priorité décroissante : surcharge personnelle d'abord, puis
      * `valid_from` décroissant — même ordre que {@see findActiveGrid()}, de sorte
      * que la première grille active un jour donné est celle qu'aurait retenue

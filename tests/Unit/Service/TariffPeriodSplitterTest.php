@@ -12,8 +12,9 @@ use DateTimeImmutable;
 use PHPUnit\Framework\TestCase;
 
 /**
- * Découpage d'une période en sous-périodes tarifaires (#196) : bornes incluses,
- * priorité identique à findActiveGrid, et conservation du nombre de jours.
+ * Découpage d'une période en sous-périodes tarifaires (#196) : validité
+ * `[valid_from, valid_to[` (#1), priorité identique à findActiveGrid, et
+ * conservation du nombre de jours.
  */
 final class TariffPeriodSplitterTest extends TestCase
 {
@@ -50,9 +51,10 @@ final class TariffPeriodSplitterTest extends TestCase
 
     public function testSupplierSwitchMidMonthSplitsThePeriod(): void
     {
-        // B démarre le 16 ; A est fermée au 15 (borne incluse).
+        // Les deux grilles se RECOLLENT sur le 16 (#1) : A s'arrête là où B
+        // commence, aucun jour n'est laissé sans grille au passage.
         $b = $this->grid(2, 'B', '2026-01-16');
-        $a = $this->grid(1, 'A', '2026-01-01', '2026-01-15');
+        $a = $this->grid(1, 'A', '2026-01-01', '2026-01-16');
 
         $segments = (new TariffPeriodSplitter())->split([$b, $a], new DateTimeImmutable('2026-01-01'), 31);
 
@@ -68,10 +70,11 @@ final class TariffPeriodSplitterTest extends TestCase
 
     public function testOverlappingDayIsBilledOnce(): void
     {
-        // Chevauchement : A valide jusqu'au 15 inclus, B démarre le 15.
-        // La liste est triée par priorité (valid_from décroissant) → B gagne le 15.
+        // Vrai chevauchement : A court jusqu'au 16 exclu (donc le 15 inclus) et B
+        // démarre dès le 15. La liste est triée par priorité (valid_from
+        // décroissant) → B gagne le 15, qui n'est facturé qu'une fois.
         $b = $this->grid(2, 'B', '2026-01-15');
-        $a = $this->grid(1, 'A', '2026-01-01', '2026-01-15');
+        $a = $this->grid(1, 'A', '2026-01-01', '2026-01-16');
 
         $segments = (new TariffPeriodSplitter())->split([$b, $a], new DateTimeImmutable('2026-01-01'), 31);
 
@@ -95,9 +98,9 @@ final class TariffPeriodSplitterTest extends TestCase
 
     public function testUncoveredDaysAreAttachedToTheNeighbouringSegment(): void
     {
-        // Grille active seulement du 10 au 20 : les jours de tête et de queue
-        // lui sont rattachés pour ne perdre aucune consommation.
-        $grid = $this->grid(1, 'A', '2026-01-10', '2026-01-20');
+        // Grille active seulement du 10 au 20 inclus : les jours de tête et de
+        // queue lui sont rattachés pour ne perdre aucune consommation.
+        $grid = $this->grid(1, 'A', '2026-01-10', '2026-01-21');
 
         $segments = (new TariffPeriodSplitter())->split([$grid], new DateTimeImmutable('2026-01-01'), 31);
 
@@ -123,12 +126,41 @@ final class TariffPeriodSplitterTest extends TestCase
     public function testFractionSplitsTheQuantitiesProRataDays(): void
     {
         $b = $this->grid(2, 'B', '2026-01-16');
-        $a = $this->grid(1, 'A', '2026-01-01', '2026-01-15');
+        $a = $this->grid(1, 'A', '2026-01-01', '2026-01-16');
 
         $segments = (new TariffPeriodSplitter())->split([$b, $a], new DateTimeImmutable('2026-01-01'), 31);
 
         $this->assertEqualsWithDelta(15 / 31, $segments[0]->fraction(31), 1e-9);
         $this->assertEqualsWithDelta(16 / 31, $segments[1]->fraction(31), 1e-9);
         $this->assertEqualsWithDelta(1.0, $segments[0]->fraction(31) + $segments[1]->fraction(31), 1e-9);
+    }
+
+    /**
+     * Garde-fou de la bascule sur bornes exclues (#1) : sur une succession de
+     * grilles qui se recollent, chaque jour de la période est attribué à une grille
+     * et à une seule. Sans elle, une erreur d'un jour sur la borne se rattraperait
+     * en silence — le comblement de lacunes du splitter recolle les jours orphelins
+     * au segment voisin, si bien que le total de jours reste juste alors que le
+     * jour est facturé au mauvais tarif.
+     */
+    public function testConsecutiveGridsCoverEveryDayExactlyOnce(): void
+    {
+        $c = $this->grid(3, 'C', '2026-01-21');
+        $b = $this->grid(2, 'B', '2026-01-11', '2026-01-21');
+        $a = $this->grid(1, 'A', '2026-01-01', '2026-01-11');
+
+        $segments = (new TariffPeriodSplitter())->split([$c, $b, $a], new DateTimeImmutable('2026-01-01'), 31);
+
+        $this->assertSame(['A', 'B', 'C'], array_map(
+            static fn ($s): string => $s->grid->name,
+            $segments,
+        ));
+        $this->assertSame([10, 10, 11], array_map(
+            static fn ($s): int => $s->days,
+            $segments,
+        ));
+        $this->assertSame('2026-01-10', $segments[0]->to->format('Y-m-d'));
+        $this->assertSame('2026-01-11', $segments[1]->from->format('Y-m-d'));
+        $this->assertSame('2026-01-21', $segments[2]->from->format('Y-m-d'));
     }
 }

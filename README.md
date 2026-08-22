@@ -374,6 +374,7 @@ connector card is hidden from the account page and the nightly push is skipped.
 - [`app/docs/oidc-authentik.md`](app/docs/oidc-authentik.md) — sign in with authentik *(written in French)*.
 - [`app/docs/oidc-generic.md`](app/docs/oidc-generic.md) — any other self-hosted OIDC provider (Keycloak, Zitadel).
 - [`app/docs/architecture.md`](app/docs/architecture.md) — layered architecture and the #47 community-platform design.
+- [`app/docs/date-bounds.md`](app/docs/date-bounds.md) — date bounds convention: every end date is exclusive *(written in French)*.
 - [`app/docs/import.md`](app/docs/import.md) — bulk import formats, mapping, idempotence.
 - [`app/docs/entsoe-dynamic-prices.md`](app/docs/entsoe-dynamic-prices.md) — ENTSO-E setup, 15-min prices, cron & Unraid script *(written in French)*.
 - [`app/docs/security-review.md`](app/docs/security-review.md) — security checklist.

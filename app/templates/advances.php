@@ -76,7 +76,7 @@ $currency = $balance['currency'] ?? $currency;
         <input type="date" id="adv-from" name="from" class="form-input" required min="2000-01-01" max="2100-12-31" value="<?= $this->e($periodFrom) ?>">
       </div>
       <div class="form-row">
-        <label class="form-label" for="adv-to"><?= $this->te('advances.period_to') ?> <span class="unit"><?= $this->te('advances.period_to_exclusive') ?></span></label>
+        <label class="form-label" for="adv-to"><?= $this->te('advances.period_to') ?> <span class="unit"><?= $this->te('common.end_exclusive') ?></span></label>
         <input type="date" id="adv-to" name="to" class="form-input" required min="2000-01-01" max="2100-12-31" value="<?= $this->e($periodTo) ?>">
       </div>
       <div class="form-row full">
@@ -269,9 +269,12 @@ $currency = $balance['currency'] ?? $currency;
                value="<?= $editing !== null ? $this->e($editing->validFrom->format('Y-m-d')) : '' ?>">
       </div>
       <div class="form-row">
-        <label class="form-label" for="adv-valid-to"><?= $this->te('advances.valid_to') ?> <span class="unit"><?= $this->te('common.optional') ?></span></label>
+        <label class="form-label" for="adv-valid-to"><?= $this->te('advances.valid_to') ?> <span class="unit"><?= $this->te('common.optional') ?> · <?= $this->te('common.end_exclusive') ?></span></label>
         <input type="date" id="adv-valid-to" name="valid_to" class="form-input"
                value="<?= $editing?->validTo !== null ? $this->e($editing->validTo->format('Y-m-d')) : '' ?>">
+      </div>
+      <div class="form-row full">
+        <p class="dates-hint"><?= $this->te('advances.validity_hint') ?></p>
       </div>
       <div class="form-row">
         <label class="form-label" for="adv-due-day"><?= $this->te('advances.due_day') ?></label>
@@ -313,7 +316,7 @@ $currency = $balance['currency'] ?? $currency;
       <tr>
         <th><?= $this->te('advances.col_energy') ?></th>
         <th class="num"><?= $this->te('advances.amount_monthly') ?></th>
-        <th><?= $this->te('advances.col_validity') ?></th>
+        <th><?= $this->te('advances.col_validity') ?> <span class="unit"><?= $this->te('common.end_exclusive') ?></span></th>
         <th class="num"><?= $this->te('advances.due_day') ?></th>
         <th></th>
       </tr>

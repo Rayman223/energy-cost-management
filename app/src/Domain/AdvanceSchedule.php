@@ -8,8 +8,12 @@ use App\Support\Dates;
 use DateTimeImmutable;
 
 /**
- * Barème d'acompte mensuel : « 120 €/mois du 01/01/2026 au 31/12/2026, prélevés
+ * Barème d'acompte mensuel : « 120 €/mois du 01/01/2026 au 01/01/2027, prélevés
  * le 5 » (#241).
+ *
+ * La plage de validité est un intervalle `[valid_from, valid_to[` : la borne de
+ * fin est EXCLUE, c'est le premier jour non couvert par le contrat (#1, cf.
+ * app/docs/date-bounds.md). L'exemple ci-dessus couvre donc l'année 2026 entière.
  *
  * On modélise le barème plutôt que chaque prélèvement : un montant révisé une ou
  * deux fois par an tient en deux lignes, là où la saisie ligne à ligne en
@@ -48,15 +52,17 @@ final class AdvanceSchedule
      * Échéances de ce barème tombant dans `[$from, $to[` — l'intersection de la
      * période demandée et de la plage de validité du barème.
      *
-     * La borne de fin est EXCLUE, comme celle de la fenêtre de coût
+     * Les DEUX bornes de fin sont exclues, celle de la fenêtre comme celle du
+     * barème (#1, cf. app/docs/date-bounds.md) : l'intersection de deux intervalles
+     * semi-ouverts se prend borne à borne, sans correctif. Le `-1 day` n'intervient
+     * qu'une fois, tout à la fin, pour revenir du premier jour exclu au dernier jour
+     * éligible.
+     *
+     * La fenêtre est exclusive pour la même raison que celle du coût
      * ({@see \App\Service\CostCalculationService}) : sur une période « aujourd'hui
      * moins un an → aujourd'hui », une fin incluse compterait treize prélèvements
      * face à douze mois de consommation, et le solde annoncerait un excédent d'un
-     * acompte entier qui n'existe pas. Comparer deux fenêtres différentes est le
-     * seul moyen sûr de se tromper ici.
-     *
-     * La borne de VALIDITÉ du barème, elle, reste incluse : `valid_to` désigne le
-     * dernier jour couvert par le contrat, tel que l'utilisateur l'a saisi.
+     * acompte entier qui n'existe pas.
      *
      * Un `dueDay` au-delà de la fin du mois (31 en février) est ramené au dernier
      * jour du mois : le fournisseur prélève alors le 28 ou le 29, pas le 3 mars.
@@ -67,12 +73,12 @@ final class AdvanceSchedule
     {
         $start = $this->maxDate($from, $this->validFrom)->setTime(0, 0, 0);
 
-        // Fin de fenêtre exclue → dernier jour éligible = la veille. La validité du
-        // barème, elle, est inclusive, d'où le min() sur la veille seulement.
-        $end = $to->setTime(0, 0, 0)->modify('-1 day');
+        // Première date HORS intersection, puis retour au dernier jour éligible.
+        $stop = $to->setTime(0, 0, 0);
         if ($this->validTo !== null) {
-            $end = $this->minDate($end, $this->validTo->setTime(0, 0, 0));
+            $stop = $this->minDate($stop, $this->validTo->setTime(0, 0, 0));
         }
+        $end = $stop->modify('-1 day');
 
         if ($end < $start) {
             return [];
@@ -99,7 +105,7 @@ final class AdvanceSchedule
     }
 
     /**
-     * Montant total prélevé sur [$from, $to] au titre de ce barème.
+     * Montant total prélevé sur `[$from, $to[` au titre de ce barème.
      */
     public function totalWithin(DateTimeImmutable $from, DateTimeImmutable $to): float
     {
@@ -111,6 +117,11 @@ final class AdvanceSchedule
      * se chevauchent pour une même énergie feraient compter deux prélèvements
      * pour un seul débit réel.
      *
+     * Test d'intervalles semi-ouverts `[from, to[` (#1) : les deux plages se
+     * touchent dès que chacune commence avant que l'autre ne finisse. Deux barèmes
+     * qui se RECOLLENT — le second démarre le jour même où le premier s'arrête —
+     * ne se chevauchent donc pas, alors qu'une borne incluse les aurait refusés.
+     *
      * Une plage ouverte (`validTo === null`) court indéfiniment.
      */
     public function overlaps(DateTimeImmutable $otherFrom, ?DateTimeImmutable $otherTo): bool
@@ -121,11 +132,11 @@ final class AdvanceSchedule
         $thisStart  = $this->validFrom->setTime(0, 0, 0);
         $otherStart = $otherFrom->setTime(0, 0, 0);
 
-        if ($thisEnd !== null && $otherStart > $thisEnd) {
+        if ($thisEnd !== null && $otherStart >= $thisEnd) {
             return false;
         }
 
-        if ($otherEnd !== null && $thisStart > $otherEnd) {
+        if ($otherEnd !== null && $thisStart >= $otherEnd) {
             return false;
         }
 
@@ -133,9 +144,9 @@ final class AdvanceSchedule
     }
 
     /**
-     * Ce barème court-il à la date donnée ? Les deux bornes sont INCLUSES, comme
-     * pour une grille tarifaire ({@see TariffGrid::isActiveOn()}) : `valid_to`
-     * désigne le dernier jour couvert par le contrat, tel que saisi.
+     * Ce barème court-il à la date donnée ? Intervalle `[validFrom, validTo[`,
+     * comme pour une grille tarifaire ({@see TariffGrid::isActiveOn()}) :
+     * `valid_to` désigne le premier jour NON couvert par le contrat (#1).
      *
      * Une plage ouverte (`validTo === null`) court indéfiniment.
      */
@@ -147,17 +158,20 @@ final class AdvanceSchedule
             return false;
         }
 
-        return $this->validTo === null || $day <= $this->validTo->setTime(0, 0, 0);
+        return $this->validTo === null || $day < $this->validTo->setTime(0, 0, 0);
     }
 
     /**
      * Barème dont le terme est passé. Distinct de `!isActiveOn()` : un barème à
      * venir n'est pas actif non plus, mais il n'est pas échu pour autant.
+     *
+     * `valid_to` étant le premier jour non couvert (#1), un barème est échu DÈS ce
+     * jour-là — et non le lendemain.
      */
     public function isExpiredOn(DateTimeImmutable $date): bool
     {
         return $this->validTo !== null
-            && $this->validTo->setTime(0, 0, 0) < $date->setTime(0, 0, 0);
+            && $this->validTo->setTime(0, 0, 0) <= $date->setTime(0, 0, 0);
     }
 
     /** Jour de prélèvement du mois de $monthStart, clampé sur la fin du mois. */

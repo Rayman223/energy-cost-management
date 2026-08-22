@@ -27,9 +27,13 @@ interface AdvanceScheduleRepositoryInterface
     public function listFor(?string $energyType = null): array;
 
     /**
-     * Barèmes de la même énergie dont la plage recouvre [$validFrom, $validTo],
+     * Barèmes de la même énergie dont la plage recouvre `[$validFrom, $validTo[`,
      * en excluant éventuellement un identifiant (le barème en cours d'édition).
      *
+     * Borne de fin EXCLUE (#1) : un barème qui s'arrête pile à `$validFrom` ne
+     * chevauche pas, il se recolle.
+     *
+     * @param ?DateTimeImmutable $validTo Premier jour non couvert ; null = ouvert.
      * @return list<AdvanceSchedule>
      */
     public function findOverlapping(

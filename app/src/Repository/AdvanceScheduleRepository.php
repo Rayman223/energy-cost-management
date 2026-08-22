@@ -54,13 +54,18 @@ final class AdvanceScheduleRepository implements AdvanceScheduleRepositoryInterf
         ?DateTimeImmutable $validTo,
         ?int $exceptId = null,
     ): array {
-        // Chevauchement de deux intervalles, bornes de fin ouvertes gérées en SQL :
-        // `valid_to IS NULL` court indéfiniment, tout comme un $validTo absent.
+        // Chevauchement de deux intervalles SEMI-OUVERTS `[valid_from, valid_to[`
+        // (#1) : comparaisons strictes des deux côtés, sinon deux barèmes qui se
+        // RECOLLENT proprement — le second démarre le jour même où le premier
+        // s'arrête — seraient refusés comme chevauchants à la saisie.
+        //
+        // Bornes de fin ouvertes gérées en SQL : `valid_to IS NULL` court
+        // indéfiniment, tout comme un $validTo absent.
         $sql = 'SELECT ' . self::COLUMNS . ' FROM energy_advances
                  WHERE user_id = :uid
                    AND energy_type = :type
-                   AND (:to IS NULL OR valid_from <= :to2)
-                   AND (valid_to IS NULL OR valid_to >= :from)';
+                   AND (:to IS NULL OR valid_from < :to2)
+                   AND (valid_to IS NULL OR valid_to > :from)';
 
         $params = [
             'uid'  => $this->userId,

@@ -115,7 +115,9 @@ $energyLabels = [
 <?php else: foreach ($grids as $g):
   $today0  = new \DateTimeImmutable('today');
   $active  = $g->isActiveOn($today0);
-  $expired = $g->validTo !== null && $g->validTo < $today0;
+  // `valid_to` est le premier jour NON couvert (#1) : la grille est échue dès ce
+  // jour-là, pas le lendemain.
+  $expired = $g->validTo !== null && $g->validTo <= $today0;
   $rowId   = 'lines-' . $g->id;
   $catalog = TariffLineCatalog::forType($g->energyType);
 ?>
@@ -303,7 +305,7 @@ $energyLabels = [
                value="<?= $this->e($formValidFrom) ?>">
       </div>
       <div class="form-row">
-        <label class="form-label"><?= $this->te('tariffs.valid_to') ?> <span class="unit"><?= $this->te('common.optional') ?></span></label>
+        <label class="form-label"><?= $this->te('tariffs.valid_to') ?> <span class="unit"><?= $this->te('common.optional') ?> · <?= $this->te('common.end_exclusive') ?></span></label>
         <input type="date" name="valid_to" class="form-input"
                value="<?= $this->e($formValidTo ?? '') ?>">
       </div>

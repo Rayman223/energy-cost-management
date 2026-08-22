@@ -1341,12 +1341,19 @@ final class CostCalculationServiceTest extends TestCase
         );
     }
 
-    /** @return list<TariffGrid> Deux grilles élec successives, dans l'ordre de priorité du repository. */
+    /**
+     * @return list<TariffGrid> Deux grilles élec successives, dans l'ordre de priorité
+     *                          du repository. Elles se RECOLLENT sur le 16 : `valid_to`
+     *                          est le premier jour NON couvert (#1). Une fin au 15
+     *                          laisserait le 15 orphelin — que le comblement de lacunes
+     *                          du splitter rattraperait en silence, faisant passer le
+     *                          test pour de mauvaises raisons.
+     */
     private function twoElectricityGrids(float $vatRateB = 21.0): array
     {
         return [
             $this->elecGrid(2, 'Elec B', '2026-01-16', null, 0.20, 0.16, $vatRateB),
-            $this->elecGrid(1, 'Elec A', '2026-01-01', '2026-01-15', 0.10, 0.08),
+            $this->elecGrid(1, 'Elec A', '2026-01-01', '2026-01-16', 0.10, 0.08),
         ];
     }
 
@@ -1509,7 +1516,7 @@ final class CostCalculationServiceTest extends TestCase
                 energyType: 'gas',
                 name: 'Gaz A',
                 validFrom: new DateTimeImmutable('2026-01-01'),
-                validTo: new DateTimeImmutable('2026-01-15'),
+                validTo: new DateTimeImmutable('2026-01-16'),
                 lines: ['energy' => new TariffLine('energy', 0.05, ComponentKind::EnergyFlat)],
                 pcsCoefficient: 10.0,
             ),
@@ -1579,7 +1586,7 @@ final class CostCalculationServiceTest extends TestCase
                 energyType: 'gas',
                 name: 'Gaz A',
                 validFrom: new DateTimeImmutable('2026-01-01'),
-                validTo: new DateTimeImmutable('2026-01-15'),
+                validTo: new DateTimeImmutable('2026-01-16'),
                 lines: ['energy' => new TariffLine('energy', 0.05, ComponentKind::EnergyFlat)],
                 pcsCoefficient: 10.0,
             ),

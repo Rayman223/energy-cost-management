@@ -63,13 +63,27 @@ final class TariffGrid
         return $this->userId === null;
     }
 
+    /**
+     * Cette grille couvre-t-elle le jour donné ? Intervalle `[validFrom, validTo[`
+     * — `valid_to` désigne le PREMIER JOUR NON COUVERT (#1, cf.
+     * app/docs/date-bounds.md), si bien que le jour de bascule entre deux grilles
+     * successives n'appartient qu'à la nouvelle.
+     *
+     * Les trois dates sont ramenées à minuit : les appelants passent tantôt un jour
+     * nu (`TariffPeriodSplitter`), tantôt un instant horodaté, et comparer un
+     * `14:00` à une borne stockée à minuit sortait la journée de sa propre grille.
+     *
+     * Une borne ouverte (`validTo === null`) court indéfiniment.
+     */
     public function isActiveOn(DateTimeImmutable $date): bool
     {
-        if ($date < $this->validFrom) {
+        $day = $date->setTime(0, 0, 0);
+
+        if ($day < $this->validFrom->setTime(0, 0, 0)) {
             return false;
         }
 
-        return $this->validTo === null || $date <= $this->validTo;
+        return $this->validTo === null || $day < $this->validTo->setTime(0, 0, 0);
     }
 
     public function getLine(string $key, float $default = 0.0): float

@@ -56,6 +56,10 @@ the OIDC client only.
   `View` engine with centralized escaping (`$this->e()`, `$this->te()`). Never
   interpolate raw user input into HTML.
 - **Dates are stored in UTC** and rendered in the user's timezone.
+- **End dates are exclusive**: any end date — in the database, in the API, on
+  screen — is an instant at midnight, so every interval is `[start, end[`. June
+  2026 is `2026-06-01 → 2026-07-01`. See
+  [`app/docs/date-bounds.md`](app/docs/date-bounds.md).
 - Comments and commit messages: French or English, both are fine. Match the
   surrounding file.
 

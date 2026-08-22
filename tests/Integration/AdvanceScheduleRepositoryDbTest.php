@@ -45,13 +45,13 @@ final class AdvanceScheduleRepositoryDbTest extends DatabaseTestCase
 
         self::assertSame([], $repo->listFor('electricity'));
 
-        $repo->insert('electricity', 120.0, $this->at('2026-01-01'), $this->at('2026-12-31'), 5, 'contrat 2026');
+        $repo->insert('electricity', 120.0, $this->at('2026-01-01'), $this->at('2027-01-01'), 5, 'contrat 2026');
         $rows = $repo->listFor('electricity');
 
         self::assertCount(1, $rows);
         self::assertEqualsWithDelta(120.0, $rows[0]->amountMonthly, 0.0001);
         self::assertSame('2026-01-01', $rows[0]->validFrom->format('Y-m-d'));
-        self::assertSame('2026-12-31', $rows[0]->validTo?->format('Y-m-d'));
+        self::assertSame('2027-01-01', $rows[0]->validTo?->format('Y-m-d'));
         self::assertSame(5, $rows[0]->dueDay);
         self::assertSame('contrat 2026', $rows[0]->note);
 
@@ -135,16 +135,22 @@ final class AdvanceScheduleRepositoryDbTest extends DatabaseTestCase
     {
         $repo = new AdvanceScheduleRepository($this->pdo(), $this->userId);
 
-        $repo->insert('electricity', 120.0, $this->at('2026-01-01'), $this->at('2026-06-30'), 1);
+        $repo->insert('electricity', 120.0, $this->at('2026-01-01'), $this->at('2026-07-01'), 1);
 
-        // Consécutif : pas de chevauchement.
-        self::assertSame([], $repo->findOverlapping('electricity', $this->at('2026-07-01'), $this->at('2026-12-31')));
+        // Consécutif : les bornes se RECOLLENT sur le 01/07 et ne se chevauchent pas
+        // pour autant (#1). C'est le cas limite exact que verrouille `valid_to > :from` :
+        // avec une comparaison large, réviser son acompte en cours d'année serait
+        // refusé comme un conflit.
+        self::assertSame([], $repo->findOverlapping('electricity', $this->at('2026-07-01'), $this->at('2027-01-01')));
+
+        // Symétrique : un barème qui s'arrête là où l'existant démarre.
+        self::assertSame([], $repo->findOverlapping('electricity', $this->at('2025-01-01'), $this->at('2026-01-01')));
 
         // Intersecte le dernier mois.
-        self::assertCount(1, $repo->findOverlapping('electricity', $this->at('2026-06-15'), $this->at('2026-12-31')));
+        self::assertCount(1, $repo->findOverlapping('electricity', $this->at('2026-06-15'), $this->at('2027-01-01')));
 
         // Autre énergie : indépendante.
-        self::assertSame([], $repo->findOverlapping('gas', $this->at('2026-01-01'), $this->at('2026-06-30')));
+        self::assertSame([], $repo->findOverlapping('gas', $this->at('2026-01-01'), $this->at('2026-07-01')));
     }
 
     /** Une plage ouverte court indéfiniment : tout barème ultérieur la chevauche. */
@@ -162,12 +168,12 @@ final class AdvanceScheduleRepositoryDbTest extends DatabaseTestCase
     {
         $repo = new AdvanceScheduleRepository($this->pdo(), $this->userId);
 
-        $repo->insert('electricity', 120.0, $this->at('2026-01-01'), $this->at('2026-12-31'), 1);
+        $repo->insert('electricity', 120.0, $this->at('2026-01-01'), $this->at('2027-01-01'), 1);
         $id = $repo->listFor('electricity')[0]->id;
 
         self::assertSame(
             [],
-            $repo->findOverlapping('electricity', $this->at('2026-01-01'), $this->at('2026-12-31'), $id),
+            $repo->findOverlapping('electricity', $this->at('2026-01-01'), $this->at('2027-01-01'), $id),
         );
     }
 
