@@ -66,6 +66,17 @@ final class FakeLegacyDailyRepository implements LegacyDailyRepositoryInterface
 
     public function getMonthlyDeltas(): array
     {
+        if ($this->indexSeries !== []) {
+            // Mois courant, comme le vrai repository : la voie « mois en cours » doit
+            // pouvoir être testée sur une consommation non uniforme, elle aussi.
+            $start = (new DateTimeImmutable('now'))->modify('first day of this month')->setTime(0, 0, 0);
+
+            return $this->deltasFromSeries(
+                $start->format('Y-m-d H:i:s'),
+                $start->modify('+1 month')->format('Y-m-d H:i:s'),
+            );
+        }
+
         return $this->monthlyDeltas;
     }
 
