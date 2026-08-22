@@ -108,6 +108,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($name === '')      throw new \InvalidArgumentException($view->t('tariffs.name_required'));
             if ($validFrom === '') throw new \InvalidArgumentException($view->t('tariffs.from_required'));
 
+            // Borne de fin EXCLUE (#1) : `valid_to == valid_from` ne décrit plus une
+            // plage d'un jour mais une plage VIDE, qui ne facturerait jamais rien.
+            // Le contrôle n'existait pas jusqu'ici — une grille inversée s'y
+            // enregistrait en silence pour n'être ensuite active aucun jour.
+            if ($validTo !== null && $validTo <= $validFrom) {
+                throw new \InvalidArgumentException($view->t('tariffs.invalid_range'));
+            }
+
             // Lignes dynamiques : lines[N][key|kind|label|amount].
             $lines    = [];
             $usedKeys = [];
@@ -269,7 +277,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $validTo = $_POST['valid_to_close'] ?? '';
             if ($id <= 0)        throw new \InvalidArgumentException($view->t('tariffs.invalid_id'));
             if ($validTo === '') throw new \InvalidArgumentException($view->t('tariffs.end_required'));
-            $tariffRepo->closeGrid($id, new \DateTimeImmutable($validTo));
+
+            // La date de clôture est le premier jour NON couvert (#1) : la poser à la
+            // date de début, ou avant, viderait la grille au lieu de la fermer.
+            $closeAt = new \DateTimeImmutable($validTo);
+            $target  = $tariffRepo->findById($id);
+            if ($target !== null && $closeAt <= $target->validFrom) {
+                throw new \InvalidArgumentException($view->t('tariffs.invalid_range'));
+            }
+
+            $tariffRepo->closeGrid($id, $closeAt);
             $success = $view->t('tariffs.closed');
         }
 

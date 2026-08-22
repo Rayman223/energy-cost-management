@@ -127,7 +127,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 throw new \InvalidArgumentException($view->t('advances.invalid_valid_from'));
             }
 
-            if ($validTo !== null && $validTo < $validFrom) {
+            // Borne de fin EXCLUE (#1) : `valid_to == valid_from` ne décrit plus une
+            // plage d'un jour mais une plage VIDE, qui ne prélèverait jamais rien.
+            if ($validTo !== null && $validTo <= $validFrom) {
                 throw new \InvalidArgumentException($view->t('advances.invalid_range'));
             }
 
