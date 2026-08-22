@@ -11,6 +11,7 @@ use App\Http\Controller\TariffController;
 use App\Http\Request;
 use App\Http\ValidationException;
 use DateTimeImmutable;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use Tests\Fake\FakeTariffRepository;
 
@@ -67,6 +68,57 @@ final class TariffControllerTest extends TestCase
         $this->expectException(ValidationException::class);
         $this->expectExceptionMessage('Invalid valid_from date format');
         $controller->save($this->post($body));
+    }
+
+    /**
+     * Borne de fin EXCLUE (#1) : `valid_to == valid_from` décrit une plage VIDE, pas
+     * une plage d'un jour. La grille serait enregistrée sans être active un seul jour
+     * et le calcul retomberait en silence sur une autre grille — ou sur aucune. L'API
+     * écrit dans la même table que le formulaire /tariffs : les deux doivent refuser.
+     *
+     * @return list<array{string, ?string}>
+     */
+    public static function emptyRangeProvider(): array
+    {
+        return [
+            'même jour'  => ['2026-02-01', '2026-02-01'],
+            'inversée'   => ['2026-02-01', '2026-01-15'],
+            // Deux instants du même jour : la colonne est un DATE, la plage est vide.
+            'même jour, heures différentes' => ['2026-02-01 08:00:00', '2026-02-01 18:00:00'],
+        ];
+    }
+
+    #[DataProvider('emptyRangeProvider')]
+    public function testSaveRejectsAnEmptyValidityRange(string $validFrom, string $validTo): void
+    {
+        $repo = new FakeTariffRepository();
+
+        $body = $this->validBody();
+        $body['valid_from'] = $validFrom;
+        $body['valid_to']   = $validTo;
+
+        try {
+            (new TariffController($repo))->save($this->post($body));
+            self::fail('Expected ValidationException');
+        } catch (ValidationException $e) {
+            self::assertSame('valid_to must be after valid_from (end bound is exclusive)', $e->getMessage());
+        }
+
+        self::assertNull($repo->savedGrid);
+    }
+
+    /** Deux grilles qui se RECOLLENT restent acceptées : la fin de l'une est le début de l'autre. */
+    public function testSaveAcceptsAnEndBoundOneDayAfterTheStart(): void
+    {
+        $repo = new FakeTariffRepository();
+
+        $body = $this->validBody();
+        $body['valid_to'] = '2026-02-02';
+
+        (new TariffController($repo))->save($this->post($body));
+
+        self::assertNotNull($repo->savedGrid);
+        self::assertSame('2026-02-02', $repo->savedGrid['valid_to']?->format('Y-m-d'));
     }
 
     public function testSaveRejectsTariffWithoutValidLines(): void

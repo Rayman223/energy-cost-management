@@ -108,11 +108,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($name === '')      throw new \InvalidArgumentException($view->t('tariffs.name_required'));
             if ($validFrom === '') throw new \InvalidArgumentException($view->t('tariffs.from_required'));
 
+            // Bornes converties AVANT le contrôle, et comparées sur la forme
+            // réellement persistée (`Y-m-d`, la colonne étant un DATE) : comparer les
+            // chaînes POSTées laissait passer tout ce que `DateTimeImmutable` accepte
+            // sans être trié lexicalement (« 2026-1-15 », « +1 year »), c'est-à-dire
+            // précisément l'entrée forgée que ce contrôle est censé refuser.
+            $validFromDate = new \DateTimeImmutable($validFrom);
+            $validToDate   = $validTo !== null ? new \DateTimeImmutable($validTo) : null;
+
             // Borne de fin EXCLUE (#1) : `valid_to == valid_from` ne décrit plus une
             // plage d'un jour mais une plage VIDE, qui ne facturerait jamais rien.
             // Le contrôle n'existait pas jusqu'ici — une grille inversée s'y
             // enregistrait en silence pour n'être ensuite active aucun jour.
-            if ($validTo !== null && $validTo <= $validFrom) {
+            if ($validToDate !== null
+                && $validToDate->format('Y-m-d') <= $validFromDate->format('Y-m-d')
+            ) {
                 throw new \InvalidArgumentException($view->t('tariffs.invalid_range'));
             }
 
@@ -240,15 +250,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($editId !== null) {
                 $tariffRepo->updateGrid(
                     $editId, $energyType, $name,
-                    new \DateTimeImmutable($validFrom),
-                    $validTo ? new \DateTimeImmutable($validTo) : null,
+                    $validFromDate,
+                    $validToDate,
                     $lines, $pcs, $country, $currency, $vatRate, $pricingMode,
                 );
             } else {
                 $tariffRepo->saveGrid(
                     $energyType, $name,
-                    new \DateTimeImmutable($validFrom),
-                    $validTo ? new \DateTimeImmutable($validTo) : null,
+                    $validFromDate,
+                    $validToDate,
                     $lines, $pcs, $country, $currency, $shared, $vatRate, $pricingMode,
                 );
 

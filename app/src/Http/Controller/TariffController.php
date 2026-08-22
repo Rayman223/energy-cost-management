@@ -47,6 +47,18 @@ final class TariffController
         $validFrom = Request::parseDate($request->input('valid_from'), 'valid_from');
         $validTo   = Request::optionalDate($request->input('valid_to'), 'valid_to');
 
+        // Borne de fin EXCLUE (#1) : `valid_to <= valid_from` ne décrit pas une plage
+        // d'un jour mais une plage VIDE. La grille serait enregistrée sans être active
+        // un seul jour, et le calcul retomberait en silence sur une autre grille — ou
+        // sur aucune. Même refus que le formulaire /tariffs : les deux écrivent dans
+        // la même table, une seule des deux portes ne garde rien.
+        //
+        // Comparaison sur la forme persistée (`Y-m-d`, la colonne étant un DATE) :
+        // deux instants du même jour donnent la même ligne, donc une plage vide.
+        if ($validTo !== null && $validTo->format('Y-m-d') <= $validFrom->format('Y-m-d')) {
+            throw new ValidationException('valid_to must be after valid_from (end bound is exclusive)');
+        }
+
         $vatRaw  = $request->input('vat_rate');
         $vatRate = is_numeric($vatRaw) ? (float) $vatRaw : 21.0;
         if ($vatRate < 0.0 || $vatRate > 100.0) {

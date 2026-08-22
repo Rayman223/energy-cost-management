@@ -208,7 +208,7 @@ final class BillReconciliationServiceTest extends TestCase
         $tariffs = new FakeTariffRepository();
         $tariffs->gridsBetween = [
             $this->gridWithSpot(1.05, 0.03, id: 2, validFrom: '2026-01-11'),
-            $this->gridWithSpot(1.08, 0.02, id: 1, validFrom: '2026-01-01', validTo: '2026-01-10'),
+            $this->gridWithSpot(1.08, 0.02, id: 1, validFrom: '2026-01-01', validTo: '2026-01-11'),
         ];
 
         $result = $this->service(
@@ -242,7 +242,7 @@ final class BillReconciliationServiceTest extends TestCase
         $tariffs = new FakeTariffRepository();
         $tariffs->gridsBetween = [
             $this->gridWithSpot(1.08, 0.02, id: 2, validFrom: '2026-01-11', vatRate: 6.0),
-            $this->gridWithSpot(1.08, 0.02, id: 1, validFrom: '2026-01-01', validTo: '2026-01-10', vatRate: 21.0),
+            $this->gridWithSpot(1.08, 0.02, id: 1, validFrom: '2026-01-01', validTo: '2026-01-11', vatRate: 21.0),
         ];
 
         $result = $this->service(
