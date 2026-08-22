@@ -669,6 +669,7 @@ return [
     'advances.col_balance'                         => 'Saldo',
     'advances.col_total'                           => 'Totaal',
     'advances.col_validity'                        => 'Geldigheid',
+    'advances.active_in_period'                    => 'In de periode',
     'advances.unavailable'                         => 'Kost kan voor deze periode niet worden berekend.',
     'advances.gaps_warning'                        => 'Minstens één energie kon niet worden berekend en valt buiten het totaal. Het saldo geldt alleen voor de volledige regels.',
     'advances.verdict_refund'                      => 'Uw voorschotten overtreffen uw verbruik met {amount}: uw leverancier zou dat bedrag moeten terugbetalen.',

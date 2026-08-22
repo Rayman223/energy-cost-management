@@ -211,9 +211,10 @@ if ($editId !== false && $editId !== null) {
 // ── Bilan de la période ────────────────────────────────────────────────────
 $timezone = $profile->timezone ?? 'UTC';
 
-// Jour civil de l'utilisateur (#252) : sert à marquer le barème en cours dans la
-// liste. Distinct du `$today` ci-dessous, qui reste en UTC parce qu'il borne la
-// période de calcul du solde — deux usages, deux référentiels assumés.
+// Jour civil de l'utilisateur (#252) : sert de repli au surlignage de la liste
+// quand aucun bilan n'est calculable (#4). Distinct du `$today` ci-dessous, qui
+// reste en UTC parce qu'il borne la période de calcul du solde — deux usages,
+// deux référentiels assumés.
 $todayLocal = Dates::todayIn($timezone);
 
 // Période par défaut : l'année écoulée jusqu'à aujourd'hui, fenêtre d'un cycle de
@@ -305,6 +306,16 @@ try {
     $periodError = $e->getMessage();
 }
 
+// #4 : le liseré « actif » suit la période consultée, pas le jour courant — un
+// bilan sur 2025 doit désigner les barèmes de 2025, pas celui qui court
+// aujourd'hui et n'entre pour rien dans le calcul affiché. On prend les bornes du
+// bilan (donc après le clamp au futur ci-dessus), pas les chaînes du formulaire :
+// c'est la fenêtre réellement facturée. Sans bilan calculable — période refusée —
+// la journée civile de l'utilisateur redonne exactement l'ancien comportement,
+// `[aujourd'hui, demain[` valant « actif aujourd'hui ».
+$highlightFrom = $balance['from'] ?? $todayLocal;
+$highlightTo   = $balance['to'] ?? $todayLocal->modify('+1 day');
+
 echo $view->render('advances', [
     'oidcEnabled'    => AuthGuard::isOidcEnabled($config),
     'discordUrl'     => DiscordLink::inviteUrl($config),
@@ -321,7 +332,8 @@ echo $view->render('advances', [
     'periodTo'       => $periodTo,
     'energyTypes'    => AdvanceSchedule::ENERGY_TYPES,
     'maxAmount'      => AdvanceSchedule::MAX_AMOUNT,
-    'today'          => $todayLocal,
+    'highlightFrom'  => $highlightFrom,
+    'highlightTo'    => $highlightTo,
     'currency'       => $profile->currency ?? 'EUR',
     'available'      => Locale::available($config),
     'timezone'       => $profile->timezone ?? null,

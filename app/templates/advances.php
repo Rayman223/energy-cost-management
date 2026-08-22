@@ -18,7 +18,8 @@ use App\Domain\AdvanceSchedule;
  * @var bool                     $futureClamped Fin ramenée à aujourd'hui (acompte à échoir)
  * @var string                   $periodFrom    'YYYY-MM-DD' du formulaire de période
  * @var string                   $periodTo      'YYYY-MM-DD' du formulaire de période
- * @var DateTimeImmutable        $today         Jour civil de l'utilisateur (barème en cours)
+ * @var DateTimeImmutable        $highlightFrom Début du bilan affiché (référentiel du liseré)
+ * @var DateTimeImmutable        $highlightTo   Fin EXCLUE du bilan affiché
  * @var list<string>             $energyTypes
  * @var float                    $maxAmount     Plafond de saisie (capacité de la colonne)
  * @var string                   $currency      Devise du profil
@@ -324,13 +325,17 @@ $currency = $balance['currency'] ?? $currency;
     <tbody>
     <?php foreach ($schedules as $schedule): ?>
       <?php
-        // #252 : le barème qui court aujourd'hui porte un liseré ET un badge — la
-        // couleur seule ne dirait rien à qui ne la perçoit pas. Les barèmes échus
-        // passent en retrait pour que le « en cours » ressorte dans un historique
-        // long. Le fond ambré de `is-editing` n'entre pas en concurrence : le
+        // #4 : le barème qui participe au bilan affiché porte un liseré ET un badge
+        // — la couleur seule ne dirait rien à qui ne la perçoit pas (#252). Il
+        // suffit d'un jour commun avec la période : un barème qui n'en couvre
+        // qu'une partie compte quand même dans le montant payé. Les barèmes déjà
+        // clos AVANT le début de la période passent en retrait pour que les
+        // pertinents ressortent dans un historique long ; ceux entièrement
+        // postérieurs restent neutres — ils ne sont pas échus, ils n'ont pas
+        // commencé. Le fond ambré de `is-editing` n'entre pas en concurrence : le
         // liseré est un box-shadow, pas un background.
-        $isCurrent = $schedule->isActiveOn($today);
-        $isExpired = $schedule->isExpiredOn($today);
+        $isCurrent = $schedule->overlaps($highlightFrom, $highlightTo);
+        $isExpired = $schedule->isExpiredOn($highlightFrom);
         $rowClass  = array_filter([
             $editing !== null && $editing->id === $schedule->id ? 'is-editing' : '',
             $isCurrent ? 'is-current' : '',
@@ -348,7 +353,7 @@ $currency = $balance['currency'] ?? $currency;
         <td>
           <?= $this->e($schedule->validityLabel()) ?>
           <?php if ($isCurrent): ?>
-          <span class="adv-badge"><?= $this->te('common.active') ?></span>
+          <span class="adv-badge"><?= $this->te('advances.active_in_period') ?></span>
           <?php endif; ?>
         </td>
         <td class="num"><?= $this->e((string) $schedule->dueDay) ?></td>
