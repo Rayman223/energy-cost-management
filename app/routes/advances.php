@@ -313,8 +313,19 @@ try {
 // c'est la fenêtre réellement facturée. Sans bilan calculable — période refusée —
 // la journée civile de l'utilisateur redonne exactement l'ancien comportement,
 // `[aujourd'hui, demain[` valant « actif aujourd'hui ».
-$highlightFrom = $balance['from'] ?? $todayLocal;
-$highlightTo   = $balance['to'] ?? $todayLocal->modify('+1 day');
+$highlightFrom = $balance['from'] ?? null;
+$highlightTo   = $balance['to'] ?? null;
+
+// Fenêtre vide : le clamp au futur ramène la fin à demain sans toucher au début,
+// si bien qu'une période entièrement à venir ressort inversée (`from > to`). Sur
+// un intervalle inversé, `overlaps()` répond à l'envers — il désigne les barèmes
+// qui ENJAMBENT le trou et écarte ceux qui tombent dans la période demandée, un
+// barème encore en cours passant même en « échu ». Aucune fenêtre à surligner
+// dans ce cas : on retombe sur le repli du jour courant.
+if ($highlightFrom === null || $highlightTo === null || $highlightTo <= $highlightFrom) {
+    $highlightFrom = $todayLocal;
+    $highlightTo   = $todayLocal->modify('+1 day');
+}
 
 echo $view->render('advances', [
     'oidcEnabled'    => AuthGuard::isOidcEnabled($config),
