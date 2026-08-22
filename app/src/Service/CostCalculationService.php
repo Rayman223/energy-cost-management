@@ -35,6 +35,12 @@ final class CostCalculationService
     private const DEFAULT_PCS = 10.55;
 
     /**
+     * Quantités électriques réparties entre sous-périodes tarifaires (#2). Clés du
+     * contrat de deltas rendu par LegacyDailyRepositoryInterface.
+     */
+    private const ELECTRICITY_QUANTITY_KEYS = ['prelev_jour', 'prelev_nuit', 'injec_jour', 'injec_nuit', 'solar'];
+
+    /**
      * Part minimale de consommation devant être mesurée au pas de 15 min pour qu'une
      * période soit facturée au quart d'heure (#230). En dessous, l'essentiel du profil
      * intra-horaire serait reconstruit par étalement plutôt que mesuré : mieux vaut le
@@ -805,6 +811,126 @@ final class CostCalculationService
     }
 
     /**
+     * Quantités électriques attribuées à chaque sous-période tarifaire, mesurées sur
+     * SES PROPRES bornes plutôt que réparties au prorata des jours (#2). Pendant
+     * électricité de {@see volumesPerSegment()}, qui corrige le même défaut pour le
+     * gaz et l'eau (#255).
+     *
+     * Le prorata au jour suppose une consommation uniforme : faux dès qu'il y a du
+     * chauffage électrique, une production solaire saisonnière ou un simple
+     * changement de rythme de vie. La somme mensuelle du dashboard ne souffre pas de
+     * ce biais — chaque mois porte son propre delta interpolé — d'où l'écart avec une
+     * période libre couvrant la même fenêtre.
+     *
+     * Chaque registre est réparti selon SA propre distribution : le solaire se
+     * concentre en été là où le prélèvement de nuit se concentre en hiver, et une
+     * clé unique de répartition les fausserait tous les deux.
+     *
+     * Les deltas rendus par le repository télescopent vers un total non arrondi, et
+     * leurs bornes sont clampées sur les relevés réellement présents ; on ne s'en
+     * sert donc que comme POIDS, renormalisés sur le total déjà connu. La somme des
+     * sous-périodes reste ainsi exactement égale aux `$deltas` de la période, ce qui
+     * préserve `Σ tariff_segments[*].total ≈ cost.total` et laisse intactes la
+     * réconciliation de facture et la répartition des abonnements — celle-ci
+     * continuant de s'appuyer sur les `days` du splitter.
+     *
+     * @param  array<string, mixed> $deltas
+     * @param  list<TariffSegment>  $segments
+     * @return list<array<string, float>> Une entrée par sous-période.
+     */
+    private function quantitiesPerSegment(array $deltas, array $segments, int $days): array
+    {
+        $totals = [];
+        foreach (self::ELECTRICITY_QUANTITY_KEYS as $key) {
+            $totals[$key] = (float) ($deltas[$key] ?? 0.0);
+        }
+
+        // Mono-grille : rien à répartir, et surtout aucune requête à payer — c'est le
+        // cas de l'écrasante majorité des affichages du dashboard. Sans bornes de
+        // période exploitables, il n'y a pas non plus de découpe possible.
+        if (count($segments) < 2 || !is_string($deltas['from'] ?? null) || !is_string($deltas['to'] ?? null)) {
+            return $this->dayProrataQuantities($segments, $days, $totals);
+        }
+
+        $raw = $this->legacyRepo->getDeltasByBoundaries($this->segmentBoundaries($deltas['from'], $deltas['to'], $segments));
+        if (count($raw) !== count($segments)) {
+            return $this->dayProrataQuantities($segments, $days, $totals);
+        }
+
+        $quantities = array_fill(0, count($segments), []);
+        foreach (self::ELECTRICITY_QUANTITY_KEYS as $key) {
+            $sum = 0.0;
+            foreach ($raw as $row) {
+                $sum += $row[$key];
+            }
+
+            // Registre vide, compteur remis à zéro, série plate : rien ne permet de
+            // départager les sous-périodes SUR CETTE CLÉ. Le repli est donc par clé —
+            // un registre solaire absent ne doit pas renvoyer le prélèvement au prorata.
+            if ($sum <= 0.0) {
+                foreach ($segments as $i => $segment) {
+                    $quantities[$i][$key] = $totals[$key] * $segment->fraction($days);
+                }
+                continue;
+            }
+
+            foreach ($raw as $i => $row) {
+                $quantities[$i][$key] = $totals[$key] * $row[$key] / $sum;
+            }
+        }
+
+        return $quantities;
+    }
+
+    /**
+     * Bornes des sous-périodes, en instants de base : début réel de la période, puis
+     * le minuit qui ouvre chaque sous-période suivante, puis fin réelle.
+     *
+     * Les bornes intermédiaires sont clampées dans `[from, to]` et forcées
+     * croissantes : {@see computeDays()} rend le nombre de jours du MOIS de `$from`
+     * quand la période chevauche deux mois, si bien que le découpage peut déborder la
+     * fenêtre réellement couverte par les relevés. Un intervalle écrasé rend alors un
+     * delta nul, que la renormalisation absorbe — même parade que le
+     * `min($startTs + $offset * 86400, $endTs)` du gaz dans {@see volumesPerSegment()}.
+     *
+     * @param  string              $from Début réel de la période, format DB (UTC).
+     * @param  string              $to   Fin réelle, même format.
+     * @param  list<TariffSegment> $segments
+     * @return list<string>
+     */
+    private function segmentBoundaries(string $from, string $to, array $segments): array
+    {
+        $boundaries = [$from];
+        foreach (array_slice($segments, 1) as $segment) {
+            $at           = Dates::toDbString($segment->from);
+            $boundaries[] = max($boundaries[count($boundaries) - 1], min($at, $to));
+        }
+        $boundaries[] = max($boundaries[count($boundaries) - 1], $to);
+
+        return $boundaries;
+    }
+
+    /**
+     * Répartition historique des quantités électriques : au prorata des jours de
+     * chaque sous-période. Sert de repli quand les relevés ne permettent pas de
+     * mesurer la consommation sous-période par sous-période (#2).
+     *
+     * @param  list<TariffSegment>  $segments
+     * @param  array<string, float> $totals
+     * @return list<array<string, float>>
+     */
+    private function dayProrataQuantities(array $segments, int $totalDays, array $totals): array
+    {
+        return array_map(
+            static fn (TariffSegment $s): array => array_map(
+                static fn (float $total): float => $total * $s->fraction($totalDays),
+                $totals,
+            ),
+            $segments,
+        );
+    }
+
+    /**
      * Coût gaz d'une période découpée en sous-périodes : chaque sous-période porte
      * le volume réellement consommé sur ses bornes (#255) et applique le PCS de SA
      * grille (repli sur le dernier PCS connu puis sur la constante par défaut).
@@ -983,7 +1109,13 @@ final class CostCalculationService
      */
     private function buildElectricityResponse(array $deltas, array $segments, int $days): array
     {
-        return $this->buildResponse($deltas, $segments, $days, $this->dynamicSegmentIndexes($segments));
+        return $this->buildResponse(
+            $deltas,
+            $segments,
+            $days,
+            $this->dynamicSegmentIndexes($segments),
+            $this->quantitiesPerSegment($deltas, $segments, $days),
+        );
     }
 
     /**
@@ -1010,7 +1142,14 @@ final class CostCalculationService
         }
 
         $all      = array_keys($segments);
-        $response = $this->buildResponse($deltas, $segments, $days, $all, strict: true);
+        $response = $this->buildResponse(
+            $deltas,
+            $segments,
+            $days,
+            $all,
+            $this->quantitiesPerSegment($deltas, $segments, $days),
+            strict: true,
+        );
 
         if (($response['available'] ?? false) === true) {
             $response['is_simulation'] = $this->dynamicSegmentIndexes($segments) === [];
@@ -1037,15 +1176,20 @@ final class CostCalculationService
      * @param array<string, mixed> $deltas
      * @param list<TariffSegment> $segments
      * @param list<int> $dynamicIndexes Sous-périodes à indexer au spot (vide = tout classique).
+     * @param list<array<string, float>> $quantities Quantités par sous-période
+     *        ({@see quantitiesPerSegment()}). Résolues par l'appelant et transmises
+     *        telles quelles au repli classique : le calcul consomme au plus une fois
+     *        les relevés, même quand une série de prix indisponible fait basculer la
+     *        voie dynamique vers la voie fournisseur.
      * @param bool $strict true : une série de prix inexploitable rend `available: false`.
      *                     false : elle fait retomber les sous-périodes dynamiques sur le
      *                     tarif fournisseur, la réponse restant disponible et motivée.
      * @return array<string, mixed>
      */
-    private function buildResponse(array $deltas, array $segments, int $days, array $dynamicIndexes, bool $strict = false): array
+    private function buildResponse(array $deltas, array $segments, int $days, array $dynamicIndexes, array $quantities, bool $strict = false): array
     {
         if ($dynamicIndexes === []) {
-            return $this->classicResponse($deltas, $segments, $days, null);
+            return $this->classicResponse($deltas, $segments, $days, $quantities, null);
         }
 
         $isDynamic = array_fill_keys($dynamicIndexes, true);
@@ -1058,7 +1202,7 @@ final class CostCalculationService
             // de disparaître du dashboard le temps qu'un cron rattrape les prix.
             return $strict
                 ? ['available' => false, 'reason' => $series['reason']]
-                : $this->classicResponse($deltas, $segments, $days, (string) $series['reason']);
+                : $this->classicResponse($deltas, $segments, $days, $quantities, (string) $series['reason']);
         }
 
         /** @var list<array{slot: string, import_kwh: float}> $slots */
@@ -1140,28 +1284,28 @@ final class CostCalculationService
         // identiquement dans les deux cas.
         $breakdowns = [];
         foreach ($segments as $i => $segment) {
-            $share = $segment->fraction($days);
+            $qty = $quantities[$i];
 
             $breakdowns[] = isset($isDynamic[$i])
                 ? $this->calculator->calculateElectricityCostDynamic(
-                    kwhT1:            (float) ($deltas['prelev_jour'] ?? 0.0) * $share,
-                    kwhT2:            (float) ($deltas['prelev_nuit'] ?? 0.0) * $share,
-                    kwhExportT1:      (float) ($deltas['injec_jour']  ?? 0.0) * $share,
-                    kwhExportT2:      (float) ($deltas['injec_nuit']  ?? 0.0) * $share,
+                    kwhT1:            $qty['prelev_jour'],
+                    kwhT2:            $qty['prelev_nuit'],
+                    kwhExportT1:      $qty['injec_jour'],
+                    kwhExportT2:      $qty['injec_nuit'],
                     days:             $segment->days,
                     tariff:           $segment->grid->toCalculationTariff(),
                     dynamicEnergyTtc: $energyBySegment[$i],
-                    kwhSolar:         (float) ($deltas['solar'] ?? 0.0) * $share,
+                    kwhSolar:         $qty['solar'],
                     monthsOverride:   $this->monthsOverride($segments, $days, $segment),
                 )
                 : $this->calculator->calculateElectricityCost(
-                    kwhT1:          (float) ($deltas['prelev_jour'] ?? 0.0) * $share,
-                    kwhT2:          (float) ($deltas['prelev_nuit'] ?? 0.0) * $share,
-                    kwhExportT1:    (float) ($deltas['injec_jour']  ?? 0.0) * $share,
-                    kwhExportT2:    (float) ($deltas['injec_nuit']  ?? 0.0) * $share,
+                    kwhT1:          $qty['prelev_jour'],
+                    kwhT2:          $qty['prelev_nuit'],
+                    kwhExportT1:    $qty['injec_jour'],
+                    kwhExportT2:    $qty['injec_nuit'],
                     days:           $segment->days,
                     tariff:         $segment->grid->toCalculationTariff(),
-                    kwhSolar:       (float) ($deltas['solar'] ?? 0.0) * $share,
+                    kwhSolar:       $qty['solar'],
                     monthsOverride: $this->monthsOverride($segments, $days, $segment),
                 );
         }
@@ -1226,25 +1370,26 @@ final class CostCalculationService
      *
      * @param array<string, mixed> $deltas
      * @param list<TariffSegment> $segments
+     * @param list<array<string, float>> $quantities Quantités par sous-période ({@see quantitiesPerSegment()}).
      * @param ?string $dynamicUnavailableReason Motif quand des sous-périodes étaient
      *        bien dynamiques mais qu'aucun prix n'était exploitable — la période est
      *        alors facturée au tarif fournisseur, ce que l'UI doit pouvoir dire.
      * @return array<string, mixed>
      */
-    private function classicResponse(array $deltas, array $segments, int $days, ?string $dynamicUnavailableReason): array
+    private function classicResponse(array $deltas, array $segments, int $days, array $quantities, ?string $dynamicUnavailableReason): array
     {
         $breakdowns = [];
-        foreach ($segments as $segment) {
-            $share = $segment->fraction($days);
+        foreach ($segments as $i => $segment) {
+            $qty = $quantities[$i];
 
             $breakdowns[] = $this->calculator->calculateElectricityCost(
-                kwhT1:          (float) ($deltas['prelev_jour'] ?? 0.0) * $share,
-                kwhT2:          (float) ($deltas['prelev_nuit'] ?? 0.0) * $share,
-                kwhExportT1:    (float) ($deltas['injec_jour']  ?? 0.0) * $share,
-                kwhExportT2:    (float) ($deltas['injec_nuit']  ?? 0.0) * $share,
+                kwhT1:          $qty['prelev_jour'],
+                kwhT2:          $qty['prelev_nuit'],
+                kwhExportT1:    $qty['injec_jour'],
+                kwhExportT2:    $qty['injec_nuit'],
                 days:           $segment->days,
                 tariff:         $segment->grid->toCalculationTariff(),
-                kwhSolar:       (float) ($deltas['solar'] ?? 0.0) * $share,
+                kwhSolar:       $qty['solar'],
                 monthsOverride: $this->monthsOverride($segments, $days, $segment),
             );
         }

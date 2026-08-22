@@ -2076,4 +2076,184 @@ final class CostCalculationServiceTest extends TestCase
         // 27 × 2 € + 3 × 4 € = 66,00 € (le prorata des jours donnait 90,00 €).
         self::assertEqualsWithDelta(66.0, $r['cost']['total'], 0.01);
     }
+
+    // ── Répartition des quantités électriques entre grilles (#2) ─────────────
+
+    /**
+     * Deux grilles élec encadrant une consommation SAISONNIÈRE, avec des registres
+     * de distributions OPPOSÉES : le prélèvement se concentre sur le trimestre
+     * d'hiver (900 T1 / 450 T2 sur 90 j, contre 100 / 50 sur les 91 j suivants),
+     * l'injection sur celui de printemps (20 kWh puis 300). Aucune clé unique de
+     * répartition ne peut satisfaire les deux.
+     *
+     * @return array{0: FakeTariffRepository, 1: FakeLegacyDailyRepository}
+     */
+    private function seasonalElectricityFixture(): array
+    {
+        $grid = static fn (int $id, string $name, string $from, ?string $to, float $t1, float $t2, float $injection): TariffGrid => new TariffGrid(
+            id: $id,
+            energyType: 'electricity',
+            name: $name,
+            validFrom: new DateTimeImmutable($from),
+            validTo: $to !== null ? new DateTimeImmutable($to) : null,
+            lines: [
+                'energy_t1'    => new TariffLine('energy_t1', $t1, ComponentKind::EnergyT1),
+                'energy_t2'    => new TariffLine('energy_t2', $t2, ComponentKind::EnergyT2),
+                'subscription' => new TariffLine('subscription', 5.0, ComponentKind::FixedMonthly),
+                'injection_t1' => new TariffLine('injection_t1', $injection, ComponentKind::InjectionT1),
+            ],
+        );
+
+        $tariffs = new FakeTariffRepository();
+        $tariffs->gridsBetween = [
+            $grid(12, 'Elec printemps', '2026-04-01', null, 0.20, 0.16, 0.02),
+            $grid(11, 'Elec hiver', '2026-01-01', '2026-03-31', 0.10, 0.08, 0.04),
+        ];
+
+        $legacy = new FakeLegacyDailyRepository();
+        $legacy->indexSeries = [
+            'prelev_jour' => [
+                ['at' => '2026-01-01 00:00:00', 'index' => 0.0],
+                ['at' => '2026-04-01 00:00:00', 'index' => 900.0],
+                ['at' => '2026-07-01 00:00:00', 'index' => 1000.0],
+            ],
+            'prelev_nuit' => [
+                ['at' => '2026-01-01 00:00:00', 'index' => 0.0],
+                ['at' => '2026-04-01 00:00:00', 'index' => 450.0],
+                ['at' => '2026-07-01 00:00:00', 'index' => 500.0],
+            ],
+            'injec_jour' => [
+                ['at' => '2026-01-01 00:00:00', 'index' => 0.0],
+                ['at' => '2026-04-01 00:00:00', 'index' => 20.0],
+                ['at' => '2026-07-01 00:00:00', 'index' => 320.0],
+            ],
+            'injec_nuit' => [
+                ['at' => '2026-01-01 00:00:00', 'index' => 0.0],
+                ['at' => '2026-07-01 00:00:00', 'index' => 0.0],
+            ],
+            'solar' => [
+                ['at' => '2026-01-01 00:00:00', 'index' => 0.0],
+                ['at' => '2026-04-01 00:00:00', 'index' => 100.0],
+                ['at' => '2026-07-01 00:00:00', 'index' => 900.0],
+            ],
+        ];
+
+        return [$tariffs, $legacy];
+    }
+
+    /**
+     * Le défaut de l'issue #2 : la somme des mois du dashboard et le coût d'une
+     * période libre couvrant la même fenêtre doivent converger, y compris quand une
+     * bascule de grille tombe au milieu d'une consommation non uniforme.
+     *
+     * Aucun mois calendaire n'est ici à cheval sur les deux grilles : chacun porte
+     * déjà sa consommation réelle. C'est donc la voie « période libre » que le
+     * prorata au jour faisait diverger.
+     */
+    public function testElectricityMonthlySumMatchesFreeRangeOnSeasonalConsumptionAcrossGrids(): void
+    {
+        [$tariffs, $legacy] = $this->seasonalElectricityFixture();
+        $svc = $this->makeService($legacy, $tariffs, new FakeGasReadingRepository());
+
+        $monthlyTotal = 0.0;
+        for ($month = 1; $month <= 6; $month++) {
+            $m = $svc->estimateMonthElectricity(2026, $month);
+            self::assertTrue($m['available'], sprintf('Mois %d indisponible', $month));
+            $monthlyTotal += (float) $m['cost']['total'];
+        }
+
+        $period = $svc->estimatePeriodElectricity(
+            new DateTimeImmutable('2026-01-01 00:00:00'),
+            new DateTimeImmutable('2026-07-01 00:00:00'),
+        );
+
+        self::assertTrue($period['available']);
+        // 6 arrondis à 2 décimales d'un côté contre 1 de l'autre.
+        self::assertEqualsWithDelta($monthlyTotal, (float) $period['cost']['total'], 0.05);
+    }
+
+    /**
+     * Chaque registre suit SA propre distribution : le prélèvement va massivement à
+     * la grille d'hiver, l'injection à celle de printemps. Une clé de répartition
+     * commune aux deux — a fortiori le prorata des jours — ne pourrait rendre ces
+     * deux sous-totaux à la fois.
+     */
+    public function testElectricitySegmentQuantitiesFollowEachRegisterOwnConsumption(): void
+    {
+        [$tariffs, $legacy] = $this->seasonalElectricityFixture();
+
+        $r = $this->makeService($legacy, $tariffs, new FakeGasReadingRepository())
+            ->estimatePeriodElectricity(
+                new DateTimeImmutable('2026-01-01 00:00:00'),
+                new DateTimeImmutable('2026-07-01 00:00:00'),
+            );
+
+        self::assertTrue($r['available']);
+        self::assertSame(181, $r['days']);
+        self::assertCount(2, $r['tariff_segments']);
+
+        // Hiver (90 j) : 900 × 0,10 + 450 × 0,08 − 20 × 0,04 = 125,20 €
+        //                + abonnement 6 × 90/181 × 5 € = 14,92 €
+        self::assertEqualsWithDelta(140.12, (float) $r['tariff_segments'][0]['total'], 0.02);
+        // Printemps (91 j) : 100 × 0,20 + 50 × 0,16 − 300 × 0,02 = 22,00 €
+        //                    + abonnement 6 × 91/181 × 5 € = 15,08 €
+        self::assertEqualsWithDelta(37.08, (float) $r['tariff_segments'][1]['total'], 0.02);
+
+        self::assertEqualsWithDelta(
+            (float) $r['cost']['total'],
+            array_sum(array_column($r['tariff_segments'], 'total')),
+            0.02,
+        );
+    }
+
+    /**
+     * Sans relevés exploitables par sous-période, on garde la répartition au prorata
+     * des jours : le montant reste dû, avec l'approximation d'avant #2 plutôt qu'un
+     * coût manquant.
+     */
+    public function testElectricityFallsBackToDayProrataWithoutSegmentDeltas(): void
+    {
+        [$tariffs] = $this->seasonalElectricityFixture();
+
+        // Mêmes totaux de période, mais aucune série : le repository ne sait pas les
+        // ventiler.
+        $legacy = new FakeLegacyDailyRepository(deltasBetween: [
+            'from'        => '2026-01-01 00:00:00',
+            'to'          => '2026-07-01 00:00:00',
+            'prelev_jour' => 1000.0,
+            'prelev_nuit' => 500.0,
+            'injec_jour'  => 320.0,
+            'injec_nuit'  => 0.0,
+            'solar'       => 900.0,
+        ]);
+
+        $r = $this->makeService($legacy, $tariffs, new FakeGasReadingRepository())
+            ->estimatePeriodElectricity(
+                new DateTimeImmutable('2026-01-01 00:00:00'),
+                new DateTimeImmutable('2026-07-01 00:00:00'),
+            );
+
+        self::assertTrue($r['available']);
+        self::assertCount(1, $legacy->boundariesRequested); // demandé, mais sans réponse exploitable
+        // 90/181 et 91/181 des quantités, soit le comportement d'avant #2.
+        self::assertEqualsWithDelta(230.80, (float) $r['cost']['total'], 0.05);
+    }
+
+    /** Une seule grille active : ni répartition, ni requête supplémentaire. */
+    public function testSingleGridElectricityAsksNoSegmentDeltas(): void
+    {
+        [, $legacy] = $this->seasonalElectricityFixture();
+
+        $tariffs = new FakeTariffRepository();
+        $tariffs->gridsBetween = [$this->elecGrid(11, 'Elec unique', '2026-01-01', null, 0.10, 0.08)];
+
+        $r = $this->makeService($legacy, $tariffs, new FakeGasReadingRepository())
+            ->estimateMonthElectricity(2026, 1);
+
+        self::assertTrue($r['available']);
+        self::assertCount(1, $r['tariff_segments']);
+        self::assertSame([], $legacy->boundariesRequested);
+        // 310 kWh T1 × 0,10 + 155 kWh T2 × 0,08 + abonnement 5 € = 48,40 €
+        self::assertEqualsWithDelta(48.40, (float) $r['cost']['total'], 0.02);
+    }
 }

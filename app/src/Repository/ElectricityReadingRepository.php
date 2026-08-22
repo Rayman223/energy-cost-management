@@ -78,6 +78,16 @@ final class ElectricityReadingRepository implements LegacyDailyRepositoryInterfa
     /** @var array<string, array<string, mixed>> Cache requête-scopé des deltas par intervalle libre (clé "from|to"). */
     private array $rangeDeltasCache = [];
 
+    /**
+     * Cache requête-scopé des deltas par bornes de sous-périodes (#2), clefé sur la
+     * liste de bornes : la vue d'un mois appelle estimateMonthElectricity() PUIS
+     * estimateMonthElectricityDynamic(), qui découpent la même période aux mêmes
+     * bornes tarifaires.
+     *
+     * @var array<string, list<array{prelev_jour: float, prelev_nuit: float, injec_jour: float, injec_nuit: float, solar: float}>>
+     */
+    private array $boundaryDeltasCache = [];
+
     /** Cache requête-scopé du total d'horodatages de l'historique (pagination, #257). */
     private ?int $historyCount = null;
 
@@ -242,6 +252,7 @@ final class ElectricityReadingRepository implements LegacyDailyRepositoryInterfa
         $this->monthlyDeltasCache         = [];
         $this->monthlyDeltasForMonthCache = [];
         $this->rangeDeltasCache           = [];
+        $this->boundaryDeltasCache        = [];
         $this->historyCount               = null;
     }
 
@@ -559,6 +570,81 @@ final class ElectricityReadingRepository implements LegacyDailyRepositoryInterfa
     public function getDeltasBetween(string $from, string $to): array
     {
         return $this->rangeDeltasCache[$from . '|' . $to] ??= $this->interpolatedDeltasBetween($from, $to);
+    }
+
+    /**
+     * Deltas par registre entre bornes consécutives (#2).
+     *
+     * Même mécanique que {@see getMonthlyDeltaSeries()}, dont la série mensuelle
+     * n'est qu'un cas particulier : chaque instant n'est interpolé qu'UNE fois
+     * (2 requêtes indexées), la fin d'un intervalle étant le début du suivant.
+     * Un découpage en N sous-périodes coûte donc 2(N+1) requêtes, et non 2N appels
+     * complets à {@see getDeltasBetween()}.
+     *
+     * @param  list<string> $boundaries
+     * @return list<array{prelev_jour: float, prelev_nuit: float, injec_jour: float, injec_nuit: float, solar: float}>
+     */
+    public function getDeltasByBoundaries(array $boundaries): array
+    {
+        if (count($boundaries) < 2) {
+            return [];
+        }
+
+        return $this->boundaryDeltasCache[implode('|', $boundaries)] ??= $this->interpolatedBoundaryDeltas($boundaries);
+    }
+
+    /**
+     * Corps de {@see getDeltasByBoundaries()}.
+     *
+     * @param  list<string> $boundaries
+     * @return list<array{prelev_jour: float, prelev_nuit: float, injec_jour: float, injec_nuit: float, solar: float}>
+     */
+    private function interpolatedBoundaryDeltas(array $boundaries): array
+    {
+        // Mêmes clés de sortie que interpolatedDeltasBetween() : l'appelant compare
+        // ces deltas au total de la période, qui vient de là.
+        $outKeys = ['import_t1' => 'prelev_jour', 'import_t2' => 'prelev_nuit', 'export_t1' => 'injec_jour', 'export_t2' => 'injec_nuit', 'production' => 'solar'];
+
+        $rids   = [];
+        $allIds = [];
+        foreach (array_keys($outKeys) as $registerKey) {
+            $rid                = $this->registerId($registerKey);
+            $rids[$registerKey] = $rid;
+            if ($rid !== null) {
+                $allIds[] = $rid;
+            }
+        }
+
+        if ($allIds === []) {
+            return [];
+        }
+
+        /** @var array<string, array<int, array{value: float, timestamp: string}|null>> $valuesAt */
+        $valuesAt = [];
+        $out      = [];
+
+        for ($i = 0, $n = count($boundaries) - 1; $i < $n; $i++) {
+            $start = $boundaries[$i];
+            $end   = $boundaries[$i + 1];
+
+            $valuesAt[$start] ??= $this->interpolatedValuesAt($allIds, $start);
+            $valuesAt[$end]   ??= $this->interpolatedValuesAt($allIds, $end);
+
+            $row = [];
+            foreach ($outKeys as $registerKey => $outKey) {
+                $rid = $rids[$registerKey];
+                // boundedDelta() plafonne déjà à 0 : un compteur qui recule sur une
+                // sous-période ne contamine pas ses voisines.
+                $row[$outKey] = $rid === null
+                    ? 0.0
+                    : self::boundedDelta($valuesAt[$start][$rid] ?? null, $valuesAt[$end][$rid] ?? null);
+            }
+
+            /** @var array{prelev_jour: float, prelev_nuit: float, injec_jour: float, injec_nuit: float, solar: float} $row */
+            $out[] = $row;
+        }
+
+        return $out;
     }
 
     /**
