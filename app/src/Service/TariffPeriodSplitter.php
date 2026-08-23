@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Service;
 
+use App\Domain\TariffCoverage;
 use App\Domain\TariffGrid;
 use App\Domain\TariffSegment;
 use DateTimeImmutable;
@@ -35,11 +36,36 @@ final class TariffPeriodSplitter
      */
     public function split(array $grids, DateTimeImmutable $from, int $totalDays): array
     {
-        if ($grids === [] || $totalDays < 1) {
-            return [];
+        return $this->analyse($grids, $from, $totalDays)->segments;
+    }
+
+    /**
+     * Découpage + diagnostic de couverture, issus du même balayage (#6) : les jours
+     * comblés par {@see fillGaps()} sont invisibles dans les segments rendus, c'est
+     * `missingDays` qui les compte.
+     *
+     * @param list<TariffGrid> $grids  Grilles candidates, triées par priorité décroissante.
+     */
+    public function analyse(array $grids, DateTimeImmutable $from, int $totalDays): TariffCoverage
+    {
+        if ($totalDays < 1) {
+            return new TariffCoverage([], 0);
         }
 
         $start = $from->setTime(0, 0, 0);
+
+        // Aucune grille candidate : la période est un trou d'un seul tenant. Le dire
+        // explicitement plutôt que de rendre une couverture « complète mais vide »,
+        // que l'appelant confondrait avec une période correctement tarifée (#6).
+        if ($grids === []) {
+            return new TariffCoverage(
+                [],
+                $totalDays,
+                $totalDays,
+                $start,
+                $start->modify(sprintf('+%d day', $totalDays - 1)),
+            );
+        }
 
         /** @var list<DateTimeImmutable> $days */
         $days = [];
@@ -52,12 +78,49 @@ final class TariffPeriodSplitter
             $gridPerDay[] = $this->gridFor($grids, $day);
         }
 
-        $gridPerDay = $this->fillGaps($gridPerDay);
-        if ($gridPerDay === null) {
-            return []; // aucune grille active sur un seul jour de la période
+        $missing = $this->missingDays($days, $gridPerDay);
+
+        $filled = $this->fillGaps($gridPerDay);
+        if ($filled === null) {
+            // Aucune grille active sur un seul jour de la période : rien à facturer,
+            // mais le diagnostic reste utile à l'appelant (période entièrement à trou).
+            return new TariffCoverage([], $totalDays, $missing['days'], $missing['from'], $missing['to']);
         }
 
-        return $this->groupConsecutive($days, $gridPerDay);
+        return new TariffCoverage(
+            $this->groupConsecutive($days, $filled),
+            $totalDays,
+            $missing['days'],
+            $missing['from'],
+            $missing['to'],
+        );
+    }
+
+    /**
+     * Jours sans aucune grille active, et leurs bornes (premier et dernier jour
+     * découvert, même si le trou n'est pas d'un seul tenant).
+     *
+     * @param  list<DateTimeImmutable> $days
+     * @param  list<TariffGrid|null>   $gridPerDay
+     * @return array{days: int, from: ?DateTimeImmutable, to: ?DateTimeImmutable}
+     */
+    private function missingDays(array $days, array $gridPerDay): array
+    {
+        $count = 0;
+        $first = null;
+        $last  = null;
+
+        foreach ($gridPerDay as $i => $grid) {
+            if ($grid !== null) {
+                continue;
+            }
+
+            $count++;
+            $first ??= $days[$i];
+            $last    = $days[$i];
+        }
+
+        return ['days' => $count, 'from' => $first, 'to' => $last];
     }
 
     /**

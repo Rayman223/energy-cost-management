@@ -35,13 +35,31 @@ final class DashboardJsCatalogTest extends TestCase
         self::assertIsString($source, 'dashboard.js doit être lisible.');
 
         preg_match_all("/\btr\('([^']+)'/", $source, $matches);
-        $keys = array_merge($matches[1], self::DYNAMIC_KEYS);
+        $keys = array_merge($matches[1], self::DYNAMIC_KEYS, $this->fallbackKeys());
 
         // Les clés concaténées apparaissent tronquées dans la capture ('dash.meta.days_') :
         // seules les formes complètes déclarées ci-dessus sont vérifiables.
         $keys = array_filter($keys, static fn (string $k): bool => !str_ends_with($k, '_'));
 
         return array_values(array_unique($keys));
+    }
+
+    /**
+     * Clés de repli passées à `reasonHtml(data, 'clé')` (#6) : elles ne traversent
+     * `tr()` qu'à l'intérieur de cette fonction, donc la regex sur `tr('…')` ne les
+     * voit pas. Sans cette capture, supprimer `dash.empty.water_reason` d'un
+     * catalogue passerait la CI et afficherait la clé brute à l'écran.
+     *
+     * @return list<string>
+     */
+    private function fallbackKeys(): array
+    {
+        $source = (string) file_get_contents(self::JS);
+
+        preg_match_all("/\breasonHtml\([^,)]+,\s*'([^']+)'\s*\)/", $source, $matches);
+        self::assertNotEmpty($matches[1], 'Aucun repli reasonHtml() détecté : la regex a dérivé.');
+
+        return array_values(array_unique($matches[1]));
     }
 
     /**
@@ -144,8 +162,10 @@ final class DashboardJsCatalogTest extends TestCase
         $source  = (string) file_get_contents(self::JS);
         $catalog = $this->translator('fr')->allWithPrefix('');
 
+        // Les replis de reasonHtml() sont rendus par `tr(fallbackKey)`, donc eux
+        // aussi sans paramètre.
         preg_match_all("/\btr\('([^']+)'\)/", $source, $calls);
-        foreach (array_unique($calls[1]) as $key) {
+        foreach (array_unique([...$calls[1], ...$this->fallbackKeys()]) as $key) {
             self::assertSame(
                 [],
                 $this->placeholders($catalog[$key] ?? ''),

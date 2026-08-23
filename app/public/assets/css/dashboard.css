@@ -175,6 +175,14 @@
   .no-tariff a { color: var(--amber); text-decoration: none; }
   .no-tariff a:hover { text-decoration: underline; }
 
+  /* Couverture tarifaire incomplète (#6) : le montant reste affiché, l'encart dit
+     sur quoi il repose. Ton ambre, comme .adv-warn / .rec-warn ailleurs dans l'app. */
+  .tariff-warn {
+    background: var(--amber-dim); border-radius: 8px;
+    padding: 10px 14px; margin-bottom: 12px;
+    color: var(--amber); font-size: .84rem; line-height: 1.6;
+  }
+
   /* ── Chart ──────────────────────────────────────────────────────────────── */
   .chart-card {
     background: var(--surface); border: 1px solid var(--border);

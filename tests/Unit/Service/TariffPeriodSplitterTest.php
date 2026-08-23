@@ -163,4 +163,75 @@ final class TariffPeriodSplitterTest extends TestCase
         $this->assertSame('2026-01-11', $segments[1]->from->format('Y-m-d'));
         $this->assertSame('2026-01-21', $segments[2]->from->format('Y-m-d'));
     }
+
+    // ── Diagnostic de couverture (#6) ──────────────────────────────────────────
+    //
+    // Le comblement de lacunes rend un découpage complet quoi qu'il arrive : c'est
+    // `analyse()` qui dit ce qu'il a masqué, sans changer les segments facturés.
+
+    public function testCoverageIsCompleteWhenEveryDayHasAGrid(): void
+    {
+        $coverage = (new TariffPeriodSplitter())
+            ->analyse([$this->grid(1, 'A', '2026-01-01')], new DateTimeImmutable('2026-01-01'), 31);
+
+        $this->assertTrue($coverage->isComplete());
+        $this->assertSame(0, $coverage->missingDays);
+        $this->assertNull($coverage->missingFrom);
+        $this->assertNull($coverage->toGapArray());
+    }
+
+    public function testCoverageReportsDaysLeftUncoveredAtTheEndOfThePeriod(): void
+    {
+        // Le cas de l'issue #6 : la grille s'est arrêtée le 15, on consulte le mois
+        // en cours. Le montant existe toujours — les 16 derniers jours sont facturés
+        // au tarif prolongé — mais la couverture le dit.
+        $grid = $this->grid(1, 'A', '2026-01-01', '2026-01-16');
+
+        $coverage = (new TariffPeriodSplitter())->analyse([$grid], new DateTimeImmutable('2026-01-01'), 31);
+
+        $this->assertFalse($coverage->isComplete());
+        $this->assertSame(16, $coverage->missingDays);
+        $this->assertSame('2026-01-16', $coverage->missingFrom?->format('Y-m-d'));
+        $this->assertSame('2026-01-31', $coverage->missingTo?->format('Y-m-d'));
+        $this->assertSame(
+            ['days' => 16, 'total_days' => 31, 'from' => '2026-01-16', 'to' => '2026-01-31'],
+            $coverage->toGapArray(),
+        );
+
+        // Le découpage, lui, ne bouge pas : un seul segment de 31 jours.
+        $this->assertCount(1, $coverage->segments);
+        $this->assertSame(31, $coverage->segments[0]->days);
+    }
+
+    public function testCoverageBoundsSpanNonContiguousGaps(): void
+    {
+        // Trou en tête (1 → 9) et en queue (21 → 31) : les bornes encadrent les deux,
+        // le compte reste celui des jours réellement découverts.
+        $grid = $this->grid(1, 'A', '2026-01-10', '2026-01-21');
+
+        $coverage = (new TariffPeriodSplitter())->analyse([$grid], new DateTimeImmutable('2026-01-01'), 31);
+
+        $this->assertSame(20, $coverage->missingDays);
+        $this->assertSame('2026-01-01', $coverage->missingFrom?->format('Y-m-d'));
+        $this->assertSame('2026-01-31', $coverage->missingTo?->format('Y-m-d'));
+    }
+
+    public function testCoverageWithoutAnyGridMarksThePeriodEntirelyUncovered(): void
+    {
+        $coverage = (new TariffPeriodSplitter())->analyse([], new DateTimeImmutable('2026-01-01'), 31);
+
+        $this->assertSame([], $coverage->segments);
+        $this->assertSame(31, $coverage->missingDays);
+        $this->assertSame(31, $coverage->totalDays);
+        $this->assertSame('2026-01-31', $coverage->missingTo?->format('Y-m-d'));
+    }
+
+    public function testCoverageWithGridsOutsideThePeriodMarksItEntirelyUncovered(): void
+    {
+        $coverage = (new TariffPeriodSplitter())
+            ->analyse([$this->grid(1, 'A', '2027-01-01')], new DateTimeImmutable('2026-01-01'), 31);
+
+        $this->assertSame([], $coverage->segments);
+        $this->assertSame(31, $coverage->missingDays);
+    }
 }

@@ -340,6 +340,23 @@ return [
     'dash.empty.water'              => 'Geen waterverbruik beschikbaar',
     'dash.empty.water_reason'       => 'Registreer minstens twee meterstanden voor water.',
 
+    // Redenen van onbeschikbaarheid uit CostCalculationService (`reason_key`).
+    'dash.reason.no_data_month'           => 'Geen meterstanden voor deze periode.',
+    'dash.reason.no_tariff_electricity'   => 'Geen enkel elektriciteitstarief dekt deze periode.',
+    'dash.reason.no_tariff_gas'           => 'Geen enkel gastarief dekt deze periode.',
+    'dash.reason.gas_two_readings'        => 'Er zijn minstens twee gasmeterstanden nodig.',
+    'dash.reason.water_no_readings'       => 'Meterstanden voor water niet beschikbaar.',
+    'dash.reason.invalid_period'          => 'Ongeldige periode: het einde moet na het begin liggen.',
+    'dash.reason.period_too_long'         => 'Periode te lang.',
+    'dash.reason.dynamic_not_configured'  => 'Dynamisch tarief niet geconfigureerd.',
+
+    // Onvolledige tariefdekking (#6): het bedrag blijft zichtbaar, maar niet-gedekte
+    // dagen vallen terug op het aangrenzende tarief — het vorige, of het volgende
+    // wanneer het gat aan het begin van de periode ligt (zie TariffPeriodSplitter).
+    'dash.warn.tariff_gap'      => 'Geen enkel tarief dekt {days} van deze periode ({from} → {to}): die dagen worden aangerekend tegen het tarief van de aangrenzende periode.',
+    'dash.warn.no_tariff'       => 'Er geldt geen enkel tarief voor de weergegeven periode.',
+    'dash.warn.tariff_gap_hint' => 'Vul uw tarieven aan onder Tarieven voor een exacte raming.',
+
     'dash.period.current_month'  => 'Raming huidige maand',
     'dash.period.current_period' => 'Raming huidige periode',
 
