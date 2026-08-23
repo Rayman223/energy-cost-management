@@ -25,6 +25,7 @@ use App\Security\AuthSession;
 use App\Security\IdentityLinker;
 use App\Security\Oidc\OidcClientFactory;
 use App\Security\Oidc\OidcDiscoveryCache;
+use App\Security\Oidc\OidcDisplayName;
 use App\Security\Session;
 use App\Security\WebAccessGuard;
 use App\Support\SafeRedirect;
@@ -113,16 +114,15 @@ try {
         throw new OpenIDConnectClientException('Claim "sub" manquant.');
     }
 
-    $displayName = '';
-    $claimName = $oidc->getVerifiedClaims('name');
-    if (is_string($claimName) && $claimName !== '') {
-        $displayName = $claimName;
-    } else {
+    // Nom d'affichage : d'abord l'id_token (Google/Microsoft y mettent « name »),
+    // et seulement s'il n'apporte rien, un appel au userinfo — Discord n'expose
+    // « preferred_username »/« nickname » que là (cf. app/docs/oidc-discord.md).
+    $verifiedClaims = $oidc->getVerifiedClaims();
+    $displayName = OidcDisplayName::fromClaims(is_object($verifiedClaims) ? $verifiedClaims : null);
+    if ($displayName === '') {
         try {
-            $infoName = $oidc->requestUserInfo('name');
-            if (is_string($infoName)) {
-                $displayName = $infoName;
-            }
+            $userInfo = $oidc->requestUserInfo();
+            $displayName = OidcDisplayName::fromClaims(null, is_object($userInfo) ? $userInfo : null);
         } catch (\Throwable) {
             // Le nom d'affichage est optionnel.
         }

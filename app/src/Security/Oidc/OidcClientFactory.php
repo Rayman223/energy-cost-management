@@ -106,7 +106,7 @@ final class OidcClientFactory
         }
 
         $client->setCodeChallengeMethod('S256');
-        $client->addScope(self::scopes($config));
+        $client->addScope(self::scopesFromConfig($config));
 
         // Découverte OIDC mise en cache par issuer : injectée telle quelle, la lib
         // ne re-télécharge plus le well-known à chaque initiation/callback. On EXCLUT
@@ -154,14 +154,21 @@ final class OidcClientFactory
     }
 
     /**
-     * @param array<string, mixed> $config
+     * Scopes demandés à l'IdP : ceux de la config s'ils sont exploitables, sinon
+     * le repli de {@see self::defaultScopes()}. Publique pour être testable sans
+     * construire de client (ce que {@see self::fromConfig()} ne permet pas : la
+     * découverte OIDC y déclenche un aller-retour réseau).
+     *
+     * @param array<string, mixed> $config Bloc d'un fournisseur.
      * @return list<string>
      */
-    private static function scopes(array $config): array
+    public static function scopesFromConfig(array $config): array
     {
+        $issuer = (string) ($config['issuer'] ?? '');
+
         $scopes = $config['scopes'] ?? null;
         if (!is_array($scopes)) {
-            return ['openid', 'profile'];
+            return self::defaultScopes($issuer);
         }
 
         $clean = [];
@@ -171,6 +178,25 @@ final class OidcClientFactory
             }
         }
 
-        return $clean === [] ? ['openid', 'profile'] : $clean;
+        return $clean === [] ? self::defaultScopes($issuer) : $clean;
+    }
+
+    /**
+     * Repli quand `scopes` n'est pas configuré. `openid` + `profile` partout,
+     * SAUF Discord : son OAuth2 ignore le scope OIDC `profile` et rejette la
+     * demande en `invalid_scope` — l'équivalent maison est `identify`, qui
+     * débloque `preferred_username`/`nickname` sur /api/oauth2/userinfo
+     * (cf. app/docs/oidc-discord.md).
+     *
+     * @return list<string>
+     */
+    private static function defaultScopes(string $issuer): array
+    {
+        $host = parse_url($issuer, PHP_URL_HOST);
+        if (is_string($host) && ($host === 'discord.com' || str_ends_with($host, '.discord.com'))) {
+            return ['openid', 'identify'];
+        }
+
+        return ['openid', 'profile'];
     }
 }
