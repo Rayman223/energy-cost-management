@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace App\Service;
 
 use App\Repository\Contract\LegacyDailyRepositoryInterface;
+use App\Support\Dates;
+use DateTimeImmutable;
 
 /**
  * Construit la ligne de cards « consommation du mois en cours » du dashboard
@@ -20,8 +22,8 @@ use App\Repository\Contract\LegacyDailyRepositoryInterface;
  *   - `tone` / `dot`    : classes CSS de la variante colorée et de la pastille
  *   - `value`           : valeur du mois en cours (null → « — »)
  *   - `unit`/`decimals` : unité affichée et précision
- *   - `delta_pct`       : variation en % vs mois précédent complet (null si
- *                         incalculable)
+ *   - `delta_pct`       : variation en % vs la MÊME fenêtre du mois précédent
+ *                         (null si incalculable, cf. {@see build()})
  *   - `is_new`          : le mois précédent est connu et vaut 0 alors que le
  *                         mois en cours est consommé — un pourcentage serait une
  *                         division par zéro, le template affiche « nouveau »
@@ -56,6 +58,17 @@ final class DashboardCardsService
         ['key' => 'export_t2', 'delta_key' => 'injec_nuit',  'tone' => 'blue',  'dot' => 'dot--blue-dim',  'lower_is_better' => false],
     ];
 
+    /**
+     * Durée minimale de fenêtre écoulée sous laquelle aucune variation n'est
+     * affichée (#5). Sur quelques heures, le rapport entre les deux mois est
+     * dominé par l'heure du relevé et le rythme intra-journalier plutôt que par
+     * une différence de consommation réelle : mieux vaut ne rien annoncer.
+     */
+    private const MIN_WINDOW_SECONDS = 86400;
+
+    /** Fenêtre inexploitable : ni valeur du mois en cours, ni référence. */
+    private const NO_WINDOW = ['from' => null, 'to' => null, 'prev_from' => null, 'prev_to' => null];
+
     public function __construct(
         private readonly LegacyDailyRepositoryInterface $elecRepo,
         private readonly CostCalculationService $costSvc,
@@ -66,16 +79,25 @@ final class DashboardCardsService
      * @param array<string, mixed> $deltas Deltas élec du mois demandé, DÉJÀ calculés
      *        par l'appelant (la route les utilise aussi pour l'en-tête de section) :
      *        les repasser évite de refaire l'interpolation, les caches de
-     *        getMonthlyDeltas() et getMonthlyDeltasForMonth() étant distincts.
+     *        getMonthlyDeltas() et getDeltasBetween() étant distincts.
+     * @param DateTimeImmutable|null $asOf Instant de référence, utilisé quand le mois
+     *        en cours n'a aucun relevé électricité et ne fournit donc pas de borne de
+     *        fin. Défaut : maintenant, en UTC (fuseau de stockage).
      *
      * @return list<DashboardCard>
      */
-    public function build(array $deltas, int $year, int $month): array
+    public function build(array $deltas, int $year, int $month, ?DateTimeImmutable $asOf = null): array
     {
-        $prevYear  = $month === 1 ? $year - 1 : $year;
-        $prevMonth = $month === 1 ? 12 : $month - 1;
+        $window   = self::comparisonWindow($deltas, $year, $month, $asOf);
+        $prevFrom = $window['prev_from'];
+        $prevTo   = $window['prev_to'];
 
-        $prevDeltas = $this->elecRepo->getMonthlyDeltasForMonth($prevYear, $prevMonth);
+        // Référence : la MÊME fenêtre, un mois plus tôt (#5). Sous le seuil, aucune
+        // référence n'est chargée — les cards sortent alors sans badge, sans coûter
+        // une requête pour une comparaison qu'on n'affichera pas.
+        $prevDeltas = ($prevFrom === null || $prevTo === null)
+            ? []
+            : $this->elecRepo->getDeltasBetween(Dates::toDbString($prevFrom), Dates::toDbString($prevTo));
 
         $cards = [];
 
@@ -109,29 +131,97 @@ final class DashboardCardsService
 
         // Gaz & eau : libellés déjà présents au catalogue (dash.gas / dash.water),
         // réutilisés tels quels plutôt que dupliqués sous dash.card.*.
+        //
+        // Volume mesuré sur la fenêtre écoulée, et non projeté sur le mois entier
+        // comme le faisait la voie « mois calendaire » (#5) : les deux mois sont
+        // ainsi lus sur la même durée, et la valeur affichée s'aligne sur celle des
+        // cards élec — toutes deux arrêtées au dernier relevé, comme l'annonce
+        // l'en-tête de section.
+        $gasVolume = $this->costSvc->periodGasVolume(...);
         $cards[] = $this->card(
             'gas',
             'orange',
             'dot--orange',
-            self::volume($this->costSvc->monthGasVolume($year, $month)),
-            self::volume($this->costSvc->monthGasVolume($prevYear, $prevMonth)),
+            self::volumeOver($window['from'], $window['to'], $gasVolume),
+            self::volumeOver($prevFrom, $prevTo, $gasVolume),
             'm³',
             true,
             'dash.gas',
         );
 
+        $waterVolume = $this->costSvc->periodWaterVolume(...);
         $cards[] = $this->card(
             'water',
             'cyan',
             'dot--cyan',
-            self::volume($this->costSvc->estimateMonthWater($year, $month)),
-            self::volume($this->costSvc->estimateMonthWater($prevYear, $prevMonth)),
+            self::volumeOver($window['from'], $window['to'], $waterVolume),
+            self::volumeOver($prevFrom, $prevTo, $waterVolume),
             'm³',
             true,
             'dash.water',
         );
 
         return $cards;
+    }
+
+    /**
+     * Fenêtre de comparaison du mois demandé, et son homologue du mois précédent.
+     *
+     * Le badge comparait le mois en cours — forcément partiel — à un mois précédent
+     * COMPLET, d'où les « −99 % » des premiers jours du mois (#5). On compare
+     * désormais deux fenêtres de même durée, toutes deux comptées depuis le 1er.
+     *
+     * La borne de fin est celle des deltas élec (`to`), que le repository clampe
+     * déjà sur le dernier relevé disponible : c'est le « dernier index connu »
+     * demandé par l'issue, et non une projection de fin de mois.
+     *
+     * @param array<string, mixed> $deltas
+     * @return array{
+     *     from: DateTimeImmutable|null,
+     *     to: DateTimeImmutable|null,
+     *     prev_from: DateTimeImmutable|null,
+     *     prev_to: DateTimeImmutable|null,
+     * } Bornes nulles quand rien n'est exploitable ; `prev_*` seules nulles sous
+     *   {@see MIN_WINDOW_SECONDS}, la valeur du mois en cours restant affichable.
+     */
+    private static function comparisonWindow(array $deltas, int $year, int $month, ?DateTimeImmutable $asOf): array
+    {
+        $monthStart = new DateTimeImmutable(sprintf('%04d-%02d-01 00:00:00', $year, $month), Dates::utc());
+        $monthEnd   = $monthStart->modify('+1 month');
+
+        $to = (isset($deltas['to']) && is_string($deltas['to']) && $deltas['to'] !== '')
+            ? Dates::fromDbString($deltas['to'])
+            : ($asOf ?? new DateTimeImmutable('now', Dates::utc()));
+
+        // Un mois révolu, ou un relevé horodaté en avance, ne doit pas déborder du
+        // mois demandé : la fenêtre resterait comparable, mais plus « à date ».
+        if ($to > $monthEnd) {
+            $to = $monthEnd;
+        }
+
+        $elapsed = $to->getTimestamp() - $monthStart->getTimestamp();
+        if ($elapsed <= 0) {
+            return self::NO_WINDOW;
+        }
+
+        if ($elapsed < self::MIN_WINDOW_SECONDS) {
+            return ['from' => $monthStart, 'to' => $to, 'prev_from' => null, 'prev_to' => null];
+        }
+
+        // Même durée écoulée depuis le 1er du mois précédent (les bornes sont en
+        // UTC : pas d'heure d'été à absorber). Clampée à la fin de ce mois, plus
+        // court que le mois en cours un 31 mars.
+        //
+        // Un mois entier se compare en revanche au mois précédent ENTIER : le
+        // calage à durée égale ne corrige que le biais du mois partiel, il n'a pas
+        // à amputer février de trois jours parce que mars en compte 31.
+        $prevFrom = $monthStart->modify('-1 month');
+        $prevTo   = $to >= $monthEnd ? $monthStart : $prevFrom->modify('+' . $elapsed . ' seconds');
+        if ($prevTo > $monthStart) {
+            $prevTo = $monthStart;
+        }
+
+        return ['from' => $monthStart, 'to' => $to, 'prev_from' => $prevFrom, 'prev_to' => $prevTo];
     }
 
     /**
@@ -162,9 +252,9 @@ final class DashboardCardsService
     }
 
     /**
-     * Variation en % du mois en cours par rapport au mois précédent COMPLET.
-     * Volontairement null si la référence est absente ou nulle : un pourcentage
-     * calculé sur 0 n'a pas de sens.
+     * Variation en % de la fenêtre écoulée du mois en cours par rapport à la MÊME
+     * fenêtre du mois précédent (#5). Volontairement null si la référence est
+     * absente ou nulle : un pourcentage calculé sur 0 n'a pas de sens.
      */
     private static function variation(?float $current, ?float $previous): ?float
     {
@@ -186,6 +276,21 @@ final class DashboardCardsService
     private static function isNew(?float $current, ?float $previous): bool
     {
         return $current !== null && $current > 0.0 && $previous !== null && $previous <= 0.0;
+    }
+
+    /**
+     * Volume (m³) mesuré sur une fenêtre, ou null si la fenêtre est absente —
+     * fenêtre inexploitable, ou référence écartée par {@see MIN_WINDOW_SECONDS}.
+     *
+     * @param callable(DateTimeImmutable, DateTimeImmutable): array<string, mixed> $volumeFor
+     */
+    private static function volumeOver(?DateTimeImmutable $from, ?DateTimeImmutable $to, callable $volumeFor): ?float
+    {
+        if ($from === null || $to === null) {
+            return null;
+        }
+
+        return self::volume($volumeFor($from, $to));
     }
 
     /**
