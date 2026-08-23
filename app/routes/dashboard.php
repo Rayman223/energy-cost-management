@@ -18,6 +18,7 @@ use App\Security\AuthGuard;
 use App\Security\AuthSession;
 use App\Security\WebAccessGuard;
 use App\Support\Adsense;
+use App\Support\Dates;
 use App\Support\DiscordLink;
 use App\Support\DynamicPricing;
 use App\Support\LocaleContext;
@@ -125,9 +126,11 @@ try {
 
     $deltas      = $elecRepo->getMonthlyDeltas();
     // Cards du haut (élec / solaire / gaz / eau) : $deltas est repassé au
-    // service pour ne pas refaire l'interpolation du mois en cours (#215).
+    // service pour ne pas refaire l'interpolation du mois en cours (#215). Le
+    // dernier paramètre n'est qu'un repli : il ne sert que si aucun relevé élec
+    // du mois ne fournit de borne de fin à la fenêtre de comparaison (#5).
     $cards       = (new DashboardCardsService($elecRepo, $costSvc))
-        ->build($deltas, (int) date('Y'), (int) date('n'));
+        ->build($deltas, (int) date('Y'), (int) date('n'), new DateTimeImmutable('now', Dates::utc()));
     // Coût du mois : chaque sous-période dans le mode de sa grille (#245).
     $cost        = $costSvc->estimateCurrentMonthElectricity();
     // Tarif dynamique désactivé côté serveur ⇒ on n'expose pas la section (le JS

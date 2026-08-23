@@ -57,7 +57,7 @@ $deltaBadge = function (?float $pct, bool $lowerIsBetter, bool $isNew = false): 
 
     return '<div class="card-delta card-delta--' . $tone . '">'
         . $arrow . ' ' . ($pct > 0.0 ? '+' : '') . $this->num($pct, 1) . ' % '
-        . '<span class="card-delta-ref">' . $this->te('dash.card.vs_prev') . '</span></div>';
+        . '<span class="card-delta-ref">' . $this->te('dash.card.vs_prev_period') . '</span></div>';
 };
 ?>
 <!DOCTYPE html>

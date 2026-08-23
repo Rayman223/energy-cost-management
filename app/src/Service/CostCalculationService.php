@@ -446,24 +446,61 @@ final class CostCalculationService
     }
 
     /**
-     * Volume gaz (m³) d'un mois calendaire, SANS exiger de grille tarifaire.
+     * Volume gaz (m³) entre deux instants QUELCONQUES, SANS exiger de grille
+     * tarifaire.
      *
-     * {@see estimateMonthGas()} renvoie `available => false` quand aucun tarif
-     * gaz n'est configuré ; la card « Gaz » du dashboard n'a besoin que du
-     * volume. On isole donc ici l'interpolation (même moteur, mêmes bornes à
-     * minuit), sans résolution tarifaire — symétrique du volet « volume seul »
-     * de {@see estimateMonthWater()}.
+     * {@see estimateMonthGas()} renvoie `available => false` quand aucun tarif gaz
+     * n'est configuré ; la card « Gaz » du dashboard n'a besoin que du volume. On
+     * isole donc ici l'interpolation, sans résolution tarifaire — symétrique du
+     * volet « volume seul » de {@see estimateMonthWater()}.
+     *
+     * Les bornes sont libres, et non celles d'un mois calendaire : les cards
+     * comparent le mois en cours à la MÊME fenêtre du mois précédent (#5).
      *
      * @return array<string, mixed>
      */
-    public function monthGasVolume(int $year, int $month): array
+    public function periodGasVolume(DateTimeImmutable $from, DateTimeImmutable $to): array
     {
-        $interp = $this->interpolator->interpolateMonth(
-            $this->toSeries($this->gasRepo->getReadingsForInterpolation($year, $month)),
-            $year,
-            $month,
-        );
+        $invalid = self::rejectUnusablePeriod($from, $to);
+        if ($invalid !== null) {
+            return $invalid;
+        }
 
+        $series = $this->toSeries($this->gasRepo->getReadingsForRange(Dates::toDbString($from), Dates::toDbString($to)));
+
+        return self::volumeResponse($this->interpolator->interpolateRange($series, $from, $to));
+    }
+
+    /**
+     * Volume eau (m³) entre deux instants QUELCONQUES, sans grille tarifaire (#5).
+     * Symétrique de {@see periodGasVolume()} ; le repository eau reste optionnel.
+     *
+     * @return array<string, mixed>
+     */
+    public function periodWaterVolume(DateTimeImmutable $from, DateTimeImmutable $to): array
+    {
+        if ($this->waterRepo === null) {
+            return ['available' => false, 'reason' => 'Relevés eau indisponibles.'];
+        }
+
+        $invalid = self::rejectUnusablePeriod($from, $to);
+        if ($invalid !== null) {
+            return $invalid;
+        }
+
+        $series = $this->toSeries($this->waterRepo->getReadingsForRange(Dates::toDbString($from), Dates::toDbString($to)));
+
+        return self::volumeResponse($this->interpolator->interpolateRange($series, $from, $to));
+    }
+
+    /**
+     * Volume seul (sans coût) d'un résultat d'interpolation gaz/eau : corps commun
+     * au mois calendaire et à la période libre.
+     *
+     * @return array<string, mixed>
+     */
+    private static function volumeResponse(MonthInterpolation $interp): array
+    {
         if (!$interp->available) {
             return ['available' => false, 'reason' => $interp->reason];
         }
