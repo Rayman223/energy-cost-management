@@ -340,6 +340,22 @@ return [
     'dash.empty.water'              => 'Kein Wasserverbrauch verfügbar',
     'dash.empty.water_reason'       => 'Erfassen Sie mindestens zwei Wasserzählerstände.',
 
+    // Gründe für Nichtverfügbarkeit aus CostCalculationService (`reason_key`).
+    'dash.reason.no_data_month'           => 'Keine Zählerstände in diesem Zeitraum.',
+    'dash.reason.no_tariff_electricity'   => 'Kein Stromtarif deckt diesen Zeitraum ab.',
+    'dash.reason.no_tariff_gas'           => 'Kein Gastarif deckt diesen Zeitraum ab.',
+    'dash.reason.gas_two_readings'        => 'Es sind mindestens zwei Gaszählerstände erforderlich.',
+    'dash.reason.water_no_readings'       => 'Wasserzählerstände nicht verfügbar.',
+    'dash.reason.invalid_period'          => 'Ungültiger Zeitraum: Das Ende muss nach dem Beginn liegen.',
+    'dash.reason.period_too_long'         => 'Zeitraum zu lang.',
+    'dash.reason.dynamic_not_configured'  => 'Dynamischer Tarif nicht konfiguriert.',
+
+    // Unvollständige Tarifabdeckung (#6): Der Betrag bleibt sichtbar, beruht aber
+    // teilweise auf einem mangels gültigem Tarif verlängerten Tarif.
+    'dash.warn.tariff_gap'      => 'Kein Tarif deckt {days} dieses Zeitraums ab ({from} → {to}): Der Betrag verlängert den letzten bekannten Tarif.',
+    'dash.warn.no_tariff'       => 'Für den angezeigten Zeitraum gilt kein Tarif.',
+    'dash.warn.tariff_gap_hint' => 'Vervollständigen Sie Ihre Tarife unter Tarife für eine genaue Schätzung.',
+
     'dash.period.current_month'  => 'Schätzung laufender Monat',
     'dash.period.current_period' => 'Schätzung laufender Zeitraum',
 

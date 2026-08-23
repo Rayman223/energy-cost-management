@@ -350,6 +350,22 @@ return [
     'dash.empty.water'              => 'Aucune consommation eau disponible',
     'dash.empty.water_reason'       => 'Enregistrez au moins deux relevés d\'eau.',
 
+    // Motifs d'indisponibilité renvoyés par CostCalculationService (`reason_key`).
+    'dash.reason.no_data_month'           => 'Aucun relevé sur cette période.',
+    'dash.reason.no_tariff_electricity'   => 'Aucune grille tarifaire électricité ne couvre cette période.',
+    'dash.reason.no_tariff_gas'           => 'Aucune grille tarifaire gaz ne couvre cette période.',
+    'dash.reason.gas_two_readings'        => 'Il faut au moins deux relevés gaz.',
+    'dash.reason.water_no_readings'       => 'Relevés d\'eau indisponibles.',
+    'dash.reason.invalid_period'          => 'Période invalide : la fin doit suivre le début.',
+    'dash.reason.period_too_long'         => 'Période trop longue.',
+    'dash.reason.dynamic_not_configured'  => 'Tarif dynamique non configuré.',
+
+    // Couverture tarifaire incomplète (#6) : le montant reste affiché, mais il
+    // repose en partie sur une grille prolongée faute de grille en vigueur.
+    'dash.warn.tariff_gap'      => 'Aucune grille tarifaire ne couvre {days} de cette période ({from} → {to}) : le montant prolonge la dernière grille connue.',
+    'dash.warn.no_tariff'       => 'Aucune grille tarifaire n\'est en vigueur sur la période affichée.',
+    'dash.warn.tariff_gap_hint' => 'Complétez vos grilles dans Tarifs pour une estimation exacte.',
+
     'dash.period.current_month'  => 'Estimation mois en cours',
     'dash.period.current_period' => 'Estimation période en cours',
 

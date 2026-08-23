@@ -161,6 +161,30 @@ function tariffSegmentsMeta(data) {
   })}</span>`).join('');
 }
 
+// Motif d'indisponibilité : `reason_key` est une clé de catalogue posée par le
+// serveur (traduite ici), `reason` le texte technique historique — échappé, car
+// il peut relayer une donnée saisie. `fallbackKey` couvre les réponses sans motif.
+function reasonHtml(data, fallbackKey) {
+  if (data && data.reason_key) return tr(data.reason_key);
+  if (data && data.reason) return escapeHtml(data.reason);
+  return tr(fallbackKey);
+}
+
+// Avertissement de couverture tarifaire incomplète (#6) : le montant affiché
+// prolonge la dernière grille connue sur les jours qu'aucune grille ne couvre.
+// Vide — donc invisible — dès que la période est entièrement tarifée.
+function tariffGapHtml(data) {
+  const gap = data && data.tariff_gap;
+  if (!gap) return '';
+
+  const _d = (iso) => String(iso).slice(8, 10) + '/' + String(iso).slice(5, 7);
+  const message = gap.days >= gap.total_days
+    ? tr('dash.warn.no_tariff')
+    : tr('dash.warn.tariff_gap', { days: daysLabel(gap.days), from: _d(gap.from), to: _d(gap.to) });
+
+  return `<div class="tariff-warn">⚠ ${message} ${tr('dash.warn.tariff_gap_hint')}</div>`;
+}
+
 // ── Electricity cost navigation ────────────────────────────────────────────
 (function () {
   const _APP_LOC = (typeof window !== 'undefined' && window.APP_LOCALE) ? window.APP_LOCALE : 'fr';
@@ -184,7 +208,7 @@ function tariffSegmentsMeta(data) {
     if (!data || !data.available) {
       el.innerHTML = `<div class="no-tariff">
         <strong>${tr('dash.empty.electricity')}</strong>
-        ${data?.reason ?? tr('dash.empty.electricity_reason')}
+        ${reasonHtml(data, 'dash.empty.electricity_reason')}
       </div>`;
       return;
     }
@@ -218,7 +242,7 @@ function tariffSegmentsMeta(data) {
     const isCurrentMonth = (navYear === NOW_YEAR && navMonth === NOW_MONTH);
     const periodLabel    = isCurrentMonth ? tr('dash.period.current_month') : `${MONTHS_SHORT[navMonth-1]} ${navYear}`;
 
-    el.innerHTML = `<div class="cost-wrap">
+    el.innerHTML = tariffGapHtml(data) + `<div class="cost-wrap">
       <div class="cost-lines">
         ${costLinesHtml(c, row)}
 
@@ -555,7 +579,7 @@ function tariffSegmentsMeta(data) {
     if (!data || !data.available) {
       el.innerHTML = `<div class="no-tariff">
         <strong>${tr('dash.empty.gas')}</strong>
-        ${data?.reason ?? tr('dash.empty.gas_reason')}
+        ${reasonHtml(data, 'dash.empty.gas_reason')}
       </div>`;
       return;
     }
@@ -569,7 +593,7 @@ function tariffSegmentsMeta(data) {
     const isCurrentPeriod = (gasNavYear === NOW_YEAR && gasNavMonth === NOW_MONTH);
     const periodLabel     = isCurrentPeriod ? tr('dash.period.current_period') : `${MONTHS_SHORT[gasNavMonth-1]} ${gasNavYear}`;
 
-    el.innerHTML = `<div class="cost-wrap">
+    el.innerHTML = tariffGapHtml(data) + `<div class="cost-wrap">
       <div class="cost-lines">
         ${costLinesHtml(c, row)}
         <div class="cost-group-sep"></div>
@@ -743,7 +767,7 @@ function tariffSegmentsMeta(data) {
     if (!data || !data.available) {
       el.innerHTML = `<div class="no-tariff">
         <strong>${tr('dash.empty.water')}</strong>
-        ${data?.reason ?? tr('dash.empty.water_reason')}
+        ${reasonHtml(data, 'dash.empty.water_reason')}
       </div>`;
       return;
     }
@@ -759,7 +783,7 @@ function tariffSegmentsMeta(data) {
 
     // Sans tarif eau configuré → volume seul (rétrocompat).
     if (!c) {
-      el.innerHTML = `<div class="cost-total-card">
+      el.innerHTML = tariffGapHtml(data) + `<div class="cost-total-card">
         <div>
           <div class="cost-total-label">${label}</div>
           <div class="cost-total-amount">${Number(data.delta_m3).toFixed(3)} m³</div>
@@ -779,7 +803,7 @@ function tariffSegmentsMeta(data) {
         <span class="cl-amount">${amt == null ? '<span class="t-muted">—</span>' : formatMoney(amt)}</span>
       </div>`;
 
-    el.innerHTML = `<div class="cost-wrap">
+    el.innerHTML = tariffGapHtml(data) + `<div class="cost-wrap">
       <div class="cost-lines">
         ${costLinesHtml(c, row)}
         <div class="cost-group-sep"></div>
