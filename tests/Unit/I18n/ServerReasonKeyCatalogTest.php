@@ -37,12 +37,14 @@ final class ServerReasonKeyCatalogTest extends TestCase
 
     public function testEveryServerReasonKeyIsTranslatedInEveryLocale(): void
     {
+        $keys = $this->reasonKeys();
+
         foreach (['fr', 'en', 'nl', 'de'] as $locale) {
             // Repli sur la locale elle-même : sinon le catalogue fr comblerait les
             // trous des autres langues, et une clé absente passerait inaperçue.
             $catalog = (new Translator(__DIR__ . '/../../../app/translations', $locale, $locale))->allWithPrefix('');
 
-            foreach ($this->reasonKeys() as $key) {
+            foreach ($keys as $key) {
                 self::assertArrayHasKey(
                     $key,
                     $catalog,

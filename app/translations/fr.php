@@ -360,9 +360,10 @@ return [
     'dash.reason.period_too_long'         => 'Période trop longue.',
     'dash.reason.dynamic_not_configured'  => 'Tarif dynamique non configuré.',
 
-    // Couverture tarifaire incomplète (#6) : le montant reste affiché, mais il
-    // repose en partie sur une grille prolongée faute de grille en vigueur.
-    'dash.warn.tariff_gap'      => 'Aucune grille tarifaire ne couvre {days} de cette période ({from} → {to}) : le montant prolonge la dernière grille connue.',
+    // Couverture tarifaire incomplète (#6) : le montant reste affiché, mais les
+    // jours découverts sont rattachés à la grille voisine — la précédente, ou la
+    // suivante quand le trou est en tête de période (cf. TariffPeriodSplitter).
+    'dash.warn.tariff_gap'      => 'Aucune grille tarifaire ne couvre {days} de cette période ({from} → {to}) : ces jours sont facturés au tarif de la période voisine.',
     'dash.warn.no_tariff'       => 'Aucune grille tarifaire n\'est en vigueur sur la période affichée.',
     'dash.warn.tariff_gap_hint' => 'Complétez vos grilles dans Tarifs pour une estimation exacte.',
 

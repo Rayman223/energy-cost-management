@@ -351,9 +351,10 @@ return [
     'dash.reason.period_too_long'         => 'Period too long.',
     'dash.reason.dynamic_not_configured'  => 'Dynamic tariff not configured.',
 
-    // Incomplete tariff coverage (#6): the amount is still shown, but part of it
-    // relies on a grid extended for lack of one in force.
-    'dash.warn.tariff_gap'      => 'No tariff grid covers {days} of this period ({from} → {to}): the amount extends the last known grid.',
+    // Incomplete tariff coverage (#6): the amount is still shown, but uncovered
+    // days fall back to the neighbouring grid — the previous one, or the next one
+    // when the gap sits at the start of the period (see TariffPeriodSplitter).
+    'dash.warn.tariff_gap'      => 'No tariff grid covers {days} of this period ({from} → {to}): those days are billed at the neighbouring period’s rate.',
     'dash.warn.no_tariff'       => 'No tariff grid is in force over the displayed period.',
     'dash.warn.tariff_gap_hint' => 'Complete your grids under Tariffs for an exact estimate.',
 

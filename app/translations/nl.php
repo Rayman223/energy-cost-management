@@ -350,9 +350,10 @@ return [
     'dash.reason.period_too_long'         => 'Periode te lang.',
     'dash.reason.dynamic_not_configured'  => 'Dynamisch tarief niet geconfigureerd.',
 
-    // Onvolledige tariefdekking (#6): het bedrag blijft zichtbaar, maar steunt
-    // deels op een tarief dat verlengd is bij gebrek aan een geldig tarief.
-    'dash.warn.tariff_gap'      => 'Geen enkel tarief dekt {days} van deze periode ({from} → {to}): het bedrag verlengt het laatst bekende tarief.',
+    // Onvolledige tariefdekking (#6): het bedrag blijft zichtbaar, maar niet-gedekte
+    // dagen vallen terug op het aangrenzende tarief — het vorige, of het volgende
+    // wanneer het gat aan het begin van de periode ligt (zie TariffPeriodSplitter).
+    'dash.warn.tariff_gap'      => 'Geen enkel tarief dekt {days} van deze periode ({from} → {to}): die dagen worden aangerekend tegen het tarief van de aangrenzende periode.',
     'dash.warn.no_tariff'       => 'Er geldt geen enkel tarief voor de weergegeven periode.',
     'dash.warn.tariff_gap_hint' => 'Vul uw tarieven aan onder Tarieven voor een exacte raming.',
 

@@ -319,7 +319,7 @@ function tariffGapHtml(data) {
 
     if (!dyn || !dyn.available) {
       return wrap(`${head}
-        <div class="no-tariff mt-10">${(dyn && dyn.reason) ? dyn.reason : tr('dash.dynamic.unavailable')}</div>`);
+        <div class="no-tariff mt-10">${reasonHtml(dyn, 'dash.dynamic.unavailable')}</div>`);
     }
 
     const dc            = dyn.cost || {};

@@ -350,9 +350,10 @@ return [
     'dash.reason.period_too_long'         => 'Zeitraum zu lang.',
     'dash.reason.dynamic_not_configured'  => 'Dynamischer Tarif nicht konfiguriert.',
 
-    // Unvollständige Tarifabdeckung (#6): Der Betrag bleibt sichtbar, beruht aber
-    // teilweise auf einem mangels gültigem Tarif verlängerten Tarif.
-    'dash.warn.tariff_gap'      => 'Kein Tarif deckt {days} dieses Zeitraums ab ({from} → {to}): Der Betrag verlängert den letzten bekannten Tarif.',
+    // Unvollständige Tarifabdeckung (#6): Der Betrag bleibt sichtbar, nicht
+    // abgedeckte Tage greifen auf den angrenzenden Tarif zurück — den vorherigen,
+    // oder den folgenden bei einer Lücke am Anfang (siehe TariffPeriodSplitter).
+    'dash.warn.tariff_gap'      => 'Kein Tarif deckt {days} dieses Zeitraums ab ({from} → {to}): Diese Tage werden zum Tarif des angrenzenden Zeitraums abgerechnet.',
     'dash.warn.no_tariff'       => 'Für den angezeigten Zeitraum gilt kein Tarif.',
     'dash.warn.tariff_gap_hint' => 'Vervollständigen Sie Ihre Tarife unter Tarife für eine genaue Schätzung.',
 
