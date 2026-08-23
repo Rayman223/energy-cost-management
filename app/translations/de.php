@@ -303,7 +303,7 @@ return [
     'dash.card.export_t1'  => 'Δ Einspeisung T1',
     'dash.card.export_t2'  => 'Δ Einspeisung T2',
     'dash.card.solar'      => 'Δ PV-Erzeugung',
-    'dash.card.vs_prev'    => 'vs. Vormonat',
+    'dash.card.vs_prev_period' => 'vs. gleicher Zeitraum Vormonat',
     'dash.card.new'        => 'neu in diesem Monat',
     'dash.db_error_hint'   => 'Prüfen Sie {file} und stellen Sie sicher, dass die Datenbank erreichbar ist.',
 

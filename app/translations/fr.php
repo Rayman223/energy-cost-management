@@ -313,7 +313,7 @@ return [
     'dash.card.export_t1'  => 'Δ Export T1',
     'dash.card.export_t2'  => 'Δ Export T2',
     'dash.card.solar'      => 'Δ Production PV',
-    'dash.card.vs_prev'    => 'vs mois préc.',
+    'dash.card.vs_prev_period' => 'vs même période mois préc.',
     'dash.card.new'        => 'nouveau ce mois-ci',
     'dash.db_error_hint'   => 'Vérifiez {file} et assurez-vous que la base est joignable.',
 

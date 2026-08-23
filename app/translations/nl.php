@@ -303,7 +303,7 @@ return [
     'dash.card.export_t1'  => 'Δ Injectie T1',
     'dash.card.export_t2'  => 'Δ Injectie T2',
     'dash.card.solar'      => 'Δ PV-productie',
-    'dash.card.vs_prev'    => 'vs vorige maand',
+    'dash.card.vs_prev_period' => 'vs zelfde periode vorige maand',
     'dash.card.new'        => 'nieuw deze maand',
     'dash.db_error_hint'   => 'Controleer {file} en zorg dat de database bereikbaar is.',
 

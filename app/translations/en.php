@@ -304,7 +304,7 @@ return [
     'dash.card.export_t1'  => 'Δ Export T1',
     'dash.card.export_t2'  => 'Δ Export T2',
     'dash.card.solar'      => 'Δ PV production',
-    'dash.card.vs_prev'    => 'vs prev. month',
+    'dash.card.vs_prev_period' => 'vs same period last month',
     'dash.card.new'        => 'new this month',
     'dash.db_error_hint'   => 'Check {file} and make sure the database is reachable.',
 
