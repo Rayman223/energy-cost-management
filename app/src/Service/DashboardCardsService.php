@@ -88,9 +88,19 @@ final class DashboardCardsService
      */
     public function build(array $deltas, int $year, int $month, ?DateTimeImmutable $asOf = null): array
     {
-        $window   = self::comparisonWindow($deltas, $year, $month, $asOf);
-        $prevFrom = $window['prev_from'];
-        $prevTo   = $window['prev_to'];
+        $now = $asOf ?? new DateTimeImmutable('now', Dates::utc());
+
+        // Une fenêtre par source de relevés. L'électricité s'arrête au dernier index
+        // connu — le repository a déjà clampé `to` dessus — tandis que le gaz et
+        // l'eau, relevés bien plus rarement, se lisent jusqu'à aujourd'hui : les
+        // faire dépendre du dernier relevé élec réduirait la card Gaz à un jour et
+        // demi chez qui saisit son index électrique une fois par mois, et priverait
+        // toutes les cards de badge dès que ce relevé tombe le 1er.
+        $elecWindow    = self::comparisonWindow($year, $month, self::elecWindowEnd($deltas, $now));
+        $utilityWindow = self::comparisonWindow($year, $month, $now);
+
+        $prevFrom = $elecWindow['prev_from'];
+        $prevTo   = $elecWindow['prev_to'];
 
         // Référence : la MÊME fenêtre, un mois plus tôt (#5). Sous le seuil, aucune
         // référence n'est chargée — les cards sortent alors sans badge, sans coûter
@@ -142,8 +152,8 @@ final class DashboardCardsService
             'gas',
             'orange',
             'dot--orange',
-            self::volumeOver($window['from'], $window['to'], $gasVolume),
-            self::volumeOver($prevFrom, $prevTo, $gasVolume),
+            self::volumeOver($utilityWindow['from'], $utilityWindow['to'], $gasVolume),
+            self::volumeOver($utilityWindow['prev_from'], $utilityWindow['prev_to'], $gasVolume),
             'm³',
             true,
             'dash.gas',
@@ -154,8 +164,8 @@ final class DashboardCardsService
             'water',
             'cyan',
             'dot--cyan',
-            self::volumeOver($window['from'], $window['to'], $waterVolume),
-            self::volumeOver($prevFrom, $prevTo, $waterVolume),
+            self::volumeOver($utilityWindow['from'], $utilityWindow['to'], $waterVolume),
+            self::volumeOver($utilityWindow['prev_from'], $utilityWindow['prev_to'], $waterVolume),
             'm³',
             true,
             'dash.water',
@@ -165,17 +175,32 @@ final class DashboardCardsService
     }
 
     /**
+     * Borne de fin de la fenêtre électricité : le dernier index connu.
+     *
+     * `to` sort de {@see \App\Repository\ElectricityReadingRepository::getDeltasBetween()},
+     * qui le clampe déjà sur le dernier relevé disponible — c'est le « dernier index
+     * du jour » demandé par l'issue, et non une projection de fin de mois. Sans
+     * aucun relevé élec ce mois-ci, les deltas sont vides et la fenêtre retombe sur
+     * l'instant courant, comme pour le gaz et l'eau.
+     *
+     * @param array<string, mixed> $deltas
+     */
+    private static function elecWindowEnd(array $deltas, DateTimeImmutable $now): DateTimeImmutable
+    {
+        return (isset($deltas['to']) && is_string($deltas['to']) && $deltas['to'] !== '')
+            ? Dates::fromDbString($deltas['to'])
+            : $now;
+    }
+
+    /**
      * Fenêtre de comparaison du mois demandé, et son homologue du mois précédent.
      *
      * Le badge comparait le mois en cours — forcément partiel — à un mois précédent
      * COMPLET, d'où les « −99 % » des premiers jours du mois (#5). On compare
      * désormais deux fenêtres de même durée, toutes deux comptées depuis le 1er.
      *
-     * La borne de fin est celle des deltas élec (`to`), que le repository clampe
-     * déjà sur le dernier relevé disponible : c'est le « dernier index connu »
-     * demandé par l'issue, et non une projection de fin de mois.
-     *
-     * @param array<string, mixed> $deltas
+     * @param DateTimeImmutable $end Fin de la fenêtre écoulée, propre à la source de
+     *        relevés considérée ({@see elecWindowEnd()} pour l'électricité).
      * @return array{
      *     from: DateTimeImmutable|null,
      *     to: DateTimeImmutable|null,
@@ -184,20 +209,14 @@ final class DashboardCardsService
      * } Bornes nulles quand rien n'est exploitable ; `prev_*` seules nulles sous
      *   {@see MIN_WINDOW_SECONDS}, la valeur du mois en cours restant affichable.
      */
-    private static function comparisonWindow(array $deltas, int $year, int $month, ?DateTimeImmutable $asOf): array
+    private static function comparisonWindow(int $year, int $month, DateTimeImmutable $end): array
     {
         $monthStart = new DateTimeImmutable(sprintf('%04d-%02d-01 00:00:00', $year, $month), Dates::utc());
         $monthEnd   = $monthStart->modify('+1 month');
 
-        $to = (isset($deltas['to']) && is_string($deltas['to']) && $deltas['to'] !== '')
-            ? Dates::fromDbString($deltas['to'])
-            : ($asOf ?? new DateTimeImmutable('now', Dates::utc()));
-
         // Un mois révolu, ou un relevé horodaté en avance, ne doit pas déborder du
         // mois demandé : la fenêtre resterait comparable, mais plus « à date ».
-        if ($to > $monthEnd) {
-            $to = $monthEnd;
-        }
+        $to = $end > $monthEnd ? $monthEnd : $end;
 
         $elapsed = $to->getTimestamp() - $monthStart->getTimestamp();
         if ($elapsed <= 0) {
@@ -215,6 +234,13 @@ final class DashboardCardsService
         // Un mois entier se compare en revanche au mois précédent ENTIER : le
         // calage à durée égale ne corrige que le biais du mois partiel, il n'a pas
         // à amputer février de trois jours parce que mars en compte 31.
+        //
+        // Ce clamp laisse volontairement les deux fenêtres se désaligner sur les
+        // derniers jours d'un mois plus long que son prédécesseur : au 31 mars, mars
+        // pèse ses 31 jours contre les 28 de février, et le badge annonce l'écart de
+        // longueur (~+10 %). C'est exactement ce qu'il affichera le lendemain, mois
+        // révolu — la fin de mois converge vers la comparaison de deux mois entiers
+        // au lieu d'y sauter d'un coup à minuit.
         $prevFrom = $monthStart->modify('-1 month');
         $prevTo   = $to >= $monthEnd ? $monthStart : $prevFrom->modify('+' . $elapsed . ' seconds');
         if ($prevTo > $monthStart) {

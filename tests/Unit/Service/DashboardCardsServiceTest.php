@@ -369,20 +369,43 @@ final class DashboardCardsServiceTest extends TestCase
     }
 
     /**
-     * Gaz et eau lisent la même fenêtre que l'électricité : plus de projection sur
-     * le mois entier d'un côté et de mois tronqué de l'autre.
+     * Gaz et eau se lisent eux aussi sur une fenêtre écoulée, comparée à la même
+     * fenêtre du mois précédent : plus de projection sur le mois entier.
      *
      * Mai = 100 m³ sur 31 jours ; juin = 50 m³ sur 30 jours. Au 5 juin 00:00,
      * 4 jours écoulés → juin ≈ 6,667 m³, mai ≈ 12,903 m³, soit −48,3 %.
      */
-    public function testGasAndWaterFollowTheSameWindowAsElectricity(): void
+    public function testGasAndWaterAreMeasuredOverTheElapsedWindow(): void
     {
         $cards = $this->makeService(new FakeLegacyDailyRepository(), $this->gasReadings(), $this->waterReadings())
-            ->build($this->deltas(30.0, '2026-06-05 00:00:00'), 2026, 6);
+            ->build($this->deltas(30.0), 2026, 6, new DateTimeImmutable('2026-06-05 00:00:00', new DateTimeZone('UTC')));
 
         self::assertEqualsWithDelta(6.667, $this->card($cards, 'gas')['value'], 0.001);
         self::assertEqualsWithDelta(-48.3, $this->card($cards, 'gas')['delta_pct'], 0.1);
         self::assertEqualsWithDelta(2.067, $this->card($cards, 'water')['value'], 0.001);
+    }
+
+    /**
+     * La fenêtre gaz/eau ne dépend PAS du dernier relevé électricité.
+     *
+     * Les index élec saisis à la main n'arrivent parfois qu'une fois par mois :
+     * caler le gaz sur eux réduirait la card à un jour et demi de consommation
+     * pendant tout le reste du mois. Chaque énergie se lit donc jusqu'à
+     * aujourd'hui, l'électricité seule s'arrêtant à son dernier index connu.
+     */
+    public function testUtilityWindowDoesNotDependOnTheLastElectricityReading(): void
+    {
+        $cards = $this->makeService(new FakeLegacyDailyRepository(), $this->gasReadings(), $this->waterReadings())
+            ->build(
+                $this->deltas(30.0, '2026-06-02 09:00:00'),
+                2026,
+                6,
+                new DateTimeImmutable('2026-06-15 00:00:00', new DateTimeZone('UTC')),
+            );
+
+        // 14 jours de juin (50 m³ / 30 j), et non les 1,4 jour de la fenêtre élec.
+        self::assertEqualsWithDelta(23.333, $this->card($cards, 'gas')['value'], 0.001);
+        self::assertEqualsWithDelta(7.233, $this->card($cards, 'water')['value'], 0.001);
     }
 
     /**
@@ -411,7 +434,12 @@ final class DashboardCardsServiceTest extends TestCase
         $legacy = new FakeLegacyDailyRepository(deltasBetween: ['prelev_jour' => 80.0]);
 
         $cards = $this->makeService($legacy, $this->gasReadings(), $this->waterReadings())
-            ->build($this->deltas(30.0, '2026-06-01 06:00:00'), 2026, 6);
+            ->build(
+                $this->deltas(30.0, '2026-06-01 06:00:00'),
+                2026,
+                6,
+                new DateTimeImmutable('2026-06-01 06:00:00', new DateTimeZone('UTC')),
+            );
 
         self::assertNull($this->card($cards, 'import_t1')['delta_pct']);
         self::assertFalse($this->card($cards, 'import_t1')['is_new']);
@@ -420,6 +448,51 @@ final class DashboardCardsServiceTest extends TestCase
 
         // La valeur du mois en cours, elle, reste affichée.
         self::assertEqualsWithDelta(100.0, $this->card($cards, 'import_t1')['value'], 0.001);
+    }
+
+    /**
+     * Le seuil s'applique fenêtre par fenêtre : un relevé électricité tombé le 1er
+     * ne doit pas priver de badge les cards gaz et eau, alimentées par des relevés
+     * qui, eux, continuent d'arriver.
+     */
+    public function testTheOneDayThresholdIsEvaluatedPerEnergy(): void
+    {
+        $legacy = new FakeLegacyDailyRepository(deltasBetween: ['prelev_jour' => 80.0]);
+
+        $cards = $this->makeService($legacy, $this->gasReadings(), $this->waterReadings())
+            ->build(
+                $this->deltas(30.0, '2026-06-01 06:00:00'),
+                2026,
+                6,
+                new DateTimeImmutable('2026-06-15 00:00:00', new DateTimeZone('UTC')),
+            );
+
+        self::assertNull($this->card($cards, 'import_t1')['delta_pct']);
+        self::assertNotNull($this->card($cards, 'gas')['delta_pct']);
+        self::assertNotNull($this->card($cards, 'water')['delta_pct']);
+    }
+
+    /**
+     * Fin d'un mois plus long que son prédécesseur : la fenêtre de référence bute
+     * sur la fin du mois précédent, et le badge annonce dès lors l'écart de
+     * longueur des mois — 31 jours de mars contre 28 de février, à consommation
+     * journalière égale.
+     *
+     * C'est voulu : c'est exactement ce qu'affichera le lendemain la comparaison de
+     * deux mois révolus. La fin de mois y converge au lieu d'y sauter à minuit.
+     */
+    public function testEndOfALongMonthConvergesTowardsTheWholeMonthComparison(): void
+    {
+        $legacy = new FakeLegacyDailyRepository(deltasBetween: ['prelev_jour' => 28.0]);
+
+        $deltas = [...$this->deltas(30.0), 'from' => '2026-03-01 00:00:00', 'to' => '2026-03-31 23:59:00'];
+        $deltas['prelev_jour'] = 31.0;
+
+        $cards = $this->makeService($legacy)->build($deltas, 2026, 3);
+
+        self::assertSame([['2026-02-01 00:00:00', '2026-03-01 00:00:00']], $legacy->rangesRequested);
+        // 31 jours vs 28 : +10,7 %, la valeur que donnera aussi le mois révolu.
+        self::assertEqualsWithDelta(10.7, $this->card($cards, 'import_t1')['delta_pct'], 0.05);
     }
 
     /**
