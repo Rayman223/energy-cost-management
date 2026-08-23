@@ -2256,4 +2256,96 @@ final class CostCalculationServiceTest extends TestCase
         // 310 kWh T1 × 0,10 + 155 kWh T2 × 0,08 + abonnement 5 € = 48,40 €
         self::assertEqualsWithDelta(48.40, (float) $r['cost']['total'], 0.02);
     }
+
+    // ── Couverture tarifaire incomplète (#6) ─────────────────────────────────
+    //
+    // Le splitter prolonge la dernière grille connue sur les jours qu'aucune
+    // grille ne couvre : sans `tariff_gap`, rien ne distingue le montant d'une
+    // période réellement tarifée de bout en bout.
+
+    /** Grille élec bornée, pour laisser volontairement des jours à découvert. */
+    private function electricityGridUntil(string $validTo): TariffGrid
+    {
+        return new TariffGrid(
+            id: 1,
+            energyType: 'electricity',
+            name: 'Elec expirée',
+            validFrom: new DateTimeImmutable('2026-01-01'),
+            validTo: new DateTimeImmutable($validTo),
+            lines: [
+                'energy_t1'    => new TariffLine('energy_t1', 0.10, ComponentKind::EnergyT1),
+                'energy_t2'    => new TariffLine('energy_t2', 0.08, ComponentKind::EnergyT2),
+                'subscription' => new TariffLine('subscription', 5.0, ComponentKind::FixedMonthly),
+            ],
+        );
+    }
+
+    public function testElectricityReportsTheDaysNoGridCovers(): void
+    {
+        // Période du 01 au 15/06 (14 jours pleins), grille arrêtée au 08 exclu :
+        // les 7 derniers jours sont facturés au tarif prolongé.
+        $svc = $this->makeService(
+            new FakeLegacyDailyRepository(monthlyDeltas: $this->electricityDeltas()),
+            new FakeTariffRepository(grid: $this->electricityGridUntil('2026-06-08')),
+            new FakeGasReadingRepository(),
+        );
+
+        $r = $svc->estimateCurrentMonthElectricity();
+
+        self::assertTrue($r['available']);
+        self::assertIsArray($r['cost']);
+        self::assertSame(
+            ['days' => 7, 'total_days' => 14, 'from' => '2026-06-08', 'to' => '2026-06-14'],
+            $r['tariff_gap'],
+        );
+    }
+
+    public function testElectricityFullyCoveredCarriesNoGap(): void
+    {
+        $svc = $this->makeService(
+            new FakeLegacyDailyRepository(monthlyDeltas: $this->electricityDeltas()),
+            new FakeTariffRepository(grid: $this->electricityGrid()),
+            new FakeGasReadingRepository(),
+        );
+
+        self::assertArrayNotHasKey('tariff_gap', $svc->estimateCurrentMonthElectricity());
+    }
+
+    public function testWaterWithoutAnyTariffReportsTheWholePeriodAsUncovered(): void
+    {
+        // L'eau garde `available => true` avec le volume seul (rétrocompat) :
+        // `tariff_gap` est le seul signal disant pourquoi il n'y a pas de montant.
+        $svc = $this->makeService(
+            new FakeLegacyDailyRepository(),
+            new FakeTariffRepository(grid: null),
+            new FakeGasReadingRepository(),
+            new FakeMeterReadingRepository(forInterpolation: [
+                ['reading_at' => '2026-04-01 00:00:00', 'counter_m3' => 100.0],
+                ['reading_at' => '2026-05-01 00:00:00', 'counter_m3' => 130.0],
+            ]),
+        );
+
+        $r = $svc->estimateMonthWater(2026, 4);
+
+        self::assertTrue($r['available']);
+        self::assertArrayNotHasKey('cost', $r);
+        self::assertSame(30, $r['tariff_gap']['days']);
+        self::assertSame(30, $r['tariff_gap']['total_days']);
+    }
+
+    public function testUnavailableResponsesCarryATranslatableReasonKey(): void
+    {
+        $svc = $this->makeService(
+            new FakeLegacyDailyRepository(monthlyDeltas: $this->electricityDeltas()),
+            new FakeTariffRepository(grid: null),
+            new FakeGasReadingRepository(),
+        );
+
+        $r = $svc->estimateCurrentMonthElectricity();
+
+        self::assertFalse($r['available']);
+        self::assertSame('dash.reason.no_tariff_electricity', $r['reason_key']);
+        // Le texte technique reste, pour l'API et les logs.
+        self::assertSame('No active electricity tariff configured', $r['reason']);
+    }
 }

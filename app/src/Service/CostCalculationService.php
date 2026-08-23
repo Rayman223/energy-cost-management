@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Service;
 
 use App\Domain\SpotFormula;
+use App\Domain\TariffCoverage;
 use App\Domain\TariffGrid;
 use App\Domain\TariffSegment;
 use App\Repository\Contract\DynamicPriceRepositoryInterface;
@@ -114,19 +115,19 @@ final class CostCalculationService
         $deltas = $this->legacyRepo->getMonthlyDeltas();
 
         if (empty($deltas)) {
-            return ['available' => false, 'reason' => 'No data for current month'];
+            return self::unavailable('No data for current month', 'dash.reason.no_data_month');
         }
 
         $from = new DateTimeImmutable($deltas['from']);
         $to   = new DateTimeImmutable($deltas['to']);
         $days = $this->computeDays($from, $to);
 
-        $segments = $this->segmentsFor('electricity', $from, $to, $days);
-        if ($segments === []) {
-            return ['available' => false, 'reason' => 'No active electricity tariff configured'];
+        $coverage = $this->coverageFor('electricity', $from, $to, $days);
+        if ($coverage->segments === []) {
+            return self::unavailable('No active electricity tariff configured', 'dash.reason.no_tariff_electricity');
         }
 
-        return $this->buildElectricityResponse($deltas, $segments, $days);
+        return self::withGap($this->buildElectricityResponse($deltas, $coverage->segments, $days), $coverage);
     }
 
     /**
@@ -139,19 +140,22 @@ final class CostCalculationService
         $deltas = $this->legacyRepo->getMonthlyDeltasForMonth($year, $month);
 
         if (empty($deltas)) {
-            return ['available' => false, 'reason' => sprintf('No data for %04d-%02d', $year, $month)];
+            return self::unavailable(sprintf('No data for %04d-%02d', $year, $month), 'dash.reason.no_data_month');
         }
 
         $from = new DateTimeImmutable($deltas['from']);
         $to   = new DateTimeImmutable($deltas['to']);
         $days = $this->computeDays($from, $to);
 
-        $segments = $this->segmentsFor('electricity', $from, $to, $days);
-        if ($segments === []) {
-            return ['available' => false, 'reason' => sprintf('No active electricity tariff for %04d-%02d', $year, $month)];
+        $coverage = $this->coverageFor('electricity', $from, $to, $days);
+        if ($coverage->segments === []) {
+            return self::unavailable(
+                sprintf('No active electricity tariff for %04d-%02d', $year, $month),
+                'dash.reason.no_tariff_electricity',
+            );
         }
 
-        return $this->buildElectricityResponse($deltas, $segments, $days);
+        return self::withGap($this->buildElectricityResponse($deltas, $coverage->segments, $days), $coverage);
     }
 
     /**
@@ -170,19 +174,19 @@ final class CostCalculationService
     {
         $deltas = $this->legacyRepo->getMonthlyDeltas();
         if (empty($deltas)) {
-            return ['available' => false, 'reason' => 'No data for current month'];
+            return self::unavailable('No data for current month', 'dash.reason.no_data_month');
         }
 
         $from = new DateTimeImmutable($deltas['from']);
         $to   = new DateTimeImmutable($deltas['to']);
         $days = $this->computeDays($from, $to);
 
-        $segments = $this->segmentsFor('electricity', $from, $to, $days);
-        if ($segments === []) {
-            return ['available' => false, 'reason' => 'No active electricity tariff configured'];
+        $coverage = $this->coverageFor('electricity', $from, $to, $days);
+        if ($coverage->segments === []) {
+            return self::unavailable('No active electricity tariff configured', 'dash.reason.no_tariff_electricity');
         }
 
-        return $this->buildDynamicResponse($deltas, $segments, $days);
+        return $this->buildDynamicResponse($deltas, $coverage->segments, $days);
     }
 
     /**
@@ -194,19 +198,22 @@ final class CostCalculationService
     {
         $deltas = $this->legacyRepo->getMonthlyDeltasForMonth($year, $month);
         if (empty($deltas)) {
-            return ['available' => false, 'reason' => sprintf('No data for %04d-%02d', $year, $month)];
+            return self::unavailable(sprintf('No data for %04d-%02d', $year, $month), 'dash.reason.no_data_month');
         }
 
         $from = new DateTimeImmutable($deltas['from']);
         $to   = new DateTimeImmutable($deltas['to']);
         $days = $this->computeDays($from, $to);
 
-        $segments = $this->segmentsFor('electricity', $from, $to, $days);
-        if ($segments === []) {
-            return ['available' => false, 'reason' => sprintf('No active electricity tariff for %04d-%02d', $year, $month)];
+        $coverage = $this->coverageFor('electricity', $from, $to, $days);
+        if ($coverage->segments === []) {
+            return self::unavailable(
+                sprintf('No active electricity tariff for %04d-%02d', $year, $month),
+                'dash.reason.no_tariff_electricity',
+            );
         }
 
-        return $this->buildDynamicResponse($deltas, $segments, $days);
+        return $this->buildDynamicResponse($deltas, $coverage->segments, $days);
     }
 
     /**
@@ -246,25 +253,25 @@ final class CostCalculationService
 
         $deltas = $this->legacyRepo->getDeltasBetween(Dates::toDbString($from), Dates::toDbString($to));
         if (empty($deltas)) {
-            return [
-                'available' => false,
-                'reason'    => sprintf('No data for %s → %s', $from->format('Y-m-d'), $to->format('Y-m-d')),
-            ];
+            return self::unavailable(
+                sprintf('No data for %s → %s', $from->format('Y-m-d'), $to->format('Y-m-d')),
+                'dash.reason.no_data_month',
+            );
         }
 
         $realFrom = new DateTimeImmutable($deltas['from']);
         $realTo   = new DateTimeImmutable($deltas['to']);
         $days     = $this->periodDays($realFrom, $realTo);
 
-        $segments = $this->segmentsFor('electricity', $realFrom, $realTo, $days);
-        if ($segments === []) {
-            return [
-                'available' => false,
-                'reason'    => sprintf('No active electricity tariff for %s → %s', $from->format('Y-m-d'), $to->format('Y-m-d')),
-            ];
+        $coverage = $this->coverageFor('electricity', $realFrom, $realTo, $days);
+        if ($coverage->segments === []) {
+            return self::unavailable(
+                sprintf('No active electricity tariff for %s → %s', $from->format('Y-m-d'), $to->format('Y-m-d')),
+                'dash.reason.no_tariff_electricity',
+            );
         }
 
-        $response = $this->buildElectricityResponse($deltas, $segments, $days);
+        $response = self::withGap($this->buildElectricityResponse($deltas, $coverage->segments, $days), $coverage);
 
         // Les bornes de relevés sont clampées sur le relevé le plus proche : un flux
         // arrêté en mars donne un coût qui s'arrête en mars, sans que le montant le
@@ -310,7 +317,7 @@ final class CostCalculationService
         $pair = $this->gasRepo->getLastTwoReadings();
 
         if ($pair['from'] === null || $pair['to'] === null) {
-            return ['available' => false, 'reason' => 'Il faut au moins deux relevés gaz.'];
+            return self::unavailable('Il faut au moins deux relevés gaz.', 'dash.reason.gas_two_readings');
         }
 
         // Horodatages (base, heure murale locale) parsés dans le fuseau applicatif
@@ -320,15 +327,16 @@ final class CostCalculationService
         $to   = new DateTimeImmutable($pair['to']['reading_at']);
         $days = max(1, (int) $from->setTime(0, 0, 0)->diff($to->setTime(0, 0, 0))->days);
 
-        $segments = $this->segmentsFor('gas', $from, $to, $days);
+        $coverage = $this->coverageFor('gas', $from, $to, $days);
+        $segments = $coverage->segments;
         if ($segments === []) {
-            return ['available' => false, 'reason' => 'Aucun tarif gaz configuré pour cette période.'];
+            return self::unavailable('Aucun tarif gaz configuré pour cette période.', 'dash.reason.no_tariff_gas');
         }
 
         $deltaM3 = max(0.0, (float) $pair['to']['counter_m3'] - (float) $pair['from']['counter_m3']);
         $gas     = $this->buildGasCost($segments, $deltaM3, $days, $from);
 
-        return [
+        return self::withGap([
             'available'       => true,
             'period_from'     => $pair['from']['reading_at'],
             'period_to'       => $pair['to']['reading_at'],
@@ -341,7 +349,7 @@ final class CostCalculationService
             'tariff_rates'    => $this->dominantGrid($segments)->toTariffArray(),
             'tariff_segments' => $gas['segments'],
             'cost'            => $gas['cost'],
-        ];
+        ], $coverage);
     }
 
     /**
@@ -406,12 +414,13 @@ final class CostCalculationService
         $startDt = new DateTimeImmutable($interp->monthStart);
 
         // ── Tariff & PCS ──────────────────────────────────────────────────────
-        $segments = $this->segmentsFor('gas', $startDt, new DateTimeImmutable($interp->monthEnd), $interp->days);
+        $coverage = $this->coverageFor('gas', $startDt, new DateTimeImmutable($interp->monthEnd), $interp->days);
+        $segments = $coverage->segments;
         if ($segments === []) {
-            return [
-                'available' => false,
-                'reason'    => sprintf('Aucun tarif gaz configuré pour %s.', $label),
-            ];
+            return self::unavailable(
+                sprintf('Aucun tarif gaz configuré pour %s.', $label),
+                'dash.reason.no_tariff_gas',
+            );
         }
 
         $gas = $this->buildGasCost(
@@ -424,7 +433,7 @@ final class CostCalculationService
             $interp->endTs,
         );
 
-        return [
+        return self::withGap([
             'available'       => true,
             // Fenêtre calendaire effective (bornes interpolées à minuit).
             'period_from'     => $interp->monthStart,
@@ -442,7 +451,7 @@ final class CostCalculationService
             'tariff_rates'    => $this->dominantGrid($segments)->toTariffArray(),
             'tariff_segments' => $gas['segments'],
             'cost'            => $gas['cost'],
-        ];
+        ], $coverage);
     }
 
     /**
@@ -480,7 +489,7 @@ final class CostCalculationService
     public function periodWaterVolume(DateTimeImmutable $from, DateTimeImmutable $to): array
     {
         if ($this->waterRepo === null) {
-            return ['available' => false, 'reason' => 'Relevés eau indisponibles.'];
+            return self::unavailable('Relevés eau indisponibles.', 'dash.reason.water_no_readings');
         }
 
         $invalid = self::rejectUnusablePeriod($from, $to);
@@ -527,7 +536,7 @@ final class CostCalculationService
     public function estimateMonthWater(int $year, int $month): array
     {
         if ($this->waterRepo === null) {
-            return ['available' => false, 'reason' => 'Relevés eau indisponibles.'];
+            return self::unavailable('Relevés eau indisponibles.', 'dash.reason.water_no_readings');
         }
 
         $series = $this->toSeries($this->waterRepo->getReadingsForInterpolation($year, $month));
@@ -544,7 +553,7 @@ final class CostCalculationService
     public function estimatePeriodWater(DateTimeImmutable $from, DateTimeImmutable $to): array
     {
         if ($this->waterRepo === null) {
-            return ['available' => false, 'reason' => 'Relevés eau indisponibles.'];
+            return self::unavailable('Relevés eau indisponibles.', 'dash.reason.water_no_readings');
         }
 
         $invalid = self::rejectUnusablePeriod($from, $to);
@@ -576,15 +585,15 @@ final class CostCalculationService
     private static function rejectUnusablePeriod(DateTimeImmutable $from, DateTimeImmutable $to): ?array
     {
         if ($to <= $from) {
-            return ['available' => false, 'reason' => 'Période invalide : la fin doit suivre le début.'];
+            return self::unavailable('Période invalide : la fin doit suivre le début.', 'dash.reason.invalid_period');
         }
 
         $days = ($to->getTimestamp() - $from->getTimestamp()) / 86400;
         if ($days > self::MAX_PERIOD_DAYS) {
-            return [
-                'available' => false,
-                'reason'    => sprintf('Période trop longue : %d jours au maximum.', self::MAX_PERIOD_DAYS),
-            ];
+            return self::unavailable(
+                sprintf('Période trop longue : %d jours au maximum.', self::MAX_PERIOD_DAYS),
+                'dash.reason.period_too_long',
+            );
         }
 
         return null;
@@ -632,7 +641,8 @@ final class CostCalculationService
         ];
 
         $startDt  = new DateTimeImmutable($interp->monthStart);
-        $segments = $this->segmentsFor('water', $startDt, new DateTimeImmutable($interp->monthEnd), $interp->days);
+        $coverage = $this->coverageFor('water', $startDt, new DateTimeImmutable($interp->monthEnd), $interp->days);
+        $segments = $coverage->segments;
 
         if ($segments !== []) {
             $breakdowns = [];
@@ -661,7 +671,10 @@ final class CostCalculationService
             $result['cost']            = $this->aggregator->aggregate($breakdowns);
         }
 
-        return $result;
+        // Sans grille eau, la réponse reste `available` avec le volume seul
+        // (rétrocompat) : `tariff_gap` est alors le seul signal disant pourquoi il
+        // n'y a pas de montant.
+        return self::withGap($result, $coverage);
     }
 
     // ── Helpers privés ─────────────────────────────────────────────────────────
@@ -736,23 +749,61 @@ final class CostCalculationService
      * Repli : si aucune grille n'est active pendant la fenêtre balayée mais qu'une
      * l'est à la borne de fin, elle couvre toute la période — c'est le comportement
      * de l'ancien `findActiveGrid($from) ?? findActiveGrid($to)`, qui rendait un
-     * coût dès la création d'une grille démarrant aujourd'hui.
-     *
-     * @return list<TariffSegment>
+     * coût dès la création d'une grille démarrant aujourd'hui. La couverture rendue
+     * porte alors `missingDays === $days` : le montant existe, mais aucun de ses
+     * jours n'est réellement tarifé (#6).
      */
-    private function segmentsFor(string $energyType, DateTimeImmutable $from, DateTimeImmutable $to, int $days): array
+    private function coverageFor(string $energyType, DateTimeImmutable $from, DateTimeImmutable $to, int $days): TariffCoverage
     {
         $start   = $from->setTime(0, 0, 0);
         $scanEnd = $start->modify(sprintf('+%d day', max(0, $days - 1)));
 
         $grids    = $this->tariffRepo->findActiveGridsBetween($energyType, $start, max($scanEnd, $to->setTime(0, 0, 0)));
-        $segments = $this->splitter->split($grids, $start, $days);
+        $coverage = $this->splitter->analyse($grids, $start, $days);
 
-        if ($segments === [] && $grids !== []) {
-            return [new TariffSegment($grids[0], $start, $scanEnd, $days)];
+        if ($coverage->segments === [] && $grids !== []) {
+            return new TariffCoverage(
+                [new TariffSegment($grids[0], $start, $scanEnd, $days)],
+                $days,
+                $days,
+                $start,
+                $scanEnd,
+            );
         }
 
-        return $segments;
+        return $coverage;
+    }
+
+    /**
+     * Réponse « rien à montrer », avec son motif sous deux formes : `reason`, texte
+     * technique conservé pour l'API et les logs, et `reason_key`, la clé de
+     * catalogue que l'UI traduit dans la langue de l'utilisateur (#6). Le service
+     * n'a pas de Translator — c'est le client qui rend, à partir du sous-catalogue
+     * `dash.*` déjà exporté par le template.
+     *
+     * @return array{available: false, reason: string, reason_key: string}
+     */
+    private static function unavailable(string $reason, string $reasonKey): array
+    {
+        return ['available' => false, 'reason' => $reason, 'reason_key' => $reasonKey];
+    }
+
+    /**
+     * Ajoute à une réponse le diagnostic de couverture tarifaire, ou la laisse
+     * intacte quand la période est entièrement couverte : la clé `tariff_gap` ne
+     * paraît que lorsqu'il y a quelque chose à signaler (#6).
+     *
+     * @param  array<string, mixed> $response
+     * @return array<string, mixed>
+     */
+    private static function withGap(array $response, TariffCoverage $coverage): array
+    {
+        $gap = $coverage->toGapArray();
+        if ($gap !== null) {
+            $response['tariff_gap'] = $gap;
+        }
+
+        return $response;
     }
 
     /**
@@ -1175,7 +1226,7 @@ final class CostCalculationService
     private function buildDynamicResponse(array $deltas, array $segments, int $days): array
     {
         if ($this->dynamicPriceRepo === null || !$this->dynamicEnabled) {
-            return ['available' => false, 'reason' => 'Tarif dynamique non configuré.'];
+            return self::unavailable('Tarif dynamique non configuré.', 'dash.reason.dynamic_not_configured');
         }
 
         $all      = array_keys($segments);
