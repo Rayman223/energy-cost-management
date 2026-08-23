@@ -221,6 +221,7 @@ Set at least `database`, then choose the authentication mode:
   from the `/auth/login` route. Multi-user accounts, no password/e-mail stored.
   Step-by-step guides: [oidc-google.md](oidc-google.md) (Google),
   [oidc-microsoft.md](oidc-microsoft.md) (Microsoft / Entra ID),
+  [oidc-discord.md](oidc-discord.md) (Discord),
   [oidc-authentik.md](oidc-authentik.md) (authentik, *in French*) and
   [oidc-generic.md](oidc-generic.md) (Keycloak, Zitadel, any other OIDC IdP).
 - **Legacy single-tenant mode** — keep `oidc.enabled = false`; the historic HTTP

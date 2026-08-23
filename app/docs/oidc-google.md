@@ -116,8 +116,9 @@ Setting `enabled => true` switches the app to multi-user OIDC mode. Leaving it
 `false` keeps the historic single-tenant HTTP Basic Auth (`web_security`).
 
 > **Multiple providers.** Add more entries under `providers` (e.g. `microsoft`,
-> `keycloak`) to show one button per IdP on the sign-in page — see
-> [oidc-microsoft.md](oidc-microsoft.md) and [oidc-generic.md](oidc-generic.md).
+> `discord`, `keycloak`) to show one button per IdP on the sign-in page — see
+> [oidc-microsoft.md](oidc-microsoft.md), [oidc-discord.md](oidc-discord.md) and
+> [oidc-generic.md](oidc-generic.md).
 > The provider key (`google`, `microsoft`…) is stored in `users.provider` and
 > picks the button icon.
 >
