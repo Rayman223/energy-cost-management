@@ -69,7 +69,10 @@ final class TariffCalculatorService
         $result = $this->computeLines($tariff, $quantities, $days, null, 'electricity', $monthsOverride);
         $solar  = $this->solarInfo($tariff, $kwhT1, $kwhT2, $kwhExportT1, $kwhExportT2, $kwhSolar);
 
-        return array_merge($result, $solar);
+        $breakdown = array_merge($result, $solar);
+        $breakdown['net_cost_per_kwh'] = self::netCostPerKwh($breakdown);
+
+        return $breakdown;
     }
 
     /**
@@ -101,7 +104,45 @@ final class TariffCalculatorService
         $result = $this->computeLines($tariff, $quantities, $days, $dynamicEnergyTtc, 'electricity', $monthsOverride);
         $solar  = $this->solarInfo($tariff, $kwhT1, $kwhT2, $kwhExportT1, $kwhExportT2, $kwhSolar);
 
-        return array_merge(['mode' => 'dynamic'], $result, $solar);
+        $breakdown = array_merge(['mode' => 'dynamic'], $result, $solar);
+        $breakdown['net_cost_per_kwh'] = self::netCostPerKwh($breakdown);
+
+        return $breakdown;
+    }
+
+    /**
+     * Coût réel TTC du kWh prélevé au réseau (#9) : le total facturé — abonnement,
+     * termes fixes annuels, taxes et TVA compris — rapporté aux seuls kWh importés.
+     *
+     * Les crédits d'injection sont RETRANCHÉS du total avant division : ils rémunèrent
+     * l'énergie réinjectée, pas celle consommée. Les laisser dans le numérateur ferait
+     * baisser le prix affiché du kWh prélevé à mesure que le prosumer exporte, ce qui
+     * ne dit plus ce que coûte un kWh. Le crédit reste visible dans les lignes de détail.
+     *
+     * Renvoie null sans prélèvement sur la période : il n'y a alors pas de prix unitaire
+     * à afficher, seulement des postes fixes.
+     *
+     * @param array<string, mixed> $breakdown Décompte électricité ({@see calculateElectricityCost()})
+     *                                        ou son agrégat ({@see CostBreakdownAggregator}).
+     */
+    public static function netCostPerKwh(array $breakdown): ?float
+    {
+        $importKwh = (float) ($breakdown['import_kwh'] ?? 0.0);
+        if ($importKwh <= 0.0) {
+            return null;
+        }
+
+        /** @var list<array{kind?: string, amount?: float}> $lines */
+        $lines     = $breakdown['lines'] ?? [];
+        $injection = 0.0;
+        foreach ($lines as $line) {
+            $kind = ComponentKind::tryFrom((string) ($line['kind'] ?? ''));
+            if ($kind !== null && $kind->isInjection()) {
+                $injection += (float) ($line['amount'] ?? 0.0);
+            }
+        }
+
+        return round(((float) ($breakdown['total'] ?? 0.0) - $injection) / $importKwh, 6);
     }
 
     /**

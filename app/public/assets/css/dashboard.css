@@ -164,6 +164,10 @@
     font-family: var(--mono); font-size: 3rem; font-weight: 700;
     color: var(--amber); letter-spacing: -.04em; line-height: 1;
   }
+  .cost-total-unit {
+    font-family: var(--mono); font-size: .95rem; color: var(--muted);
+    margin-top: 6px; line-height: 1.4;
+  }
   .cost-total-meta { font-family: var(--mono); font-size: 1rem; color: var(--muted); margin-top: 12px; }
   .cost-total-meta span { display: block; margin-top: 3px; }
   .no-tariff {

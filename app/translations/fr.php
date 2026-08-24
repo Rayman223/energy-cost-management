@@ -402,6 +402,10 @@ return [
     'dash.meta.days_other'     => '{days} jours',
     'dash.meta.pcs'            => 'PCS {value} kWh/m³',
 
+    // Coût réel du kWh prélevé (#9) : {rate} arrive déjà formaté (devise + locale).
+    'dash.total.net_per_kwh'      => 'soit {rate} tout compris',
+    'dash.total.net_per_kwh_hint' => 'Total TTC hors crédit d\'injection ÷ kWh prélevés',
+
     'dash.dynamic.group'          => 'Tarif dynamique (day-ahead)',
     'dash.dynamic.simulation_title' => 'Et si j’étais en tarif dynamique ?',
     'dash.dynamic.mixed_period'   => '{dynamic} des {total} jours du mois ont été facturés au prix de marché (changement de grille en cours de période).',

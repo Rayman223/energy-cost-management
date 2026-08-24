@@ -193,6 +193,63 @@ final class CostBreakdownAggregatorTest extends TestCase
         self::assertEqualsWithDelta(0.15, $r['solar_savings_rate'], 0.0001);
     }
 
+    /**
+     * Le prix unitaire est recalculé sur les totaux agrégés (#9) : la moyenne des
+     * valeurs par sous-période donnerait ici 0.4725 €/kWh, en traitant à égalité
+     * une sous-période de 100 kWh et une de 20 kWh.
+     */
+    public function testNetCostPerKwhIsRecomputedOnTheAggregateNotAveraged(): void
+    {
+        $injection = static fn (float $amount): array => [
+            'key'      => 'injection_t1',
+            'kind'     => 'injection_t1',
+            'group'    => 'injection',
+            'label'    => null,
+            'quantity' => 10.0,
+            'unit'     => '€/kWh',
+            'rate'     => 0.05,
+            'amount'   => $amount,
+        ];
+
+        $segment = function (float $importKwh, float $total, float $injectionAmount) use ($injection): array {
+            $b = $this->breakdown(
+                [$this->line('energy_t1', 'energy_t1', $importKwh, 0.10), $injection($injectionAmount)],
+                $total,
+                round($total / 1.21, 2)
+            );
+
+            return $b + [
+                'import_kwh'           => $importKwh,
+                'export_kwh'           => 10.0,
+                'solar_produced'       => null,
+                'solar_consumed'       => null,
+                'self_consumption_pct' => null,
+                'solar_savings_rate'   => null,
+                'solar_savings'        => null,
+                'net_cost_per_kwh'     => round(($total - $injectionAmount) / $importKwh, 6),
+            ];
+        };
+
+        $r = (new CostBreakdownAggregator())->aggregate([
+            $segment(100.0, 30.0, -2.0),   // 32.00 / 100 = 0.32
+            $segment(20.0, 12.0, -0.5),    // 12.50 /  20 = 0.625
+        ]);
+
+        // (42.00 + 2.50) / 120 kWh
+        self::assertEqualsWithDelta(0.370833, $r['net_cost_per_kwh'], 0.0001);
+    }
+
+    /** Gaz et eau n'ont pas d'`import_kwh` : la clé ne doit pas apparaître. */
+    public function testNetCostPerKwhIsAbsentForNonElectricity(): void
+    {
+        $r = (new CostBreakdownAggregator())->aggregate([
+            $this->breakdown([$this->line('energy', 'energy_flat', 500.0, 0.05)], 25.0, 20.66) + ['kwh' => 500.0],
+            $this->breakdown([$this->line('energy', 'energy_flat', 550.0, 0.10)], 55.0, 45.45) + ['kwh' => 550.0],
+        ]);
+
+        self::assertArrayNotHasKey('net_cost_per_kwh', $r);
+    }
+
     public function testGasQuantityIsSummed(): void
     {
         $a = $this->breakdown([$this->line('energy', 'energy_flat', 500.0, 0.05)], 25.0, 20.66) + ['kwh' => 500.0];
