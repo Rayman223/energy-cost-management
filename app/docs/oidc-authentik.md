@@ -232,4 +232,5 @@ son compte existant depuis la page **Mon compte → Fournisseurs de connexion**.
 
 - **Google** — [oidc-google.md](oidc-google.md).
 - **Microsoft / Entra ID** — [oidc-microsoft.md](oidc-microsoft.md).
+- **Discord** — [oidc-discord.md](oidc-discord.md).
 - **Keycloak, Zitadel et autres IdP auto-hébergés** — [oidc-generic.md](oidc-generic.md).

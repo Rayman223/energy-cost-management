@@ -37,6 +37,14 @@ final class OidcProviderIconTest extends TestCase
         self::assertStringNotContainsString('#FD4B2D', $html);
     }
 
+    public function testDiscordUsesItsBrandColour(): void
+    {
+        $html = $this->render('discord');
+
+        self::assertStringContainsString('#5865F2', $html);
+        self::assertStringNotContainsString('currentColor', $html);
+    }
+
     public function testUnknownProviderFallsBackToTheNeutralKeyIcon(): void
     {
         $html = $this->render('zitadel');
@@ -51,7 +59,7 @@ final class OidcProviderIconTest extends TestCase
      */
     public function testEveryVariantIsADecorativeSvg(): void
     {
-        foreach (['authentik', 'google', 'microsoft', 'microsoftonline', 'keycloak'] as $key) {
+        foreach (['authentik', 'discord', 'google', 'microsoft', 'microsoftonline', 'keycloak'] as $key) {
             $html = $this->render($key);
 
             self::assertStringContainsString('class="btn-provider-icon"', $html, $key);

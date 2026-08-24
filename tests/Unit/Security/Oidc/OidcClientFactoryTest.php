@@ -93,4 +93,55 @@ final class OidcClientFactoryTest extends TestCase
     {
         self::assertSame([], OidcClientFactory::labelsFromConfig([]));
     }
+
+    public function testConfiguredScopesWin(): void
+    {
+        self::assertSame(
+            ['openid', 'email'],
+            OidcClientFactory::scopesFromConfig([
+                'issuer' => 'https://discord.com',
+                'scopes' => ['openid', 'email'],
+            ]),
+        );
+    }
+
+    public function testScopesFallBackToProfileForStandardProviders(): void
+    {
+        foreach (['https://accounts.google.com', 'https://auth.example.com/realms/x', '', 'not-a-url'] as $issuer) {
+            self::assertSame(
+                ['openid', 'profile'],
+                OidcClientFactory::scopesFromConfig(['issuer' => $issuer]),
+                $issuer,
+            );
+        }
+    }
+
+    /**
+     * Discord ne connaît pas le scope OIDC « profile » (invalid_scope) : à défaut
+     * de scopes configurés, le repli doit demander « identify » à la place, sans
+     * quoi une config Discord minimale échouerait dès l'écran de consentement.
+     */
+    public function testScopesFallBackToIdentifyForDiscord(): void
+    {
+        self::assertSame(
+            ['openid', 'identify'],
+            OidcClientFactory::scopesFromConfig(['issuer' => 'https://discord.com']),
+        );
+
+        // Repli aussi quand « scopes » est présent mais inexploitable.
+        self::assertSame(
+            ['openid', 'identify'],
+            OidcClientFactory::scopesFromConfig(['issuer' => 'https://discord.com/', 'scopes' => ['', 42]]),
+        );
+
+        // Sous-domaine Discord (canary) ; un homographe ne doit PAS matcher.
+        self::assertSame(
+            ['openid', 'identify'],
+            OidcClientFactory::scopesFromConfig(['issuer' => 'https://canary.discord.com']),
+        );
+        self::assertSame(
+            ['openid', 'profile'],
+            OidcClientFactory::scopesFromConfig(['issuer' => 'https://notdiscord.com']),
+        );
+    }
 }

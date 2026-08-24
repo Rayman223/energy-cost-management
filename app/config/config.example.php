@@ -115,6 +115,19 @@ return [
             //     'label'         => 'Authentik',
             // ],
             //
+            // cf. app/docs/oidc-discord.md — ATTENTION aux scopes : Discord ne
+            // connaît pas le scope OIDC 'profile' (erreur invalid_scope), son
+            // équivalent est 'identify'. Laisser 'scopes' absent revient au même :
+            // le repli est adapté automatiquement pour l'issuer discord.com.
+            // 'discord' => [
+            //     'issuer'        => 'https://discord.com',
+            //     'client_id'     => 'change_me',
+            //     'client_secret' => 'change_me',
+            //     'redirect_uri'  => '',
+            //     'scopes'        => ['openid', 'identify'],
+            //     'label'         => 'Discord',
+            // ],
+            //
             // cf. app/docs/oidc-generic.md
             // 'keycloak' => [
             //     'issuer'        => 'https://auth.example.com/realms/mon-realm',
