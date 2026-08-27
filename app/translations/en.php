@@ -393,7 +393,8 @@ return [
     'dash.meta.days_other'     => '{days} days',
     'dash.meta.pcs'            => 'CV {value} kWh/m³',
 
-    // Coût réel du kWh prélevé (#9) : {rate} arrive déjà formaté (devise + locale).
+    // Real cost of a kWh drawn from the grid (#9): {rate} arrives pre-formatted
+    // (profile currency + locale).
     'dash.total.net_per_kwh'      => 'i.e. {rate} all-in',
     'dash.total.net_per_kwh_hint' => 'Total incl. VAT, excluding injection credit ÷ kWh drawn',
 

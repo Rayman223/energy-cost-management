@@ -392,7 +392,8 @@ return [
     'dash.meta.days_other'     => '{days} Tage',
     'dash.meta.pcs'            => 'Brennwert {value} kWh/m³',
 
-    // Coût réel du kWh prélevé (#9) : {rate} arrive déjà formaté (devise + locale).
+    // Tatsächliche Kosten der bezogenen kWh (#9): {rate} kommt bereits formatiert
+    // (Währung + Locale des Profils).
     'dash.total.net_per_kwh'      => 'also {rate} alles inbegriffen',
     'dash.total.net_per_kwh_hint' => 'Gesamtbetrag inkl. MwSt. ohne Einspeisevergütung ÷ bezogene kWh',
 

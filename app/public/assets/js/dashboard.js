@@ -278,7 +278,7 @@ function tariffGapHtml(data) {
           <div class="cost-total-label">${periodLabel}</div>
           <div class="cost-total-amount">${formatMoney(c.total)}</div>
           ${c.net_cost_per_kwh != null ? `
-          <div class="cost-total-unit" title="${tr('dash.total.net_per_kwh_hint')}">${tr('dash.total.net_per_kwh', { rate: formatRate(c.net_cost_per_kwh) })}</div>
+          <div class="cost-total-unit" title="${escapeHtml(tr('dash.total.net_per_kwh_hint'))}">${tr('dash.total.net_per_kwh', { rate: formatRate(c.net_cost_per_kwh) })}</div>
           ` : ''}
         </div>
         <div class="cost-total-meta">

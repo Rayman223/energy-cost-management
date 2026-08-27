@@ -392,7 +392,8 @@ return [
     'dash.meta.days_other'     => '{days} dagen',
     'dash.meta.pcs'            => 'Calorische waarde {value} kWh/m³',
 
-    // Coût réel du kWh prélevé (#9) : {rate} arrive déjà formaté (devise + locale).
+    // Werkelijke kostprijs van de afgenomen kWh (#9): {rate} komt al opgemaakt door
+    // (munteenheid + locale van het profiel).
     'dash.total.net_per_kwh'      => 'ofwel {rate} alles inbegrepen',
     'dash.total.net_per_kwh_hint' => 'Totaal incl. btw zonder injectievergoeding ÷ afgenomen kWh',
 
