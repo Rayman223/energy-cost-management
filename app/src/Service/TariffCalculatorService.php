@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Service;
 
 use App\Domain\ComponentKind;
+use App\Domain\Currency;
 
 /**
  * Calculateur de coût énergétique générique (électricité, gaz, eau).
@@ -46,7 +47,7 @@ final class TariffCalculatorService
      * @param float $kwhSolar Production PV totale de la période (kWh), pour l'info
      *                        d'auto-consommation. 0.0 si pas de données solaires.
      * @param float|null $monthsOverride Nombre de mois facturés imposé (cf. {@see computeLines()}).
-     * @param array{vat_rate: float, lines: list<array{key: string, kind: string, amount: float, label: string|null}>} $tariff
+     * @param array{vat_rate: float, currency?: string, lines: list<array{key: string, kind: string, amount: float, label: string|null}>} $tariff
      * @return array<string, mixed>
      */
     public function calculateElectricityCost(
@@ -80,7 +81,7 @@ final class TariffCalculatorService
      * un coût indexé au prix de marché horaire ($dynamicEnergyTtc, déjà TTC). Tous
      * les autres postes restent identiques au tarif classique.
      *
-     * @param array{vat_rate: float, lines: list<array{key: string, kind: string, amount: float, label: string|null}>} $tariff
+     * @param array{vat_rate: float, currency?: string, lines: list<array{key: string, kind: string, amount: float, label: string|null}>} $tariff
      * @return array<string, mixed>
      */
     public function calculateElectricityCostDynamic(
@@ -149,7 +150,7 @@ final class TariffCalculatorService
      * Calcule le coût gaz pour une période.
      *
      * @param float $kwh consommation en kWh (après conversion m³ → kWh via PCS)
-     * @param array{vat_rate: float, lines: list<array{key: string, kind: string, amount: float, label: string|null}>} $tariff
+     * @param array{vat_rate: float, currency?: string, lines: list<array{key: string, kind: string, amount: float, label: string|null}>} $tariff
      * @return array<string, mixed>
      */
     public function calculateGasCost(float $kwh, int $days, array $tariff, ?float $monthsOverride = null): array
@@ -164,7 +165,7 @@ final class TariffCalculatorService
      * Calcule le coût de l'eau pour une période (composantes en €/m³ + fixes).
      *
      * @param float $m3 volume consommé en m³
-     * @param array{vat_rate: float, lines: list<array{key: string, kind: string, amount: float, label: string|null}>} $tariff
+     * @param array{vat_rate: float, currency?: string, lines: list<array{key: string, kind: string, amount: float, label: string|null}>} $tariff
      * @return array<string, mixed>
      */
     public function calculateWaterCost(float $m3, int $days, array $tariff, ?float $monthsOverride = null): array
@@ -178,7 +179,7 @@ final class TariffCalculatorService
     /**
      * Moteur générique : applique la formule de chaque ligne selon son kind.
      *
-     * @param array{vat_rate?: float, lines?: list<array{key: string, kind: string, amount: float, label: string|null, category?: string|null}>} $tariff
+     * @param array{vat_rate?: float, currency?: string, lines?: list<array{key: string, kind: string, amount: float, label: string|null, category?: string|null}>} $tariff
      * @param array{kwh_t1?: float, kwh_t2?: float, kwh_export_t1?: float, kwh_export_t2?: float, m3?: float} $quantities
      * @param float|null $dynamicEnergyTtc  Coût énergie dynamique (mode dynamique) ; les kinds énergie fournisseur sont alors ignorés.
      * @param float|null $monthsOverride    Nombre de mois facturés imposé (fractionnaire autorisé), au lieu du
@@ -205,6 +206,12 @@ final class TariffCalculatorService
         $wholeMonths = $monthsOverride ?? (float) $this->wholeMonths($days);
         $isDynamic   = $dynamicEnergyTtc !== null;
 
+        // Devise de la grille : elle donne le numérateur des unités affichées. Un
+        // tarif sans devise explicite reste sur le défaut de la base.
+        $currency = is_string($tariff['currency'] ?? null) && $tariff['currency'] !== ''
+            ? (string) $tariff['currency']
+            : Currency::DEFAULT;
+
         $lines       = [];
         $total       = 0.0;
         $energyTotal = 0.0;
@@ -217,7 +224,7 @@ final class TariffCalculatorService
                 'group'    => 'energy',
                 'label'    => null,
                 'quantity' => round($totalKwh, 3),
-                'unit'     => '€/kWh',
+                'unit'     => Currency::symbol($currency) . '/kWh',
                 'rate'     => $totalKwh > 0.0 ? round($dynamicEnergyTtc / $totalKwh, 6) : null,
                 'amount'   => round($dynamicEnergyTtc, 4),
             ];
@@ -260,7 +267,7 @@ final class TariffCalculatorService
                     : $kind->group(),
                 'label'    => $line['label'] ?? null,
                 'quantity' => round($quantity, 4),
-                'unit'     => $kind->unit($energyType),
+                'unit'     => $kind->unit($energyType, $currency),
                 'rate'     => $rate,
                 'amount'   => round($amount, 4),
             ];
@@ -312,7 +319,7 @@ final class TariffCalculatorService
      * Bloc informatif d'auto-consommation solaire (exclu du total facturé).
      * La production PV a lieu en journée → tarifs variables T1 (jour).
      *
-     * @param array{vat_rate?: float, lines?: list<array{key: string, kind: string, amount: float, label: string|null, category?: string|null}>} $tariff
+     * @param array{vat_rate?: float, currency?: string, lines?: list<array{key: string, kind: string, amount: float, label: string|null, category?: string|null}>} $tariff
      * @return array<string, float|null>
      */
     private function solarInfo(
@@ -344,7 +351,7 @@ final class TariffCalculatorService
     /**
      * Somme des taux (€/kWh) des lignes appartenant à un ensemble de kinds.
      *
-     * @param array{vat_rate?: float, lines?: list<array{key: string, kind: string, amount: float, label: string|null, category?: string|null}>} $tariff
+     * @param array{vat_rate?: float, currency?: string, lines?: list<array{key: string, kind: string, amount: float, label: string|null, category?: string|null}>} $tariff
      * @param list<ComponentKind> $kinds
      */
     private function sumRatesForKinds(array $tariff, array $kinds): float

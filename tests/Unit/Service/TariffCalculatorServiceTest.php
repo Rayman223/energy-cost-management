@@ -455,4 +455,74 @@ final class TariffCalculatorServiceTest extends TestCase
         self::assertEqualsWithDelta(110.0, $this->calc->m3ToKwh(10.0, 11.0), self::DELTA);
         self::assertEqualsWithDelta(35.163, $this->calc->m3ToKwh(3.333, 10.55), self::DELTA);
     }
+
+    /**
+     * Unité de chaque ligne : le symbole vient de la devise de la grille, jamais
+     * d'un « € » codé en dur. Le champ `unit` part tel quel vers le front, qui
+     * l'affiche sans le retraduire.
+     *
+     * @return array<string,string> clé de ligne → unité
+     */
+    private function lineUnits(array $result): array
+    {
+        $units = [];
+        foreach ($result['lines'] as $line) {
+            $units[$line['key']] = (string) $line['unit'];
+        }
+
+        return $units;
+    }
+
+    public function testLineUnitsFollowTheGridCurrency(): void
+    {
+        $tariff = $this->calcTariff(['energy_t1' => 0.10, 'subscription' => 5.0, 'management_annual' => 36.5]);
+        $tariff['currency'] = 'CHF';
+
+        $units = $this->lineUnits($this->calc->calculateElectricityCost(
+            kwhT1: 100.0, kwhT2: 0.0, kwhExportT1: 0.0, kwhExportT2: 0.0, days: 30, tariff: $tariff,
+        ));
+
+        self::assertSame('CHF/kWh', $units['energy_t1']);
+        self::assertSame('CHF/mois', $units['subscription']);
+        self::assertSame('CHF/an', $units['management_annual']);
+    }
+
+    public function testLineUnitsDefaultToEuroWhenTheTariffCarriesNoCurrency(): void
+    {
+        $units = $this->lineUnits($this->calc->calculateElectricityCost(
+            kwhT1: 100.0, kwhT2: 0.0, kwhExportT1: 0.0, kwhExportT2: 0.0, days: 30,
+            tariff: $this->calcTariff(['energy_t1' => 0.10, 'subscription' => 5.0]),
+        ));
+
+        self::assertSame('€/kWh', $units['energy_t1']);
+        self::assertSame('€/mois', $units['subscription']);
+    }
+
+    /**
+     * La ligne synthétique du mode dynamique était le second « € » en dur : elle
+     * doit suivre la devise comme les autres.
+     */
+    public function testDynamicEnergyLineFollowsTheGridCurrency(): void
+    {
+        $tariff = $this->calcTariff(['distribution_t1' => 0.05]);
+        $tariff['currency'] = 'USD';
+
+        $units = $this->lineUnits($this->calc->calculateElectricityCostDynamic(
+            kwhT1: 100.0, kwhT2: 0.0, kwhExportT1: 0.0, kwhExportT2: 0.0, days: 30,
+            tariff: $tariff, dynamicEnergyTtc: 12.0,
+        ));
+
+        self::assertSame('$/kWh', $units['energy_dynamic']);
+    }
+
+    public function testWaterLinesUseTheCubicMetreDenominator(): void
+    {
+        $tariff = $this->calcTariff(['consumption' => 2.5, 'subscription' => 8.0], 'water');
+        $tariff['currency'] = 'GBP';
+
+        $units = $this->lineUnits($this->calc->calculateWaterCost(10.0, 30, $tariff));
+
+        self::assertSame('£/m³', $units['consumption']);
+        self::assertSame('£/mois', $units['subscription']);
+    }
 }

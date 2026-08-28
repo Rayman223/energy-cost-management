@@ -123,16 +123,27 @@ enum ComponentKind: string
         };
     }
 
-    /** Unité affichée (dépend de l'énergie pour la part variable). */
-    public function unit(string $energyType): string
+    /**
+     * Unité affichée : dépend de l'énergie pour la part variable, et de la devise
+     * de la grille pour le numérateur. Le symbole n'est jamais codé en dur —
+     * facturer en CHF et afficher « €/kWh » induirait en erreur.
+     *
+     * @param string $currency Code ISO de la grille (`tariff_grids.currency`).
+     */
+    public function unit(string $energyType, string $currency): string
     {
-        return match ($this) {
-            self::FixedMonthly    => '€/mois',
-            self::FixedAnnual     => '€/an',
-            self::PerM3           => '€/m³',
-            // Multiplicateur sans dimension : ni une devise, ni une quantité.
-            self::SpotCoefficient => '×',
-            default               => $energyType === 'water' ? '€/m³' : '€/kWh',
+        // Multiplicateur sans dimension : ni une devise, ni une quantité.
+        if ($this === self::SpotCoefficient) {
+            return '×';
+        }
+
+        $symbol = Currency::symbol($currency);
+
+        return $symbol . match ($this) {
+            self::FixedMonthly => '/mois',
+            self::FixedAnnual  => '/an',
+            self::PerM3        => '/m³',
+            default            => $energyType === 'water' ? '/m³' : '/kWh',
         };
     }
 }
