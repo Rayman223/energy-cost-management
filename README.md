@@ -372,6 +372,7 @@ connector card is hidden from the account page and the nightly push is skipped.
 - [`app/docs/oidc-google.md`](app/docs/oidc-google.md) — sign in with Google, step by step.
 - [`app/docs/oidc-microsoft.md`](app/docs/oidc-microsoft.md) — sign in with Microsoft / Entra ID.
 - [`app/docs/oidc-discord.md`](app/docs/oidc-discord.md) — sign in with Discord, step by step.
+- [`app/docs/oidc-github.md`](app/docs/oidc-github.md) — sign in with GitHub (OAuth 2.0, not OIDC).
 - [`app/docs/oidc-authentik.md`](app/docs/oidc-authentik.md) — sign in with authentik *(written in French)*.
 - [`app/docs/oidc-generic.md`](app/docs/oidc-generic.md) — any other self-hosted OIDC provider (Keycloak, Zitadel).
 - [`app/docs/architecture.md`](app/docs/architecture.md) — layered architecture and the #47 community-platform design.

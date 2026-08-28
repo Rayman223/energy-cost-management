@@ -4,7 +4,9 @@ How to plug a self-hosted OpenID Connect identity provider into the app. The OID
 plumbing is already built in and standards-compliant (Authorization Code + PKCE
 S256, discovery via `.../.well-known/openid-configuration`), so any conformant IdP
 works. See [oidc-google.md](oidc-google.md) for the shared background, and
-[oidc-discord.md](oidc-discord.md) for the hosted Discord IdP.
+[oidc-discord.md](oidc-discord.md) for the hosted Discord IdP. GitHub is the one
+provider that is *not* OIDC — it has its own guide,
+[oidc-github.md](oidc-github.md).
 
 > **No e-mail is requested or stored.** The app identifies users by the OIDC
 > `issuer` + `subject` pair only. Requested scopes are `openid` + `profile`

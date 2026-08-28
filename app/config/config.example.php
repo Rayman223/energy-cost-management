@@ -128,6 +128,19 @@ return [
             //     'label'         => 'Discord',
             // ],
             //
+            // cf. app/docs/oidc-github.md — GitHub n'est PAS un fournisseur OIDC
+            // (ni découverte, ni id_token) : l'app le gère par un connecteur OAuth 2.0
+            // dédié. L'issuer ci-dessous n'est donc pas découvert, il sert d'identifiant
+            // de fournisseur en base — le laisser tel quel. 'scopes' est volontairement
+            // absent : le profil public suffit à identifier le compte.
+            // 'github' => [
+            //     'issuer'        => 'https://github.com',
+            //     'client_id'     => 'change_me',
+            //     'client_secret' => 'change_me',
+            //     'redirect_uri'  => '',
+            //     'label'         => 'GitHub',
+            // ],
+            //
             // cf. app/docs/oidc-generic.md
             // 'keycloak' => [
             //     'issuer'        => 'https://auth.example.com/realms/mon-realm',

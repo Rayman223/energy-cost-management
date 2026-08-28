@@ -164,6 +164,7 @@ The app supports several providers side by side — one button per configured Id
 
 - **Microsoft / Entra ID** — [oidc-microsoft.md](oidc-microsoft.md).
 - **authentik** — [oidc-authentik.md](oidc-authentik.md) *(written in French)*.
+- **GitHub** — [oidc-github.md](oidc-github.md) *(OAuth 2.0: GitHub is not an OIDC provider)*.
 - **Self-hosted OIDC** (Keycloak, Zitadel, …) — [oidc-generic.md](oidc-generic.md).
 
 > **One identity = one `issuer` + `subject` pair.** A user who signs in with Google
