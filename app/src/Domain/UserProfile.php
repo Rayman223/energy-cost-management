@@ -28,6 +28,10 @@ final class UserProfile
      *        `updateProfile` : le formulaire de /account n'a pas à connaître cette
      *        préférence, ni à l'écraser en enregistrant le reste du profil.
      * @param ?string $advancesPeriodTo Fin 'Y-m-d', EXCLUE de la période.
+     * @param bool $statsOptOut Retrait des statistiques agrégées de /stats (#8).
+     *        false (défaut) = le foyer contribue. Le retrait l'ôte du numérateur
+     *        ET du dénominateur du seuil de k-anonymat : un foyer retiré ne fait
+     *        plus passer son pays au-dessus du seuil de publication.
      */
     public function __construct(
         public readonly ?string $country,
@@ -38,6 +42,7 @@ final class UserProfile
         public readonly string $locale,
         public readonly ?string $advancesPeriodFrom = null,
         public readonly ?string $advancesPeriodTo = null,
+        public readonly bool $statsOptOut = false,
     ) {
     }
 
@@ -54,6 +59,7 @@ final class UserProfile
             biddingZone: null,
             supplierMarkupPerKwh: 0.0,
             locale: 'fr',
+            statsOptOut: false,
         );
     }
 }
