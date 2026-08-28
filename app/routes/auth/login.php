@@ -27,6 +27,7 @@ use App\Security\Oidc\OidcAuthFailure;
 use App\Security\Oidc\OidcClientFactory;
 use App\Security\Oidc\OidcDiscoveryCache;
 use App\Security\Oidc\OidcDisplayName;
+use App\Security\Oidc\OidcSessionState;
 use App\Security\Session;
 use App\Security\WebAccessGuard;
 use App\Support\SafeRedirect;
@@ -83,6 +84,12 @@ try {
             }
         }
         $_SESSION['auth_oidc_provider'] = $key;
+
+        // Nouvelle demande d'autorisation : oublier le code_verifier PKCE d'un flux
+        // antérieur, que la lib ne nettoie jamais. Sans cela il est envoyé au
+        // fournisseur suivant, qui n'a pourtant reçu aucun code_challenge, et
+        // l'échange du code est refusé (#25).
+        OidcSessionState::forgetCodeVerifier();
 
         // Mode liaison (#137) : un utilisateur déjà connecté rattache un second
         // fournisseur. L'id lié provient de la session authentifiée — jamais du

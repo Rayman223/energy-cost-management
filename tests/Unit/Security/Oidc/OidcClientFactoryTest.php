@@ -149,6 +149,28 @@ final class OidcClientFactoryTest extends TestCase
         );
     }
 
+    /**
+     * Discord supporte PKCE S256 sans l'annoncer : sans ce complément, la lib
+     * n'envoie aucun code_challenge tout en transmettant un code_verifier, et
+     * l'échange du code est refusé sur « Code challenge failed » (#25).
+     */
+    public function testDiscoveryIsCompletedForDiscordOnly(): void
+    {
+        self::assertSame(
+            ['code_challenge_methods_supported' => ['S256']],
+            OidcClientFactory::discoveryOverrides('https://discord.com'),
+        );
+        self::assertSame(
+            ['code_challenge_methods_supported' => ['S256']],
+            OidcClientFactory::discoveryOverrides('https://canary.discord.com'),
+        );
+
+        // Les IdP qui décrivent correctement leurs capacités ne sont pas touchés.
+        self::assertSame([], OidcClientFactory::discoveryOverrides('https://accounts.google.com'));
+        self::assertSame([], OidcClientFactory::discoveryOverrides('https://auth.example.com/realms/x'));
+        self::assertSame([], OidcClientFactory::discoveryOverrides(''));
+    }
+
     public function testIsDiscordMatchesTheHostOnly(): void
     {
         self::assertTrue(OidcClientFactory::isDiscord('https://discord.com'));

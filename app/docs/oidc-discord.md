@@ -140,6 +140,7 @@ happened before the redirect to Discord; `stage=callback`, on the way back.
 
 | Symptom | Cause / fix |
 | --- | --- |
+| Linking Discord to an account signed in with another provider fails, log says *"Code challenge failed"* | The PKCE `code_verifier` of the previous sign-in was still in the session — the library never clears it — and was sent to Discord, which had received no `code_challenge` because its discovery document does not advertise PKCE. Fixed in the app: the verifier is cleared at each new authorisation, and Discord's discovery is completed with `code_challenge_methods_supported: ["S256"]`, which it does support. |
 | Sign-in fails **without showing the consent screen**, log says *"User did not authorize openid scope."* | The application was already authorised by that Discord user during an earlier attempt, with scopes that did not include `openid` — Discord then skips the consent screen and returns a token with no ID token. The app now sends `prompt=consent` for Discord, which forces a fresh consent. If it persists, revoke the app from **Discord → User Settings → Authorized Apps** and sign in again. |
 | `invalid_scope` on the consent screen | `profile` was requested. Use `['openid', 'identify']`, or drop the `scopes` line entirely and let the fallback apply. |
 | *"Invalid OAuth2 redirect_uri"* | The redirect registered in the OAuth2 tab ≠ the one the app sends. Match `https://<host><base>/auth/login` exactly: scheme, host, base path, no trailing slash, no query string. |

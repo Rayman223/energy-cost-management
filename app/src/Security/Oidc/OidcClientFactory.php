@@ -134,6 +134,13 @@ final class OidcClientFactory
             }
         }
 
+        // Complément de découverte, injecté APRÈS le document découvert : la lib
+        // fusionne (array_merge) et celui-ci l'écraserait sinon.
+        $overrides = self::discoveryOverrides($issuer);
+        if ($overrides !== []) {
+            $client->providerConfigParam($overrides);
+        }
+
         // Microsoft/Entra multi-tenant : l'issuer configuré (common/organizations/
         // consumers) ne correspond jamais à l'issuer réel des jetons, qui contient
         // le GUID du tenant de l'utilisateur. On assouplit la validation à tout
@@ -190,6 +197,25 @@ final class OidcClientFactory
         }
 
         return $clean === [] ? self::defaultScopes($issuer) : $clean;
+    }
+
+    /**
+     * Corrections à appliquer au document de découverte d'un IdP qui décrit mal
+     * ses propres capacités.
+     *
+     * Discord **supporte** PKCE S256 sans l'annoncer. Or la lib ne joint un
+     * `code_challenge` à la demande d'autorisation que si l'IdP le déclare — tout
+     * en envoyant au token endpoint le `code_verifier` qu'elle trouve en session,
+     * fût-il le résidu d'une connexion précédente ({@see OidcSessionState}).
+     * Discord recevait donc un verifier sans challenge et refusait l'échange sur
+     * « Code challenge failed » (#25). Déclarer la capacité rend le flux cohérent
+     * — et PKCE réellement actif.
+     *
+     * @return array<string, mixed> Vide quand la découverte de l'IdP se suffit.
+     */
+    public static function discoveryOverrides(string $issuer): array
+    {
+        return self::isDiscord($issuer) ? ['code_challenge_methods_supported' => ['S256']] : [];
     }
 
     /**
