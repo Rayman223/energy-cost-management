@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Integration;
 
 use App\Domain\TariffUnitRate;
+use App\Domain\UserProfile;
 use App\Repository\ElectricityReadingRepository;
 use App\Repository\StatisticsRepository;
 use App\Repository\TariffRepository;
@@ -441,11 +442,23 @@ final class StatisticsRepositoryDbTest extends DatabaseTestCase
             ->create('https://iss.test', $sub . '-' . uniqid(), 'test', 'Foyer ' . $sub)->id;
     }
 
+    /**
+     * Renseigne le pays du foyer.
+     *
+     * Passe par `updateProfile()` et non par un INSERT direct : `UserRepository::create()`
+     * pose déjà la ligne `user_profiles` (cf. UserRepository::create), dont `user_id`
+     * est la clé primaire. Un second INSERT violerait la contrainte.
+     */
     private function profile(int $userId, string $country): void
     {
-        $this->pdo()
-            ->prepare('INSERT INTO user_profiles (user_id, country, timezone, currency, locale) VALUES (:u, :c, :tz, :cur, :l)')
-            ->execute(['u' => $userId, 'c' => $country, 'tz' => 'UTC', 'cur' => 'EUR', 'l' => 'fr']);
+        (new UserRepository($this->pdo()))->updateProfile($userId, new UserProfile(
+            country: $country,
+            timezone: 'UTC',
+            currency: 'EUR',
+            biddingZone: null,
+            supplierMarkupPerKwh: 0.0,
+            locale: 'fr',
+        ));
     }
 
     private function optOut(int $userId): void

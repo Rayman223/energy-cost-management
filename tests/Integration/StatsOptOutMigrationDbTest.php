@@ -54,11 +54,13 @@ final class StatsOptOutMigrationDbTest extends DatabaseTestCase
         $users  = new UserRepository($this->pdo());
         $userId = $users->create('https://iss.test', 'optout-default', 'test', 'Testeur')->id;
 
-        // Profil écrit SANS mention de stats_opt_out, comme le ferait une ligne
-        // antérieure à la migration.
-        $this->pdo()
-            ->prepare('INSERT INTO user_profiles (user_id, country, timezone, currency, locale) VALUES (:u, :c, :tz, :cur, :l)')
-            ->execute(['u' => $userId, 'c' => 'BE', 'tz' => 'UTC', 'cur' => 'EUR', 'l' => 'fr']);
+        // `create()` pose la ligne user_profiles avec le seul user_id, laissant
+        // toutes les autres colonnes à leur DEFAULT — c'est exactement l'état
+        // d'une ligne antérieure à la migration, qui ne mentionnait pas encore
+        // stats_opt_out. Inutile de le simuler par un INSERT : ce serait d'ailleurs
+        // impossible, user_id étant la clé primaire de la table.
+        $this->pdo()->prepare('UPDATE user_profiles SET country = :c WHERE user_id = :u')
+            ->execute(['c' => 'BE', 'u' => $userId]);
 
         $profile = $users->getProfile($userId);
 
