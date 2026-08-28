@@ -41,6 +41,25 @@ réconcilier lors du découplage).
 | **Formulaire** | Sécurité + Basic Auth activés | Page de connexion bilingue (FR/EN, négociée via `?lang=` puis `Accept-Language`). |
 | **Identifiants invalides** | Échec d'authentification | Message d'erreur localisé (`Identifiants invalides.` / `Invalid credentials.`). |
 
+## `/stats` — Statistiques communautaires (#8)
+
+Seule page du site rendue à un visiteur **anonyme** tout en partageant la coquille
+applicative. Le rendu s'enrichit d'un bloc personnel quand une session existe,
+sans jamais l'exiger. Les agrégats sont k-anonymisés en SQL (seuil de 5 foyers
+contributeurs), et un membre peut se retirer depuis `/account`.
+
+| État | Déclencheur | Rendu attendu |
+|------|-------------|---------------|
+| **Anonyme** | Aucune session, mode OIDC actif | Blocs publics seuls ; en-tête sans navigation privée ni bouton de déconnexion ; encart « Se connecter ». **Aucun cookie de session n'est posé** (la session n'est sondée que si un cookie existe déjà). |
+| **Connecté, pays renseigné** | Session valide + `user_profiles.country` non nul | Bloc personnel EN PREMIER (tarif au kWh, consommation, percentile, coût réel), puis graphes 12 mois et par poste, puis les blocs publics. |
+| **Connecté, sans pays** | Session valide, `country` nul | Pas de bloc personnel : invite à compléter le profil, avec lien vers `/account`. Les blocs publics restent affichés. |
+| **Connecté, retiré des statistiques** | `stats_opt_out = 1` | Bloc personnel affiché normalement, précédé d'un avertissement : les chiffres restent visibles, mais ne comptent dans aucune moyenne. |
+| **Pays sous le seuil** | Moins de 5 foyers contributeurs dans le pays | Le pays est fondu dans « Autres pays » (aucune valeur, seulement un nombre de foyers) ; percentile masqué ; comparaison de moyenne à `—`. |
+| **Corpus insuffisant** | Aucun agrégat ne franchit le seuil | Message explicatif à la place des tableaux et graphes — jamais un tableau vide. |
+| **Erreur BDD** | Exception au bootstrap ou au chargement → `$dbError` | La page se rend quand même : bandeau d'erreur, sections à `—`, aucune trace d'exception. |
+| **Instance en Basic Auth** | Mode OIDC **désactivé** | La page N'EST PAS publique : `AuthGuard::protect()` s'applique comme sur toute autre page. Sans cela, `/stats` percerait l'allowlist IP d'une installation auto-hébergée. |
+| **Compte bloqué** | Session vivante mais `users.status <> 'active'` | Rendu anonyme : `AuthGuard::protect()` n'ayant pas tourné, la route vérifie `isActive()` elle-même. |
+
 ---
 
 ## Méthode de comparaison

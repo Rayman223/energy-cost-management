@@ -156,6 +156,14 @@ $csrf = \App\Security\Csrf::field();
       <p class="hint"><?= $this->te('account.no_dynamic_grid_hint') ?></p>
       <?php endif; ?>
       <?php endif; ?>
+      <?php // Contribution aux statistiques agrégées de /stats (#8). Case COCHÉE par
+            // défaut : le champ est nommé « contribuer », si bien qu'un POST sans lui
+            // vaut retrait — cf. la note dans app/routes/account.php. ?>
+      <label class="checkbox-row">
+        <input type="checkbox" name="stats_contribute" value="1"<?= $profile->statsOptOut ? '' : ' checked' ?>>
+        <?= $this->te('account.stats_contribute') ?>
+      </label>
+      <p class="hint"><?= $this->te('account.stats_contribute_hint', ['k' => \App\Repository\Contract\StatisticsRepositoryInterface::MIN_HOUSEHOLDS]) ?></p>
       <button type="submit"><?= $this->te('account.save_profile') ?></button>
     </form>
   </div>

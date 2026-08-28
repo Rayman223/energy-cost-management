@@ -112,6 +112,12 @@ $outbound = fn (string $url, string $labelKey): string =>
     <?= $items([
         'legal.privacy.purpose_service',
         'legal.privacy.purpose_security',
+        // Statistiques agrégées de /stats (#8). Traitement inconditionnel — il
+        // n'est pas subordonné à une option de configuration comme la publicité —
+        // et donc énuméré ici sans garde : le décrire est une obligation (RGPD
+        // art. 13), et le droit d'opposition qui l'accompagne n'a de sens que si
+        // l'intéressé sait que le traitement existe.
+        'legal.privacy.purpose_stats',
     ]) ?>
     <?php if ($adsEnabled): ?>
       <?= $items(['legal.privacy.purpose_ads']) ?>

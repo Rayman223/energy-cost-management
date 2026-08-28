@@ -1,0 +1,150 @@
+/* Statistiques communautaires (#8).
+   Layout (.wrap) et en-tête mutualisés dans app-header.css (#193) ; sélecteur
+   de langue dans lang-switcher.css. Toutes les couleurs viennent de tokens.css :
+   la page suit le thème clair/sombre sans règle propre. */
+
+  html { font-size: 16px; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    min-height: 100vh;
+    background-image: radial-gradient(circle, var(--dotgrid) 1px, transparent 1px);
+    background-size: 28px 28px;
+  }
+
+  /* ── Titres de section (mêmes proportions que le dashboard) ─────────────── */
+  .section-header {
+    display: flex; align-items: baseline; gap: 12px;
+    margin: 36px 0 16px; flex-wrap: wrap;
+  }
+  .section-title {
+    font-size: .78rem; font-weight: 700; letter-spacing: .15em;
+    text-transform: uppercase; color: var(--muted);
+  }
+  .section-line { flex: 1; height: 1px; background: var(--border); min-width: 40px; }
+  .deltas-range { font-family: var(--mono); font-size: .72rem; color: var(--muted); }
+
+  /* ── Cards de comparaison ──────────────────────────────────────────────── */
+  .stat-cards {
+    display: grid; gap: 12px;
+    grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  }
+  .stat-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 18px 20px;
+  }
+  /* Le coût réel du kWh n'est comparé à rien (il inclut l'abonnement) : atténué
+     pour ne pas se lire comme un second indicateur de comparaison. */
+  .stat-card--muted { background: var(--surface2); }
+
+  .stat-label {
+    font-size: .72rem; font-weight: 700; letter-spacing: .1em;
+    text-transform: uppercase; color: var(--muted); margin-bottom: 10px;
+  }
+  .stat-value {
+    font-family: var(--mono); font-size: 1.5rem; font-weight: 700;
+    color: var(--text-strong); line-height: 1.2;
+  }
+  .stat-ref {
+    margin-top: 8px; font-family: var(--mono);
+    font-size: .74rem; color: var(--muted); line-height: 1.6;
+  }
+
+  /* Le sens « favorable » n'est pas universel, mais sur cette page tous les
+     indicateurs comparés sont des coûts et des consommations : plus bas vaut
+     mieux. Une hausse est donc signalée en rouge. */
+  .stat-delta { font-weight: 700; margin-left: 6px; }
+  .stat-delta--up   { color: var(--red); }
+  .stat-delta--down { color: var(--green); }
+  .stat-delta--flat,
+  .stat-delta--none { color: var(--muted); }
+
+  /* ── Graphiques ────────────────────────────────────────────────────────── */
+  .chart-grid {
+    display: grid; gap: 12px; margin-top: 20px;
+    grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+  }
+  .chart-box {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 18px 20px;
+  }
+  .chart-box h3 {
+    font-size: .72rem; font-weight: 700; letter-spacing: .1em;
+    text-transform: uppercase; color: var(--muted);
+    margin: 0 0 14px;
+  }
+
+  /* ── Invitations (se connecter, renseigner son pays, corpus insuffisant) ── */
+  .cta-box {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 22px 24px; margin-top: 16px;
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 16px; flex-wrap: wrap;
+  }
+  .cta-box p { margin: 0; color: var(--text); line-height: 1.6; }
+  .cta {
+    display: inline-block; padding: 10px 20px; border-radius: 8px;
+    background: var(--amber); color: var(--on-amber);
+    font-weight: 700; font-size: .85rem; text-decoration: none;
+    white-space: nowrap;
+  }
+  .cta:hover { opacity: .93; }
+  .cta:focus-visible { outline: 2px solid var(--amber); outline-offset: 3px; }
+
+  /* ── Tableau des prix ──────────────────────────────────────────────────── */
+  /* Conteneur scrollable : la page elle-même ne doit jamais défiler
+     horizontalement sur mobile. */
+  .table-scroll {
+    margin-top: 16px; overflow-x: auto;
+    background: var(--surface);
+    border: 1px solid var(--border); border-radius: 10px;
+  }
+  .stats-table { width: 100%; border-collapse: collapse; font-size: .88rem; }
+  .stats-table thead th {
+    text-align: left; padding: 12px 16px;
+    font-family: var(--mono); font-size: .7rem; letter-spacing: .08em;
+    text-transform: uppercase; color: var(--muted);
+    border-bottom: 1px solid var(--border); white-space: nowrap;
+  }
+  .stats-table td {
+    padding: 11px 16px; border-bottom: 1px solid var(--border);
+    font-family: var(--mono); color: var(--text); white-space: nowrap;
+  }
+  .stats-table tbody tr:last-child td { border-bottom: none; }
+  /* Le regroupement « Autres » n'est pas un pays : atténué pour qu'on ne le lise
+     pas comme une ligne de même nature que les autres. */
+  .row-other td { color: var(--muted); font-style: italic; }
+
+  /* ── Note méthodologique ───────────────────────────────────────────────── */
+  .method-notes {
+    margin: 0; padding: 18px 20px 18px 38px;
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 10px;
+    font-size: .82rem; color: var(--muted); line-height: 1.9;
+  }
+  .method-notes a { color: var(--amber); }
+
+  .hint {
+    font-size: .78rem; color: var(--muted);
+    line-height: 1.6; margin: 10px 0 0;
+  }
+
+  .error-banner {
+    background: var(--red-dim); border: 1px solid rgba(245,101,101,.3);
+    border-radius: 8px; padding: 14px 18px; margin-top: 24px;
+    font-family: var(--mono); font-size: .8rem; color: var(--red);
+    line-height: 1.6;
+  }
+  .error-banner strong { display: block; margin-bottom: 4px; }
+
+  @media (max-width: 700px) {
+    .chart-grid { grid-template-columns: 1fr; }
+    .cta-box { flex-direction: column; align-items: flex-start; }
+  }

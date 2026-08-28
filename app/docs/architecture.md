@@ -54,6 +54,17 @@ graphique, tables gaz/eau).
   `MonthlyConsumptionInterpolator` (interpolation à minuit de la conso mensuelle,
   partagée gaz/eau/électricité), `ElectricityReadingMerger` (fusion des relevés),
   `TariffLineCatalog` (source unique des lignes tarifaires).
+- **Un seul repository non scopé par `user_id`** : `StatisticsRepository` (#8),
+  qui alimente `/stats`. Partout ailleurs, le `user_id` injecté au constructeur
+  rend une lecture inter-tenants structurellement impossible ; là, c'est le SQL
+  seul qui tient la garantie. Trois règles, à faire respecter en revue de toute
+  modification : aucune méthode ne renvoie de valeur attribuable à un foyer ; tout
+  agrégat par pays applique le seuil de k-anonymat **en SQL** (jamais en
+  post-traitement PHP, où un oubli d'appel suffirait à publier une ligne isolée) ;
+  un foyer retiré sort du numérateur **et** du dénominateur du seuil. Les règles
+  partagées avec le calcul PHP (quelles composantes font un €/kWh) sont
+  **générées** depuis les enums par `Repository\Sql\TariffLineSql`, pour que les
+  deux chemins ne puissent pas diverger.
 - **Pipeline d'assets** : `App\Support\Assets::url()` ajoute un cache-busting
   `?v=<mtime>` sans build tooling.
 - **Qualité** : PHPStan **niveau 6**, suite PHPUnit, CI lint + PHPStan + tests sur

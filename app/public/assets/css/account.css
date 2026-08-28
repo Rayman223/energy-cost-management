@@ -28,3 +28,12 @@ th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--bord
 .btn-provider:hover { border-color: var(--amber); }
 .btn-provider-icon { flex: 0 0 auto; }
 .identity-primary { color: var(--muted); font-weight: 400; }
+
+/* Contribution aux statistiques agrégées (#8) : la case et son libellé sur une
+   même ligne, alignés sur la ligne de base du texte plutôt qu'au centre — le
+   libellé peut tenir sur deux lignes en néerlandais et en allemand. */
+.checkbox-row {
+  display: flex; align-items: flex-start; gap: 10px;
+  margin-top: 16px; font-weight: 400; line-height: 1.5;
+}
+.checkbox-row input[type="checkbox"] { margin-top: .2em; flex: 0 0 auto; }

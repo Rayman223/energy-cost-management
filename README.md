@@ -68,6 +68,10 @@ dev tooling and the OIDC library only.
 - **Administration** (`admin.php`, admins only) — manage members (role, status) and the shared tariff catalog.
 - **Dashboard** — live consumption, monthly deltas, cost estimates, 30/60/90-day
   history, dynamic vs. regulated price comparison.
+- **Community statistics** (`/stats`, public) — average price per kWh and average
+  consumption per country, plus a personal comparison when signed in. Aggregates
+  are k-anonymised (a country appears only from 5 contributing households) and
+  every member can opt out from their account page.
 - **EnergyID sync** (optional, BE/NL) — daily push of readings via the V2
   provisioning protocol.
 
@@ -293,13 +297,20 @@ electricity) applies from its date onwards instead of rewriting the past.
 
 | URL | Description |
 |-----|-------------|
-| `/` (`index.php`) | Dashboard: live, monthly deltas, cost estimates, history |
-| `/tariffs.php` | Tariff grids (personal + shared catalog for admins) |
-| `/account.php` | Profile, API tokens, EnergyID opt-in, GDPR export/delete, self-service import |
-| `/admin.php` | Admin: members (role/status) + import on behalf of a user |
-| `/login.php`, `/auth/login.php`, `/auth/logout.php` | Authentication (Basic / OIDC) |
+| `/` | Dashboard: live, monthly deltas, cost estimates, history |
+| `/meter-readings` | Manual index entry (electricity registers, gas, water) |
+| `/tariffs` | Tariff grids (personal + shared catalog for admins) |
+| `/reconciliation` | Bill reconciliation: invoiced amounts vs. computed cost |
+| `/advances` | Advance payment schedules and their balance |
+| `/stats` | Community statistics — average price and consumption per country, k-anonymised at 5 households. **Public**; adds a personal comparison when signed in |
+| `/account` | Profile, API tokens, EnergyID opt-in, statistics opt-out, GDPR export/delete, self-service import |
+| `/admin` | Admin: members (role/status) + import on behalf of a user |
+| `/api-guide` | Ingestion API guide (tokens, examples) |
+| `/login`, `/auth/login`, `/auth/logout` | Authentication (Basic / OIDC) |
 | `/privacy`, `/terms`, `/cookies`, `/legal-notice` | Legal pages (localized): GDPR notice, terms, cookie policy, publisher identity |
-| `/api.php` | JSON API — ingestion (`ingest_*`) and read/cost endpoints. See [`app/docs/api-contract.md`](app/docs/api-contract.md) |
+| `/api` | JSON API — ingestion (`ingest_*`) and read/cost endpoints. See [`app/docs/api-contract.md`](app/docs/api-contract.md) |
+
+Legacy `/xxx.php` URLs redirect (308) to their clean equivalent.
 
 ---
 

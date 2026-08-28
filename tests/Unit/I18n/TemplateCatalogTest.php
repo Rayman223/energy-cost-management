@@ -43,15 +43,17 @@ final class TemplateCatalogTest extends TestCase
      * d'appel sont un sous-ensemble des littéraux ressemblant à une clé, donc
      * neutraliser la première regex ne réduirait pas le total.
      *
-     * Seuils placés sous les totaux observés (268 / 396 / 45) avec assez de marge
-     * pour qu'une suppression de libellé ne fasse pas échouer la CI.
+     * Seuils placés sous les totaux observés (419 / 580 / 54) avec assez de marge
+     * pour qu'une suppression de libellé ne fasse pas échouer la CI. À remonter
+     * quand le catalogue grossit : laissés loin en arrière, ils cesseraient de
+     * voir une regex qui ne rapporterait plus que la moitié des clés.
      *
      * @var array<string, int>
      */
     private const MINIMUM_KEYS_PER_SOURCE = [
-        'callSiteKeys'    => 240,
-        'keyLikeLiterals' => 350,
-        'derivedKeys'     => 40,
+        'callSiteKeys'    => 380,
+        'keyLikeLiterals' => 520,
+        'derivedKeys'     => 48,
     ];
 
     /**
