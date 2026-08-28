@@ -30,6 +30,7 @@ return [
     'auth.sign_out'        => 'Abmelden',
     'auth.signed_out'      => 'Sie wurden abgemeldet.',
     'auth.error'           => 'Anmeldung fehlgeschlagen. Bitte erneut versuchen.',
+    'auth.error_reference' => 'Vorgangsnummer: {reference} (bitte der Website-Administration mitteilen, die sie im Serverprotokoll findet).',
     'auth.welcome'         => 'Willkommen, {name}!',
     'auth.heading'         => 'Authentifizierung erforderlich',
     'auth.username'        => 'Benutzername',

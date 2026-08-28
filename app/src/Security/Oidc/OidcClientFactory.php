@@ -106,7 +106,18 @@ final class OidcClientFactory
         }
 
         $client->setCodeChallengeMethod('S256');
-        $client->addScope(self::scopesFromConfig($config));
+
+        $client->addScope(self::additionalScopes($config));
+
+        // Discord : exiger un consentement frais. Une application déjà autorisée
+        // par l'utilisateur — typiquement lors d'un essai antérieur, avec des
+        // scopes qui n'incluaient pas « openid » — voit sinon son écran de
+        // consentement court-circuité, et Discord renvoie un jeton SANS id_token :
+        // la lib échoue alors sur « User did not authorize openid scope. » et
+        // l'utilisateur ne voit qu'un échec de connexion (#25).
+        if (self::isDiscord($issuer)) {
+            $client->addAuthParam(['prompt' => 'consent']);
+        }
 
         // Découverte OIDC mise en cache par issuer : injectée telle quelle, la lib
         // ne re-télécharge plus le well-known à chaque initiation/callback. On EXCLUT
@@ -182,6 +193,28 @@ final class OidcClientFactory
     }
 
     /**
+     * Scopes à déclarer à la lib, c'est-à-dire ceux de la config **privés de
+     * `openid`** : la lib le rajoute systématiquement en fin de liste
+     * (`requestAuthorization()` → `array_merge($this->scopes, ['openid'])`). Le
+     * lui passer produirait un `scope=openid identify openid` dupliqué, que les
+     * IdP stricts refusent en `invalid_scope` (#25).
+     *
+     * @param array<string, mixed> $config Bloc d'un fournisseur.
+     * @return list<string>
+     */
+    public static function additionalScopes(array $config): array
+    {
+        $additional = [];
+        foreach (self::scopesFromConfig($config) as $scope) {
+            if ($scope !== 'openid') {
+                $additional[] = $scope;
+            }
+        }
+
+        return $additional;
+    }
+
+    /**
      * Repli quand `scopes` n'est pas configuré. `openid` + `profile` partout,
      * SAUF Discord : son OAuth2 ignore le scope OIDC `profile` et rejette la
      * demande en `invalid_scope` — l'équivalent maison est `identify`, qui
@@ -192,11 +225,17 @@ final class OidcClientFactory
      */
     private static function defaultScopes(string $issuer): array
     {
-        $host = parse_url($issuer, PHP_URL_HOST);
-        if (is_string($host) && ($host === 'discord.com' || str_ends_with($host, '.discord.com'))) {
-            return ['openid', 'identify'];
-        }
+        return self::isDiscord($issuer) ? ['openid', 'identify'] : ['openid', 'profile'];
+    }
 
-        return ['openid', 'profile'];
+    /**
+     * L'issuer désigne-t-il Discord ? Comparaison sur l'hôte seul : un
+     * `https://notdiscord.com` ne doit pas hériter des adaptations Discord.
+     */
+    public static function isDiscord(string $issuer): bool
+    {
+        $host = parse_url($issuer, PHP_URL_HOST);
+
+        return is_string($host) && ($host === 'discord.com' || str_ends_with($host, '.discord.com'));
     }
 }

@@ -30,6 +30,7 @@ return [
     'auth.sign_out'        => 'Afmelden',
     'auth.signed_out'      => 'U bent afgemeld.',
     'auth.error'           => 'Aanmelden mislukt. Probeer het opnieuw.',
+    'auth.error_reference' => 'Incidentreferentie: {reference} (geef deze door aan de sitebeheerder, die ze in het serverlogboek terugvindt).',
     'auth.welcome'         => 'Welkom, {name}!',
     'auth.heading'         => 'Authenticatie vereist',
     'auth.username'        => 'Gebruikersnaam',

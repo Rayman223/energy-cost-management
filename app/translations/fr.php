@@ -36,6 +36,7 @@ return [
     'auth.sign_out'        => 'Se déconnecter',
     'auth.signed_out'      => 'Vous êtes déconnecté.',
     'auth.error'           => 'La connexion a échoué. Veuillez réessayer.',
+    'auth.error_reference' => 'Référence de l\'incident : {reference} (à communiquer à l\'administrateur du site, qui la retrouvera dans le journal du serveur).',
     'auth.welcome'         => 'Bienvenue, {name} !',
     'auth.heading'         => 'Authentification requise',
     'auth.username'        => 'Nom d\'utilisateur',

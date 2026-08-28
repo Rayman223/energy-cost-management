@@ -117,6 +117,48 @@ final class OidcClientFactoryTest extends TestCase
     }
 
     /**
+     * La lib ajoute « openid » d'office à la liste qu'on lui déclare : le garder
+     * de notre côté enverrait un scope dupliqué (« openid identify openid »),
+     * refusé par les IdP stricts (#25).
+     */
+    public function testAdditionalScopesDropOpenid(): void
+    {
+        self::assertSame(
+            ['identify'],
+            OidcClientFactory::additionalScopes(['issuer' => 'https://discord.com']),
+        );
+        self::assertSame(
+            ['profile'],
+            OidcClientFactory::additionalScopes(['issuer' => 'https://accounts.google.com']),
+        );
+        // Doublon explicite en config : « openid » disparaît quelle que soit sa place.
+        self::assertSame(
+            ['email', 'profile'],
+            OidcClientFactory::additionalScopes([
+                'issuer' => 'https://auth.example.com/realms/x',
+                'scopes' => ['email', 'openid', 'profile'],
+            ]),
+        );
+        // Config réduite à « openid » : plus rien à déclarer, la lib s'en charge.
+        self::assertSame(
+            [],
+            OidcClientFactory::additionalScopes([
+                'issuer' => 'https://auth.example.com/realms/x',
+                'scopes' => ['openid'],
+            ]),
+        );
+    }
+
+    public function testIsDiscordMatchesTheHostOnly(): void
+    {
+        self::assertTrue(OidcClientFactory::isDiscord('https://discord.com'));
+        self::assertTrue(OidcClientFactory::isDiscord('https://canary.discord.com'));
+        self::assertFalse(OidcClientFactory::isDiscord('https://notdiscord.com'));
+        self::assertFalse(OidcClientFactory::isDiscord('https://accounts.google.com'));
+        self::assertFalse(OidcClientFactory::isDiscord(''));
+    }
+
+    /**
      * Discord ne connaît pas le scope OIDC « profile » (invalid_scope) : à défaut
      * de scopes configurés, le repli doit demander « identify » à la place, sans
      * quoi une config Discord minimale échouerait dès l'écran de consentement.
