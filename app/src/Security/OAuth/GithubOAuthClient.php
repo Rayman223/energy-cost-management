@@ -52,13 +52,23 @@ final class GithubOAuthClient
      * GitHub Enterprise Server (hôte propre à chaque organisation) n'est pas
      * couvert : il faudrait au minimum rendre les trois endpoints configurables.
      *
+     * L'hôte est comparé en minuscules : un `https://GitHub.com` recopié depuis
+     * la doc est un hôte parfaitement valide (RFC 3986 §3.2.2, insensible à la
+     * casse) et doit emprunter ce connecteur — sinon il retomberait sur la lib
+     * OIDC, dont la découverte échoue en 404 sur github.com.
+     *
      * @param array<string, mixed> $config Bloc d'un fournisseur.
      */
     public static function supports(array $config): bool
     {
         $host = parse_url((string) ($config['issuer'] ?? ''), PHP_URL_HOST);
+        if (!is_string($host)) {
+            return false;
+        }
 
-        return is_string($host) && ($host === 'github.com' || str_ends_with($host, '.github.com'));
+        $host = strtolower($host);
+
+        return $host === 'github.com' || str_ends_with($host, '.github.com');
     }
 
     /**

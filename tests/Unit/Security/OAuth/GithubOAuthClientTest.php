@@ -20,6 +20,10 @@ final class GithubOAuthClientTest extends TestCase
         self::assertTrue(GithubOAuthClient::supports(['issuer' => 'https://github.com']));
         self::assertTrue(GithubOAuthClient::supports(['issuer' => 'https://www.github.com']));
 
+        // L'hôte est insensible à la casse (RFC 3986) : un issuer recopié en
+        // « GitHub.com » doit emprunter le connecteur, pas la lib OIDC.
+        self::assertTrue(GithubOAuthClient::supports(['issuer' => 'https://GitHub.com']));
+
         // Un hôte qui se termine par « github.com » sans en être un sous-domaine
         // ne doit pas emprunter le flux GitHub.
         self::assertFalse(GithubOAuthClient::supports(['issuer' => 'https://notgithub.com']));
