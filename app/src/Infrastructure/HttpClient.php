@@ -7,6 +7,15 @@ namespace App\Infrastructure;
 final class HttpClient
 {
     /**
+     * User-Agent envoyé par défaut. Sans en-tête `User-Agent`, cURL n'en envoie
+     * aucun — et plusieurs API le refusent : Discord (protégé par Cloudflare)
+     * répond 403 à une requête anonyme, ce qui faisait échouer silencieusement
+     * la mise en cache de sa découverte OIDC (#25). Un appelant peut le
+     * remplacer en passant sa propre en-tête `User-Agent`.
+     */
+    private const USER_AGENT = 'energy-cost-management (+https://github.com/Rayman223/energy-cost-management)';
+
+    /**
      * Requête HTTP GET simple. Le corps brut est laissé tel quel (l'appelant
      * décode JSON, parse XML, etc.). Même forme de retour que postJson().
      *
@@ -20,6 +29,9 @@ final class HttpClient
         $curlHeaders = [];
         foreach ($headers as $name => $value) {
             $curlHeaders[] = $name . ': ' . $value;
+        }
+        if (!self::hasUserAgent($headers)) {
+            $curlHeaders[] = 'User-Agent: ' . self::USER_AGENT;
         }
 
         $ch = curl_init($url);
@@ -68,6 +80,9 @@ final class HttpClient
         foreach ($headers as $name => $value) {
             $curlHeaders[] = $name . ': ' . $value;
         }
+        if (!self::hasUserAgent($headers)) {
+            $curlHeaders[] = 'User-Agent: ' . self::USER_AGENT;
+        }
 
         $ch = curl_init($url);
         curl_setopt_array($ch, [
@@ -101,5 +116,22 @@ final class HttpClient
             'body' => is_string($body) ? $body : '',
             'headers' => $responseHeaders,
         ];
+    }
+
+    /**
+     * L'appelant fournit-il déjà un User-Agent ? (nom d'en-tête insensible à la
+     * casse, comme le veut HTTP.)
+     *
+     * @param array<string,string> $headers
+     */
+    private static function hasUserAgent(array $headers): bool
+    {
+        foreach (array_keys($headers) as $name) {
+            if (strcasecmp($name, 'User-Agent') === 0) {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

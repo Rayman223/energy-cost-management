@@ -86,6 +86,16 @@ included — as `issuer`. Config: same shape as Keycloak, with
 
 ## Troubleshooting
 
+A failed sign-in shows a generic message plus an **incident reference**; the real
+cause is written to the PHP error log on the same reference:
+
+```
+OIDC auth failed [3f9c1a02] provider=keycloak stage=callback Jumbojett\OpenIDConnectClientException: <cause>
+```
+
+`stage=initiation` = failure before the redirect to the IdP, `stage=callback` = on
+the way back.
+
 | Symptom | Cause / fix |
 | --- | --- |
 | Discovery / connection error at sign-in | `<issuer>/.well-known/openid-configuration` unreachable or wrong. Verify the exact issuer URL (realm path, trailing slash where the IdP requires it). |

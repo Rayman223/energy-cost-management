@@ -127,8 +127,20 @@ SELECT provider, display_name, created_at FROM users ORDER BY id;
 
 ## Troubleshooting
 
+Every failed sign-in now logs its actual cause to the PHP error log and shows the
+user a short **incident reference**; the matching log line looks like:
+
+```
+OIDC auth failed [3f9c1a02] provider=discord stage=callback Jumbojett\OpenIDConnectClientException: User did not authorize openid scope.
+```
+
+Read it with `docker logs <container>` (or wherever your PHP error log goes) and
+grep for the reference the user gives you. `stage=initiation` means the failure
+happened before the redirect to Discord; `stage=callback`, on the way back.
+
 | Symptom | Cause / fix |
 | --- | --- |
+| Sign-in fails **without showing the consent screen**, log says *"User did not authorize openid scope."* | The application was already authorised by that Discord user during an earlier attempt, with scopes that did not include `openid` — Discord then skips the consent screen and returns a token with no ID token. The app now sends `prompt=consent` for Discord, which forces a fresh consent. If it persists, revoke the app from **Discord → User Settings → Authorized Apps** and sign in again. |
 | `invalid_scope` on the consent screen | `profile` was requested. Use `['openid', 'identify']`, or drop the `scopes` line entirely and let the fallback apply. |
 | *"Invalid OAuth2 redirect_uri"* | The redirect registered in the OAuth2 tab ≠ the one the app sends. Match `https://<host><base>/auth/login` exactly: scheme, host, base path, no trailing slash, no query string. |
 | Callback arrives as `http://` and is rejected | Reverse proxy not forwarding `X-Forwarded-Proto`; set `redirect_uri` explicitly in the config, or fix the proxy header. |
