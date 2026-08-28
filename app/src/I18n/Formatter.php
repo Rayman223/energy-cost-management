@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\I18n;
 
+use App\Domain\Currency;
 use DateTimeInterface;
 
 /**
@@ -13,12 +14,6 @@ use DateTimeInterface;
  */
 final class Formatter
 {
-    /** Symboles de repli quand ext-intl est absent. */
-    private const SYMBOLS = [
-        'EUR' => '€', 'USD' => '$', 'GBP' => '£', 'CHF' => 'CHF',
-        'PLN' => 'zł', 'SEK' => 'kr', 'DKK' => 'kr', 'NOK' => 'kr', 'CZK' => 'Kč', 'HUF' => 'Ft',
-    ];
-
     /**
      * Formatters intl mémoïsés (construction coûteuse) : un `NumberFormatter`
      * CURRENCY par devise, un DECIMAL par nombre de décimales, un
@@ -47,7 +42,7 @@ final class Formatter
             }
         }
 
-        return number_format($amount, 2, '.', ' ') . ' ' . (self::SYMBOLS[$currency] ?? $currency);
+        return number_format($amount, 2, '.', ' ') . ' ' . (Currency::symbol($currency));
     }
 
     /**
@@ -71,7 +66,7 @@ final class Formatter
             }
         }
 
-        return self::SYMBOLS[$currency] ?? $currency;
+        return Currency::symbol($currency);
     }
 
     public function number(float $value, int $decimals = 2): string

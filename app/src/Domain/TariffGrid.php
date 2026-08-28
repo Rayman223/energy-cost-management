@@ -111,7 +111,10 @@ final class TariffGrid
      * Représentation destinée au moteur de calcul générique : taux de TVA + liste
      * ordonnée des lignes typées.
      *
-     * @return array{vat_rate: float, lines: list<array{key: string, kind: string, amount: float, label: string|null, category: string}>}
+     * La devise accompagne le tarif : elle porte les unités affichées des lignes
+     * calculées (« CHF/kWh » et non « €/kWh »).
+     *
+     * @return array{vat_rate: float, currency: string, lines: list<array{key: string, kind: string, amount: float, label: string|null, category: string}>}
      */
     public function toCalculationTariff(): array
     {
@@ -126,6 +129,6 @@ final class TariffGrid
             ];
         }
 
-        return ['vat_rate' => $this->vatRate, 'lines' => $lines];
+        return ['vat_rate' => $this->vatRate, 'currency' => $this->currency, 'lines' => $lines];
     }
 }

@@ -76,7 +76,26 @@ final class ComponentKindTest extends TestCase
 
     public function testSpotCoefficientIsDimensionlessWhileOffsetIsPerKwh(): void
     {
-        self::assertSame('×', ComponentKind::SpotCoefficient->unit('electricity'));
-        self::assertSame('€/kWh', ComponentKind::SpotOffset->unit('electricity'));
+        self::assertSame('×', ComponentKind::SpotCoefficient->unit('electricity', 'EUR'));
+        self::assertSame('€/kWh', ComponentKind::SpotOffset->unit('electricity', 'EUR'));
+    }
+
+    /**
+     * Le symbole suit la devise de la grille : facturer en CHF et afficher
+     * « €/kWh » induirait l'utilisateur en erreur.
+     */
+    public function testUnitFollowsTheGridCurrency(): void
+    {
+        self::assertSame('CHF/kWh', ComponentKind::EnergyFlat->unit('electricity', 'CHF'));
+        self::assertSame('$/mois', ComponentKind::FixedMonthly->unit('electricity', 'USD'));
+        self::assertSame('£/an', ComponentKind::FixedAnnual->unit('electricity', 'GBP'));
+        self::assertSame('zł/m³', ComponentKind::PerM3->unit('water', 'PLN'));
+        self::assertSame('kr/m³', ComponentKind::PerKwh->unit('water', 'SEK'));
+
+        // Devise hors table : le code ISO reste lisible et sans ambiguïté.
+        self::assertSame('RON/kWh', ComponentKind::EnergyT1->unit('electricity', 'RON'));
+
+        // Le multiplicateur d'indexation n'a pas de dimension, devise comprise.
+        self::assertSame('×', ComponentKind::SpotCoefficient->unit('electricity', 'CHF'));
     }
 }

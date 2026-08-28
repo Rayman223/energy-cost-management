@@ -174,7 +174,7 @@ $energyLabels = [
       ?>
       <tr>
         <td><?= $this->e($lbl) ?></td>
-        <td><?= number_format($line->amount, 7) ?> <?= $this->e($kind->unit($g->energyType)) ?></td>
+        <td><?= number_format($line->amount, 7) ?> <?= $this->e($kind->unit($g->energyType, $g->currency)) ?></td>
       </tr>
       <?php endforeach; ?>
     </table>
