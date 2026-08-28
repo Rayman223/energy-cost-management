@@ -23,6 +23,7 @@ use App\Security\AccountProvisioner;
 use App\Security\AuthGuard;
 use App\Security\AuthSession;
 use App\Security\IdentityLinker;
+use App\Security\Oidc\OidcAuthFailure;
 use App\Security\Oidc\OidcClientFactory;
 use App\Security\Oidc\OidcDiscoveryCache;
 use App\Security\Oidc\OidcDisplayName;
@@ -198,6 +199,17 @@ try {
         }
     }
 
+    // Journaliser la cause : la page ci-dessous reste muette pour le visiteur,
+    // mais l'admin doit pouvoir diagnostiquer (#25). La référence relie l'écran
+    // à la ligne de log.
+    $reference = OidcAuthFailure::reference();
+    error_log(OidcAuthFailure::describe(
+        $reference,
+        $e,
+        isset($key) && is_string($key) ? $key : '',
+        isset($isCallback) && $isCallback === true,
+    ));
+
     $i18n = $config['i18n'] ?? [];
     $available = ['fr', 'en'];
     $default = 'fr';
@@ -224,12 +236,18 @@ try {
 
     $translator = new Translator(__DIR__ . '/../../translations', $locale, $default);
 
+    $title = htmlspecialchars($translator->t('auth.error'), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+    $hint = htmlspecialchars(
+        $translator->t('auth.error_reference', ['reference' => $reference]),
+        ENT_QUOTES | ENT_SUBSTITUTE,
+        'UTF-8',
+    );
+
     http_response_code(400);
     header('Content-Type: text/html; charset=utf-8');
-    echo '<!doctype html><html><head><meta charset="utf-8"><title>'
-        . htmlspecialchars($translator->t('auth.error'), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8')
-        . '</title></head><body><p>'
-        . htmlspecialchars($translator->t('auth.error'), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8')
+    echo '<!doctype html><html><head><meta charset="utf-8"><title>' . $title
+        . '</title></head><body><p>' . $title
+        . '</p><p><small>' . $hint . '</small>'
         . '</p><p><a href="' . htmlspecialchars($home, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . '">&larr;</a></p></body></html>';
     exit;
 }

@@ -30,6 +30,7 @@ return [
     'auth.sign_out'        => 'Sign out',
     'auth.signed_out'      => 'You have been signed out.',
     'auth.error'           => 'Sign-in failed. Please try again.',
+    'auth.error_reference' => 'Incident reference: {reference} (give it to the site administrator, who will find it in the server log).',
     'auth.welcome'         => 'Welcome, {name}!',
     'auth.heading'         => 'Authentication required',
     'auth.username'        => 'Username',
