@@ -24,9 +24,73 @@ final class HttpClient
      */
     public function get(string $url, int $timeout = 15, array $headers = []): array
     {
+        return $this->send($url, [CURLOPT_HTTPGET => true], $timeout, $headers);
+    }
+
+    /**
+     * @param array<array-key, mixed> $payload  Corps JSON : objet (assoc) ou liste de mesures.
+     * @param array<string,string> $headers
+     * @return array<string, mixed>
+     */
+    public function postJson(string $url, array $payload, int $timeout = 15, array $headers = []): array
+    {
+        return $this->send(
+            $url,
+            [
+                CURLOPT_POST       => true,
+                CURLOPT_POSTFIELDS => json_encode($payload, JSON_THROW_ON_ERROR),
+            ],
+            $timeout,
+            $headers,
+            'application/json',
+        );
+    }
+
+    /**
+     * Requête POST `application/x-www-form-urlencoded`. Pendant de postJson()
+     * pour les API qui n'acceptent pas le JSON : le token endpoint OAuth 2.0
+     * (RFC 6749 §4.1.3), dont celui de GitHub (#24), attend un corps encodé en
+     * formulaire. Même forme de retour que les autres méthodes.
+     *
+     * @param array<string, string> $fields  Paramètres du corps (encodés ici).
+     * @param array<string, string> $headers
+     * @return array<string, mixed>
+     */
+    public function postForm(string $url, array $fields, int $timeout = 15, array $headers = []): array
+    {
+        return $this->send(
+            $url,
+            [
+                CURLOPT_POST       => true,
+                CURLOPT_POSTFIELDS => http_build_query($fields, '', '&', PHP_QUERY_RFC1738),
+            ],
+            $timeout,
+            $headers,
+            'application/x-www-form-urlencoded',
+        );
+    }
+
+    /**
+     * Exécution commune aux trois verbes : en-têtes (dont le User-Agent par
+     * défaut), collecte des en-têtes de réponse et forme du retour. Seules les
+     * options propres au verbe (`$curlOptions`) et le `Content-Type` du corps
+     * varient d'un appelant à l'autre.
+     *
+     * @param array<int, mixed>    $curlOptions Options cURL propres au verbe.
+     * @param array<string,string> $headers     En-têtes de l'appelant (ajoutés après le Content-Type).
+     * @param string|null          $contentType Type du corps envoyé, `null` pour une requête sans corps.
+     * @return array<string, mixed>
+     */
+    private function send(
+        string $url,
+        array $curlOptions,
+        int $timeout,
+        array $headers,
+        ?string $contentType = null,
+    ): array {
         $responseHeaders = [];
 
-        $curlHeaders = [];
+        $curlHeaders = $contentType !== null ? ['Content-Type: ' . $contentType] : [];
         foreach ($headers as $name => $value) {
             $curlHeaders[] = $name . ': ' . $value;
         }
@@ -35,9 +99,8 @@ final class HttpClient
         }
 
         $ch = curl_init($url);
-        curl_setopt_array($ch, [
+        curl_setopt_array($ch, $curlOptions + [
             CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_HTTPGET        => true,
             CURLOPT_HTTPHEADER     => $curlHeaders,
             CURLOPT_TIMEOUT        => $timeout,
             CURLOPT_HEADERFUNCTION => static function ($curl, string $headerLine) use (&$responseHeaders): int {
@@ -63,57 +126,6 @@ final class HttpClient
             'status'  => $status,
             'error'   => $error,
             'body'    => is_string($body) ? $body : '',
-            'headers' => $responseHeaders,
-        ];
-    }
-
-    /**
-     * @param array<array-key, mixed> $payload  Corps JSON : objet (assoc) ou liste de mesures.
-     * @param array<string,string> $headers
-     * @return array<string, mixed>
-     */
-    public function postJson(string $url, array $payload, int $timeout = 15, array $headers = []): array
-    {
-        $responseHeaders = [];
-
-        $curlHeaders = ['Content-Type: application/json'];
-        foreach ($headers as $name => $value) {
-            $curlHeaders[] = $name . ': ' . $value;
-        }
-        if (!self::hasUserAgent($headers)) {
-            $curlHeaders[] = 'User-Agent: ' . self::USER_AGENT;
-        }
-
-        $ch = curl_init($url);
-        curl_setopt_array($ch, [
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_POST => true,
-            CURLOPT_HTTPHEADER => $curlHeaders,
-            CURLOPT_POSTFIELDS => json_encode($payload, JSON_THROW_ON_ERROR),
-            CURLOPT_TIMEOUT => $timeout,
-            CURLOPT_HEADERFUNCTION => static function ($curl, string $headerLine) use (&$responseHeaders): int {
-                $trimmed = trim($headerLine);
-                if ($trimmed === '' || str_contains($trimmed, ':') === false) {
-                    return strlen($headerLine);
-                }
-
-                [$name, $value] = explode(':', $trimmed, 2);
-                $responseHeaders[strtolower(trim($name))] = trim($value);
-
-                return strlen($headerLine);
-            },
-        ]);
-
-        $body = curl_exec($ch);
-        $error = curl_error($ch);
-        $status = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
-
-        return [
-            'ok' => $error === '' && $status >= 200 && $status < 300,
-            'status' => $status,
-            'error' => $error,
-            'body' => is_string($body) ? $body : '',
             'headers' => $responseHeaders,
         ];
     }

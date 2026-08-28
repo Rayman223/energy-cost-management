@@ -11,6 +11,10 @@ declare(strict_types=1);
  * puis mémorisé en session (`auth_oidc_provider`) et relu au callback — le
  * redirect_uri reste unique et sans query (contrainte Microsoft/Google + routeur
  * à correspondance exacte).
+ *
+ * GitHub (#24) emprunte la même route mais un connecteur OAuth 2.0 distinct
+ * ({@see \App\Security\OAuth\GithubOAuthClient}) : il n'expose aucune découverte
+ * OIDC ni d'id_token.
  */
 
 use App\Http\SecurityHeaders;
@@ -23,6 +27,7 @@ use App\Security\AccountProvisioner;
 use App\Security\AuthGuard;
 use App\Security\AuthSession;
 use App\Security\IdentityLinker;
+use App\Security\OAuth\GithubOAuthClient;
 use App\Security\Oidc\OidcAuthFailure;
 use App\Security\Oidc\OidcClientFactory;
 use App\Security\Oidc\OidcDiscoveryCache;
@@ -113,26 +118,40 @@ try {
         $providerConfig['redirect_uri'] = $scheme . '://' . $host . WebAccessGuard::appRootPath() . '/auth/login';
     }
 
-    $oidc = OidcClientFactory::fromConfig($providerConfig);
-    $oidc->authenticate(); // 1er appel : redirige vers l'IdP. Retour : valide le code.
+    if (GithubOAuthClient::supports($providerConfig)) {
+        // GitHub n'est pas un IdP OpenID Connect : pas de découverte, pas
+        // d'id_token — la lib jumbojett ne peut rien en faire. Connecteur OAuth 2.0
+        // dédié (#24), qui rend le même couple (sub, nom d'affichage) et laisse tout
+        // l'aval — provisionnement, liaison, journalisation d'échec — inchangé.
+        $identity = (new GithubOAuthClient())->authenticate(
+            $providerConfig,
+            $isCallback,
+            (string) $providerConfig['redirect_uri'],
+        );
+        $sub = $identity['sub'];
+        $displayName = $identity['name'];
+    } else {
+        $oidc = OidcClientFactory::fromConfig($providerConfig);
+        $oidc->authenticate(); // 1er appel : redirige vers l'IdP. Retour : valide le code.
 
-    $sub = $oidc->getVerifiedClaims('sub');
-    $sub = is_string($sub) ? $sub : '';
-    if ($sub === '') {
-        throw new OpenIDConnectClientException('Claim "sub" manquant.');
-    }
+        $sub = $oidc->getVerifiedClaims('sub');
+        $sub = is_string($sub) ? $sub : '';
+        if ($sub === '') {
+            throw new OpenIDConnectClientException('Claim "sub" manquant.');
+        }
 
-    // Nom d'affichage : d'abord l'id_token (Google/Microsoft y mettent « name »),
-    // et seulement s'il n'apporte rien, un appel au userinfo — Discord n'expose
-    // « preferred_username »/« nickname » que là (cf. app/docs/oidc-discord.md).
-    $verifiedClaims = $oidc->getVerifiedClaims();
-    $displayName = OidcDisplayName::fromClaims(is_object($verifiedClaims) ? $verifiedClaims : null);
-    if ($displayName === '') {
-        try {
-            $userInfo = $oidc->requestUserInfo();
-            $displayName = OidcDisplayName::fromClaims(null, is_object($userInfo) ? $userInfo : null);
-        } catch (\Throwable) {
-            // Le nom d'affichage est optionnel.
+        // Nom d'affichage : d'abord l'id_token (Google/Microsoft y mettent « name »),
+        // et seulement s'il n'apporte rien, un appel au userinfo — Discord n'expose
+        // « preferred_username »/« nickname » que là (cf. app/docs/oidc-discord.md).
+        $verifiedClaims = $oidc->getVerifiedClaims();
+        $displayName = OidcDisplayName::fromClaims(is_object($verifiedClaims) ? $verifiedClaims : null);
+        if ($displayName === '') {
+            try {
+                $userInfo = $oidc->requestUserInfo();
+                $displayName = OidcDisplayName::fromClaims(null, is_object($userInfo) ? $userInfo : null);
+            } catch (\Throwable) {
+                // Le nom d'affichage est optionnel.
+            }
         }
     }
 

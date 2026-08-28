@@ -160,5 +160,6 @@ happened before the redirect to Discord; `stage=callback`, on the way back.
 
 - **Google** — [oidc-google.md](oidc-google.md).
 - **Microsoft / Entra ID** — [oidc-microsoft.md](oidc-microsoft.md).
+- **GitHub** — [oidc-github.md](oidc-github.md) *(OAuth 2.0: GitHub is not an OIDC provider)*.
 - **authentik** — [oidc-authentik.md](oidc-authentik.md) *(written in French)*.
 - **Keycloak, Zitadel and other self-hosted IdPs** — [oidc-generic.md](oidc-generic.md).

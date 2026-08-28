@@ -75,7 +75,10 @@ Transformation du site mono-utilisateur belge en plateforme **multi-tenant**,
   OpenID Connect générique (Authorization Code + PKCE/state/nonce). **Aucun
   mot de passe ni e-mail stocké** — identité = `issuer` + `subject` + nom
   d'affichage (`users`). Le mode Basic Auth historique reste actif tant qu'OIDC
-  est désactivé (`enabled=false`), donc strictement rétrocompatible.
+  est désactivé (`enabled=false`), donc strictement rétrocompatible. GitHub
+  (`App\Security\OAuth\GithubOAuthClient`) partage la même route et le même
+  provisionnement, mais par un connecteur OAuth 2.0 dédié : il n'expose ni
+  découverte OIDC ni `id_token`.
 - **Multi-tenant** : `user_id` sur toutes les tables de données, `UNIQUE`
   composites, repositories scopés via `App\Security\UserContext`. Électricité en
   **modèle à registres** (`meters`/`meter_registers`/`meter_readings`) ; gaz/eau
