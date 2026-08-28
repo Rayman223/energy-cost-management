@@ -119,6 +119,62 @@ final class HttpClient
     }
 
     /**
+     * Requête POST `application/x-www-form-urlencoded`. Pendant de postJson()
+     * pour les API qui n'acceptent pas le JSON : le token endpoint OAuth 2.0
+     * (RFC 6749 §4.1.3), dont celui de GitHub (#24), attend un corps encodé en
+     * formulaire. Même forme de retour que les autres méthodes.
+     *
+     * @param array<string, string> $fields  Paramètres du corps (encodés ici).
+     * @param array<string, string> $headers
+     * @return array<string, mixed>
+     */
+    public function postForm(string $url, array $fields, int $timeout = 15, array $headers = []): array
+    {
+        $responseHeaders = [];
+
+        $curlHeaders = ['Content-Type: application/x-www-form-urlencoded'];
+        foreach ($headers as $name => $value) {
+            $curlHeaders[] = $name . ': ' . $value;
+        }
+        if (!self::hasUserAgent($headers)) {
+            $curlHeaders[] = 'User-Agent: ' . self::USER_AGENT;
+        }
+
+        $ch = curl_init($url);
+        curl_setopt_array($ch, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_POST           => true,
+            CURLOPT_HTTPHEADER     => $curlHeaders,
+            CURLOPT_POSTFIELDS     => http_build_query($fields, '', '&', PHP_QUERY_RFC1738),
+            CURLOPT_TIMEOUT        => $timeout,
+            CURLOPT_HEADERFUNCTION => static function ($curl, string $headerLine) use (&$responseHeaders): int {
+                $trimmed = trim($headerLine);
+                if ($trimmed === '' || str_contains($trimmed, ':') === false) {
+                    return strlen($headerLine);
+                }
+
+                [$name, $value] = explode(':', $trimmed, 2);
+                $responseHeaders[strtolower(trim($name))] = trim($value);
+
+                return strlen($headerLine);
+            },
+        ]);
+
+        $body   = curl_exec($ch);
+        $error  = curl_error($ch);
+        $status = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+
+        return [
+            'ok'      => $error === '' && $status >= 200 && $status < 300,
+            'status'  => $status,
+            'error'   => $error,
+            'body'    => is_string($body) ? $body : '',
+            'headers' => $responseHeaders,
+        ];
+    }
+
+    /**
      * L'appelant fournit-il déjà un User-Agent ? (nom d'en-tête insensible à la
      * casse, comme le veut HTTP.)
      *
