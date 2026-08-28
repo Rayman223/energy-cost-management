@@ -171,6 +171,22 @@ final class CostCalculationServiceTest extends TestCase
         self::assertArrayHasKey('total', $r['cost']);
     }
 
+    /** Le coût réel du kWh prélevé remonte jusqu'au dashboard (#9). */
+    public function testCurrentMonthElectricityExposesNetCostPerKwh(): void
+    {
+        $svc = $this->makeService(
+            new FakeLegacyDailyRepository(monthlyDeltas: $this->electricityDeltas()),
+            new FakeTariffRepository(grid: $this->electricityGrid()),
+            new FakeGasReadingRepository(),
+        );
+
+        $r = $svc->estimateCurrentMonthElectricity();
+
+        // 100 × 0.10 + 50 × 0.08 + 5 € d'abonnement = 19.00 € pour 150 kWh prélevés.
+        self::assertEqualsWithDelta(19.0, $r['cost']['total'], 0.0001);
+        self::assertEqualsWithDelta(19.0 / 150.0, $r['cost']['net_cost_per_kwh'], 0.000001);
+    }
+
     public function testMonthElectricityUnavailableWhenNoData(): void
     {
         $svc = $this->makeService(

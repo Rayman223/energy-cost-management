@@ -394,6 +394,11 @@ return [
     'dash.meta.days_other'     => '{days} days',
     'dash.meta.pcs'            => 'CV {value} kWh/m³',
 
+    // Real cost of a kWh drawn from the grid (#9): {rate} arrives pre-formatted
+    // (profile currency + locale).
+    'dash.total.net_per_kwh'      => 'i.e. {rate} all-in',
+    'dash.total.net_per_kwh_hint' => 'Total incl. VAT, excluding injection credit ÷ kWh drawn',
+
     'dash.dynamic.group'          => 'Dynamic tariff (day-ahead)',
     'dash.dynamic.simulation_title' => 'What if I were on a dynamic tariff?',
     'dash.dynamic.mixed_period'   => '{dynamic} of the month’s {total} days were billed at market price (grid change during the period).',

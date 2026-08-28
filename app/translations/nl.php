@@ -393,6 +393,11 @@ return [
     'dash.meta.days_other'     => '{days} dagen',
     'dash.meta.pcs'            => 'Calorische waarde {value} kWh/m³',
 
+    // Werkelijke kostprijs van de afgenomen kWh (#9): {rate} komt al opgemaakt door
+    // (munteenheid + locale van het profiel).
+    'dash.total.net_per_kwh'      => 'ofwel {rate} alles inbegrepen',
+    'dash.total.net_per_kwh_hint' => 'Totaal incl. btw zonder injectievergoeding ÷ afgenomen kWh',
+
     'dash.dynamic.group'          => 'Dynamisch tarief (day-ahead)',
     'dash.dynamic.simulation_title' => 'Wat als ik een dynamisch tarief had?',
     'dash.dynamic.mixed_period'   => '{dynamic} van de {total} dagen van de maand zijn tegen marktprijs gefactureerd (rasterwissel tijdens de periode).',

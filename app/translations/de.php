@@ -393,6 +393,11 @@ return [
     'dash.meta.days_other'     => '{days} Tage',
     'dash.meta.pcs'            => 'Brennwert {value} kWh/m³',
 
+    // Tatsächliche Kosten der bezogenen kWh (#9): {rate} kommt bereits formatiert
+    // (Währung + Locale des Profils).
+    'dash.total.net_per_kwh'      => 'also {rate} alles inbegriffen',
+    'dash.total.net_per_kwh_hint' => 'Gesamtbetrag inkl. MwSt. ohne Einspeisevergütung ÷ bezogene kWh',
+
     'dash.dynamic.group'          => 'Dynamischer Tarif (Day-Ahead)',
     'dash.dynamic.simulation_title' => 'Was wäre mit einem dynamischen Tarif?',
     'dash.dynamic.mixed_period'   => '{dynamic} von {total} Tagen des Monats wurden zum Marktpreis abgerechnet (Rasterwechsel innerhalb des Zeitraums).',

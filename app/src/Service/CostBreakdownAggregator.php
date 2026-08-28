@@ -16,6 +16,9 @@ namespace App\Service;
  *    TVA de SA grille — deux grilles peuvent avoir des taux différents ;
  *  - `vat_rate` n'est renseigné que si toutes les grilles partagent le même taux,
  *    sinon null (le dashboard affiche alors « dont TVA incluse » sans taux) ;
+ *  - `net_cost_per_kwh` est RECALCULÉ sur l'agrégat, jamais moyenné : un prix unitaire
+ *    ne s'additionne pas, et la moyenne arithmétique des sous-périodes ignorerait
+ *    leurs poids respectifs (une bascule de contrat au 25 du mois pèse 6 jours) ;
  *  - un seul décompte en entrée → renvoyé tel quel (cas mono-grille inchangé).
  */
 final class CostBreakdownAggregator
@@ -67,7 +70,13 @@ final class CostBreakdownAggregator
             }
         }
 
-        return $result + $this->aggregateSolar($breakdowns);
+        $result += $this->aggregateSolar($breakdowns);
+
+        if (array_key_exists('import_kwh', $result)) {
+            $result['net_cost_per_kwh'] = TariffCalculatorService::netCostPerKwh($result);
+        }
+
+        return $result;
     }
 
     /**

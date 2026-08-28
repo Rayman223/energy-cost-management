@@ -142,6 +142,62 @@ final class TariffCalculatorServiceTest extends TestCase
         self::assertEqualsWithDelta($withoutExport['total'] - 1.40, $withExport['total'], self::DELTA);
     }
 
+    public function testNetCostPerKwhSpreadsEveryChargeOverTheImportedKwh(): void
+    {
+        $r = $this->calc->calculateElectricityCost(
+            kwhT1: 100.0,
+            kwhT2: 50.0,
+            kwhExportT1: 0.0,
+            kwhExportT2: 0.0,
+            days: 30,
+            tariff: $this->calcTariff($this->electricityTariff()),
+        );
+
+        // 43.10 € TTC (total sans crédit d'injection) / 150 kWh prélevés.
+        self::assertEqualsWithDelta(43.10, $r['total'], self::DELTA);
+        self::assertEqualsWithDelta(0.287333, $r['net_cost_per_kwh'], self::DELTA);
+    }
+
+    public function testNetCostPerKwhIgnoresInjectionCredits(): void
+    {
+        $tariff = $this->calcTariff($this->electricityTariff());
+
+        $withoutExport = $this->calc->calculateElectricityCost(100.0, 50.0, 0.0, 0.0, 30, $tariff);
+        $withExport    = $this->calc->calculateElectricityCost(100.0, 50.0, 20.0, 10.0, 30, $tariff);
+
+        // Le crédit d'injection baisse la facture, pas le prix du kWh prélevé (#9).
+        self::assertLessThan($withoutExport['total'], $withExport['total']);
+        self::assertEqualsWithDelta(
+            $withoutExport['net_cost_per_kwh'],
+            $withExport['net_cost_per_kwh'],
+            self::DELTA
+        );
+    }
+
+    public function testNetCostPerKwhIsNullWithoutAnyImport(): void
+    {
+        $r = $this->calc->calculateElectricityCost(0.0, 0.0, 20.0, 10.0, 30, $this->calcTariff($this->electricityTariff()));
+
+        // Que des postes fixes et un crédit d'injection : aucun prix unitaire à afficher.
+        self::assertNull($r['net_cost_per_kwh']);
+    }
+
+    public function testDynamicNetCostPerKwhCoversTheIndexedEnergy(): void
+    {
+        $r = $this->calc->calculateElectricityCostDynamic(
+            kwhT1: 100.0,
+            kwhT2: 50.0,
+            kwhExportT1: 20.0,
+            kwhExportT2: 10.0,
+            days: 30,
+            tariff: $this->calcTariff($this->electricityTariff()),
+            dynamicEnergyTtc: 30.0,
+        );
+
+        // Part énergie fournisseur (10 + 4) remplacée par 30 € indexés : 43.10 − 14 + 30 = 59.10.
+        self::assertEqualsWithDelta(59.10 / 150.0, $r['net_cost_per_kwh'], self::DELTA);
+    }
+
     public function testSolarSelfConsumption(): void
     {
         $r = $this->calc->calculateElectricityCost(

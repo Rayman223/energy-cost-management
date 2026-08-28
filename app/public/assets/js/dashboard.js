@@ -60,6 +60,12 @@ const CURRENCY_SYMBOL = (function () {
   const part = _moneyFmt.formatToParts(0).find((p) => p.type === 'currency');
   return part ? part.value : APP_CURRENCY;
 })();
+// Prix unitaire du kWh : 2 décimales (le format monétaire) noieraient l'écart entre
+// deux tarifs, d'où les 4 décimales — les séparateurs restent ceux de la locale.
+const _rateFmt = new Intl.NumberFormat(APP_LOCALE, { minimumFractionDigits: 4, maximumFractionDigits: 4 });
+function formatRate(v) {
+  return `${_rateFmt.format(Number(v) || 0)} ${CURRENCY_SYMBOL}/kWh`;
+}
 
 // Le catalogue est plat (pas de pluralisation intégrée côté Translator) : on
 // choisit la forme via Intl.PluralRules, qui applique les règles de la locale
@@ -271,6 +277,9 @@ function tariffGapHtml(data) {
         <div>
           <div class="cost-total-label">${periodLabel}</div>
           <div class="cost-total-amount">${formatMoney(c.total)}</div>
+          ${c.net_cost_per_kwh != null ? `
+          <div class="cost-total-unit" title="${escapeHtml(tr('dash.total.net_per_kwh_hint'))}">${tr('dash.total.net_per_kwh', { rate: formatRate(c.net_cost_per_kwh) })}</div>
+          ` : ''}
         </div>
         <div class="cost-total-meta">
           <span>${tr('dash.meta.tariff', { name: escapeHtml(data.tariff_name ?? '—') })}</span>
