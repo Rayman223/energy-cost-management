@@ -1,6 +1,5 @@
-# Blank issues stay enabled on purpose: the maintainers use short free-form
-# issues for their own tracking, and forcing a form on them adds friction with
-# no benefit. External reports are steered to the forms above by the labels.
+# No issue forms: the project is small enough that free-form issues are enough,
+# and a form only adds friction for reporters and maintainers alike.
 blank_issues_enabled: true
 contact_links:
   - name: Report a security vulnerability
