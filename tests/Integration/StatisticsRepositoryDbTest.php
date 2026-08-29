@@ -59,19 +59,30 @@ final class StatisticsRepositoryDbTest extends DatabaseTestCase
 
     public function testCountryBelowThresholdIsFoldedIntoTheOtherBucket(): void
     {
-        // BE atteint tout juste le seuil, FR reste en dessous.
+        // BE atteint tout juste le seuil et se publie nommément. FR et NL restent
+        // chacun en dessous, mais leur SOMME le franchit : c'est ce qui permet au
+        // bucket « Autres » d'exister — le seuil s'applique aussi à lui (cf.
+        // testOtherBucketDisappearsWhenItAlsoStaysBelowTheThreshold), de sorte
+        // qu'un unique pays résiduel ne peut jamais être publié sous ce déguisement.
         for ($i = 0; $i < self::K; $i++) {
             $this->householdWithGrid('BE', 0.30);
         }
-        for ($i = 0; $i < self::K - 1; $i++) {
+        for ($i = 0; $i < 3; $i++) {
             $this->householdWithGrid('FR', 0.20);
+            $this->householdWithGrid('NL', 0.25);
         }
 
-        $buckets = array_column($this->stats->unitRateByCountry(), 'bucket');
+        $rows    = $this->stats->unitRateByCountry();
+        $buckets = array_column($rows, 'bucket');
 
         self::assertContains('BE', $buckets, 'Un pays au seuil doit être publié nommément.');
         self::assertNotContains('FR', $buckets, 'Un pays sous le seuil ne doit jamais être nommé.');
+        self::assertNotContains('NL', $buckets);
         self::assertContains(StatisticsRepository::OTHER_BUCKET, $buckets);
+
+        // Le bucket agrège bien les deux pays résiduels, et rien d'autre.
+        $other = array_column($rows, 'households', 'bucket')[StatisticsRepository::OTHER_BUCKET];
+        self::assertSame(6, $other);
     }
 
     public function testOtherBucketDisappearsWhenItAlsoStaysBelowTheThreshold(): void
