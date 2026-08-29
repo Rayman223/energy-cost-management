@@ -27,6 +27,15 @@ return [
     'common.yes'           => 'Oui',
     'common.no'            => 'Non',
     'common.loading'       => 'Chargement…',
+    // Motifs d'indisponibilité partagés par plusieurs écrans (dashboard, acomptes) :
+    // rangés sous `common.` et non `dash.`, sans quoi la page acomptes — qui n'exporte
+    // pas le catalogue du dashboard — les afficherait muets (#20).
+    'common.reason.no_readings'           => 'Aucun relevé disponible pour cette période.',
+    'common.reason.invalid_period'        => 'Période invalide : la fin doit suivre le début.',
+    'common.reason.awaiting_next_reading' => 'Relevé manquant : le calcul se fera dès le prochain relevé.',
+    'common.reason.not_enough_readings'   => 'Pas assez de relevés pour encadrer cette période.',
+    'common.reason.no_tariff'             => 'Aucune grille tarifaire ne couvre cette période.',
+    'common.reason.unknown_energy'        => 'Type d\'énergie inconnu.',
 
     // Authentification
     'auth.sign_in'         => 'Se connecter',

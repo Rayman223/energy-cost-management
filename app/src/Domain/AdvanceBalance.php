@@ -37,6 +37,10 @@ final class AdvanceBalance
      *        échéance alors que le contrat court bel et bien (#254). Sans cette
      *        nuance, les deux cas se confondent en « aucun acompte saisi », et l'écran
      *        conseille d'ajouter un barème qui existe déjà.
+     * @param string|null $unavailableKey Même motif, sous forme de clé de catalogue
+     *        (`common.reason.*`, `dash.reason.*`), pour l'afficher dans la langue du
+     *        visiteur. `$unavailable` reste le texte technique, seul repli quand la
+     *        source n'a posé aucune clé (#20).
      */
     public function __construct(
         public readonly string $energyType,
@@ -48,6 +52,7 @@ final class AdvanceBalance
         public readonly bool $partialData = false,
         public readonly bool $partialAdvances = false,
         public readonly bool $hasSchedule = false,
+        public readonly ?string $unavailableKey = null,
     ) {
     }
 
