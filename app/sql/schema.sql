@@ -147,6 +147,10 @@ CREATE TABLE IF NOT EXISTS user_profiles (
     -- reste au profil : la zone de marche est geographique, pas contractuelle.
     supplier_markup_per_kwh DECIMAL(12,7) NOT NULL DEFAULT 0.0000000 COMMENT 'Marge fournisseur EUR/kWh ajoutee au prix spot TTC (repli sans ligne spot_offset)',
     locale       VARCHAR(8)  NOT NULL DEFAULT 'fr',
+    -- Contribution aux statistiques publiques /stats (#8) : 0 = contribue
+    -- (défaut), 1 = retiré. Le retrait ôte le foyer du numérateur ET du
+    -- dénominateur du seuil de k-anonymat.
+    stats_opt_out TINYINT(1) NOT NULL DEFAULT 0 COMMENT 'Retrait des statistiques agregees (#8) : 1 = foyer non compte',
     -- Période du bilan d'acomptes mémorisée (#241) : restituée telle quelle au
     -- retour de l'utilisateur, jusqu'à ce qu'il en choisisse une autre. NULL =
     -- aucune mémorisée, la page retombe sur son défaut.

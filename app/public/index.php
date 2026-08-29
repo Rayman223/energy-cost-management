@@ -59,6 +59,7 @@ $routes = [
     '/reconciliation' => 'reconciliation.php',
     '/advances'       => 'advances.php',
     '/meter-readings' => 'meter-readings.php',
+    '/stats'          => 'stats.php',
     '/api'            => 'api.php',
     '/api-guide'      => 'api-guide.php',
     '/login'          => 'login.php',

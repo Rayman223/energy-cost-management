@@ -43,6 +43,32 @@ final class UserProfileTest extends TestCase
     }
 
     /**
+     * Contribution aux statistiques agrégées (#8) : le défaut est « je contribue ».
+     *
+     * Ce n'est pas un détail de valeur par défaut. Sur un site jeune soumis à un
+     * seuil de k-anonymat, un défaut inverse laisserait la page publique vide
+     * indéfiniment. Le retrait reste possible d'un clic dans /account, et le
+     * formulaire est construit pour qu'un champ absent vaille retrait — le défaut
+     * du code penche vers la contribution, celui du POST vers la protection.
+     */
+    public function testStatsContributionIsTheDefault(): void
+    {
+        self::assertFalse(UserProfile::defaults()->statsOptOut);
+
+        // Et le paramètre est optionnel : aucun appelant existant n'a eu à changer.
+        $profile = new UserProfile(
+            country: 'BE',
+            timezone: 'UTC',
+            currency: 'EUR',
+            biddingZone: null,
+            supplierMarkupPerKwh: 0.0,
+            locale: 'fr',
+        );
+
+        self::assertFalse($profile->statsOptOut);
+    }
+
+    /**
      * Le mode de tarification a quitté le profil pour la grille (#245) : il est
      * versionné par période de validité et n'a plus rien à faire ici. Garde
      * anti-régression — le réintroduire recréerait la double source que l'issue a

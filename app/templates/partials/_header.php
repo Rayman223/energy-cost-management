@@ -10,8 +10,14 @@
  * active. L'icône Admin n'apparaît que pour les administrateurs.
  *
  * @var string            $subtitle    Sous-titre de page, déjà traduit (échappé ici)
- * @var string            $current     Clé de page active : dashboard|tariffs|reconciliation|advances|admin|account|meter-readings|api-guide
+ * @var string            $current     Clé de page active : dashboard|tariffs|reconciliation|advances|admin|account|meter-readings|api-guide|stats
  * @var bool|null         $isAdmin     Affiche l'icône Admin (défaut false)
+ * @var bool|null         $authenticated Défaut true. À false (visiteur anonyme sur une
+ *                                      page publique, cf. /stats #8), la navigation vers
+ *                                      les pages privées et le bouton de déconnexion
+ *                                      disparaissent au profit d'un lien « Se connecter » :
+ *                                      des liens menant tous à /login seraient au mieux
+ *                                      inutiles, au pire trompeurs.
  * @var string|null       $discordUrl  URL d'invitation Discord (partial discord-link)
  * @var list<string>|null $available   Locales disponibles pour le sélecteur (défaut [])
  * @var string|null       $timezone    Fuseau IANA du profil pour l'horloge ; null/vide ⇒
@@ -23,6 +29,9 @@ $current   = $current ?? '';
 $isAdmin   = !empty($isAdmin);
 $available = $available ?? [];
 $timezone  = $timezone ?? '';
+// Défaut true : toutes les pages appelantes historiques omettent le paramètre et
+// doivent rendre exactement la même sortie qu'avant (#8).
+$authenticated = !isset($authenticated) || $authenticated;
 
 /**
  * Rend un lien de navigation en icône, marqué actif sur la page courante.
@@ -49,13 +58,19 @@ $navlink = function (string $page, string $url, string $icon, string $title) use
       <span class="time" id="clock-time">--:--:--</span>
       <span id="clock-date">--- -- ----</span>
     </div>
+    <?php if ($authenticated): ?>
     <?= $navlink('meter-readings', $this->url('meter-readings'), '📝', $this->t('nav.meter_readings')) ?>
     <?php if ($isAdmin): ?><?= $navlink('admin', $this->url('admin'), '🛡', $this->t('admin.title')) ?><?php endif; ?>
     <?= $navlink('tariffs', $this->url('tariffs'), '€', $this->t('nav.tariffs')) ?>
     <?= $navlink('reconciliation', $this->url('reconciliation'), '🧾', $this->t('nav.reconciliation')) ?>
     <?= $navlink('advances', $this->url('advances'), '🏦', $this->t('nav.advances')) ?>
+    <?= $navlink('stats', $this->url('stats'), '📊', $this->t('nav.stats')) ?>
     <?= $navlink('account', $this->url('account'), '👤', $this->t('nav.account')) ?>
     <form method="post" action="<?= $this->url('auth/logout') ?>" class="logout-form"><?= \App\Security\Csrf::field() ?><button type="submit" class="theme-toggle" title="<?= $this->te('auth.sign_out') ?>">🚪</button></form>
+    <?php else: ?>
+    <?= $navlink('stats', $this->url('stats'), '📊', $this->t('nav.stats')) ?>
+    <a href="<?= $this->e($this->url('login')) ?>" class="theme-toggle" title="<?= $this->te('auth.sign_in') ?>">🔑</a>
+    <?php endif; ?>
     <?= $this->partial('discord-link', ['url' => $discordUrl ?? null]) ?>
     <?= $this->partial('github-link') ?>
     <?= $this->partial('_lang-switcher', ['available' => $available]) ?>

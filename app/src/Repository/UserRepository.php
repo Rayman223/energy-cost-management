@@ -198,21 +198,23 @@ final class UserRepository implements UserRepositoryInterface
         $supplierMarkupPerKwh = max(-1.0, min(1.0, $profile->supplierMarkupPerKwh));
 
         $stmt = $this->pdo->prepare(
-            'INSERT INTO user_profiles (user_id, country, timezone, currency, bidding_zone, supplier_markup_per_kwh, locale)
-             VALUES (:uid, :country, :tz, :currency, :zone, :markup, :locale)
+            'INSERT INTO user_profiles (user_id, country, timezone, currency, bidding_zone, supplier_markup_per_kwh, locale, stats_opt_out)
+             VALUES (:uid, :country, :tz, :currency, :zone, :markup, :locale, :stats_opt_out)
              ON DUPLICATE KEY UPDATE
                 country = VALUES(country), timezone = VALUES(timezone),
                 currency = VALUES(currency), bidding_zone = VALUES(bidding_zone),
-                supplier_markup_per_kwh = VALUES(supplier_markup_per_kwh), locale = VALUES(locale)'
+                supplier_markup_per_kwh = VALUES(supplier_markup_per_kwh), locale = VALUES(locale),
+                stats_opt_out = VALUES(stats_opt_out)'
         );
         $stmt->execute([
-            'uid'      => $userId,
-            'country'  => $profile->country,
-            'tz'       => $profile->timezone,
-            'currency' => $profile->currency,
-            'zone'     => $profile->biddingZone,
-            'markup'   => $supplierMarkupPerKwh,
-            'locale'   => $profile->locale,
+            'uid'           => $userId,
+            'country'       => $profile->country,
+            'tz'            => $profile->timezone,
+            'currency'      => $profile->currency,
+            'zone'          => $profile->biddingZone,
+            'markup'        => $supplierMarkupPerKwh,
+            'locale'        => $profile->locale,
+            'stats_opt_out' => (int) $profile->statsOptOut,
         ]);
     }
 
@@ -290,7 +292,7 @@ final class UserRepository implements UserRepositoryInterface
     {
         $stmt = $this->pdo->prepare(
             'SELECT country, timezone, currency, bidding_zone, supplier_markup_per_kwh, locale,
-                    advances_period_from, advances_period_to
+                    advances_period_from, advances_period_to, stats_opt_out
              FROM user_profiles WHERE user_id = :id LIMIT 1'
         );
         $stmt->execute(['id' => $userId]);
@@ -309,6 +311,7 @@ final class UserRepository implements UserRepositoryInterface
             locale: (string) $row['locale'],
             advancesPeriodFrom: isset($row['advances_period_from']) ? (string) $row['advances_period_from'] : null,
             advancesPeriodTo:   isset($row['advances_period_to'])   ? (string) $row['advances_period_to']   : null,
+            statsOptOut: (bool) (int) ($row['stats_opt_out'] ?? 0),
         );
     }
 

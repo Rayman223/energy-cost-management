@@ -200,6 +200,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
             }
 
+            // Contribution aux statistiques agrégées de /stats (#8). Le champ est
+            // nommé « contribuer » et non « se retirer » : la case est cochée par
+            // défaut, donc un champ ABSENT (case décochée, POST partiel, formulaire
+            // forgé) vaut RETRAIT. Le défaut d'un champ manquant penche ainsi du
+            // côté protecteur — l'inverse aurait réinscrit un foyer aux statistiques
+            // sur un POST tronqué. Contrepartie assumée : un formulaire d'onglet
+            // resté ouvert avant ce déploiement reposte sans le champ et retire son
+            // auteur ; c'est bénin (un retrait ne divulgue rien) et réversible.
+            $statsOptOut = !isset($_POST['stats_contribute']);
+
             $users->updateProfile($userId, new UserProfile(
                 country: $country,
                 timezone: $timezone,
@@ -207,6 +217,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 biddingZone: $zone,
                 supplierMarkupPerKwh: $markup,
                 locale: $chosenLocale,
+                statsOptOut: $statsOptOut,
             ));
             $success = $view->t('account.profile_saved');
         } elseif ($action === 'token_create') {
