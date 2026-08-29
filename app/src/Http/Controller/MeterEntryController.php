@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace App\Http\Controller;
 
-use App\Domain\ReadingGranularity;
 use App\Domain\SyncStateKeys;
 use App\Http\JsonResponse;
 use App\Http\Request;
@@ -12,6 +11,7 @@ use App\Http\ValidationException;
 use App\Repository\Contract\ElectricityIngestionInterface;
 use App\Repository\Contract\MeterReadingRepositoryInterface;
 use App\Repository\WebhookSyncStateRepository;
+use App\Service\ReadingGranularityPolicy;
 use App\Support\Dates;
 use DateTimeImmutable;
 use PDOException;
@@ -29,11 +29,10 @@ final class MeterEntryController
         private readonly ElectricityIngestionInterface $electricityRepo,
         private readonly ?WebhookSyncStateRepository $syncState = null,
         // Plafonnement des index élec à un par registre et par créneau aligné
-        // (issue #165) : Day en tarif fixe, QuarterHour en tarif dynamique. null =
-        // aucun plafond. Fuseau de l'utilisateur pour délimiter le créneau. Défauts
-        // rétro-compatibles : seule api.php les renseigne.
-        private readonly ?ReadingGranularity $electricityThrottle = null,
-        private readonly string $timezone = 'UTC',
+        // (issue #165) : la politique dit quel créneau s'applique au relevé, selon la
+        // grille active à SA date (issue #10), et dans quel fuseau il se délimite.
+        // null = aucun plafond. Défaut rétro-compatible : seule api.php la renseigne.
+        private readonly ?ReadingGranularityPolicy $electricityThrottle = null,
     ) {
     }
 
@@ -85,12 +84,15 @@ final class MeterEntryController
         // Plafond « un index par registre et par créneau » : au premier registre
         // déjà relevé dans le créneau, on refuse toute la soumission.
         if ($this->electricityThrottle !== null) {
-            $inBucket = $this->electricityRepo->readingsPresentInBucket($ts, $this->timezone, $this->electricityThrottle, array_keys($indexes));
+            $timezone    = $this->electricityThrottle->timezone();
+            $granularity = $this->electricityThrottle->forMoment($ts);
+
+            $inBucket = $this->electricityRepo->readingsPresentInBucket($ts, $timezone, $granularity, array_keys($indexes));
             foreach (array_keys($indexes) as $key) {
                 if ($inBucket[$key] ?? false) {
-                    $bucket = $this->electricityThrottle->formatBucketFr($ts, new \DateTimeZone($this->timezone));
+                    $bucket = $granularity->formatBucketFr($ts, new \DateTimeZone($timezone));
                     throw new ValidationException(
-                        $key . ' : ' . $this->electricityThrottle->limitLabelFr() . ' est autorisé (' . $bucket . ').'
+                        $key . ' : ' . $granularity->limitLabelFr() . ' est autorisé (' . $bucket . ').'
                     );
                 }
             }

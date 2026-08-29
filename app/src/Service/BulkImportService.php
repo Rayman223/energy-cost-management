@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace App\Service;
 
-use App\Domain\ReadingGranularity;
 use App\Repository\Contract\ElectricityIngestionInterface;
 use App\Repository\Contract\UtilityIngestionInterface;
 use App\Service\Import\ImportMapping;
@@ -34,12 +33,14 @@ final class BulkImportService
      *        l'orchestrateur de pré-créer le rapport (cap/troncature partagés).
      * @param bool $replace Ré-import « écraser » : les valeurs déjà présentes au
      *        même horodatage sont mises à jour au lieu d'être ignorées.
-     * @param ReadingGranularity|null $throttle Plafond par registre et par créneau
-     *        aligné (Day en tarif fixe, QuarterHour en tarif dynamique) : les registres
-     *        déjà relevés dans le créneau (fuseau $timezone) sont ignorés en silence et
-     *        comptés comme doublons. null = aucun plafond.
+     * @param ReadingGranularityPolicy|null $throttle Plafond par registre et par créneau
+     *        aligné : les registres déjà relevés dans le créneau sont ignorés en silence
+     *        et comptés comme doublons. null = aucun plafond. La politique résout le
+     *        créneau LIGNE PAR LIGNE (issue #10) — un fichier couvrant une bascule
+     *        fixe → dynamique est donc dédupliqué au jour avant la bascule et au
+     *        quart d'heure après.
      */
-    public function importElectricity(iterable $rows, ImportMapping $mapping, ElectricityIngestionInterface $sink, ?ImportReport $report = null, bool $replace = false, ?ReadingGranularity $throttle = null, string $timezone = 'UTC'): ImportReport
+    public function importElectricity(iterable $rows, ImportMapping $mapping, ElectricityIngestionInterface $sink, ?ImportReport $report = null, bool $replace = false, ?ReadingGranularityPolicy $throttle = null): ImportReport
     {
         $report ??= new ImportReport();
 
@@ -79,7 +80,7 @@ final class BulkImportService
             // transaction englobante rend visibles les lignes déjà insérées du même
             // créneau aux lignes suivantes.
             if ($throttle !== null) {
-                $inBucket = $sink->readingsPresentInBucket($ts, $timezone, $throttle, array_keys($indexes));
+                $inBucket = $sink->readingsPresentInBucket($ts, $throttle->timezone(), $throttle->forMoment($ts), array_keys($indexes));
                 foreach ($inBucket as $key => $present) {
                     if ($present && isset($indexes[$key])) {
                         unset($indexes[$key]);

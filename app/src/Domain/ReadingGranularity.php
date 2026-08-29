@@ -9,21 +9,43 @@ use DateTimeZone;
 
 /**
  * Granularité de plafonnement des index électricité : au plus un relevé par
- * registre et par créneau aligné. Le créneau dépend du mode de tarification
- * (issue #165) :
- *   - {@see self::Day} quand le tarif dynamique est désactivé (la granularité
- *     horaire n'a pas d'intérêt et alourdit la base) ;
- *   - {@see self::QuarterHour} quand il est activé (périodes de 15 min, alignées
- *     sur les MTU du marché ENTSO-E).
+ * registre et par créneau aligné. Le créneau suit la **résolution de facturation**
+ * de la grille tarifaire active à la date du relevé (issue #10, cf.
+ * {@see self::forPricingMode()}) :
+ *   - {@see self::Day} en tarif fixe — aucune résolution intra-journalière n'entre
+ *     dans le calcul, un index par jour suffit et n'alourdit pas la base ;
+ *   - {@see self::Hour} en 'dynamic_hourly' — un index par MTU horaire ENTSO-E ;
+ *   - {@see self::QuarterHour} en 'dynamic_quarter' — un index par MTU de 15 min.
  *
- * Les créneaux sont **alignés** (jour calendaire, ou quart d'heure :00/:15/:30/:45)
- * et calculés dans le fuseau de l'utilisateur, cohérent avec le stockage UTC +
- * classement T1/T2 par fuseau (#172/#174).
+ * Le mode étant porté par la grille, donc versionné par valid_from/valid_to (#245),
+ * la granularité se résout relevé par relevé : c'est le rôle de
+ * {@see \App\Service\ReadingGranularityPolicy}, seul point d'entrée des appelants.
+ *
+ * Les créneaux sont **alignés** (jour calendaire, heure pleine, ou quart d'heure
+ * :00/:15/:30/:45) et calculés dans le fuseau de l'utilisateur, cohérent avec le
+ * stockage UTC + classement T1/T2 par fuseau (#172/#174).
  */
 enum ReadingGranularity
 {
     case Day;
+    case Hour;
     case QuarterHour;
+
+    /**
+     * Granularité imposée par un mode de tarification (`tariff_grids.pricing_mode`).
+     *
+     * Source unique du mapping mode → créneau. Tout mode inconnu retombe sur le
+     * plafond le plus strict ({@see self::Day}), comme
+     * {@see TariffGrid::normalizePricingMode()} retombe sur 'fixed'.
+     */
+    public static function forPricingMode(string $pricingMode): self
+    {
+        return match ($pricingMode) {
+            'dynamic_quarter' => self::QuarterHour,
+            'dynamic_hourly'  => self::Hour,
+            default           => self::Day,
+        };
+    }
 
     /**
      * Bornes `[start, end)` du créneau aligné contenant $moment, exprimées dans
@@ -36,7 +58,8 @@ enum ReadingGranularity
         $local = $moment->setTimezone($tz);
 
         [$start, $step] = match ($this) {
-            self::Day => [$local->setTime(0, 0, 0), '+1 day'],
+            self::Day  => [$local->setTime(0, 0, 0), '+1 day'],
+            self::Hour => [$local->setTime((int) $local->format('G'), 0, 0), '+1 hour'],
             self::QuarterHour => [
                 $local->setTime((int) $local->format('G'), intdiv((int) $local->format('i'), 15) * 15, 0),
                 '+15 minutes',
@@ -51,6 +74,7 @@ enum ReadingGranularity
     {
         return match ($this) {
             self::Day         => 'un seul index par jour',
+            self::Hour        => 'un seul index par heure',
             self::QuarterHour => 'un seul index par tranche de 15 minutes',
         };
     }
@@ -64,8 +88,8 @@ enum ReadingGranularity
         [$start] = $this->bucket($moment, $tz);
 
         return match ($this) {
-            self::Day         => $start->format('d/m/Y'),
-            self::QuarterHour => $start->format('d/m/Y H:i'),
+            self::Day                    => $start->format('d/m/Y'),
+            self::Hour, self::QuarterHour => $start->format('d/m/Y H:i'),
         };
     }
 }

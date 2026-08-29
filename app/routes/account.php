@@ -29,6 +29,7 @@ use App\Security\UserContext;
 use App\Service\AccountDataExporter;
 use App\Service\AccountEraser;
 use App\Service\Import\ImportRunner;
+use App\Service\ReadingGranularityPolicy;
 use App\Support\Adsense;
 use App\Support\DiscordLink;
 use App\Support\DynamicPricing;
@@ -273,15 +274,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             // Import self-service : la cible est TOUJOURS l'utilisateur courant
             // (aucun champ « utilisateur cible » — l'import ne concerne que soi).
             // Plafonnement des index élec par registre et par créneau aligné
-            // (issue #165) : un par jour en tarif fixe, un par tranche de 15 min en
-            // tarif dynamique. Délimité dans le fuseau de l'utilisateur.
+            // (issue #165) : le créneau suit la grille active à la date de CHAQUE
+            // relevé (issue #10), de sorte qu'un fichier couvrant une bascule
+            // fixe → dynamique est dédupliqué au jour avant et au quart d'heure
+            // après. Délimité dans le fuseau de l'utilisateur.
+            $importTimezone = $profileForLocale->timezone ?? 'UTC';
             $importReport = (new ImportRunner())->runFromRequest(
                 $pdo,
                 $userId,
                 $_POST,
                 $_FILES,
-                DynamicPricing::isEnabled($config) ? ReadingGranularity::QuarterHour : ReadingGranularity::Day,
-                $profileForLocale->timezone ?? 'UTC',
+                DynamicPricing::isEnabled($config)
+                    ? ReadingGranularityPolicy::fromTariffs($tariffRepo, $importTimezone)
+                    : ReadingGranularityPolicy::constant(ReadingGranularity::Day, $importTimezone),
             );
             // Import tronqué (plafond atteint, données perdues) : pas de bannière
             // « terminé » trompeuse — l'avertissement du rapport tient lieu de signal.

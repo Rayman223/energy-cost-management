@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Unit\Service;
 
 use App\Domain\ReadingGranularity;
+use App\Service\ReadingGranularityPolicy;
 use App\Repository\Contract\UtilityIngestionInterface;
 use App\Service\BulkImportService;
 use App\Service\Import\ImportMapping;
@@ -175,8 +176,7 @@ final class BulkImportServiceTest extends TestCase
             new FakeElectricityIngestion(),
             null,
             false,
-            ReadingGranularity::Day,
-            'UTC',
+            ReadingGranularityPolicy::constant(ReadingGranularity::Day, 'UTC'),
         );
 
         self::assertSame(1, $report->imported());
@@ -197,8 +197,7 @@ final class BulkImportServiceTest extends TestCase
             new FakeElectricityIngestion(),
             null,
             false,
-            ReadingGranularity::Day,
-            'UTC',
+            ReadingGranularityPolicy::constant(ReadingGranularity::Day, 'UTC'),
         );
 
         self::assertSame(2, $report->imported());
@@ -221,8 +220,7 @@ final class BulkImportServiceTest extends TestCase
             new FakeElectricityIngestion(),
             null,
             false,
-            ReadingGranularity::QuarterHour,
-            'UTC',
+            ReadingGranularityPolicy::constant(ReadingGranularity::QuarterHour, 'UTC'),
         );
 
         self::assertSame(2, $report->imported());

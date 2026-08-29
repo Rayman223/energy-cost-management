@@ -26,12 +26,14 @@ declare(strict_types=1);
 
 use App\Domain\ReadingGranularity;
 use App\Infrastructure\Database;
+use App\Repository\TariffRepository;
 use App\Repository\UserRepository;
 use App\Security\UserContext;
 use App\Service\Import\ImportMapping;
 use App\Service\Import\ImportReport;
 use App\Service\Import\ImportRunner;
 use App\Service\Import\RowSource;
+use App\Service\ReadingGranularityPolicy;
 use App\Support\CliArguments;
 use App\Support\DynamicPricing;
 
@@ -95,11 +97,14 @@ try {
     exit(1);
 }
 
-// Plafonnement des index élec par créneau, comme la voie web (issue #165) : un par
-// jour en tarif fixe, un par tranche de 15 min en tarif dynamique. Sans effet sur
-// gaz/eau. Créneau délimité dans le fuseau du profil de l'utilisateur cible.
-$throttle = DynamicPricing::isEnabled($config) ? ReadingGranularity::QuarterHour : ReadingGranularity::Day;
+// Plafonnement des index élec par créneau, comme la voie web (issue #165) : le
+// créneau suit la grille active à la date de CHAQUE relevé (issue #10) — jour en
+// fixe, heure en dynamique horaire, 15 min en dynamique quart-horaire. Sans effet
+// sur gaz/eau. Créneau délimité dans le fuseau du profil de l'utilisateur cible.
 $timezone = (new UserRepository($pdo))->getProfile($userId)->timezone ?? 'UTC';
+$throttle = DynamicPricing::isEnabled($config)
+    ? ReadingGranularityPolicy::fromTariffs(new TariffRepository($pdo, $userId), $timezone)
+    : ReadingGranularityPolicy::constant(ReadingGranularity::Day, $timezone);
 
 fwrite(STDOUT, sprintf(
     "[IMPORT] type=%s user=#%d fichier=%s mode=%s%s",
@@ -125,7 +130,7 @@ try {
     }
 
     // Orchestration transaction/dry-run/plafond partagée avec l'UI web.
-    $report = (new ImportRunner())->run($pdo, $mapping, $rows, $userId, $type, $dryRun, false, $throttle, $timezone);
+    $report = (new ImportRunner())->run($pdo, $mapping, $rows, $userId, $type, $dryRun, false, $throttle);
 } catch (\Throwable $e) {
     fwrite(STDERR, '[FATAL] ' . $e->getMessage() . PHP_EOL);
     exit(1);
