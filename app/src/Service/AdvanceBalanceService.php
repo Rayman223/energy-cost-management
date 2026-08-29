@@ -205,6 +205,7 @@ final class AdvanceBalanceService
                 unavailable: is_string($estimate['reason'] ?? null) ? $estimate['reason'] : null,
                 partialAdvances: $partialAdvances,
                 hasSchedule: $hasSchedule,
+                unavailableKey: is_string($estimate['reason_key'] ?? null) ? $estimate['reason_key'] : null,
             );
         }
 
@@ -220,6 +221,7 @@ final class AdvanceBalanceService
                 unavailable: 'no_tariff',
                 partialAdvances: $partialAdvances,
                 hasSchedule: $hasSchedule,
+                unavailableKey: 'common.reason.no_tariff',
             );
         }
 
@@ -307,7 +309,7 @@ final class AdvanceBalanceService
             'electricity' => $this->costService->estimatePeriodElectricity($from, $to),
             'gas'         => $this->costService->estimatePeriodGas($from, $to),
             'water'       => $this->costService->estimatePeriodWater($from, $to),
-            default       => ['available' => false, 'reason' => 'unknown_energy'],
+            default       => ['available' => false, 'reason' => 'unknown_energy', 'reason_key' => 'common.reason.unknown_energy'],
         };
     }
 }

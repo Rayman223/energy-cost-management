@@ -202,14 +202,14 @@ final class MonthlyConsumptionInterpolator
 
         $n = count($readingsAsc);
         if ($n === 0) {
-            return MonthInterpolation::unavailable('Aucun relevé disponible pour cette période.');
+            return MonthInterpolation::unavailable('Aucun relevé disponible pour cette période.', 'common.reason.no_readings');
         }
 
         $startTs = $from->getTimestamp();
         $endTs   = $to->getTimestamp();
 
         if ($endTs <= $startTs) {
-            return MonthInterpolation::unavailable('Période invalide : la fin doit suivre le début.');
+            return MonthInterpolation::unavailable('Période invalide : la fin doit suivre le début.', 'common.reason.invalid_period');
         }
 
         $firstTs = $readingsAsc[0]['ts'];
@@ -219,14 +219,14 @@ final class MonthlyConsumptionInterpolator
         // relevé, impossible d'établir une pente → on attend le prochain relevé.
         $incompleteEnd = $endTs > $lastTs;
         if ($incompleteEnd && $n < 2) {
-            return MonthInterpolation::unavailable('Relevé manquant : le calcul se fera dès le prochain relevé.');
+            return MonthInterpolation::unavailable('Relevé manquant : le calcul se fera dès le prochain relevé.', 'common.reason.awaiting_next_reading');
         }
 
         $indexStart = $this->interpolateValueAt($readingsAsc, $startTs);
         $indexEnd   = $this->interpolateValueAt($readingsAsc, $endTs);
 
         if ($indexStart === null || $indexEnd === null) {
-            return MonthInterpolation::unavailable('Pas assez de relevés pour encadrer cette période.');
+            return MonthInterpolation::unavailable('Pas assez de relevés pour encadrer cette période.', 'common.reason.not_enough_readings');
         }
 
         $delta = round(max(0.0, $indexEnd - $indexStart), 3);

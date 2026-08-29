@@ -159,6 +159,10 @@ final class AdvanceBalanceServiceTest extends TestCase
         self::assertNull($r['balances'][0]->cost);
         self::assertNull($r['balances'][0]->balance());
         self::assertNotNull($r['balances'][0]->unavailable);
+        // Le motif remonte aussi sous forme de clé : la page acomptes l'affiche
+        // traduite, plus en texte technique figé en français (#20).
+        self::assertNotNull($r['balances'][0]->unavailableKey);
+        self::assertMatchesRegularExpression('/^(dash|common)\.reason\./', $r['balances'][0]->unavailableKey);
         self::assertEqualsWithDelta(0.0, $r['total_cost'], 0.01);
         self::assertEqualsWithDelta(0.0, $r['total_balance'], 0.01);
         self::assertTrue($r['has_gaps']);

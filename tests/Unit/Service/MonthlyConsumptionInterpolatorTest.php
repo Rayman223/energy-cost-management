@@ -139,6 +139,7 @@ final class MonthlyConsumptionInterpolatorTest extends TestCase
 
         self::assertFalse($r->available);
         self::assertSame('Relevé manquant : le calcul se fera dès le prochain relevé.', $r->reason);
+        self::assertSame('common.reason.awaiting_next_reading', $r->reasonKey);
     }
 
     public function testNoReadingsIsUnavailable(): void
@@ -147,6 +148,45 @@ final class MonthlyConsumptionInterpolatorTest extends TestCase
 
         self::assertFalse($r->available);
         self::assertSame('Aucun relevé disponible pour cette période.', $r->reason);
+        self::assertSame('common.reason.no_readings', $r->reasonKey);
+    }
+
+    /**
+     * Le motif d'indisponibilité traverse jusqu'à l'écran : sans clé de catalogue, il
+     * s'y affichait en français en dur quelle que soit la langue du visiteur (#20).
+     */
+    public function testEveryUnavailableResultCarriesACatalogKey(): void
+    {
+        $cases = [
+            'common.reason.no_readings'           => $this->interp->interpolateRange(
+                [],
+                new DateTimeImmutable('2026-06-01 00:00:00'),
+                new DateTimeImmutable('2026-07-01 00:00:00'),
+            ),
+            'common.reason.invalid_period'        => $this->interp->interpolateRange(
+                $this->readings([['2026-06-10 00:00:00', 1000.0], ['2026-06-20 00:00:00', 1100.0]]),
+                new DateTimeImmutable('2026-07-01 00:00:00'),
+                new DateTimeImmutable('2026-06-01 00:00:00'),
+            ),
+            'common.reason.awaiting_next_reading' => $this->interp->interpolateRange(
+                $this->readings([['2026-06-10 00:00:00', 1000.0]]),
+                new DateTimeImmutable('2026-06-01 00:00:00'),
+                new DateTimeImmutable('2026-07-01 00:00:00'),
+            ),
+            // Un seul relevé, mais la fin de période tombe dessus : la pente reste
+            // inconnue, donc aucune borne n'est calculable.
+            'common.reason.not_enough_readings'   => $this->interp->interpolateRange(
+                $this->readings([['2026-06-10 00:00:00', 1000.0]]),
+                new DateTimeImmutable('2026-01-01 00:00:00'),
+                new DateTimeImmutable('2026-06-10 00:00:00'),
+            ),
+        ];
+
+        foreach ($cases as $expectedKey => $result) {
+            self::assertFalse($result->available, "Le cas {$expectedKey} devrait être indisponible.");
+            self::assertSame($expectedKey, $result->reasonKey);
+            self::assertNotNull($result->reason, 'Le texte technique reste posé pour l\'API et les logs.');
+        }
     }
 
     public function testHandlesDecemberBoundaryRollover(): void

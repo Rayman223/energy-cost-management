@@ -141,12 +141,16 @@ $currency = $balance['currency'] ?? $currency;
         </td>
         <?php endif; ?>
         <?php else: ?>
-        <?php // La raison technique est AFFICHÉE : sans elle, « non calculable » est un
-              // mur muet, impossible à diagnostiquer depuis l'écran (prix de marché
-              // manquants, grille absente, aucun relevé sur la fenêtre…). ?>
+        <?php // La raison est AFFICHÉE : sans elle, « non calculable » est un mur muet,
+              // impossible à diagnostiquer depuis l'écran (prix de marché manquants,
+              // grille absente, aucun relevé sur la fenêtre…). On la rend traduite dès
+              // que la source a posé une clé de catalogue ; le texte technique brut ne
+              // sert plus que de repli pour les motifs qui n'en ont pas encore (#20). ?>
         <td colspan="2" class="adv-gap">
           <?= $this->te('advances.unavailable') ?>
-          <?php if ($row->unavailable !== null && $row->unavailable !== ''): ?>
+          <?php if ($row->unavailableKey !== null && $row->unavailableKey !== ''): ?>
+          <span class="adv-note"><?= $this->te($row->unavailableKey) ?></span>
+          <?php elseif ($row->unavailable !== null && $row->unavailable !== ''): ?>
           <span class="adv-note"><?= $this->e($row->unavailable) ?></span>
           <?php endif; ?>
         </td>

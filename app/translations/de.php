@@ -22,6 +22,15 @@ return [
     'common.yes'           => 'Ja',
     'common.no'            => 'Nein',
     'common.loading'       => 'Wird geladen…',
+    // Von mehreren Ansichten geteilte Gründe für Nichtverfügbarkeit (Dashboard,
+    // Abschläge): unter `common.` statt `dash.` abgelegt, sonst bliebe die
+    // Abschlagsseite — die den Dashboard-Katalog nicht exportiert — stumm (#20).
+    'common.reason.no_readings'           => 'Für diesen Zeitraum liegt kein Zählerstand vor.',
+    'common.reason.invalid_period'        => 'Ungültiger Zeitraum: Das Ende muss nach dem Beginn liegen.',
+    'common.reason.awaiting_next_reading' => 'Fehlender Zählerstand: Die Berechnung erfolgt mit dem nächsten Zählerstand.',
+    'common.reason.not_enough_readings'   => 'Nicht genügend Zählerstände, um diesen Zeitraum einzugrenzen.',
+    'common.reason.no_tariff'             => 'Kein Tarifraster deckt diesen Zeitraum ab.',
+    'common.reason.unknown_energy'        => 'Unbekannte Energieart.',
 
     'auth.sign_in'         => 'Anmelden',
     'auth.signin_with'     => 'Mit {provider} anmelden',

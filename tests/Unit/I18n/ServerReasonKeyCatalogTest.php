@@ -8,7 +8,7 @@ use App\I18n\Translator;
 use PHPUnit\Framework\TestCase;
 
 /**
- * `CostCalculationService` ne traduit pas : il pose une clé de catalogue
+ * Le serveur ne traduit pas : il pose une clé de catalogue
  * (`reason_key`) que dashboard.js rend côté client (#6). Ces clés-là échappent à
  * {@see DashboardJsCatalogTest}, qui ne voit que les `tr('…')` littéraux du JS —
  * une clé serveur orpheline traverserait donc toutes les vérifications et
@@ -16,7 +16,16 @@ use PHPUnit\Framework\TestCase;
  */
 final class ServerReasonKeyCatalogTest extends TestCase
 {
-    private const SERVICE = __DIR__ . '/../../../app/src/Service/CostCalculationService.php';
+    /**
+     * Sources qui posent une clé de motif. `MonthlyConsumptionInterpolator` en fait
+     * partie depuis #20 : ses quatre motifs (gaz/eau) remontaient jusqu'à l'écran en
+     * français en dur, hors de portée de ce garde-fou.
+     */
+    private const SOURCES = [
+        __DIR__ . '/../../../app/src/Service/CostCalculationService.php',
+        __DIR__ . '/../../../app/src/Service/MonthlyConsumptionInterpolator.php',
+        __DIR__ . '/../../../app/src/Service/AdvanceBalanceService.php',
+    ];
 
     /** Préfixes réellement exportés par dashboard.php (`translations(...)`). */
     private const EXPORTED_PREFIXES = ['dash.', 'common.'];
@@ -24,11 +33,17 @@ final class ServerReasonKeyCatalogTest extends TestCase
     /** @return list<string> */
     private function reasonKeys(): array
     {
-        $source = file_get_contents(self::SERVICE);
-        self::assertIsString($source, 'CostCalculationService.php doit être lisible.');
+        $keys = [];
 
-        preg_match_all("/'(dash\.[a-z0-9_.]+)'/", $source, $matches);
-        $keys = array_values(array_unique($matches[1]));
+        foreach (self::SOURCES as $path) {
+            $source = file_get_contents($path);
+            self::assertIsString($source, basename($path) . ' doit être lisible.');
+
+            preg_match_all("/'((?:dash|common)\.[a-z0-9_.]+)'/", $source, $matches);
+            $keys = [...$keys, ...$matches[1]];
+        }
+
+        $keys = array_values(array_unique($keys));
 
         self::assertNotEmpty($keys, 'Aucune clé de catalogue détectée : la regex a dérivé.');
 
@@ -48,7 +63,7 @@ final class ServerReasonKeyCatalogTest extends TestCase
                 self::assertArrayHasKey(
                     $key,
                     $catalog,
-                    "Clé {$key} posée par CostCalculationService mais absente de {$locale}.php",
+                    "Clé {$key} posée côté serveur mais absente de {$locale}.php",
                 );
             }
         }

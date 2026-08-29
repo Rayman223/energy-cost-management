@@ -27,6 +27,7 @@ final class MonthInterpolation
     private function __construct(
         public readonly bool $available,
         public readonly ?string $reason,
+        public readonly ?string $reasonKey,
         public readonly float $indexStart,
         public readonly float $indexEnd,
         public readonly float $monthlyDelta,
@@ -42,9 +43,14 @@ final class MonthInterpolation
     ) {
     }
 
-    public static function unavailable(string $reason): self
+    /**
+     * @param string $reason    Texte technique, conservé pour l'API et les logs.
+     * @param string $reasonKey Clé de catalogue (`common.reason.*`) que les pages
+     *                          traduisent dans la langue du visiteur (#20).
+     */
+    public static function unavailable(string $reason, string $reasonKey): self
     {
-        return new self(false, $reason, 0.0, 0.0, 0.0, 0, 0, '', '', '', '', false, 0, 0);
+        return new self(false, $reason, $reasonKey, 0.0, 0.0, 0.0, 0, 0, '', '', '', '', false, 0, 0);
     }
 
     public static function of(
@@ -63,6 +69,7 @@ final class MonthInterpolation
     ): self {
         return new self(
             true,
+            null,
             null,
             $indexStart,
             $indexEnd,

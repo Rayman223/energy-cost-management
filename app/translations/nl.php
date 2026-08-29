@@ -22,6 +22,15 @@ return [
     'common.yes'           => 'Ja',
     'common.no'            => 'Nee',
     'common.loading'       => 'Laden…',
+    // Redenen van onbeschikbaarheid die meerdere schermen delen (dashboard,
+    // voorschotten): onder `common.` en niet onder `dash.`, anders zou de
+    // voorschottenpagina — die de dashboardcatalogus niet exporteert — ze leeg tonen (#20).
+    'common.reason.no_readings'           => 'Geen meterstand beschikbaar voor deze periode.',
+    'common.reason.invalid_period'        => 'Ongeldige periode: het einde moet na het begin liggen.',
+    'common.reason.awaiting_next_reading' => 'Ontbrekende meterstand: de berekening volgt zodra de volgende meterstand is ingevoerd.',
+    'common.reason.not_enough_readings'   => 'Te weinig meterstanden om deze periode te omsluiten.',
+    'common.reason.no_tariff'             => 'Geen tariefschema dekt deze periode.',
+    'common.reason.unknown_energy'        => 'Onbekend energietype.',
 
     'auth.sign_in'         => 'Aanmelden',
     'auth.signin_with'     => 'Aanmelden met {provider}',

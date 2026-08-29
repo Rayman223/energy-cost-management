@@ -22,6 +22,15 @@ return [
     'common.yes'           => 'Yes',
     'common.no'            => 'No',
     'common.loading'       => 'Loading…',
+    // Unavailability reasons shared by several screens (dashboard, advances): filed
+    // under `common.` rather than `dash.`, otherwise the advances page — which does
+    // not export the dashboard catalog — would render them blank (#20).
+    'common.reason.no_readings'           => 'No reading available for this period.',
+    'common.reason.invalid_period'        => 'Invalid period: the end must come after the start.',
+    'common.reason.awaiting_next_reading' => 'Missing reading: the calculation will run as soon as the next reading is entered.',
+    'common.reason.not_enough_readings'   => 'Not enough readings to bracket this period.',
+    'common.reason.no_tariff'             => 'No tariff grid covers this period.',
+    'common.reason.unknown_energy'        => 'Unknown energy type.',
 
     'auth.sign_in'         => 'Sign in',
     'auth.signin_with'     => 'Sign in with {provider}',

@@ -408,7 +408,7 @@ final class CostCalculationService
     private function gasResponse(MonthInterpolation $interp, string $label, array $series): array
     {
         if (!$interp->available) {
-            return ['available' => false, 'reason' => $interp->reason];
+            return ['available' => false, 'reason' => $interp->reason, 'reason_key' => $interp->reasonKey];
         }
 
         $startDt = new DateTimeImmutable($interp->monthStart);
@@ -511,7 +511,7 @@ final class CostCalculationService
     private static function volumeResponse(MonthInterpolation $interp): array
     {
         if (!$interp->available) {
-            return ['available' => false, 'reason' => $interp->reason];
+            return ['available' => false, 'reason' => $interp->reason, 'reason_key' => $interp->reasonKey];
         }
 
         return [
@@ -625,7 +625,7 @@ final class CostCalculationService
     private function waterResponse(MonthInterpolation $interp, array $series): array
     {
         if (!$interp->available) {
-            return ['available' => false, 'reason' => $interp->reason];
+            return ['available' => false, 'reason' => $interp->reason, 'reason_key' => $interp->reasonKey];
         }
 
         $result = [
