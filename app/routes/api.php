@@ -26,6 +26,7 @@ use App\Security\AuthGuard;
 use App\Security\UserContext;
 use App\Security\WebAccessGuard;
 use App\Service\CostCalculationService;
+use App\Service\ReadingGranularityPolicy;
 use App\Service\TariffCalculatorService;
 use App\Support\DynamicPricing;
 
@@ -129,17 +130,22 @@ try {
 }
 
 // Plafonnement des index élec par registre et par créneau aligné (issue #165) :
-// un par jour en tarif fixe, un par tranche de 15 min en tarif dynamique. Fuseau
-// de l'utilisateur pour délimiter le créneau (repli UTC neutre si pas de profil).
-$elecThrottle = DynamicPricing::isEnabled($config) ? ReadingGranularity::QuarterHour : ReadingGranularity::Day;
+// le créneau suit la résolution de facturation de la grille active à la date du
+// relevé (issue #10) — jour en fixe, heure en dynamique horaire, 15 min en
+// dynamique quart-horaire. Kill-switch serveur prioritaire : sans import de prix
+// de marché, tout le monde est traité comme fixe. Fuseau de l'utilisateur pour
+// délimiter le créneau (repli UTC neutre si pas de profil).
 $userTimezone = $profile->timezone ?? 'UTC';
+$elecThrottle = DynamicPricing::isEnabled($config)
+    ? ReadingGranularityPolicy::fromTariffs($tariffRepo, $userTimezone)
+    : ReadingGranularityPolicy::constant(ReadingGranularity::Day, $userTimezone);
 
 $readings = new ReadingsController($elecRepo, $gasRepo, $waterRepo);
 $cost     = new CostController($costSvc, DynamicPricing::isEnabled($config));
 $tariffs  = new TariffController($tariffRepo);
-$entries  = new MeterEntryController($gasRepo, $waterRepo, $elecRepo, $syncState, $elecThrottle, $userTimezone);
+$entries  = new MeterEntryController($gasRepo, $waterRepo, $elecRepo, $syncState, $elecThrottle);
 $deletion = new ReadingDeletionController($gasRepo, $waterRepo, $elecRepo);
-$ingest   = new IngestController($elecRepo, $gasRepo, $waterRepo, $elecThrottle, $userTimezone);
+$ingest   = new IngestController($elecRepo, $gasRepo, $waterRepo, $elecThrottle);
 
 $router = new Router();
 

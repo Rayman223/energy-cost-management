@@ -270,6 +270,26 @@ final class ElectricityReadingRepositoryDbTest extends DatabaseTestCase
         self::assertFalse($exact['production']);
     }
 
+    public function testReadingsPresentInHourBucketAlignsToFullHour(): void
+    {
+        $repo = $this->repo();
+        $hour = ReadingGranularity::Hour;
+        // Tarif dynamique horaire (#10) : relevé solaire à 09:02 → créneau [09:00–10:00).
+        $repo->insertIndexes(new \DateTimeImmutable('2026-07-13 09:02:00', new \DateTimeZone('UTC')), ['production' => 7.0]);
+
+        // Autre instant de la même heure pleine → présent (au-delà du quart d'heure).
+        $sameHour = $repo->readingsPresentInBucket(new \DateTimeImmutable('2026-07-13 09:47:00', new \DateTimeZone('UTC')), 'UTC', $hour, ['production']);
+        self::assertTrue($sameHour['production']);
+
+        // Heure suivante → absent.
+        $nextHour = $repo->readingsPresentInBucket(new \DateTimeImmutable('2026-07-13 10:05:00', new \DateTimeZone('UTC')), 'UTC', $hour, ['production']);
+        self::assertFalse($nextHour['production']);
+
+        // Instant exact exclu (idempotence).
+        $exact = $repo->readingsPresentInBucket(new \DateTimeImmutable('2026-07-13 09:02:00', new \DateTimeZone('UTC')), 'UTC', $hour, ['production']);
+        self::assertFalse($exact['production']);
+    }
+
     public function testDailyChartGroupsByUserLocalDay(): void
     {
         // Utilisateur isolé (le seed 2025/2026 de la classe ne doit pas interférer :

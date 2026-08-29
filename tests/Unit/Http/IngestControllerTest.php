@@ -8,6 +8,7 @@ use App\Domain\ReadingGranularity;
 use App\Http\Controller\IngestController;
 use App\Http\Request;
 use App\Http\ValidationException;
+use App\Service\ReadingGranularityPolicy;
 use PHPUnit\Framework\TestCase;
 use Tests\Fake\FakeElectricityIngestion;
 use Tests\Fake\FakeUtilityIngestion;
@@ -40,8 +41,9 @@ final class IngestControllerTest extends TestCase
 
     private function throttledController(ReadingGranularity $throttle): IngestController
     {
-        // Plafond activé (Day = tarif fixe, QuarterHour = tarif dynamique), fuseau UTC.
-        return new IngestController($this->elec, $this->gas, $this->water, $throttle, 'UTC');
+        // Plafond activé, granularité figée (la résolution par grille est couverte
+        // par ReadingGranularityPolicyTest), fuseau UTC.
+        return new IngestController($this->elec, $this->gas, $this->water, ReadingGranularityPolicy::constant($throttle, 'UTC'));
     }
 
     private function dailyLimitController(): IngestController

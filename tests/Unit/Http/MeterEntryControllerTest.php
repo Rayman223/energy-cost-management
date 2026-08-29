@@ -8,9 +8,11 @@ use App\Domain\ReadingGranularity;
 use App\Http\Controller\MeterEntryController;
 use App\Http\Request;
 use App\Http\ValidationException;
+use App\Service\ReadingGranularityPolicy;
 use PHPUnit\Framework\TestCase;
 use Tests\Fake\FakeElectricityIngestion;
 use Tests\Fake\FakeMeterReadingRepository;
+use Tests\Fake\FakeTariffRepository;
 
 final class MeterEntryControllerTest extends TestCase
 {
@@ -215,14 +217,19 @@ final class MeterEntryControllerTest extends TestCase
 
     private function throttledController(FakeElectricityIngestion $elec, ReadingGranularity $throttle): MeterEntryController
     {
-        // Plafond activé (Day = tarif fixe, QuarterHour = tarif dynamique), fuseau UTC.
+        // Plafond activé, granularité figée (la résolution par grille est couverte
+        // par ReadingGranularityPolicyTest), fuseau UTC.
+        return $this->policyController($elec, ReadingGranularityPolicy::constant($throttle, 'UTC'));
+    }
+
+    private function policyController(FakeElectricityIngestion $elec, ReadingGranularityPolicy $policy): MeterEntryController
+    {
         return new MeterEntryController(
             new FakeMeterReadingRepository(),
             new FakeMeterReadingRepository(),
             $elec,
             null,
-            $throttle,
-            'UTC',
+            $policy,
         );
     }
 
@@ -314,5 +321,80 @@ final class MeterEntryControllerTest extends TestCase
         self::assertSame(200, $res->status);
         self::assertIsArray($res->data);
         self::assertSame(1, $res->data['inserted']);
+    }
+
+    public function testHourLimitRejectsSameRegisterSameHour(): void
+    {
+        // Tarif dynamique horaire (#10) : deux index du même registre dans l'heure
+        // pleine [07:00–08:00) → le 2e est refusé, message ancré sur 07:00.
+        $elec = new FakeElectricityIngestion();
+        $elec->insertIndexes(new \DateTimeImmutable('2026-06-25 07:02:00', new \DateTimeZone('UTC')), ['import_t1' => 1000.0]);
+
+        $this->expectException(ValidationException::class);
+        $this->expectExceptionMessage('import_t1 : un seul index par heure est autorisé (25/06/2026 07:00).');
+        $this->throttledController($elec, ReadingGranularity::Hour)
+            ->electricity($this->elecPost(['reading_at' => '2026-06-25 07:45:00', 'import_t1' => 1005.0]));
+    }
+
+    public function testHourLimitAllowsNextHour(): void
+    {
+        $elec = new FakeElectricityIngestion();
+        $elec->insertIndexes(new \DateTimeImmutable('2026-06-25 07:45:00', new \DateTimeZone('UTC')), ['import_t1' => 1000.0]);
+
+        $res = $this->throttledController($elec, ReadingGranularity::Hour)
+            ->electricity($this->elecPost(['reading_at' => '2026-06-25 08:05:00', 'import_t1' => 1005.0]));
+
+        self::assertSame(200, $res->status);
+        self::assertIsArray($res->data);
+        self::assertSame(1, $res->data['inserted']);
+    }
+
+    /**
+     * Câblage bout en bout de la politique tarifaire (#10) : le créneau appliqué est
+     * celui de la grille active à la date du relevé, pas un réglage global. Deux
+     * index à 15 min d'écart passent sous une grille quart-horaire.
+     */
+    public function testPolicyDerivedFromDynamicQuarterGridAllowsTwoReadingsInOneHour(): void
+    {
+        $elec = new FakeElectricityIngestion();
+        $elec->insertIndexes(new \DateTimeImmutable('2026-06-25 07:02:00', new \DateTimeZone('UTC')), ['import_t1' => 1000.0]);
+
+        $tariffs = new FakeTariffRepository(new \App\Domain\TariffGrid(
+            id: 1,
+            energyType: 'electricity',
+            name: 'Dyn 15 min',
+            validFrom: new \DateTimeImmutable('2026-01-01'),
+            validTo: null,
+            lines: [],
+            pricingMode: 'dynamic_quarter',
+        ));
+
+        $res = $this->policyController($elec, ReadingGranularityPolicy::fromTariffs($tariffs, 'UTC'))
+            ->electricity($this->elecPost(['reading_at' => '2026-06-25 07:20:00', 'import_t1' => 1005.0]));
+
+        self::assertSame(200, $res->status);
+        self::assertIsArray($res->data);
+        self::assertSame(1, $res->data['inserted']);
+    }
+
+    /** Même relevé, mais sous une grille fixe : le plafond journalier s'applique. */
+    public function testPolicyDerivedFromFixedGridKeepsDailyLimit(): void
+    {
+        $elec = new FakeElectricityIngestion();
+        $elec->insertIndexes(new \DateTimeImmutable('2026-06-25 07:02:00', new \DateTimeZone('UTC')), ['import_t1' => 1000.0]);
+
+        $tariffs = new FakeTariffRepository(new \App\Domain\TariffGrid(
+            id: 1,
+            energyType: 'electricity',
+            name: 'Fixe',
+            validFrom: new \DateTimeImmutable('2026-01-01'),
+            validTo: null,
+            lines: [],
+        ));
+
+        $this->expectException(ValidationException::class);
+        $this->expectExceptionMessage('import_t1 : un seul index par jour est autorisé');
+        $this->policyController($elec, ReadingGranularityPolicy::fromTariffs($tariffs, 'UTC'))
+            ->electricity($this->elecPost(['reading_at' => '2026-06-25 07:20:00', 'import_t1' => 1005.0]));
     }
 }

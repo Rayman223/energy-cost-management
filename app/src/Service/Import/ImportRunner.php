@@ -4,12 +4,12 @@ declare(strict_types=1);
 
 namespace App\Service\Import;
 
-use App\Domain\ReadingGranularity;
 use App\Domain\SyncStateKeys;
 use App\Repository\ElectricityReadingRepository;
 use App\Repository\UtilityReadingRepository;
 use App\Repository\WebhookSyncStateRepository;
 use App\Service\BulkImportService;
+use App\Service\ReadingGranularityPolicy;
 use PDO;
 use RuntimeException;
 
@@ -42,7 +42,7 @@ final class ImportRunner
      * @throws \InvalidArgumentException si le mapping ou le type d'énergie est invalide.
      *         Message sûr à afficher (aucun détail interne) : la route le présente tel quel.
      */
-    public function runFromRequest(PDO $pdo, int $targetUserId, array $post, array $files, ?ReadingGranularity $throttle = null, string $timezone = 'UTC'): ImportReport
+    public function runFromRequest(PDO $pdo, int $targetUserId, array $post, array $files, ?ReadingGranularityPolicy $throttle = null): ImportReport
     {
         $energyType = strtolower(trim((string) ($post['energy_type'] ?? '')));
         $dryRun     = ($post['dry_run'] ?? '') === '1';
@@ -50,7 +50,7 @@ final class ImportRunner
 
         $file = is_array($files['import_file'] ?? null) ? $files['import_file'] : [];
 
-        return $this->runUploaded($pdo, $targetUserId, $energyType, self::parseOverrides($post), $file, $dryRun, $replace, $throttle, $timezone);
+        return $this->runUploaded($pdo, $targetUserId, $energyType, self::parseOverrides($post), $file, $dryRun, $replace, $throttle);
     }
 
     /**
@@ -126,8 +126,7 @@ final class ImportRunner
         array $file,
         bool $dryRun,
         bool $replace = false,
-        ?ReadingGranularity $throttle = null,
-        string $timezone = 'UTC',
+        ?ReadingGranularityPolicy $throttle = null,
     ): ImportReport {
         $tmp  = is_string($file['tmp_name'] ?? null) ? $file['tmp_name'] : '';
         $name = is_string($file['name'] ?? null) ? $file['name'] : '';
@@ -158,7 +157,7 @@ final class ImportRunner
         // schéma/SQL vers l'utilisateur). La CLI, elle, appelle run() en direct et
         // affiche la cause réelle à l'opérateur.
         try {
-            return $this->run($pdo, $mapping, $this->openRows($tmp, $ext === 'json'), $targetUserId, $energyType, $dryRun, $replace, $throttle, $timezone);
+            return $this->run($pdo, $mapping, $this->openRows($tmp, $ext === 'json'), $targetUserId, $energyType, $dryRun, $replace, $throttle);
         } catch (\InvalidArgumentException $e) {
             // Erreurs « métier » (format/fichier) : message sûr à afficher.
             throw new RuntimeException($e->getMessage(), 0, $e);
@@ -191,8 +190,7 @@ final class ImportRunner
         string $energyType,
         bool $dryRun,
         bool $replace = false,
-        ?ReadingGranularity $throttle = null,
-        string $timezone = 'UTC',
+        ?ReadingGranularityPolicy $throttle = null,
     ): ImportReport {
         $report = new ImportReport();
 
@@ -201,7 +199,7 @@ final class ImportRunner
             $capped = $this->capped($rows, $report);
 
             if ($mapping->isElectricity()) {
-                $this->service->importElectricity($capped, $mapping, new ElectricityReadingRepository($pdo, $targetUserId), $report, $replace, $throttle, $timezone);
+                $this->service->importElectricity($capped, $mapping, new ElectricityReadingRepository($pdo, $targetUserId), $report, $replace, $throttle);
             } else {
                 $this->service->importUtility($capped, $mapping, new UtilityReadingRepository($pdo, $targetUserId, $energyType), $report, $replace);
             }

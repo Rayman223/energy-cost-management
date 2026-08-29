@@ -31,9 +31,34 @@ final class FakeTariffRepository implements TariffRepositoryInterface
     /** @var list<TariffGrid> Grilles renvoyées par findActiveGridsBetween ; vide → repli sur $grid. */
     public array $gridsBetween = [];
 
+    /**
+     * Grilles parmi lesquelles findActiveGrid() choisit selon la DATE demandée
+     * (première dont `isActiveOn()` répond vrai) ; vide → repli sur $grid, insensible
+     * à la date. Permet de simuler une bascule fixe → dynamique dans l'historique.
+     *
+     * @var list<TariffGrid>
+     */
+    public array $activeGrids = [];
+
+    /** Nombre d'appels à findActiveGrid() — sert à vérifier la mémoïsation des appelants. */
+    public int $findActiveGridCalls = 0;
+
     public function findActiveGrid(string $energyType, ?DateTimeImmutable $on = null): ?TariffGrid
     {
-        return $this->grid;
+        $this->findActiveGridCalls++;
+
+        if ($this->activeGrids === []) {
+            return $this->grid;
+        }
+
+        $on ??= new DateTimeImmutable('now');
+        foreach ($this->activeGrids as $grid) {
+            if ($grid->energyType === $energyType && $grid->isActiveOn($on)) {
+                return $grid;
+            }
+        }
+
+        return null;
     }
 
     /** @return list<TariffGrid> */

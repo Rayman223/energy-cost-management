@@ -4,13 +4,13 @@ declare(strict_types=1);
 
 namespace App\Http\Controller;
 
-use App\Domain\ReadingGranularity;
 use App\Http\JsonResponse;
 use App\Http\Request;
 use App\Http\ValidationException;
 use App\Repository\Contract\ElectricityIngestionInterface;
 use App\Repository\Contract\UtilityIngestionInterface;
 use App\Service\Import\ReadingParser;
+use App\Service\ReadingGranularityPolicy;
 use DateTimeImmutable;
 
 /**
@@ -31,11 +31,11 @@ final class IngestController
         private readonly UtilityIngestionInterface $gas,
         private readonly UtilityIngestionInterface $water,
         // Plafonnement des index élec à un par registre et par créneau aligné
-        // (issue #165) : Day en tarif fixe, QuarterHour en tarif dynamique. null =
-        // aucun plafond. Les registres déjà relevés dans le créneau sont ignorés en
-        // silence (comme un doublon), sans casser le batch. Fuseau utilisateur.
-        private readonly ?ReadingGranularity $electricityThrottle = null,
-        private readonly string $timezone = 'UTC',
+        // (issue #165) : la politique dit quel créneau s'applique au relevé, selon la
+        // grille active à SA date (issue #10), et dans quel fuseau il se délimite.
+        // null = aucun plafond. Les registres déjà relevés dans le créneau sont
+        // ignorés en silence (comme un doublon), sans casser le batch.
+        private readonly ?ReadingGranularityPolicy $electricityThrottle = null,
     ) {
     }
 
@@ -73,7 +73,12 @@ final class IngestController
             // relevés dans le créneau (skip silencieux = doublon), insérer les
             // registres libres de la même lecture.
             if ($this->electricityThrottle !== null) {
-                $inBucket = $this->electricity->readingsPresentInBucket($ts, $this->timezone, $this->electricityThrottle, array_keys($indexes));
+                $inBucket = $this->electricity->readingsPresentInBucket(
+                    $ts,
+                    $this->electricityThrottle->timezone(),
+                    $this->electricityThrottle->forMoment($ts),
+                    array_keys($indexes),
+                );
                 $indexes = array_filter($indexes, static fn (string $k): bool => !($inBucket[$k] ?? false), ARRAY_FILTER_USE_KEY);
             }
 
