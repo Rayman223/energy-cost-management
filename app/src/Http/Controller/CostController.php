@@ -8,6 +8,7 @@ use App\Http\JsonResponse;
 use App\Http\Request;
 use App\Http\ValidationException;
 use App\Service\CostCalculationService;
+use App\Support\Dates;
 
 /**
  * Estimations de coûts (électricité mois courant/donné, gaz dernière période/mois).
@@ -73,8 +74,13 @@ final class CostController
      */
     private function yearMonth(Request $request): array
     {
-        $year  = $request->queryInt('year', (int) date('Y'));
-        $month = $request->queryInt('month', (int) date('n'));
+        // Défaut en UTC, comme le mois amorcé par le dashboard (#21) : lu dans le
+        // fuseau PHP, un appel sans paramètre retomberait sur un autre mois que
+        // celui que la page vient d'afficher.
+        [$currentYear, $currentMonth] = Dates::currentYearMonth();
+
+        $year  = $request->queryInt('year', $currentYear);
+        $month = $request->queryInt('month', $currentMonth);
 
         if ($year < 2000 || $year > 2100 || $month < 1 || $month > 12) {
             throw new ValidationException('Invalid year/month');

@@ -39,12 +39,20 @@ $gasCostData  = null;
 $gasLatest    = null;
 $waterLatest  = null;
 $waterCostData = null;
-$gasInitYear  = (int) date('Y');
-$gasInitMonth = (int) date('n');
-$waterInitYear  = (int) date('Y');
-$waterInitMonth = (int) date('n');
 
 require_once __DIR__ . '/../../vendor/autoload.php';
+
+// Mois courant en UTC, dérivé d'un instant unique : les fenêtres de comparaison
+// (DashboardCardsService) et les deltas mensuels (ElectricityReadingRepository)
+// sont bâtis dans ce même référentiel (#21). Le lire dans le fuseau PHP les
+// désaligne au basculement de mois sur un serveur qui n'est pas en UTC — la
+// fenêtre demandée est alors encore à venir, et les cards perdent leur valeur.
+$now = Dates::nowUtc();
+[$currentYear, $currentMonth] = Dates::yearMonthOf($now);
+$gasInitYear    = $currentYear;
+$gasInitMonth   = $currentMonth;
+$waterInitYear  = $currentYear;
+$waterInitMonth = $currentMonth;
 
 // Bootstrap isolé : une configuration injoignable dégrade vers le dashboard en
 // erreur (bloc try ci-dessous) plutôt que de provoquer un fatal.
@@ -130,7 +138,7 @@ try {
     // dernier paramètre n'est qu'un repli : il ne sert que si aucun relevé élec
     // du mois ne fournit de borne de fin à la fenêtre de comparaison (#5).
     $cards       = (new DashboardCardsService($elecRepo, $costSvc))
-        ->build($deltas, (int) date('Y'), (int) date('n'), new DateTimeImmutable('now', Dates::utc()));
+        ->build($deltas, $currentYear, $currentMonth, $now);
     // Coût du mois : chaque sous-période dans le mode de sa grille (#245).
     $cost        = $costSvc->estimateCurrentMonthElectricity();
     // Tarif dynamique désactivé côté serveur ⇒ on n'expose pas la section (le JS
@@ -177,8 +185,8 @@ echo $view->render('dashboard', [
     'gasLatest'    => $gasLatest,
     'waterLatest'  => $waterLatest,
     'waterCostData' => $waterCostData,
-    'initYear'     => (int) date('Y'),
-    'initMonth'    => (int) date('n'),
+    'initYear'     => $currentYear,
+    'initMonth'    => $currentMonth,
     'gasInitYear'  => $gasInitYear,
     'gasInitMonth' => $gasInitMonth,
     'waterInitYear'  => $waterInitYear,
