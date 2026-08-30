@@ -27,7 +27,8 @@
       "/tmp",
       "/var/www/energy-cost-management/backups",
       "/var/www/energy-cost-management/.claude",
-      "/var/www/energy-cost-management/.git"
+      "/var/www/energy-cost-management/.git",
+      "/home/rayman/.local/bin"
     ]
   },
   "model": "claude-opus-5"
