@@ -97,4 +97,42 @@ final class DatesTest extends TestCase
             Dates::todayIn('Mars/Olympus_Mons')->format('Y-m-d'),
         );
     }
+
+    /**
+     * Contraste avec {@see testTodayInReturnsUtcMidnightOfTheUsersCivilDay()} :
+     * `todayIn()` ramène un jour civil à minuit UTC, `startOfDayIn()` l'ANCRE dans
+     * son fuseau. Un contrat belge qui bascule le 1er avril s'ouvre donc le 31 mars
+     * à 22:00 UTC — c'est ce décalage qui rattache les bons kWh à la bonne grille
+     * (#16). Le décalage suit l'heure d'été : deux heures en avril, une en janvier.
+     */
+    public function testStartOfDayInAnchorsTheCivilDayInItsZone(): void
+    {
+        self::assertSame('2026-03-31 22:00:00', Dates::toDbString(Dates::startOfDayIn('2026-04-01', 'Europe/Brussels')));
+        self::assertSame('2026-01-14 23:00:00', Dates::toDbString(Dates::startOfDayIn('2026-01-15', 'Europe/Brussels')));
+    }
+
+    /** Contrat en UTC : la frontière tombe pile à minuit, sans décalage. */
+    public function testStartOfDayInIsIdentityForUtc(): void
+    {
+        $start = Dates::startOfDayIn('2026-06-25', 'UTC');
+
+        self::assertSame('UTC', $start->getTimezone()->getName());
+        self::assertSame('2026-06-25 00:00:00', Dates::toDbString($start));
+    }
+
+    /**
+     * Nuit du passage à l'heure d'été : la bascule a lieu à 02:00, donc minuit local
+     * existe bel et bien et reste en CET (UTC+1) — le jour raccourci ne déplace pas
+     * son propre début.
+     */
+    public function testStartOfDayInHandlesTheSpringForwardDay(): void
+    {
+        self::assertSame('2026-03-28 23:00:00', Dates::toDbString(Dates::startOfDayIn('2026-03-29', 'Europe/Brussels')));
+    }
+
+    /** Même repli que todayIn() : un fuseau illisible ne doit pas casser un calcul de coût. */
+    public function testStartOfDayInFallsBackToUtcOnUnknownZone(): void
+    {
+        self::assertSame('2026-04-01 00:00:00', Dates::toDbString(Dates::startOfDayIn('2026-04-01', 'Mars/Olympus_Mons')));
+    }
 }

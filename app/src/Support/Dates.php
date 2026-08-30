@@ -53,14 +53,40 @@ final class Dates
      */
     public static function todayIn(string $timezone): DateTimeImmutable
     {
-        try {
-            $zone = new DateTimeZone($timezone);
-        } catch (\Throwable) {
-            $zone = self::utc();
-        }
-
-        $localDay = (new DateTimeImmutable('now', $zone))->format('Y-m-d');
+        $localDay = (new DateTimeImmutable('now', self::zone($timezone)))->format('Y-m-d');
 
         return new DateTimeImmutable($localDay . ' 00:00:00', self::utc());
+    }
+
+    /**
+     * Instant UTC auquel commence le jour civil $day (format `Y-m-d`) dans $timezone.
+     *
+     * Distinct de {@see todayIn()}, qui ramène un jour civil à minuit UTC : ici le
+     * jour est bien ANCRÉ dans son fuseau, si bien que le 1er avril d'un contrat
+     * belge commence le 31 mars à 22:00 UTC. C'est ce qu'il faut pour tarifer une
+     * bascule de grille (#16) : la frontière d'une sous-période est minuit chez
+     * l'utilisateur, pas minuit à Greenwich.
+     *
+     * Nuit de bascule où minuit local n'existe pas (rare, ex. `America/Santiago`) :
+     * PHP rend l'instant suivant valide (01:00 locale), ce qui reste le début réel
+     * de la journée.
+     */
+    public static function startOfDayIn(string $day, string $timezone): DateTimeImmutable
+    {
+        return (new DateTimeImmutable($day . ' 00:00:00', self::zone($timezone)))
+            ->setTimezone(self::utc());
+    }
+
+    /**
+     * Fuseau nommé, avec repli sur UTC : un identifiant illisible (donnée héritée,
+     * base éditée à la main) ne doit pas rendre une page inaccessible.
+     */
+    private static function zone(string $timezone): DateTimeZone
+    {
+        try {
+            return new DateTimeZone($timezone);
+        } catch (\Throwable) {
+            return self::utc();
+        }
     }
 }
