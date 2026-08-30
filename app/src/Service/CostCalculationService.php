@@ -81,11 +81,13 @@ final class CostCalculationService
      *        Sert de REPLI depuis #228 : une grille portant des lignes spot_coefficient
      *        ou spot_offset fait autorité et ce champ est alors ignoré
      *        (cf. SpotFormulaResolver).
-     * @param string $tariffTimezone Fuseau (IANA) du contrat servant à borner la
-     *        bascule tarifaire jour/nuit (T1/T2). Les clés horaires étant stockées
-     *        en UTC (cf. App\Support\Dates), on reconvertit vers ce fuseau avant de
-     *        classer une heure. Par utilisateur (user_profiles.timezone) ; défaut
-     *        Europe/Brussels. Sépare la facturation (fuseau contrat) de l'affichage.
+     * @param string $tariffTimezone Fuseau (IANA) du contrat. Il borne la bascule
+     *        tarifaire jour/nuit (T1/T2) et la frontière entre deux sous-périodes,
+     *        qui tombe à minuit chez l'utilisateur (#16). Les clés horaires étant
+     *        stockées en UTC (cf. App\Support\Dates), on reconvertit vers ce fuseau
+     *        avant de classer une heure ou d'ouvrir une sous-période. Par utilisateur
+     *        (user_profiles.timezone) ; défaut UTC, aligné sur `UserProfile::defaults()`
+     *        et sur le schéma. Sépare la facturation (fuseau contrat) de l'affichage.
      */
     public function __construct(
         private readonly LegacyDailyRepositoryInterface $legacyRepo,
@@ -97,7 +99,7 @@ final class CostCalculationService
         private readonly bool $dynamicEnabled = false,
         private readonly ?MeterReadingRepositoryInterface $waterRepo = null,
         private readonly float $supplierMarkupPerKwh = 0.0,
-        private readonly string $tariffTimezone = 'Europe/Brussels',
+        private readonly string $tariffTimezone = 'UTC',
         private readonly TariffPeriodSplitter $splitter = new TariffPeriodSplitter(),
         private readonly CostBreakdownAggregator $aggregator = new CostBreakdownAggregator(),
         private readonly SpotFormulaResolver $formulaResolver = new SpotFormulaResolver(),
@@ -118,8 +120,8 @@ final class CostCalculationService
             return self::unavailable('No data for current month', 'dash.reason.no_data_month');
         }
 
-        $from = new DateTimeImmutable($deltas['from']);
-        $to   = new DateTimeImmutable($deltas['to']);
+        $from = Dates::fromDbString($deltas['from']);
+        $to   = Dates::fromDbString($deltas['to']);
         $days = $this->computeDays($from, $to);
 
         $coverage = $this->coverageFor('electricity', $from, $to, $days);
@@ -143,8 +145,8 @@ final class CostCalculationService
             return self::unavailable(sprintf('No data for %04d-%02d', $year, $month), 'dash.reason.no_data_month');
         }
 
-        $from = new DateTimeImmutable($deltas['from']);
-        $to   = new DateTimeImmutable($deltas['to']);
+        $from = Dates::fromDbString($deltas['from']);
+        $to   = Dates::fromDbString($deltas['to']);
         $days = $this->computeDays($from, $to);
 
         $coverage = $this->coverageFor('electricity', $from, $to, $days);
@@ -177,8 +179,8 @@ final class CostCalculationService
             return self::unavailable('No data for current month', 'dash.reason.no_data_month');
         }
 
-        $from = new DateTimeImmutable($deltas['from']);
-        $to   = new DateTimeImmutable($deltas['to']);
+        $from = Dates::fromDbString($deltas['from']);
+        $to   = Dates::fromDbString($deltas['to']);
         $days = $this->computeDays($from, $to);
 
         $coverage = $this->coverageFor('electricity', $from, $to, $days);
@@ -201,8 +203,8 @@ final class CostCalculationService
             return self::unavailable(sprintf('No data for %04d-%02d', $year, $month), 'dash.reason.no_data_month');
         }
 
-        $from = new DateTimeImmutable($deltas['from']);
-        $to   = new DateTimeImmutable($deltas['to']);
+        $from = Dates::fromDbString($deltas['from']);
+        $to   = Dates::fromDbString($deltas['to']);
         $days = $this->computeDays($from, $to);
 
         $coverage = $this->coverageFor('electricity', $from, $to, $days);
@@ -259,8 +261,8 @@ final class CostCalculationService
             );
         }
 
-        $realFrom = new DateTimeImmutable($deltas['from']);
-        $realTo   = new DateTimeImmutable($deltas['to']);
+        $realFrom = Dates::fromDbString($deltas['from']);
+        $realTo   = Dates::fromDbString($deltas['to']);
         $days     = $this->periodDays($realFrom, $realTo);
 
         $coverage = $this->coverageFor('electricity', $realFrom, $realTo, $days);
@@ -302,8 +304,8 @@ final class CostCalculationService
 
         $tolerance = 86400;
 
-        return (new DateTimeImmutable($dataFrom))->getTimestamp() <= $from->getTimestamp() + $tolerance
-            && (new DateTimeImmutable($dataTo))->getTimestamp() >= $to->getTimestamp() - $tolerance;
+        return Dates::fromDbString($dataFrom)->getTimestamp() <= $from->getTimestamp() + $tolerance
+            && Dates::fromDbString($dataTo)->getTimestamp() >= $to->getTimestamp() - $tolerance;
     }
 
     /**
@@ -320,11 +322,11 @@ final class CostCalculationService
             return self::unavailable('Il faut au moins deux relevés gaz.', 'dash.reason.gas_two_readings');
         }
 
-        // Horodatages (base, heure murale locale) parsés dans le fuseau applicatif
-        // fixé par app/bootstrap.php (#130 B6) : cohérent avec les autres calculs
-        // de période de ce service (élec/eau), tous dans le même fuseau.
-        $from = new DateTimeImmutable($pair['from']['reading_at']);
-        $to   = new DateTimeImmutable($pair['to']['reading_at']);
+        // Horodatages relus en UTC, comme toute date venant de la base (#16) :
+        // cohérent avec les autres calculs de période de ce service (élec/eau) et
+        // indépendant du fuseau PHP par défaut, réglé par machine via config.php.
+        $from = Dates::fromDbString($pair['from']['reading_at']);
+        $to   = Dates::fromDbString($pair['to']['reading_at']);
         $days = max(1, (int) $from->setTime(0, 0, 0)->diff($to->setTime(0, 0, 0))->days);
 
         $coverage = $this->coverageFor('gas', $from, $to, $days);
@@ -411,10 +413,10 @@ final class CostCalculationService
             return ['available' => false, 'reason' => $interp->reason, 'reason_key' => $interp->reasonKey];
         }
 
-        $startDt = new DateTimeImmutable($interp->monthStart);
+        $startDt = Dates::fromDbString($interp->monthStart);
 
         // ── Tariff & PCS ──────────────────────────────────────────────────────
-        $coverage = $this->coverageFor('gas', $startDt, new DateTimeImmutable($interp->monthEnd), $interp->days);
+        $coverage = $this->coverageFor('gas', $startDt, Dates::fromDbString($interp->monthEnd), $interp->days);
         $segments = $coverage->segments;
         if ($segments === []) {
             return self::unavailable(
@@ -640,8 +642,8 @@ final class CostCalculationService
             'delta_m3'      => round($interp->monthlyDelta, 3),
         ];
 
-        $startDt  = new DateTimeImmutable($interp->monthStart);
-        $coverage = $this->coverageFor('water', $startDt, new DateTimeImmutable($interp->monthEnd), $interp->days);
+        $startDt  = Dates::fromDbString($interp->monthStart);
+        $coverage = $this->coverageFor('water', $startDt, Dates::fromDbString($interp->monthEnd), $interp->days);
         $segments = $coverage->segments;
 
         if ($segments !== []) {
@@ -972,7 +974,16 @@ final class CostCalculationService
 
     /**
      * Bornes des sous-périodes, en instants de base : début réel de la période, puis
-     * le minuit qui ouvre chaque sous-période suivante, puis fin réelle.
+     * l'instant qui ouvre chaque sous-période suivante, puis fin réelle.
+     *
+     * Cet instant est **minuit dans le fuseau du contrat** ({@see $tariffTimezone}),
+     * exprimé en UTC — le 1er avril d'un contrat belge ouvre le 31 mars à 22:00 UTC.
+     * `$segment->from` descend de `TariffGrid::$validFrom`, une date de validité sans
+     * heure : c'est bien un jour civil du contrat, pas un instant absolu. Découper à
+     * minuit UTC (#16) rattachait 1 à 2 h de kWh à une sous-période pendant que leur
+     * coût indexé était compté dans l'autre par {@see segmentIndexForHour()}, qui
+     * classe les créneaux au jour civil du contrat depuis #232. Les deux coupent
+     * désormais au même instant.
      *
      * Les bornes intermédiaires sont clampées dans `[from, to]` et forcées
      * croissantes : {@see computeDays()} rend le nombre de jours du MOIS de `$from`
@@ -990,7 +1001,7 @@ final class CostCalculationService
     {
         $boundaries = [$from];
         foreach (array_slice($segments, 1) as $segment) {
-            $at           = Dates::toDbString($segment->from);
+            $at           = Dates::toDbString(Dates::startOfDayIn($segment->from->format('Y-m-d'), $this->tariffTimezone));
             $boundaries[] = max($boundaries[count($boundaries) - 1], min($at, $to));
         }
         $boundaries[] = max($boundaries[count($boundaries) - 1], $to);
@@ -1548,6 +1559,13 @@ final class CostCalculationService
      * CHOIX de la série de prix ; la valorisation, elle, reste filtrée segment par
      * segment.
      *
+     * Les bornes suivent le fuseau du contrat, comme {@see segmentBoundaries()} : une
+     * fenêtre restée en UTC serait plus ÉTROITE que la sous-période qu'elle sert, et
+     * les créneaux tombés dans l'écart ne seraient facturés nulle part — ni en
+     * indexé, faute d'être remontés par {@see resolveDynamicSeries()}, ni au tarif
+     * fournisseur, `calculateElectricityCostDynamic()` remplaçant les lignes
+     * d'énergie de la grille par `dynamicEnergyTtc` (#16).
+     *
      * @param array<string, mixed> $deltas
      * @param list<TariffSegment> $segments
      * @param list<int> $dynamicIndexes  Non vide.
@@ -1558,12 +1576,18 @@ final class CostCalculationService
         $first = $segments[$dynamicIndexes[0]];
         $last  = $segments[$dynamicIndexes[count($dynamicIndexes) - 1]];
 
-        $from = new DateTimeImmutable((string) $deltas['from']);
-        $to   = new DateTimeImmutable((string) $deltas['to']);
+        $from = Dates::fromDbString((string) $deltas['from']);
+        $to   = Dates::fromDbString((string) $deltas['to']);
+
+        // `$last->to` est le dernier jour INCLUS : la fenêtre court jusqu'à la veille
+        // du minuit qui l'achève, toujours dans le fuseau du contrat.
+        $firstStart = Dates::startOfDayIn($first->from->format('Y-m-d'), $this->tariffTimezone);
+        $lastEnd    = Dates::startOfDayIn($last->to->modify('+1 day')->format('Y-m-d'), $this->tariffTimezone)
+            ->modify('-1 second');
 
         return [
-            max($from, $first->from->setTime(0, 0, 0)),
-            min($to, $last->to->setTime(23, 59, 59)),
+            max($from, $firstStart),
+            min($to, $lastEnd),
         ];
     }
 

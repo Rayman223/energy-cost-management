@@ -24,6 +24,7 @@ final class ConfigIssue
     public const KIND_UNKNOWN_KEY      = 'unknown_key';
     public const KIND_SENTINEL         = 'sentinel';
     public const KIND_MOVED            = 'moved';
+    public const KIND_INVALID_VALUE    = 'invalid_value';
 
     public function __construct(
         public readonly string $severity,
@@ -51,15 +52,18 @@ final class ConfigIssue
     /**
      * Un constat mérite un signal au runtime (journalisé au bootstrap) s'il est
      * bloquant (ERROR : `database`) ou s'il traduit une dérive silencieuse
-     * dangereuse : sentinelle laissée dans une section *active*, ou clé déplacée
-     * dont la valeur en config est désormais ignorée. Les sections absentes et
-     * clés inconnues restent muettes en prod (bruit inutile — ex. le config
-     * `database`-only de la CI en émettrait à chaque requête).
+     * dangereuse : sentinelle laissée dans une section *active*, clé déplacée dont
+     * la valeur en config est désormais ignorée, ou valeur invalide que le code
+     * avale sans broncher (ex. un `timezone` non-UTC qui décale les bornes
+     * tarifaires, #16). Les sections absentes et clés inconnues restent muettes en
+     * prod (bruit inutile — ex. le config `database`-only de la CI en émettrait à
+     * chaque requête).
      */
     public function isRuntimeSignal(): bool
     {
         return $this->isError()
             || $this->kind === self::KIND_SENTINEL
-            || $this->kind === self::KIND_MOVED;
+            || $this->kind === self::KIND_MOVED
+            || $this->kind === self::KIND_INVALID_VALUE;
     }
 }

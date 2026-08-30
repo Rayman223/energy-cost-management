@@ -173,7 +173,9 @@ return [
                           'bidding_zone' => '10YBE----------2' ],
     'energyid'     => [ 'enabled' => true, 'provisioning_key' => 'change_me', 'provisioning_secret' => 'change_me' ],
 
-    'timezone'     => 'Europe/Brussels',
+    // Storage timezone: keep this at UTC. Per-user display timezones live in
+    // `user_profiles.timezone`; `config_check.php` warns on any other value.
+    'timezone'     => 'UTC',
 ];
 ```
 

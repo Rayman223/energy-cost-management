@@ -24,11 +24,18 @@ use Tests\Fake\FakeTariffRepository;
  */
 final class CostCalculationServiceTest extends TestCase
 {
+    /**
+     * @param string $tariffTimezone Passé explicitement — et non laissé au défaut du
+     *        service — pour que l'intention d'un test se lise dans le test. UTC neutralise
+     *        le fuseau : les bornes de sous-période tombent alors pile à minuit, ce
+     *        qu'attendent tous les tests écrits avant #16.
+     */
     private function makeService(
         FakeLegacyDailyRepository $legacy,
         FakeTariffRepository $tariff,
         FakeGasReadingRepository $gas,
         ?FakeMeterReadingRepository $water = null,
+        string $tariffTimezone = 'UTC',
     ): CostCalculationService {
         return new CostCalculationService(
             legacyRepo: $legacy,
@@ -36,6 +43,7 @@ final class CostCalculationServiceTest extends TestCase
             gasRepo: $gas,
             calculator: new TariffCalculatorService(),
             waterRepo: $water,
+            tariffTimezone: $tariffTimezone,
         );
     }
 
@@ -1076,6 +1084,10 @@ final class CostCalculationServiceTest extends TestCase
      * vide ? » ferait facturer la seconde moitié au tarif fournisseur classique, sans
      * que `price_source` en dise rien. La moyenne horaire agrège les deux résolutions
      * et couvre tout le mois : c'est elle qu'il faut prendre.
+     *
+     * Les deux créneaux tombent dans la fenêtre de relevés d'{@see electricityDeltas()},
+     * qui s'arrête au 15 juin : un créneau au-delà ne serait jamais remonté par le
+     * repository, et le test aurait passé sur une donnée que la production ne produit pas.
      */
     public function testMonthElectricityDynamicPrefersAverageWhenNativeHourlyIsPartial(): void
     {
@@ -1083,12 +1095,12 @@ final class CostCalculationServiceTest extends TestCase
             monthlyDeltasForMonth: $this->electricityDeltas(),
             hourlyImportDeltas: [
                 ['hour' => '2026-06-05 10:00:00', 'import_kwh' => 2.0],
-                ['hour' => '2026-06-25 10:00:00', 'import_kwh' => 8.0],
+                ['hour' => '2026-06-14 10:00:00', 'import_kwh' => 8.0],
             ],
         );
         $dynamic = new FakeDynamicPriceRepository(
             // La moyenne couvre les deux heures ; le natif s'arrête à la bascule.
-            pricesByHour: ['2026-06-05 10:00:00' => 0.20, '2026-06-25 10:00:00' => 0.20],
+            pricesByHour: ['2026-06-05 10:00:00' => 0.20, '2026-06-14 10:00:00' => 0.20],
             hourlyPricesByHour: ['2026-06-05 10:00:00' => 0.30],
         );
 
@@ -1418,6 +1430,129 @@ final class CostCalculationServiceTest extends TestCase
         self::assertCount(1, $subs);
         self::assertEqualsWithDelta(1.0, $subs[0]['quantity'], 0.0001); // 0,5 + 0,5 mois
         self::assertEqualsWithDelta(5.0, $subs[0]['amount'], 0.0001);
+    }
+
+    // ── Frontière entre sous-périodes : fuseau du contrat (#16) ───────────────
+
+    /**
+     * Montage commun aux tests de frontière : bascule de grille au 16 janvier,
+     * consommation nulle jusqu'à 23:00 UTC le 15 puis 100 kWh T1 dans l'heure qui
+     * suit — soit la première heure du 16 janvier BELGE. Selon la convention de
+     * frontière, ces kWh basculent en entier d'une grille à l'autre.
+     *
+     * @return array{FakeLegacyDailyRepository, FakeTariffRepository}
+     */
+    private function gridSwitchAtLocalMidnight(): array
+    {
+        $tariffs               = new FakeTariffRepository();
+        $tariffs->gridsBetween = $this->twoElectricityGrids();
+
+        $legacy              = new FakeLegacyDailyRepository();
+        $legacy->indexSeries = [
+            'prelev_jour' => [
+                ['at' => '2026-01-01 00:00:00', 'index' => 0.0],
+                ['at' => '2026-01-15 23:00:00', 'index' => 0.0],
+                ['at' => '2026-01-16 00:00:00', 'index' => 100.0],
+                ['at' => '2026-02-01 00:00:00', 'index' => 100.0],
+            ],
+        ];
+
+        return [$legacy, $tariffs];
+    }
+
+    /**
+     * La frontière d'une sous-période est minuit CHEZ L'UTILISATEUR, pas minuit à
+     * Greenwich : une grille valable à partir du 16 janvier ouvre le 15 à 23:00 UTC
+     * pour un contrat belge (CET, UTC+1).
+     *
+     * C'est la même référence que {@see CostCalculationService::segmentIndexForHour()},
+     * qui classe les créneaux de prix au jour civil du contrat depuis #232. Les deux
+     * mécanismes coupaient auparavant à 1 h d'écart : les kWh d'un côté, leur coût
+     * indexé de l'autre (#16).
+     */
+    public function testSegmentBoundaryFallsAtContractMidnight(): void
+    {
+        [$legacy, $tariffs] = $this->gridSwitchAtLocalMidnight();
+
+        $this->makeService($legacy, $tariffs, new FakeGasReadingRepository(), tariffTimezone: 'Europe/Brussels')
+            ->estimateMonthElectricity(2026, 1);
+
+        self::assertSame(
+            [['2026-01-01 00:00:00', '2026-01-15 23:00:00', '2026-02-01 00:00:00']],
+            $legacy->boundariesRequested,
+        );
+    }
+
+    /** Contrat en UTC : aucun décalage, la frontière tombe pile à minuit. */
+    public function testSegmentBoundaryStaysAtMidnightForAUtcContract(): void
+    {
+        [$legacy, $tariffs] = $this->gridSwitchAtLocalMidnight();
+
+        $this->makeService($legacy, $tariffs, new FakeGasReadingRepository())
+            ->estimateMonthElectricity(2026, 1);
+
+        self::assertSame(
+            [['2026-01-01 00:00:00', '2026-01-16 00:00:00', '2026-02-01 00:00:00']],
+            $legacy->boundariesRequested,
+        );
+    }
+
+    /**
+     * Conséquence sonnante : les 100 kWh consommés dans la première heure du 16
+     * janvier belge sont facturés à la grille du 16 (0,20 €/kWh), pas à celle qu'elle
+     * remplace. La contre-preuve UTC les laisse dans l'ancienne grille (0,10 €/kWh)
+     * — un écart de 10 € sur le même relevé.
+     *
+     * Le TOTAL de la période, lui, ne bouge dans aucun des deux cas : c'est la
+     * ventilation entre grilles qui se déplace.
+     */
+    public function testGridSwitchBillsTheContractDayToTheIncomingGrid(): void
+    {
+        [$legacy, $tariffs] = $this->gridSwitchAtLocalMidnight();
+        $local              = $this->makeService($legacy, $tariffs, new FakeGasReadingRepository(), tariffTimezone: 'Europe/Brussels')
+            ->estimateMonthElectricity(2026, 1);
+
+        // 100 kWh × 0,20 (grille entrante) + 5,00 d'abonnement mensuel.
+        self::assertEqualsWithDelta(25.0, $local['cost']['total'], 0.01);
+
+        [$legacyUtc, $tariffsUtc] = $this->gridSwitchAtLocalMidnight();
+        $utc                      = $this->makeService($legacyUtc, $tariffsUtc, new FakeGasReadingRepository())
+            ->estimateMonthElectricity(2026, 1);
+
+        // Frontière à minuit UTC : les mêmes kWh restent dans la grille sortante.
+        self::assertEqualsWithDelta(15.0, $utc['cost']['total'], 0.01);
+
+        // Dans les deux cas, la somme des sous-périodes reste le total de la période.
+        foreach ([$local, $utc] as $result) {
+            $sum = array_sum(array_column($result['tariff_segments'], 'total'));
+            self::assertEqualsWithDelta($result['cost']['total'], $sum, 0.01);
+        }
+    }
+
+    /**
+     * Le fuseau PHP par défaut vient de `config.timezone`, gitignoré donc réglé par
+     * machine : il ne doit plus peser sur un montant. Avant #16, les bornes étaient
+     * construites sans fuseau explicite et un serveur mal réglé mesurait la bascule
+     * de grille à l'heure près.
+     */
+    public function testSegmentBoundariesIgnoreThePhpDefaultTimezone(): void
+    {
+        $previous = date_default_timezone_get();
+        date_default_timezone_set('Pacific/Kiritimati'); // UTC+14, l'écart maximal
+
+        try {
+            [$legacy, $tariffs] = $this->gridSwitchAtLocalMidnight();
+            $result             = $this->makeService($legacy, $tariffs, new FakeGasReadingRepository(), tariffTimezone: 'Europe/Brussels')
+                ->estimateMonthElectricity(2026, 1);
+
+            self::assertSame(
+                [['2026-01-01 00:00:00', '2026-01-15 23:00:00', '2026-02-01 00:00:00']],
+                $legacy->boundariesRequested,
+            );
+            self::assertEqualsWithDelta(25.0, $result['cost']['total'], 0.01);
+        } finally {
+            date_default_timezone_set($previous);
+        }
     }
 
     /** Le détail par sous-période est exposé au dashboard (dates, jours, sous-total). */

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Fake;
 
 use App\Repository\Contract\LegacyDailyRepositoryInterface;
+use App\Support\Dates;
 use DateTimeImmutable;
 
 /**
@@ -35,6 +36,12 @@ final class FakeLegacyDailyRepository implements LegacyDailyRepositoryInterface
      * @var list<list<string>>
      */
     public array $boundariesRequested = [];
+
+    /** Fenêtres (from, to) demandées à getHourlyImportDeltas(), dans l'ordre.
+     *
+     * @var list<array{string, string}>
+     */
+    public array $hourlyWindowsRequested = [];
 
     /**
      * Séries d'index cumulés par registre, interpolées par getDeltasByBoundaries()
@@ -98,12 +105,35 @@ final class FakeLegacyDailyRepository implements LegacyDailyRepositoryInterface
 
     public function getHourlyImportDeltas(DateTimeImmutable $from, DateTimeImmutable $to): array
     {
-        return $this->hourlyImportDeltas;
+        $this->hourlyWindowsRequested[] = [Dates::toDbString($from), Dates::toDbString($to)];
+
+        return array_values(self::withinWindow($this->hourlyImportDeltas, 'hour', $from, $to));
     }
 
     public function getQuarterImportDeltas(DateTimeImmutable $from, DateTimeImmutable $to): array
     {
-        return $this->quarterImportDeltas;
+        return array_values(self::withinWindow($this->quarterImportDeltas, 'quarter', $from, $to));
+    }
+
+    /**
+     * Ne rend que les créneaux de `[$from, $to]`, comme le vrai repository dont le
+     * contrat borne explicitement la ventilation. Un fake qui rendrait tout
+     * masquerait une fenêtre mal calculée : le test verrait des créneaux que la
+     * production n'aurait jamais remontés.
+     *
+     * @param  list<array<string, mixed>> $rows
+     * @return list<array<string, mixed>>
+     */
+    private static function withinWindow(array $rows, string $key, DateTimeImmutable $from, DateTimeImmutable $to): array
+    {
+        $fromTs = $from->getTimestamp();
+        $toTs   = $to->getTimestamp();
+
+        return array_filter($rows, static function (array $row) use ($key, $fromTs, $toTs): bool {
+            $ts = strtotime(((string) $row[$key]) . ' UTC');
+
+            return $ts !== false && $ts >= $fromTs && $ts <= $toTs;
+        });
     }
 
     public function getDeltasBetween(string $from, string $to): array

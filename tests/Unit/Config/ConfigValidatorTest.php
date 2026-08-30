@@ -232,4 +232,114 @@ final class ConfigValidatorTest extends TestCase
         self::assertNotContains('dynamic_prices.security_token', $this->pathsWith($issues, ConfigIssue::WARNING));
         self::assertNotContains('database.password', $this->pathsWith($issues, ConfigIssue::WARNING));
     }
+
+    // ── Garde-fou timezone (#16) ──────────────────────────────────────────────
+
+    /**
+     * `config.timezone` alimente `date_default_timezone_set()` au bootstrap, donc
+     * l'interprétation de toute date construite sans fuseau explicite. Le fichier
+     * étant gitignoré, la valeur est réglée par machine : rien ne signalait une
+     * dérive avant #16.
+     */
+    public function testNonUtcTimezoneIsWarned(): void
+    {
+        $issues = ConfigValidator::validate(['database' => $this->fullDatabase(), 'timezone' => 'Europe/Brussels']);
+
+        self::assertContains('timezone', $this->pathsWith($issues, ConfigIssue::WARNING));
+        self::assertSame([], $this->errorsOf($issues));
+    }
+
+    /** Identifiant inconnu : `date_default_timezone_set()` le rejette sans rien changer. */
+    public function testUnknownTimezoneIsWarned(): void
+    {
+        $issues = ConfigValidator::validate(['database' => $this->fullDatabase(), 'timezone' => 'Mars/Olympus_Mons']);
+
+        self::assertContains('timezone', $this->pathsWith($issues, ConfigIssue::WARNING));
+    }
+
+    /**
+     * Un alias de compatibilité reste un fuseau valide : `DateTimeZone::listIdentifiers()`
+     * ne le liste pas, mais `date_default_timezone_set()` l'accepte. Le signaler
+     * « inconnu » serait un faux positif — d'où le contrôle par construction.
+     *
+     * Le message attendu est donc celui du fuseau non-UTC, pas celui du fuseau inconnu.
+     */
+    public function testBackwardCompatibleAliasIsNotReportedAsUnknown(): void
+    {
+        $alias = null;
+        foreach (['GMT', 'US/Eastern', 'Zulu', 'Europe/Kiev'] as $candidate) {
+            try {
+                new \DateTimeZone($candidate);
+            } catch (\Throwable) {
+                continue;
+            }
+            if (!in_array($candidate, \DateTimeZone::listIdentifiers(), true)) {
+                $alias = $candidate;
+                break;
+            }
+        }
+
+        if ($alias === null) {
+            self::markTestSkipped('aucun alias de compatibilité disponible sur cette build PHP');
+        }
+
+        $issues = ConfigValidator::validate(['database' => $this->fullDatabase(), 'timezone' => $alias]);
+
+        foreach ($issues as $issue) {
+            if ($issue->path === 'timezone') {
+                self::assertStringNotContainsString('inconnu', $issue->message);
+                self::assertStringContainsString('attendu', $issue->message);
+
+                return;
+            }
+        }
+
+        self::fail('aucun constat sur timezone');
+    }
+
+    public function testUtcTimezoneIsSilent(): void
+    {
+        $issues = ConfigValidator::validate(['database' => $this->fullDatabase(), 'timezone' => 'UTC']);
+
+        self::assertNotContains('timezone', $this->pathsWith($issues, ConfigIssue::WARNING));
+    }
+
+    /**
+     * Clé absente : le bootstrap applique déjà `?? 'UTC'`, il n'y a donc pas de
+     * dérive à signaler — et le config `database`-only de la CI resterait muet.
+     */
+    public function testAbsentTimezoneIsSilent(): void
+    {
+        $issues = ConfigValidator::validate(['database' => $this->fullDatabase()]);
+
+        self::assertNotContains('timezone', $this->pathsWith($issues, ConfigIssue::WARNING));
+    }
+
+    /**
+     * Le contrôle ne dépend pas de `$checkSentinels` : `--schema-only` désactive la
+     * chasse aux `change_me`, pas la validation d'un fuseau — un template dérivé
+     * doit casser la CI.
+     */
+    public function testTimezoneIsCheckedEvenInSchemaOnlyMode(): void
+    {
+        $issues = ConfigValidator::validate(['database' => $this->fullDatabase(), 'timezone' => 'Europe/Brussels'], false);
+
+        self::assertContains('timezone', $this->pathsWith($issues, ConfigIssue::WARNING));
+    }
+
+    /** Le constat doit remonter au runtime : c'est une dérive silencieuse, pas du bruit. */
+    public function testTimezoneWarningIsARuntimeSignal(): void
+    {
+        $issues = ConfigValidator::validate(['database' => $this->fullDatabase(), 'timezone' => 'Europe/Brussels']);
+
+        foreach ($issues as $issue) {
+            if ($issue->path === 'timezone') {
+                self::assertTrue($issue->isRuntimeSignal());
+
+                return;
+            }
+        }
+
+        self::fail('aucun constat sur timezone');
+    }
 }

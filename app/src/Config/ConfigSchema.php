@@ -177,7 +177,11 @@ final class ConfigSchema
                     ],
                 ],
 
-                'timezone' => [],
+                // Fuseau applicatif : doit rester UTC. Il alimente
+                // date_default_timezone_set() au bootstrap, donc l'interprétation
+                // de toute date construite sans fuseau explicite ; une valeur
+                // non-UTC décalait les bornes tarifaires (#16).
+                'timezone' => ['valueCheck' => 'timezone', 'expected' => 'UTC'],
             ],
         ];
     }

@@ -79,11 +79,14 @@ final class CostCalculationMixedPricingModeTest extends TestCase
     /**
      * @param list<TariffGrid> $grids
      * @param array<string, float> $hourlyPrices
+     * @param list<array{hour: string, import_kwh: float}>|null $slots Créneaux consommés ;
+     *        `null` = ceux de {@see hourlySlots()}.
      */
     private function service(
         array $grids,
         array $hourlyPrices = [],
         bool $dynamicEnabled = true,
+        ?array $slots = null,
     ): CostCalculationService {
         $tariffs = new FakeTariffRepository();
         $tariffs->gridsBetween = $grids;
@@ -91,7 +94,7 @@ final class CostCalculationMixedPricingModeTest extends TestCase
         return new CostCalculationService(
             legacyRepo: new FakeLegacyDailyRepository(
                 monthlyDeltasForMonth: $this->deltas(),
-                hourlyImportDeltas: $this->hourlySlots(),
+                hourlyImportDeltas: $slots ?? $this->hourlySlots(),
             ),
             tariffRepo: $tariffs,
             gasRepo: new FakeGasReadingRepository(),
@@ -247,5 +250,37 @@ final class CostCalculationMixedPricingModeTest extends TestCase
         // Une grille fixe projetée en dynamique est annoncée au pas horaire, jamais
         // 'fixed' : le montant rendu est bien indexé.
         self::assertSame('dynamic_hourly', $fixed['pricing_mode']);
+    }
+
+    /**
+     * La fenêtre de recherche des prix s'ouvre à minuit CHEZ L'UTILISATEUR, comme la
+     * sous-période qu'elle sert (#16). 22:00 UTC le 15 juin, c'est déjà le 16 juin à
+     * Bruxelles : ce créneau relève de la grille dynamique, et `segmentBoundaries()`
+     * comme `segmentIndexForHour()` le disent.
+     *
+     * Une fenêtre restée à minuit UTC serait plus étroite que la sous-période : le
+     * créneau ne serait pas remonté par `getHourlyImportDeltas()`, donc pas indexé,
+     * et pas davantage facturé au tarif fournisseur puisque
+     * `calculateElectricityCostDynamic()` remplace les lignes d'énergie de la grille
+     * par le montant indexé. Son énergie disparaîtrait de la facture.
+     */
+    public function testDynamicWindowOpensAtContractMidnight(): void
+    {
+        $slots = [
+            ['hour' => '2026-06-05 10:00:00', 'import_kwh' => 40.0], // grille fixe
+            ['hour' => '2026-06-15 22:00:00', 'import_kwh' => 60.0], // 16 juin 00:00 à Bruxelles
+        ];
+
+        // Voie contractuelle, et non la projection « tout dynamique » d'
+        // estimateMonthElectricityDynamic() : c'est ici que les sous-périodes gardent
+        // chacune leur mode, donc que la fenêtre est restreinte au segment indexé.
+        $r = $this->service($this->mixedGrids(), ['2026-06-15 22:00:00' => 1.0], slots: $slots)
+            ->estimateMonthElectricity(2026, 6);
+
+        self::assertTrue($r['available']);
+        self::assertEqualsWithDelta(100.0, $r['coverage_pct'], 0.1);
+        // 60 kWh × 1,00 €/kWh × 1,21 = 72,60 € — l'énergie du créneau frontière est
+        // bien facturée, et à la grille dynamique.
+        self::assertEqualsWithDelta(72.6, $r['energy_dynamic'], 0.01);
     }
 }

@@ -125,6 +125,12 @@ final class ConfigValidator
             }
         }
 
+        // Feuille à valeur contrainte : contrôlée quel que soit $checkSentinels —
+        // un fuseau faux l'est aussi dans config.example.php.
+        if (($node['valueCheck'] ?? null) === 'timezone') {
+            self::checkTimezone($value, $path, $node['expected'] ?? null, $issues);
+        }
+
         // Feuille sentinelle.
         if (($node['sentinel'] ?? false) === true && $checkSentinels && $childActive && self::isSentinel($value)) {
             $issues[] = ConfigIssue::warning($path, 'valeur sentinelle « ' . (string) $value . ' » à remplacer', ConfigIssue::KIND_SENTINEL);
@@ -195,6 +201,63 @@ final class ConfigValidator
         }
 
         return $keys;
+    }
+
+    /**
+     * Contrôle d'un identifiant de fuseau IANA, et de sa conformité à la valeur
+     * attendue quand le schéma en impose une.
+     *
+     * WARNING et jamais ERROR : la règle d'or réserve ERROR à `database`. Le
+     * constat porte tout de même {@see ConfigIssue::isRuntimeSignal()}, car les
+     * deux cas sont silencieux à l'exécution — `date_default_timezone_set()`
+     * ignore un identifiant inconnu sur un simple warning PHP, et un fuseau
+     * valide mais non-UTC fausse discrètement les calculs de période (#16).
+     *
+     * La validité se teste en CONSTRUISANT le fuseau, pas en cherchant dans
+     * `listIdentifiers()` : cette liste exclut les alias de compatibilité, si bien
+     * qu'un `GMT` parfaitement accepté par `date_default_timezone_set()` y serait
+     * porté disparu. Lit la base tzdata compilée dans PHP, pas le disque : le
+     * validateur reste sans I/O.
+     *
+     * @param list<ConfigIssue> $issues
+     */
+    private static function checkTimezone(mixed $value, string $path, mixed $expected, array &$issues): void
+    {
+        if (!is_string($value) || $value === '') {
+            $issues[] = ConfigIssue::warning($path, 'fuseau horaire absent ou non textuel', ConfigIssue::KIND_INVALID_VALUE);
+
+            return;
+        }
+
+        if (!self::isKnownTimezone($value)) {
+            $issues[] = ConfigIssue::warning(
+                $path,
+                "fuseau « {$value} » inconnu : date_default_timezone_set() le rejette sans rien changer",
+                ConfigIssue::KIND_INVALID_VALUE,
+            );
+
+            return;
+        }
+
+        if (is_string($expected) && $value !== $expected) {
+            $issues[] = ConfigIssue::warning(
+                $path,
+                "fuseau « {$value} » : attendu « {$expected} » — les dates sont stockées en {$expected}, "
+                . "et une autre valeur décale les bornes de période (l'affichage suit user_profiles.timezone)",
+                ConfigIssue::KIND_INVALID_VALUE,
+            );
+        }
+    }
+
+    private static function isKnownTimezone(string $value): bool
+    {
+        try {
+            new \DateTimeZone($value);
+
+            return true;
+        } catch (\Throwable) {
+            return false;
+        }
     }
 
     private static function isSentinel(mixed $value): bool
