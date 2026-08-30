@@ -49,7 +49,8 @@ enum ReadingGranularity
 
     /**
      * Bornes `[start, end)` du créneau aligné contenant $moment, exprimées dans
-     * $tz. `modify()` gère les transitions d'heure (DST).
+     * $tz. Les transitions d'heure (DST) sont gérées, mais pas de la même façon
+     * selon l'unité (cf. la fin de la méthode).
      *
      * @return array{DateTimeImmutable, DateTimeImmutable}
      */
@@ -57,16 +58,32 @@ enum ReadingGranularity
     {
         $local = $moment->setTimezone($tz);
 
-        [$start, $step] = match ($this) {
-            self::Day  => [$local->setTime(0, 0, 0), '+1 day'],
-            self::Hour => [$local->setTime((int) $local->format('G'), 0, 0), '+1 hour'],
-            self::QuarterHour => [
-                $local->setTime((int) $local->format('G'), intdiv((int) $local->format('i'), 15) * 15, 0),
-                '+15 minutes',
-            ],
+        // `setTime()` conserve l'offset du relevé quand l'heure de mur ne change pas,
+        // si bien que les deux passages de 02:xx au retour à l'heure d'hiver gardent
+        // chacun leur propre début de créneau.
+        $start = match ($this) {
+            self::Day  => $local->setTime(0, 0, 0),
+            self::Hour => $local->setTime((int) $local->format('G'), 0, 0),
+            self::QuarterHour => $local->setTime((int) $local->format('G'), intdiv((int) $local->format('i'), 15) * 15, 0),
         };
 
-        return [$start, $start->modify($step)];
+        // Le jour se termine en heure de MUR (`modify()`) : un jour de bascule dure
+        // bien 23 h ou 25 h, et reste un jour calendaire.
+        //
+        // L'heure et le quart d'heure, eux, valent un MTU ENTSO-E : leur durée est
+        // ABSOLUE. `modify('+1 hour')` raisonnerait aussi en heure de mur — au retour
+        // à l'heure d'hiver, « 02:00 + 1 heure » vaut 03:00 locale, soit DEUX heures
+        // réelles. Le créneau du premier passage de 02:xx (CEST) avalait alors le
+        // second (CET), c'est-à-dire deux MTU distincts, chacun avec son prix
+        // ({@see \App\Service\EntsoePriceParser}) : un index légitime du premier
+        // passage était refusé au motif qu'un index existait déjà dans le second.
+        $end = match ($this) {
+            self::Day         => $start->modify('+1 day'),
+            self::Hour        => $start->setTimestamp($start->getTimestamp() + 3600),
+            self::QuarterHour => $start->setTimestamp($start->getTimestamp() + 900),
+        };
+
+        return [$start, $end];
     }
 
     /** Libellé français de la limite, pour le message de rejet en saisie manuelle. */

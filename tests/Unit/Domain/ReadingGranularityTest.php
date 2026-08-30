@@ -54,25 +54,42 @@ final class ReadingGranularityTest extends TestCase
     }
 
     /**
-     * Nuit du passage à l'heure d'hiver : 02:00 locale est jouée deux fois. Le créneau
-     * est calé sur l'heure de MUR et conserve l'offset du relevé, si bien que la
-     * première occurrence (CEST) englobe les deux passages — le plafond y est donc un
-     * cran plus strict — tandis que la seconde (CET) retrouve une heure pleine. Aucun
-     * instant n'échappe à un créneau : c'est ce qui compte pour un plafond.
+     * Nuit du passage à l'heure d'hiver : 02:00 locale est jouée deux fois, et ENTSO-E
+     * y publie DEUX MTU horaires distincts. Chaque passage doit donc avoir son propre
+     * créneau d'une heure pleine : sinon celui du premier (CEST) avalerait le second
+     * (CET) et un index légitime du premier serait refusé au motif qu'un index existe
+     * déjà dans le second.
      */
     public function testHourBucketSurvivesDstFallBack(): void
     {
         $tz = new DateTimeZone(self::TZ);
 
-        // 00:30 UTC = 02:30 CEST (1re occurrence).
+        // 00:30 UTC = 02:30 CEST (1re occurrence) : créneau UTC [00:00, 01:00).
         [$start, $end] = ReadingGranularity::Hour->bucket(new DateTimeImmutable('2026-10-25 00:30:00', new DateTimeZone('UTC')), $tz);
         self::assertSame('2026-10-25 02:00:00 +0200', $start->format('Y-m-d H:i:s O'));
-        self::assertSame('2026-10-25 03:00:00 +0100', $end->format('Y-m-d H:i:s O'));
+        self::assertSame('2026-10-25 02:00:00 +0100', $end->format('Y-m-d H:i:s O'));
+        self::assertSame(3600, $end->getTimestamp() - $start->getTimestamp());
 
-        // 01:30 UTC = 02:30 CET (2e occurrence) : heure pleine réelle.
+        // 01:30 UTC = 02:30 CET (2e occurrence) : créneau UTC [01:00, 02:00), disjoint
+        // du précédent — les deux passages ne se plafonnent pas l'un l'autre.
         [$start, $end] = ReadingGranularity::Hour->bucket(new DateTimeImmutable('2026-10-25 01:30:00', new DateTimeZone('UTC')), $tz);
         self::assertSame('2026-10-25 02:00:00 +0100', $start->format('Y-m-d H:i:s O'));
+        self::assertSame('2026-10-25 03:00:00 +0100', $end->format('Y-m-d H:i:s O'));
         self::assertSame(3600, $end->getTimestamp() - $start->getTimestamp());
+    }
+
+    /**
+     * Même travers pour le quart d'heure : le créneau [02:45, 03:00) du premier passage
+     * durait 1 h 15 et avalait toute la seconde heure 02:xx (donc quatre MTU de 15 min).
+     */
+    public function testQuarterHourBucketSurvivesDstFallBack(): void
+    {
+        $tz = new DateTimeZone(self::TZ);
+
+        // 00:45 UTC = 02:45 CEST, dernier quart d'heure avant la bascule.
+        [$start, $end] = ReadingGranularity::QuarterHour->bucket(new DateTimeImmutable('2026-10-25 00:45:00', new DateTimeZone('UTC')), $tz);
+        self::assertSame(900, $end->getTimestamp() - $start->getTimestamp());
+        self::assertSame('2026-10-25 01:00', $end->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d H:i'));
     }
 
     /** L'heure sautée au passage à l'heure d'été ne crée pas de créneau vide. */
