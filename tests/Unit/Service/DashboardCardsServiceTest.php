@@ -7,6 +7,7 @@ namespace Tests\Unit\Service;
 use App\Service\CostCalculationService;
 use App\Service\DashboardCardsService;
 use App\Service\TariffCalculatorService;
+use App\Support\Dates;
 use DateTimeImmutable;
 use DateTimeZone;
 use PHPUnit\Framework\TestCase;
@@ -523,6 +524,29 @@ final class DashboardCardsServiceTest extends TestCase
         self::assertSame([], $legacy->rangesRequested);
         self::assertNull($this->card($cards, 'gas')['value']);
         self::assertNull($this->card($cards, 'gas')['delta_pct']);
+    }
+
+    /**
+     * Régression #21 : le couple (année, mois) doit être dérivé du MÊME instant
+     * que la fenêtre. Le 31 mai 23:00 UTC, un serveur réglé sur UTC+14 annonce
+     * déjà juin — mois dont la fenêtre est encore à venir, d'où des cards à « — »
+     * pendant les quatorze heures du décalage (cf. le cas ci-dessus). Lu en UTC via
+     * {@see Dates::yearMonthOf()}, le mois reste mai et la fenêtre reste mesurable.
+     */
+    public function testMonthDerivedFromTheReferenceInstantSurvivesTheMonthRollover(): void
+    {
+        $legacy = new FakeLegacyDailyRepository(deltasBetween: ['prelev_jour' => 80.0]);
+        $now    = new DateTimeImmutable('2026-05-31 23:00:00', new DateTimeZone('UTC'));
+
+        // Ce que fait la route : un seul instant UTC, dont on tire le mois.
+        [$year, $month] = Dates::yearMonthOf($now->setTimezone(new DateTimeZone('Pacific/Kiritimati')));
+        self::assertSame([2026, 5], [$year, $month]);
+
+        $cards = $this->makeService($legacy, $this->gasReadings(), $this->waterReadings())
+            ->build([], $year, $month, $now);
+
+        // Mai quasi complet : 100 m³ sur le mois, moins la dernière heure.
+        self::assertEqualsWithDelta(99.865, $this->card($cards, 'gas')['value'], 0.01);
     }
 
     // ── Gaz sans grille tarifaire ────────────────────────────────────────────

@@ -135,4 +135,52 @@ final class DatesTest extends TestCase
     {
         self::assertSame('2026-04-01 00:00:00', Dates::toDbString(Dates::startOfDayIn('2026-04-01', 'Mars/Olympus_Mons')));
     }
+
+    /** L'instant courant est rendu en UTC, jamais dans le fuseau PHP par défaut. */
+    public function testNowUtcIgnoresThePhpDefaultTimezone(): void
+    {
+        self::assertSame('UTC', Dates::nowUtc()->getTimezone()->getName());
+    }
+
+    /**
+     * Bascule de mois vue depuis un fuseau en avance (#21) : le 1er juin 00:30 à
+     * Kiritimati (UTC+14), c'est encore le 31 mai 10:30 UTC. Le mois retourné doit
+     * être MAI — celui dans lequel sont bornées les fenêtres du dashboard — et non
+     * juin, sans quoi la fenêtre demandée serait encore à venir.
+     */
+    public function testYearMonthOfReadsTheMonthInUtcNotInTheCarriedZone(): void
+    {
+        $moment = new DateTimeImmutable('2026-06-01 00:30:00', new DateTimeZone('Pacific/Kiritimati'));
+
+        self::assertSame([2026, 5], Dates::yearMonthOf($moment));
+    }
+
+    /** Symétrique : un fuseau en retard sur UTC bascule, lui, un mois plus tôt. */
+    public function testYearMonthOfFollowsUtcForZonesBehindIt(): void
+    {
+        // 31 mai 23:00 à Niue (UTC-11) == 1er juin 10:00 UTC.
+        $moment = new DateTimeImmutable('2026-05-31 23:00:00', new DateTimeZone('Pacific/Niue'));
+
+        self::assertSame([2026, 6], Dates::yearMonthOf($moment));
+    }
+
+    /** Passage d'année : décembre → janvier suit la même règle. */
+    public function testYearMonthOfHandlesTheYearBoundary(): void
+    {
+        $moment = new DateTimeImmutable('2027-01-01 00:30:00', new DateTimeZone('Pacific/Kiritimati'));
+
+        self::assertSame([2026, 12], Dates::yearMonthOf($moment));
+    }
+
+    /**
+     * Le mois courant se lit en UTC alors même que le fuseau PHP est Europe/Brussels
+     * ({@see setUp()}) : c'est l'invariant que `date('Y')`/`date('n')` ne tenaient pas.
+     */
+    public function testCurrentYearMonthIsReadInUtc(): void
+    {
+        self::assertSame(
+            [(int) gmdate('Y'), (int) gmdate('n')],
+            Dates::currentYearMonth(),
+        );
+    }
 }

@@ -533,11 +533,19 @@ final class ElectricityReadingRepository implements LegacyDailyRepositoryInterfa
     // Dashboard : deltas mensuels (interpolation à minuit)
     // -------------------------------------------------------------------------
 
-    /** @return array<string, mixed> */
+    /**
+     * Deltas du mois EN COURS, borné en UTC comme les instants stockés (#21) : le
+     * mois se lit dans le même référentiel que les bornes construites par
+     * {@see interpolatedMonthlyDeltas()}, et que la fenêtre de comparaison des
+     * cards ({@see \App\Service\DashboardCardsService::build()}).
+     *
+     * @return array<string, mixed>
+     */
     public function getMonthlyDeltas(): array
     {
         if (!$this->monthlyDeltasComputed) {
-            $this->monthlyDeltasCache    = $this->interpolatedMonthlyDeltas((int) date('Y'), (int) date('n'));
+            [$year, $month]              = Dates::currentYearMonth();
+            $this->monthlyDeltasCache    = $this->interpolatedMonthlyDeltas($year, $month);
             $this->monthlyDeltasComputed = true;
         }
 

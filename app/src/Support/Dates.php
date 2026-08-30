@@ -40,6 +40,48 @@ final class Dates
     }
 
     /**
+     * Instant courant, exprimé dans le fuseau de stockage.
+     *
+     * Explicitement UTC, et non le fuseau PHP par défaut : celui-ci suit
+     * `config.timezone` ({@see \App\bootstrap}), qu'un environnement non conforme
+     * à la convention peut avoir laissé ailleurs qu'à UTC.
+     */
+    public static function nowUtc(): DateTimeImmutable
+    {
+        return new DateTimeImmutable('now', self::utc());
+    }
+
+    /**
+     * Mois calendaire courant, lu en UTC : la source de vérité unique du « quel
+     * mois sommes-nous » (#21).
+     *
+     * Les fenêtres du dashboard sont bâties en UTC (mois du 1er 00:00 UTC au 1er
+     * du mois suivant). Dériver le mois de `date('Y')`/`date('n')` — donc du fuseau
+     * PHP — désaligne les deux dès que celui-ci n'est pas UTC : au basculement de
+     * mois, la fenêtre demandée est encore à venir et rien n'est comparable.
+     *
+     * @return array{int, int} [année, mois]
+     */
+    public static function currentYearMonth(): array
+    {
+        return self::yearMonthOf(self::nowUtc());
+    }
+
+    /**
+     * Couple (année, mois) du mois calendaire auquel appartient $moment, LU EN UTC
+     * quel que soit le fuseau que l'objet porte — un 1er juin 00:30 à Kiritimati
+     * (UTC+14) appartient encore à mai côté stockage.
+     *
+     * @return array{int, int} [année, mois]
+     */
+    public static function yearMonthOf(DateTimeInterface $moment): array
+    {
+        $utc = (new DateTimeImmutable('@' . $moment->getTimestamp()))->setTimezone(self::utc());
+
+        return [(int) $utc->format('Y'), (int) $utc->format('n')];
+    }
+
+    /**
      * Jour civil courant de l'utilisateur, ramené à minuit UTC — le référentiel
      * des bornes de validité stockées en DATE (ex. `energy_advances.valid_from`,
      * relue par {@see \App\Domain\AdvanceSchedule::fromRow()}).

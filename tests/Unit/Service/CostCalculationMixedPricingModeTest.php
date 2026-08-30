@@ -283,4 +283,66 @@ final class CostCalculationMixedPricingModeTest extends TestCase
         // bien facturée, et à la grille dynamique.
         self::assertEqualsWithDelta(72.6, $r['energy_dynamic'], 0.01);
     }
+
+    /**
+     * Pendant du test précédent, côté FIN de période. La période est bornée en UTC
+     * (mois calendaire), le contrat non : la dernière sous-période déborde donc de sa
+     * propre date de fin, et `segmentIndexForHour()` lui rattache bien les créneaux du
+     * débordement (repli sur le dernier segment). Fermer la fenêtre au minuit belge du
+     * lendemain les en sortirait — 60 kWh facturés nulle part.
+     *
+     * Le 29 juin 22:00 UTC, c'est le 30 juin 00:00 à Bruxelles : le dernier segment
+     * s'arrêtant au 29, ce créneau tombe précisément dans l'écart.
+     */
+    public function testDynamicWindowKeepsThePeriodTailBeyondTheLastSegmentDay(): void
+    {
+        $slots = [
+            ['hour' => '2026-06-20 10:00:00', 'import_kwh' => 40.0],
+            ['hour' => '2026-06-29 22:00:00', 'import_kwh' => 60.0], // 30 juin 00:00 à Bruxelles
+        ];
+
+        $r = $this->service(
+            $this->mixedGrids(),
+            ['2026-06-20 10:00:00' => 1.0, '2026-06-29 22:00:00' => 1.0],
+            slots: $slots,
+        )->estimateMonthElectricity(2026, 6);
+
+        self::assertTrue($r['available']);
+        // (40 + 60) kWh × 1,00 €/kWh × 1,21 = 121 € : la queue de période est facturée.
+        self::assertEqualsWithDelta(121.0, $r['energy_dynamic'], 0.01);
+    }
+
+    /**
+     * Symétrique pour un contrat à l'OUEST d'UTC, où le décalage joue en TÊTE de
+     * période : le 1er juin 02:00 UTC, c'est encore le 31 mai à New York. La première
+     * sous-période étant aussi la première du mois, `segmentIndexForHour()` lui
+     * rattache ce créneau — ouvrir la fenêtre au minuit new-yorkais l'en sortirait.
+     */
+    public function testDynamicWindowKeepsThePeriodHeadBeforeTheFirstSegmentDay(): void
+    {
+        $tariffs               = new FakeTariffRepository();
+        $tariffs->gridsBetween = [$this->grid(1, '2026-06-01', null, 'dynamic_hourly')];
+
+        $r = (new CostCalculationService(
+            legacyRepo: new FakeLegacyDailyRepository(
+                monthlyDeltasForMonth: $this->deltas(),
+                hourlyImportDeltas: [
+                    ['hour' => '2026-06-01 02:00:00', 'import_kwh' => 60.0], // 31 mai 22:00 à New York
+                    ['hour' => '2026-06-20 10:00:00', 'import_kwh' => 40.0],
+                ],
+            ),
+            tariffRepo: $tariffs,
+            gasRepo: new FakeGasReadingRepository(),
+            calculator: new TariffCalculatorService(),
+            dynamicPriceRepo: new FakeDynamicPriceRepository(hourlyPricesByHour: [
+                '2026-06-01 02:00:00' => 1.0,
+                '2026-06-20 10:00:00' => 1.0,
+            ]),
+            dynamicEnabled: true,
+            tariffTimezone: 'America/New_York',
+        ))->estimateMonthElectricity(2026, 6);
+
+        self::assertTrue($r['available']);
+        self::assertEqualsWithDelta(121.0, $r['energy_dynamic'], 0.01);
+    }
 }

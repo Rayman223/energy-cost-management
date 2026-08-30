@@ -124,21 +124,23 @@ try {
         supplierMarkupPerKwh: $profile->supplierMarkupPerKwh ?? 0.0,
         tariffTimezone: $profile->timezone ?? 'UTC',
     );
+
+    // Plafonnement des index élec par registre et par créneau aligné (issue #165) :
+    // le créneau suit la résolution de facturation de la grille active à la date du
+    // relevé (issue #10) — jour en fixe, heure en dynamique horaire, 15 min en
+    // dynamique quart-horaire. Kill-switch serveur prioritaire : sans import de prix
+    // de marché, tout le monde est traité comme fixe. Fuseau de l'utilisateur pour
+    // délimiter le créneau (repli UTC neutre si pas de profil). Construit DANS le
+    // bootstrap gardé : la politique instancie le DateTimeZone du profil, et un
+    // identifiant devenu illisible doit dégrader en 503 JSON, pas en fatal nu.
+    $userTimezone = $profile->timezone ?? 'UTC';
+    $elecThrottle = DynamicPricing::isEnabled($config)
+        ? ReadingGranularityPolicy::fromTariffs($tariffRepo, $userTimezone)
+        : ReadingGranularityPolicy::constant(ReadingGranularity::Day, $userTimezone);
 } catch (\Throwable $e) {
     JsonResponse::error('Bootstrap failed: ' . $e->getMessage(), 503)->send();
     exit;
 }
-
-// Plafonnement des index élec par registre et par créneau aligné (issue #165) :
-// le créneau suit la résolution de facturation de la grille active à la date du
-// relevé (issue #10) — jour en fixe, heure en dynamique horaire, 15 min en
-// dynamique quart-horaire. Kill-switch serveur prioritaire : sans import de prix
-// de marché, tout le monde est traité comme fixe. Fuseau de l'utilisateur pour
-// délimiter le créneau (repli UTC neutre si pas de profil).
-$userTimezone = $profile->timezone ?? 'UTC';
-$elecThrottle = DynamicPricing::isEnabled($config)
-    ? ReadingGranularityPolicy::fromTariffs($tariffRepo, $userTimezone)
-    : ReadingGranularityPolicy::constant(ReadingGranularity::Day, $userTimezone);
 
 $readings = new ReadingsController($elecRepo, $gasRepo, $waterRepo);
 $cost     = new CostController($costSvc, DynamicPricing::isEnabled($config));
