@@ -213,8 +213,11 @@ final class ConfigValidator
      * ignore un identifiant inconnu sur un simple warning PHP, et un fuseau
      * valide mais non-UTC fausse discrètement les calculs de période (#16).
      *
-     * Lit la base tzdata compilée dans PHP, pas le disque : le validateur reste
-     * sans I/O.
+     * La validité se teste en CONSTRUISANT le fuseau, pas en cherchant dans
+     * `listIdentifiers()` : cette liste exclut les alias de compatibilité, si bien
+     * qu'un `GMT` parfaitement accepté par `date_default_timezone_set()` y serait
+     * porté disparu. Lit la base tzdata compilée dans PHP, pas le disque : le
+     * validateur reste sans I/O.
      *
      * @param list<ConfigIssue> $issues
      */
@@ -226,7 +229,7 @@ final class ConfigValidator
             return;
         }
 
-        if (!in_array($value, \DateTimeZone::listIdentifiers(), true)) {
+        if (!self::isKnownTimezone($value)) {
             $issues[] = ConfigIssue::warning(
                 $path,
                 "fuseau « {$value} » inconnu : date_default_timezone_set() le rejette sans rien changer",
@@ -243,6 +246,17 @@ final class ConfigValidator
                 . "et une autre valeur décale les bornes de période (l'affichage suit user_profiles.timezone)",
                 ConfigIssue::KIND_INVALID_VALUE,
             );
+        }
+    }
+
+    private static function isKnownTimezone(string $value): bool
+    {
+        try {
+            new \DateTimeZone($value);
+
+            return true;
+        } catch (\Throwable) {
+            return false;
         }
     }
 

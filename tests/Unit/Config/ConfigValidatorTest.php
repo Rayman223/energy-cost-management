@@ -257,6 +257,46 @@ final class ConfigValidatorTest extends TestCase
         self::assertContains('timezone', $this->pathsWith($issues, ConfigIssue::WARNING));
     }
 
+    /**
+     * Un alias de compatibilité reste un fuseau valide : `DateTimeZone::listIdentifiers()`
+     * ne le liste pas, mais `date_default_timezone_set()` l'accepte. Le signaler
+     * « inconnu » serait un faux positif — d'où le contrôle par construction.
+     *
+     * Le message attendu est donc celui du fuseau non-UTC, pas celui du fuseau inconnu.
+     */
+    public function testBackwardCompatibleAliasIsNotReportedAsUnknown(): void
+    {
+        $alias = null;
+        foreach (['GMT', 'US/Eastern', 'Zulu', 'Europe/Kiev'] as $candidate) {
+            try {
+                new \DateTimeZone($candidate);
+            } catch (\Throwable) {
+                continue;
+            }
+            if (!in_array($candidate, \DateTimeZone::listIdentifiers(), true)) {
+                $alias = $candidate;
+                break;
+            }
+        }
+
+        if ($alias === null) {
+            self::markTestSkipped('aucun alias de compatibilité disponible sur cette build PHP');
+        }
+
+        $issues = ConfigValidator::validate(['database' => $this->fullDatabase(), 'timezone' => $alias]);
+
+        foreach ($issues as $issue) {
+            if ($issue->path === 'timezone') {
+                self::assertStringNotContainsString('inconnu', $issue->message);
+                self::assertStringContainsString('attendu', $issue->message);
+
+                return;
+            }
+        }
+
+        self::fail('aucun constat sur timezone');
+    }
+
     public function testUtcTimezoneIsSilent(): void
     {
         $issues = ConfigValidator::validate(['database' => $this->fullDatabase(), 'timezone' => 'UTC']);

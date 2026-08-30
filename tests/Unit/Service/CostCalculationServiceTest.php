@@ -1084,6 +1084,10 @@ final class CostCalculationServiceTest extends TestCase
      * vide ? » ferait facturer la seconde moitié au tarif fournisseur classique, sans
      * que `price_source` en dise rien. La moyenne horaire agrège les deux résolutions
      * et couvre tout le mois : c'est elle qu'il faut prendre.
+     *
+     * Les deux créneaux tombent dans la fenêtre de relevés d'{@see electricityDeltas()},
+     * qui s'arrête au 15 juin : un créneau au-delà ne serait jamais remonté par le
+     * repository, et le test aurait passé sur une donnée que la production ne produit pas.
      */
     public function testMonthElectricityDynamicPrefersAverageWhenNativeHourlyIsPartial(): void
     {
@@ -1091,12 +1095,12 @@ final class CostCalculationServiceTest extends TestCase
             monthlyDeltasForMonth: $this->electricityDeltas(),
             hourlyImportDeltas: [
                 ['hour' => '2026-06-05 10:00:00', 'import_kwh' => 2.0],
-                ['hour' => '2026-06-25 10:00:00', 'import_kwh' => 8.0],
+                ['hour' => '2026-06-14 10:00:00', 'import_kwh' => 8.0],
             ],
         );
         $dynamic = new FakeDynamicPriceRepository(
             // La moyenne couvre les deux heures ; le natif s'arrête à la bascule.
-            pricesByHour: ['2026-06-05 10:00:00' => 0.20, '2026-06-25 10:00:00' => 0.20],
+            pricesByHour: ['2026-06-05 10:00:00' => 0.20, '2026-06-14 10:00:00' => 0.20],
             hourlyPricesByHour: ['2026-06-05 10:00:00' => 0.30],
         );
 

@@ -1559,6 +1559,13 @@ final class CostCalculationService
      * CHOIX de la série de prix ; la valorisation, elle, reste filtrée segment par
      * segment.
      *
+     * Les bornes suivent le fuseau du contrat, comme {@see segmentBoundaries()} : une
+     * fenêtre restée en UTC serait plus ÉTROITE que la sous-période qu'elle sert, et
+     * les créneaux tombés dans l'écart ne seraient facturés nulle part — ni en
+     * indexé, faute d'être remontés par {@see resolveDynamicSeries()}, ni au tarif
+     * fournisseur, `calculateElectricityCostDynamic()` remplaçant les lignes
+     * d'énergie de la grille par `dynamicEnergyTtc` (#16).
+     *
      * @param array<string, mixed> $deltas
      * @param list<TariffSegment> $segments
      * @param list<int> $dynamicIndexes  Non vide.
@@ -1572,9 +1579,15 @@ final class CostCalculationService
         $from = Dates::fromDbString((string) $deltas['from']);
         $to   = Dates::fromDbString((string) $deltas['to']);
 
+        // `$last->to` est le dernier jour INCLUS : la fenêtre court jusqu'à la veille
+        // du minuit qui l'achève, toujours dans le fuseau du contrat.
+        $firstStart = Dates::startOfDayIn($first->from->format('Y-m-d'), $this->tariffTimezone);
+        $lastEnd    = Dates::startOfDayIn($last->to->modify('+1 day')->format('Y-m-d'), $this->tariffTimezone)
+            ->modify('-1 second');
+
         return [
-            max($from, $first->from->setTime(0, 0, 0)),
-            min($to, $last->to->setTime(23, 59, 59)),
+            max($from, $firstStart),
+            min($to, $lastEnd),
         ];
     }
 
