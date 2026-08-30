@@ -1559,12 +1559,20 @@ final class CostCalculationService
      * CHOIX de la série de prix ; la valorisation, elle, reste filtrée segment par
      * segment.
      *
-     * Les bornes suivent le fuseau du contrat, comme {@see segmentBoundaries()} : une
-     * fenêtre restée en UTC serait plus ÉTROITE que la sous-période qu'elle sert, et
-     * les créneaux tombés dans l'écart ne seraient facturés nulle part — ni en
-     * indexé, faute d'être remontés par {@see resolveDynamicSeries()}, ni au tarif
-     * fournisseur, `calculateElectricityCostDynamic()` remplaçant les lignes
-     * d'énergie de la grille par `dynamicEnergyTtc` (#16).
+     * Les frontières INTERNES suivent le fuseau du contrat, comme
+     * {@see segmentBoundaries()} : une frontière restée en UTC serait plus ÉTROITE que
+     * la sous-période qu'elle sert, et les créneaux tombés dans l'écart ne seraient
+     * facturés nulle part — ni en indexé, faute d'être remontés par
+     * {@see resolveDynamicSeries()}, ni au tarif fournisseur,
+     * `calculateElectricityCostDynamic()` remplaçant les lignes d'énergie de la grille
+     * par `dynamicEnergyTtc` (#16).
+     *
+     * Les bornes EXTERNES, elles, restent celles de la période. {@see segmentIndexForHour()}
+     * rattache au dernier segment tout créneau postérieur à sa date de fin, et au premier
+     * tout créneau antérieur : les caler sur le jour civil du contrat les sortirait de la
+     * fenêtre alors qu'ils sont bel et bien facturés dans la sous-période — la période
+     * est bornée en UTC (mois calendaire), le contrat non, et l'écart vaut l'offset du
+     * fuseau (2 h en été à Bruxelles, 4 h à New York).
      *
      * @param array<string, mixed> $deltas
      * @param list<TariffSegment> $segments
@@ -1573,17 +1581,23 @@ final class CostCalculationService
      */
     private function dynamicWindow(array $deltas, array $segments, array $dynamicIndexes): array
     {
-        $first = $segments[$dynamicIndexes[0]];
-        $last  = $segments[$dynamicIndexes[count($dynamicIndexes) - 1]];
+        $firstIndex = $dynamicIndexes[0];
+        $lastIndex  = $dynamicIndexes[count($dynamicIndexes) - 1];
+        $first      = $segments[$firstIndex];
+        $last       = $segments[$lastIndex];
 
         $from = Dates::fromDbString((string) $deltas['from']);
         $to   = Dates::fromDbString((string) $deltas['to']);
 
         // `$last->to` est le dernier jour INCLUS : la fenêtre court jusqu'à la veille
         // du minuit qui l'achève, toujours dans le fuseau du contrat.
-        $firstStart = Dates::startOfDayIn($first->from->format('Y-m-d'), $this->tariffTimezone);
-        $lastEnd    = Dates::startOfDayIn($last->to->modify('+1 day')->format('Y-m-d'), $this->tariffTimezone)
-            ->modify('-1 second');
+        $firstStart = $firstIndex === 0
+            ? $from
+            : Dates::startOfDayIn($first->from->format('Y-m-d'), $this->tariffTimezone);
+        $lastEnd    = $lastIndex === count($segments) - 1
+            ? $to
+            : Dates::startOfDayIn($last->to->modify('+1 day')->format('Y-m-d'), $this->tariffTimezone)
+                ->modify('-1 second');
 
         return [
             max($from, $firstStart),
