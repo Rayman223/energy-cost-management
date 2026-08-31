@@ -4,9 +4,12 @@ declare(strict_types=1);
 
 namespace Tests\Integration;
 
+use App\Domain\Battery;
+use App\Domain\BatteryDischargeProfile;
 use App\Infrastructure\MeterTopology;
 use App\Repository\AdvanceScheduleRepository;
 use App\Repository\ApiTokenRepository;
+use App\Repository\BatteryRepository;
 use App\Repository\UserIntegrationRepository;
 use App\Repository\TariffRepository;
 use App\Repository\TariffTemplateRepository;
@@ -36,6 +39,7 @@ final class AccountRgpdDbTest extends DatabaseTestCase
     {
         foreach ([
             'meter_readings', 'meter_registers', 'meters', 'utility_readings',
+            'battery_readings', 'batteries',
             'tariff_grid_lines', 'tariff_grids', 'api_tokens', 'user_integrations',
             'energy_advances',
             'webhook_sync_state', 'tariff_template_usages', 'tariff_template_fields',
@@ -69,6 +73,25 @@ final class AccountRgpdDbTest extends DatabaseTestCase
             5,
             'contrat 2026',
         );
+
+        // Parc de batteries (#26) : le matériel est saisi par l'utilisateur, ses
+        // relevés sont rattachés par FK — l'export doit rendre les deux, et
+        // l'effacement les emporter tous les deux.
+        $batteryId = (new BatteryRepository($pdo, $this->userId))->insert(new Battery(
+            id: 0,
+            brand: 'BYD',
+            model: 'HVS 10.2',
+            capacityKwh: 10.24,
+            commissionedOn: new DateTimeImmutable('2026-01-01'),
+            purchasePrice: 7500.0,
+            pvChargeShare: 80,
+            dischargeProfile: BatteryDischargeProfile::Ratio,
+            dischargeT1Share: 55,
+        ));
+        $pdo->prepare(
+            'INSERT INTO battery_readings (battery_id, reading_at, charge_index_kwh, discharge_index_kwh)
+             VALUES (:b, :a, :c, :d)'
+        )->execute(['b' => $batteryId, 'a' => '2026-06-01 10:00:00', 'c' => 1200.0, 'd' => 1000.0]);
     }
 
     public function testExportContainsAllUserData(): void
@@ -110,6 +133,14 @@ final class AccountRgpdDbTest extends DatabaseTestCase
         self::assertCount(1, $data['energy_advances']);
         self::assertSame('electricity', $data['energy_advances'][0]['energy_type']);
         self::assertSame(5, (int) $data['energy_advances'][0]['due_day']);
+        // Batteries (#26) : le matériel ET ses index. Les hypothèses de calcul en
+        // font partie — sans elles, l'export ne permettrait pas de refaire le bilan.
+        self::assertCount(1, $data['batteries']);
+        self::assertSame('BYD', $data['batteries'][0]['brand']);
+        self::assertSame(80, (int) $data['batteries'][0]['pv_charge_share']);
+        self::assertSame('ratio', $data['batteries'][0]['discharge_profile']);
+        self::assertCount(1, $data['battery_readings']);
+        self::assertSame(1000.0, (float) $data['battery_readings'][0]['discharge_index_kwh']);
     }
 
     public function testEraseRemovesEverything(): void
@@ -128,6 +159,7 @@ final class AccountRgpdDbTest extends DatabaseTestCase
             'user_integrations' => 'user_id',
             'webhook_sync_state' => 'user_id',
             'energy_advances' => 'user_id',
+            'batteries' => 'user_id',
         ] as $table => $col) {
             $stmt = $this->pdo()->prepare("SELECT COUNT(*) FROM {$table} WHERE {$col} = :uid");
             $stmt->execute(['uid' => $this->userId]);
@@ -137,6 +169,9 @@ final class AccountRgpdDbTest extends DatabaseTestCase
         // Les relevés de compteur (cascade via meters) ont disparu aussi.
         self::assertSame(0, (int) $this->pdo()->query('SELECT COUNT(*) FROM meter_readings')->fetchColumn());
         self::assertSame(0, (int) $this->pdo()->query('SELECT COUNT(*) FROM meter_registers')->fetchColumn());
+        // Idem pour les index de batterie (cascade via batteries, #26) : ils ne
+        // portent pas de user_id, la boucle ci-dessus ne peut donc pas les couvrir.
+        self::assertSame(0, (int) $this->pdo()->query('SELECT COUNT(*) FROM battery_readings')->fetchColumn());
     }
 
     public function testEraseKeepsPublicTemplatesButRemovesPrivateAndUsages(): void

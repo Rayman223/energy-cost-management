@@ -1,0 +1,46 @@
+/* Parc de batteries (#26) — complète tariffs.css, chargé juste avant.
+   Ne contient que ce qui est propre à la page : le tableau du parc et les
+   encarts d'hypothèses. Tout le reste (.form-card, .form-grid, .section-header,
+   .btn, .alert) vient de tariffs.css, dont la page reprend la grammaire de
+   formulaire — comme /advances. Le tableau est calqué sur .adv-table. */
+
+.bat-intro { color: var(--muted); font-size: .88rem; line-height: 1.6; margin: 20px 0 0; max-width: 76ch; }
+
+.bat-table-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+                  overflow-x: auto; }
+.bat-table { width: 100%; border-collapse: collapse; font-size: .84rem; min-width: 720px; }
+.bat-table th { text-align: left; padding: 12px 16px; color: var(--muted); font-weight: 600;
+                font-size: .74rem; letter-spacing: .08em; text-transform: uppercase; }
+.bat-table td { padding: 12px 16px; border-top: 1px solid var(--border); vertical-align: middle; }
+.bat-table th.num, .bat-table td.num { text-align: right; font-family: var(--mono); }
+.bat-table tbody tr:hover { background: var(--surface2); }
+.bat-table td.actions { text-align: right; white-space: nowrap; }
+
+.bat-note { display: block; color: var(--muted); font-size: .76rem; margin-top: 3px; }
+.bat-empty-hint { color: var(--muted); font-size: .86rem; margin: 16px 0 0; }
+
+/* Batterie en service à la date de l'utilisateur : liseré vert + badge textuel.
+   La couleur seule n'est pas une information — même règle que /advances. Le fond
+   ambré de .is-editing n'entre pas en concurrence : le liseré est un box-shadow. */
+.bat-table tr.is-current td:first-child  { box-shadow: inset 3px 0 0 var(--green); }
+.bat-table tr.is-upcoming td:first-child { box-shadow: inset 3px 0 0 var(--blue); }
+.bat-table tr.is-retired { opacity: .6; }
+.bat-badge { display: inline-block; margin-left: 8px; padding: 2px 8px; border-radius: 4px;
+             font-size: .72rem; font-weight: 700; background: var(--green-dim); color: var(--green); }
+.bat-badge--upcoming { background: var(--blue-dim); color: var(--blue); }
+.bat-badge--warranty { background: var(--amber-dim, rgba(210,160,60,.15)); color: var(--amber); }
+
+.bat-table tr.is-editing { background: var(--amber-dim, rgba(210,160,60,.15)); }
+.bat-table tr.is-editing:hover { background: var(--amber-dim, rgba(210,160,60,.15)); }
+
+/* Encart des hypothèses : ce que l'application SUPPOSE, distinct de ce qu'elle
+   mesure. Le distinguer visuellement évite qu'un bilan à venir se lise comme une
+   mesure. */
+.bat-assumption { background: var(--surface2); border-left: 3px solid var(--amber);
+                  border-radius: 0 8px 8px 0; padding: 12px 16px; margin: 4px 0 0;
+                  color: var(--muted); font-size: .82rem; line-height: 1.6; }
+
+/* Part T1 : n'a de sens que pour le profil « ratio ». Masquée sinon par
+   batteries.js, qui suit le <select>. Sans JS le champ reste visible et saisissable
+   — dégradation acceptable, le serveur l'ignore hors profil « ratio ». */
+.bat-row-hidden { display: none; }

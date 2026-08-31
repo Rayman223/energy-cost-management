@@ -53,11 +53,33 @@ final class AccountDataExporter
             $userId
         );
 
+        // Index de batterie (#26) : paginés comme les autres relevés — un onduleur
+        // qui pousse un index par jour produit le même volume qu'un compteur.
+        echo ',"battery_readings":';
+        $this->streamRows(
+            'SELECT br.battery_id, br.reading_at, br.charge_index_kwh, br.discharge_index_kwh
+             FROM battery_readings br
+             INNER JOIN batteries b ON b.id = br.battery_id
+             WHERE b.user_id = :uid
+             ORDER BY br.battery_id, br.reading_at',
+            $userId
+        );
+
         $tail = [
             '"tariff_grids":' . self::enc($this->all('SELECT id, energy_type, pricing_mode, country, currency, name, valid_from, valid_to, pcs_coefficient FROM tariff_grids WHERE user_id = :uid ORDER BY id', $userId)),
             // Barèmes d'acomptes (#241) : saisis à la main par l'utilisateur, donc
             // exportables au même titre que ses grilles tarifaires.
             '"energy_advances":' . self::enc($this->all('SELECT id, energy_type, amount_monthly, valid_from, valid_to, due_day, note FROM energy_advances WHERE user_id = :uid ORDER BY energy_type, valid_from', $userId)),
+            // Parc de batteries (#26) : matériel et hypothèses saisis à la main,
+            // exportables au même titre. Les relevés de chaque batterie suivent en
+            // flux plus bas — ils peuvent être aussi volumineux que ceux du compteur.
+            '"batteries":' . self::enc($this->all(
+                'SELECT id, brand, model, capacity_kwh, usable_capacity_kwh, purchase_price,
+                        commissioned_on, decommissioned_on, warranty_until, rated_cycles,
+                        pv_charge_share, discharge_profile, discharge_t1_share, note
+                   FROM batteries WHERE user_id = :uid ORDER BY commissioned_on, id',
+                $userId
+            )),
             '"api_tokens":' . self::enc($this->all('SELECT id, name, prefix, scopes, last_used_at, created_at, revoked_at FROM api_tokens WHERE user_id = :uid ORDER BY id', $userId)),
             '"integrations":' . self::enc($this->integrations($userId)),
             '"sync_state":' . self::enc($this->all('SELECT source_name, last_sent_at, updated_at FROM webhook_sync_state WHERE user_id = :uid ORDER BY source_name', $userId)),

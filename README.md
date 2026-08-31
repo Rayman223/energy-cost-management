@@ -199,6 +199,7 @@ The full schema is in `app/sql/schema.sql`; incremental changes live in
 | `dynamic_prices` | day-ahead spot prices per bidding zone |
 | `api_tokens` | per-user ingestion tokens (hashed, rate-limited, revocable) |
 | `user_integrations` / `webhook_sync_state` | per-user export-connector opt-in (EnergyID, …) and sync state |
+| `batteries` / `battery_readings` | home batteries: hardware, investment, calculation assumptions, and cumulative charge/discharge indexes |
 | `schema_migrations` | applied migration versions |
 
 ---
@@ -304,6 +305,7 @@ electricity) applies from its date onwards instead of rewriting the past.
 | `/tariffs` | Tariff grids (personal + shared catalog for admins) |
 | `/reconciliation` | Bill reconciliation: invoiced amounts vs. computed cost |
 | `/advances` | Advance payment schedules and their balance |
+| `/batteries` | Home battery fleet: hardware, investment and calculation assumptions |
 | `/stats` | Community statistics — average price and consumption per country, k-anonymised at 5 households. **Public**; adds a personal comparison when signed in |
 | `/account` | Profile, API tokens, EnergyID opt-in, statistics opt-out, GDPR export/delete, self-service import |
 | `/admin` | Admin: members (role/status) + import on behalf of a user |

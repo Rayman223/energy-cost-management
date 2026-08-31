@@ -10,7 +10,7 @@
  * active. L'icône Admin n'apparaît que pour les administrateurs.
  *
  * @var string            $subtitle    Sous-titre de page, déjà traduit (échappé ici)
- * @var string            $current     Clé de page active : dashboard|tariffs|reconciliation|advances|admin|account|meter-readings|api-guide|stats
+ * @var string            $current     Clé de page active : dashboard|tariffs|reconciliation|advances|batteries|admin|account|meter-readings|api-guide|stats
  * @var bool|null         $isAdmin     Affiche l'icône Admin (défaut false)
  * @var bool|null         $authenticated Défaut true. À false (visiteur anonyme sur une
  *                                      page publique, cf. /stats #8), la navigation vers
@@ -64,6 +64,7 @@ $navlink = function (string $page, string $url, string $icon, string $title) use
     <?= $navlink('tariffs', $this->url('tariffs'), '€', $this->t('nav.tariffs')) ?>
     <?= $navlink('reconciliation', $this->url('reconciliation'), '🧾', $this->t('nav.reconciliation')) ?>
     <?= $navlink('advances', $this->url('advances'), '🏦', $this->t('nav.advances')) ?>
+    <?= $navlink('batteries', $this->url('batteries'), '🔋', $this->t('nav.batteries')) ?>
     <?= $navlink('stats', $this->url('stats'), '📊', $this->t('nav.stats')) ?>
     <?= $navlink('account', $this->url('account'), '👤', $this->t('nav.account')) ?>
     <form method="post" action="<?= $this->url('auth/logout') ?>" class="logout-form"><?= \App\Security\Csrf::field() ?><button type="submit" class="theme-toggle" title="<?= $this->te('auth.sign_out') ?>">🚪</button></form>
