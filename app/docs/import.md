@@ -14,6 +14,10 @@ sur les contraintes `UNIQUE` composites :
   `production` (index cumulés en kWh, ≥ 0).
 - **Gaz / eau** → `utility_readings` (unique `(user_id, energy_type, reading_at)`),
   index compteur m³ ≥ 0.
+- **Batterie (#26)** → `battery_readings` (unique `(battery_id, reading_at)`),
+  index cumulés `charge` / `discharge` en kWh ≥ 0. Les deux colonnes sont
+  **nullables** et se relèvent indépendamment : un second fichier **complète** un
+  compteur laissé vide sans toucher à l'autre, plutôt que de créer un doublon.
 
 Un réimport du même fichier ne crée donc **aucun doublon** ; le rapport distingue
 `imported` (nouveaux) de `duplicates` (déjà présents).
@@ -44,6 +48,7 @@ Le **mapping** est basé sur des **presets** par type d'énergie, avec surcharge
 |---|---|---|
 | electricity | `timestamp` | une colonne par registre, nommée comme la clé (`import_t1`, …) |
 | gas / water | `timestamp` | `value` |
+| battery | `timestamp` | `charge` et `discharge` (index cumulés kWh) |
 
 Surcharges : nom de la colonne d'horodatage (`--ts-col` / champ UI), de la
 colonne de valeur gaz/eau (`--value-col`), mapping colonne→registre pour
@@ -61,6 +66,25 @@ attendu par le preset) ; un champ laissé vide = index non importé, et si aucun
 renseigné le défaut du preset s'applique. Une même colonne affectée à deux index est
 refusée. Les compteurs **mono-horaires** versent tout dans `import_t1` (pas de
 registre « normal » séparé) — c'est déjà la convention du dashboard et de l'API.
+
+**Import d'index de batterie (#26)** — même mécanique de mapping que
+l'électricité (`registers[charge]` / `registers[discharge]` en UI), avec deux
+différences de fond :
+
+- **La cible est choisie, pas déduite** : le formulaire poste `battery_id`, et
+  l'import échoue avant toute écriture s'il est absent. Un fichier ne peut donc
+  alimenter qu'une batterie — deux batteries mêlées dans le même CSV seraient
+  indétectables ligne par ligne, et le bilan qui en découle serait faux sans le
+  moindre signal.
+- **Un seul relevé par jour civil est retenu**, délimité dans le fuseau de
+  l'utilisateur : la valorisation est mensuelle, une granularité plus fine
+  n'ajouterait rien. Les relevés surnuméraires d'une même journée sont comptés
+  comme **doublons**, sans erreur — un export horaire d'onduleur se réduit donc
+  tout seul, sans que l'utilisateur ait à le pré-filtrer.
+
+Le type « Batterie » n'apparaît dans le formulaire que si le compte a déclaré au
+moins une batterie sur `/batteries`. Les index de batterie ne sont poussés vers
+aucun connecteur d'export : leur import ne recule aucun watermark de synchro.
 
 ## Voies d'import
 
@@ -100,8 +124,8 @@ réelle (contrairement au web, qui assainit le message).
 
 ### 3. API batch (programmatique, P4 #55)
 Pour l'ingestion automatisée volumineuse : `POST ?action=ingest_electricity|
-ingest_gas|ingest_water`, ≤ 1000 lectures/requête, jeton Bearer. Voir
-[api-contract.md](api-contract.md).
+ingest_gas|ingest_water|ingest_battery`, ≤ 1000 lectures/requête, jeton Bearer.
+Voir [api-contract.md](api-contract.md).
 
 ## Sécurité & limites (upload web)
 

@@ -889,4 +889,21 @@ return [
     'battery.invalid_discharge_profile'            => 'Onbekend ontlaadprofiel.',
     'battery.invalid_t1_share'                     => 'Ongeldig dagurenaandeel: geef een percentage tussen 0 en 100 op.',
     'battery.invalid_battery'                      => 'Batterij niet gevonden.',
+
+    'apiguide.battery_title'                       => 'Batterij',
+    'apiguide.battery_desc'                        => 'Stuur de cumulatieve laad- en ontlaadstanden van uw batterij door, zoals afgelezen op uw omvormer.',
+    'apiguide.battery_note'                        => 'Voeg « battery_id » toe als u meerdere batterijen hebt opgegeven; met één enkele is het optioneel. De twee tellers zijn onafhankelijk: stuur degene die uw omvormer toont, de andere kan later worden aangevuld. Er wordt één stand per dag bewaard — vaker doorsturen wordt gewoon ontdubbeld.',
+
+    // Invoer en import van batterijstanden (#26, fase 2)
+    'meter.battery_charge'                         => 'Ingangsstand (laden)',
+    'meter.battery_discharge'                      => 'Uitgangsstand (ontladen)',
+    'meter.battery_hint'                           => 'Dit zijn CUMULATIEVE standen die u van uw omvormer afleest, zoals bij een meter — niet de energie van de dag. Eén van beide volstaat als uw omvormer de andere niet toont; er wordt één stand per dag en per batterij bewaard.',
+    'meter.empty_battery'                          => 'Geen batterijstand geregistreerd.',
+    'meter.battery_required'                       => '⚠ Vul een datum en minstens één batterijstand in.',
+    'import.type_battery'                          => 'Batterij',
+    'import.battery_title'                         => 'Te importeren batterijstanden',
+    'import.battery_hint'                          => 'Kies de batterij die dit bestand voedt: één import richt zich op één batterij, en twee batterijen door elkaar in hetzelfde bestand zouden onopgemerkt blijven. Geef daarna voor elke teller de kolom op die hem bevat. Er wordt slechts één stand per dag bewaard — een uurlijkse export dunt dus vanzelf uit.',
+    'import.battery_target'                        => 'Doelbatterij',
+    'import.reg_charge'                            => 'Ingangsstand (laden)',
+    'import.reg_discharge'                         => 'Uitgangsstand (ontladen)',
 ];

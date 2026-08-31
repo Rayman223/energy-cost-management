@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Service;
 
+use App\Repository\Contract\BatteryIngestionInterface;
 use App\Repository\Contract\ElectricityIngestionInterface;
 use App\Repository\Contract\UtilityIngestionInterface;
 use App\Service\Import\ImportMapping;
@@ -156,6 +157,88 @@ final class BulkImportService
                 $report->noteImportedAt($ts);
             } else {
                 $report->addDuplicate();
+            }
+        }
+
+        return $report;
+    }
+
+    /**
+     * Importe les index d'UNE batterie (#26).
+     *
+     * Même forme que {@see self::importElectricity()} — un horodatage, plusieurs
+     * colonnes d'index cumulés — mais deux différences de fond :
+     *  - le sink est déjà scopé sur une batterie précise, résolue par l'appelant :
+     *    un fichier ne peut donc pas mélanger deux batteries, ce qui serait
+     *    indétectable ligne par ligne ;
+     *  - le plafond est le JOUR CIVIL de l'utilisateur, sans lien avec la grille
+     *    tarifaire (la valorisation est mensuelle), et il porte sur la LIGNE et non
+     *    sur chaque compteur : les deux index d'une batterie se relèvent ensemble.
+     *
+     * @param iterable<int, array<string, string>> $rows numéro de ligne => colonnes normalisées
+     * @param ImportReport|null $report Rapport à remplir (créé si null).
+     * @param bool $replace Ré-import « écraser » : les valeurs déjà présentes au
+     *        même horodatage sont mises à jour au lieu d'être conservées.
+     * @param string|null $timezone Fuseau où se délimite le jour civil du plafond.
+     *        null = aucun plafond (import brut, réservé aux appels de test).
+     */
+    public function importBattery(iterable $rows, ImportMapping $mapping, BatteryIngestionInterface $sink, ?ImportReport $report = null, bool $replace = false, ?string $timezone = null): ImportReport
+    {
+        $report ??= new ImportReport();
+
+        foreach ($rows as $lineNo => $row) {
+            $ts = self::parseTimestamp($row, $mapping->timestampColumn, $lineNo, $report);
+            if ($ts === null) {
+                continue;
+            }
+
+            $indexes  = [];
+            $rowError = false;
+            foreach ($mapping->registerColumns as $col => $kind) {
+                if (!array_key_exists($col, $row) || $row[$col] === '') {
+                    continue;
+                }
+                $value = ReadingParser::parseValue($row[$col]);
+                if ($value === null) {
+                    $report->addError(sprintf('Ligne %d : valeur invalide pour « %s » (%s)', $lineNo, $col, $row[$col]));
+                    $rowError = true;
+                    break;
+                }
+                // Ramène la valeur lue à l'unité canonique de stockage (kWh) : le
+                // facteur vaut 1 en kWh, 0.001 si le fichier est en Wh.
+                $indexes[$kind] = $value * $mapping->unitToCanonicalFactor;
+            }
+
+            if ($rowError) {
+                continue;
+            }
+            if ($indexes === []) {
+                $report->addError(sprintf('Ligne %d : aucun compteur renseigné.', $lineNo));
+                continue;
+            }
+
+            // Jour déjà servi : la ligne entière est un doublon. La transaction
+            // englobante rend visibles les lignes déjà insérées du même jour aux
+            // lignes suivantes — un export horaire se réduit donc à un relevé
+            // quotidien, sans erreur ni interruption.
+            if ($timezone !== null && $sink->readingPresentInDay($ts, $timezone)) {
+                $report->addDuplicate(count($indexes));
+                continue;
+            }
+
+            try {
+                $written = $sink->insertIndexes($ts, $indexes, $replace);
+            } catch (\Throwable) {
+                // Erreur au niveau base (valeur hors bornes, verrou…) : comptée comme
+                // échec réel, sans annuler tout l'import. Aucun détail interne exposé.
+                $report->addWriteError(sprintf('Ligne %d : erreur d\'écriture en base.', $lineNo));
+                continue;
+            }
+
+            $report->addImported($written);
+            $report->addDuplicate(count($indexes) - $written);
+            if ($written > 0) {
+                $report->noteImportedAt($ts);
             }
         }
 

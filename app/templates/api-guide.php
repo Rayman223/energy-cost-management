@@ -69,6 +69,15 @@ $url   = $this->e($apiUrl);
   -H "Content-Type: application/json" \
   -d '{"readings":[{"reading_at":"2026-07-16T10:00:00+02:00","counter_m3":123.456}]}'</code></pre>
 
+  <!-- ── Batterie (#26) ───────────────────────────────────────────────────── -->
+  <h2><?= $this->te('apiguide.battery_title') ?></h2>
+  <p><?= $this->te('apiguide.battery_desc') ?></p>
+<pre><code>curl -X POST "<?= $url ?>?action=ingest_battery" \
+  -H "Authorization: Bearer mec_votre_jeton" \
+  -H "Content-Type: application/json" \
+  -d '{"readings":[{"timestamp":"2026-07-16T10:00:00+02:00","charge":1234.5,"discharge":1050.2}]}'</code></pre>
+  <p class="muted"><?= $this->te('apiguide.battery_note') ?></p>
+
   <!-- ── Réponse & envoi en lot ───────────────────────────────────────────── -->
   <h2><?= $this->te('apiguide.response_title') ?></h2>
   <p><?= $this->te('apiguide.response_desc') ?></p>

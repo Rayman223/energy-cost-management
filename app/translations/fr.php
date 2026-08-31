@@ -898,4 +898,21 @@ return [
     'battery.invalid_discharge_profile'            => 'Profil de décharge inconnu.',
     'battery.invalid_t1_share'                     => 'Part en heures pleines invalide : indiquez un pourcentage entre 0 et 100.',
     'battery.invalid_battery'                      => 'Batterie introuvable.',
+
+    'apiguide.battery_title'                       => 'Batterie',
+    'apiguide.battery_desc'                        => 'Poussez les index cumulés d\'entrée et de sortie de votre batterie, relevés sur votre onduleur.',
+    'apiguide.battery_note'                        => 'Ajoutez « battery_id » si vous avez déclaré plusieurs batteries ; avec une seule, il est facultatif. Les deux compteurs sont indépendants : envoyez celui que votre onduleur expose, l\'autre pourra être complété plus tard. Un seul relevé par jour est retenu — les envois plus fréquents sont simplement dédupliqués.',
+
+    // Saisie et import des index de batterie (#26, phase 2)
+    'meter.battery_charge'                         => 'Index d\'entrée (charge)',
+    'meter.battery_discharge'                      => 'Index de sortie (décharge)',
+    'meter.battery_hint'                           => 'Ce sont des index CUMULÉS relevés sur votre onduleur, comme ceux d\'un compteur — pas l\'énergie de la journée. Un seul des deux suffit si votre onduleur n\'expose pas l\'autre ; un relevé par jour et par batterie est retenu.',
+    'meter.empty_battery'                          => 'Aucun index de batterie enregistré.',
+    'meter.battery_required'                       => '⚠ Renseigne une date et au moins un index de batterie.',
+    'import.type_battery'                          => 'Batterie',
+    'import.battery_title'                         => 'Index de batterie à importer',
+    'import.battery_hint'                          => 'Choisissez la batterie que le fichier alimente : un import ne peut en viser qu\'une, deux batteries mêlées dans un même fichier seraient indétectables. Indiquez ensuite, pour chaque compteur, la colonne qui le contient. Un seul relevé par jour est retenu — un export horaire se réduit donc tout seul.',
+    'import.battery_target'                        => 'Batterie visée',
+    'import.reg_charge'                            => 'Index d\'entrée (charge)',
+    'import.reg_discharge'                         => 'Index de sortie (décharge)',
 ];

@@ -890,4 +890,21 @@ return [
     'battery.invalid_discharge_profile'            => 'Unknown discharge profile.',
     'battery.invalid_t1_share'                     => 'Invalid peak-hour share: enter a percentage between 0 and 100.',
     'battery.invalid_battery'                      => 'Battery not found.',
+
+    'apiguide.battery_title'                       => 'Battery',
+    'apiguide.battery_desc'                        => 'Push the cumulative charge and discharge indexes of your battery, as read from your inverter.',
+    'apiguide.battery_note'                        => 'Add “battery_id” if you declared several batteries; with a single one it is optional. The two counters are independent: send whichever your inverter exposes, the other can be filled in later. Only one reading per day is kept — more frequent pushes are simply deduplicated.',
+
+    // Battery index entry and import (#26, phase 2)
+    'meter.battery_charge'                         => 'Charge index (in)',
+    'meter.battery_discharge'                      => 'Discharge index (out)',
+    'meter.battery_hint'                           => 'These are CUMULATIVE indexes read from your inverter, like a meter — not the energy of the day. One of the two is enough if your inverter does not expose the other; one reading per day and per battery is kept.',
+    'meter.empty_battery'                          => 'No battery reading recorded.',
+    'meter.battery_required'                       => '⚠ Enter a date and at least one battery index.',
+    'import.type_battery'                          => 'Battery',
+    'import.battery_title'                         => 'Battery indexes to import',
+    'import.battery_hint'                          => 'Pick the battery this file feeds: one import targets one battery, and two batteries mixed in a single file would be undetectable. Then give, for each counter, the column holding it. Only one reading per day is kept — an hourly export narrows down on its own.',
+    'import.battery_target'                        => 'Target battery',
+    'import.reg_charge'                            => 'Charge index (in)',
+    'import.reg_discharge'                         => 'Discharge index (out)',
 ];

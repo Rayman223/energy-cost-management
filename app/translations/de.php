@@ -889,4 +889,21 @@ return [
     'battery.invalid_discharge_profile'            => 'Unbekanntes Entladeprofil.',
     'battery.invalid_t1_share'                     => 'Ungültiger Hochtarif-Anteil: geben Sie einen Prozentsatz zwischen 0 und 100 an.',
     'battery.invalid_battery'                      => 'Batterie nicht gefunden.',
+
+    'apiguide.battery_title'                       => 'Batterie',
+    'apiguide.battery_desc'                        => 'Übertragen Sie die kumulierten Lade- und Entladezählerstände Ihrer Batterie, wie an Ihrem Wechselrichter abgelesen.',
+    'apiguide.battery_note'                        => 'Ergänzen Sie „battery_id“, wenn Sie mehrere Batterien erfasst haben; bei einer einzigen ist es optional. Die beiden Zähler sind unabhängig: senden Sie den, den Ihr Wechselrichter ausgibt, der andere lässt sich später ergänzen. Pro Tag wird ein Stand behalten — häufigere Übertragungen werden einfach entdoppelt.',
+
+    // Erfassung und Import von Batteriezählerständen (#26, Phase 2)
+    'meter.battery_charge'                         => 'Eingangszählerstand (Laden)',
+    'meter.battery_discharge'                      => 'Ausgangszählerstand (Entladen)',
+    'meter.battery_hint'                           => 'Das sind KUMULIERTE Zählerstände von Ihrem Wechselrichter, wie bei einem Zähler — nicht die Energie des Tages. Einer der beiden genügt, wenn Ihr Wechselrichter den anderen nicht ausgibt; pro Tag und Batterie wird ein Stand behalten.',
+    'meter.empty_battery'                          => 'Kein Batteriezählerstand erfasst.',
+    'meter.battery_required'                       => '⚠ Datum und mindestens einen Batteriezählerstand eingeben.',
+    'import.type_battery'                          => 'Batterie',
+    'import.battery_title'                         => 'Zu importierende Batteriezählerstände',
+    'import.battery_hint'                          => 'Wählen Sie die Batterie, die diese Datei speist: ein Import zielt auf genau eine Batterie, zwei vermischte Batterien in derselben Datei blieben unentdeckt. Geben Sie dann für jeden Zähler die Spalte an, die ihn enthält. Es wird nur ein Stand pro Tag behalten — ein stündlicher Export dünnt sich also von selbst aus.',
+    'import.battery_target'                        => 'Zielbatterie',
+    'import.reg_charge'                            => 'Eingangszählerstand (Laden)',
+    'import.reg_discharge'                         => 'Ausgangszählerstand (Entladen)',
 ];
