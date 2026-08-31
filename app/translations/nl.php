@@ -911,6 +911,20 @@ return [
     'battery.dynamic_unsupported'                  => 'Minstens één maand valt onder een marktgeïndexeerd contract: een ontlading tegen spotprijzen waarderen vergt uurstanden, die de dagelijkse invoer niet levert. Die maanden blijven zonder cijfer in plaats van met een verkeerd cijfer; hun rendement wordt wel berekend.',
     'battery.no_tariff_warning'                    => 'Minstens één maand wordt door geen enkel tariefrooster gedekt: zonder kWh-prijs is de besparing niet berekenbaar. Vul uw roosters aan op de pagina Tarieven.',
 
+    // Terugverdientijd (#26, fase 4)
+    'battery.payback_title'                        => 'Terugverdientijd',
+    'battery.payback_no_price'                     => 'Vul het geïnvesteerde bedrag in op de batterijfiche om een terugverdientijd te krijgen.',
+    'battery.payback_done'                         => '✓ Terugverdiend: de cumulatieve besparing overtreft de geïnvesteerde {amount}.',
+    'battery.payback_progress'                     => 'Terugverdiend: {pct} %',
+    'battery.payback_progress_detail'              => '{saved} bespaard van {investment} geïnvesteerd — nog {remaining} terug te verdienen.',
+    'battery.payback_eta'                          => 'Aan {rate} per maand zou de investering rond {month} terugverdiend zijn.',
+    'battery.payback_beyond_horizon'               => 'Aan het huidige tempo zou de terugverdientijd voorbij de levensduur van de batterij vallen: er wordt geen datum genoemd.',
+    'battery.payback_no_rate'                      => 'Nog geen volledige maand becijferd: het besparingstempo staat niet vast, dus kan geen datum worden genoemd.',
+    'battery.payback_biased'                       => 'Schatting op basis van slechts {months} maanden: een batterij levert in de winter niet evenveel op als in de zomer, dus is de datum vertekend door het doorlopen seizoen. Hij stabiliseert zodra een volledig jaar verstreken is.',
+    'battery.payback_after_warranty'               => 'De geprojecteerde terugverdientijd valt na het einde van de batterijgarantie.',
+    'battery.cycles_used'                          => '{used} equivalente volledige cycli verbruikt.',
+    'battery.cycles_used_of'                       => '{used} equivalente volledige cycli verbruikt van de {rated} opgegeven ({pct} %).',
+
     // Invoer en import van batterijstanden (#26, fase 2)
     'meter.battery_charge'                         => 'Ingangsstand (laden)',
     'meter.battery_discharge'                      => 'Uitgangsstand (ontladen)',

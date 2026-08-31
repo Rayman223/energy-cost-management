@@ -16,6 +16,7 @@ use App\Domain\BatteryDischargeProfile;
  * @var bool                            $isAdmin
  * @var list<Battery>                   $batteries   Parc, mise en service décroissante
  * @var array{batteries: list<array<string,mixed>>, fleet: array<string,mixed>|null}|null $balance Bilan d'économie (#26), null sans batterie
+ * @var array<int, array<string,mixed>> $paybacks Amortissement par identifiant de batterie
  * @var Battery|null                    $editing     Batterie rouverte pour modification
  * @var list<BatteryDischargeProfile>   $profiles    Profils de décharge proposables
  * @var DateTimeImmutable               $today       Jour civil de l'utilisateur (badges de service)
@@ -108,6 +109,81 @@ $currency     = $fleetBalance['currency'] ?? $currency;
   </div>
   <p class="bat-summary-note"><?= $this->te('battery.balance_method') ?></p>
 </div>
+
+<?php
+// ── Amortissement ─────────────────────────────────────────────────────────
+// Une carte par batterie : investissement, garantie et cycles sont propres à
+// chaque matériel, il n'existe pas de projection « du parc » qui voudrait dire
+// quelque chose.
+?>
+<?php foreach ($batteries as $battery): ?>
+<?php $payback = $paybacks[$battery->id] ?? null; ?>
+<?php if ($payback !== null): ?>
+<div class="bat-payback">
+  <div class="bat-payback-head">
+    <span class="bat-payback-title"><?= $this->te('battery.payback_title') ?></span>
+    <?php if (count($batteries) > 1): ?>
+    <span class="bat-note"><?= $this->e($battery->label()) ?></span>
+    <?php endif; ?>
+  </div>
+
+  <?php if ($payback['investment'] === null): ?>
+  <p class="bat-gap"><?= $this->te('battery.payback_no_price') ?></p>
+  <?php elseif ($payback['paid_back']): ?>
+  <p class="bat-payback-verdict bat-payback-verdict--done">
+    <?= $this->te('battery.payback_done', ['amount' => $this->money($payback['investment'], $currency)]) ?>
+  </p>
+  <?php else: ?>
+  <div class="bat-payback-bar" role="img"
+       aria-label="<?= $this->e($this->t('battery.payback_progress', ['pct' => $this->num($payback['progress_pct'] ?? 0.0, 0)])) ?>">
+    <span style="width: <?= $this->e($this->num(min(100.0, max(0.0, $payback['progress_pct'] ?? 0.0)), 1)) ?>%"></span>
+  </div>
+  <p class="bat-payback-figures">
+    <?= $this->te('battery.payback_progress_detail', [
+        'saved'      => $this->money($payback['savings'], $currency),
+        'investment' => $this->money($payback['investment'], $currency),
+        'remaining'  => $this->money($payback['remaining'] ?? 0.0, $currency),
+    ]) ?>
+  </p>
+
+  <?php if ($payback['payback_on'] !== null): ?>
+  <p class="bat-payback-verdict">
+    <?= $this->te('battery.payback_eta', [
+        'month' => $payback['payback_on'],
+        'rate'  => $this->money($payback['monthly_rate'] ?? 0.0, $currency),
+    ]) ?>
+  </p>
+  <?php elseif ($payback['beyond_horizon']): ?>
+  <p class="bat-payback-verdict"><?= $this->te('battery.payback_beyond_horizon') ?></p>
+  <?php else: ?>
+  <p class="bat-payback-verdict"><?= $this->te('battery.payback_no_rate') ?></p>
+  <?php endif; ?>
+
+  <?php // L'avertissement de biais saisonnier n'est PAS optionnel : une moyenne
+        // prise sur quelques mois d'été promettrait un amortissement qui ne
+        // viendra pas. Il disparaît de lui-même dès qu'une année est couverte. ?>
+  <?php if ($payback['seasonally_biased'] && $payback['payback_on'] !== null): ?>
+  <p class="bat-warn">⚠ <?= $this->te('battery.payback_biased', ['months' => (string) $payback['months_observed']]) ?></p>
+  <?php endif; ?>
+  <?php if ($payback['after_warranty']): ?>
+  <p class="bat-warn">⚠ <?= $this->te('battery.payback_after_warranty') ?></p>
+  <?php endif; ?>
+  <?php endif; ?>
+
+  <?php if ($payback['cycles_used'] !== null): ?>
+  <p class="bat-payback-cycles">
+    <?= $payback['cycles_pct'] !== null
+        ? $this->te('battery.cycles_used_of', [
+            'used'  => $this->num($payback['cycles_used'], 0),
+            'rated' => (string) $payback['rated_cycles'],
+            'pct'   => $this->num($payback['cycles_pct'], 1),
+        ])
+        : $this->te('battery.cycles_used', ['used' => $this->num($payback['cycles_used'], 0)]) ?>
+  </p>
+  <?php endif; ?>
+</div>
+<?php endif; ?>
+<?php endforeach; ?>
 
 <?php if ($fleetBalance['has_unsupported_months']): ?>
 <p class="bat-warn">⚠ <?= $this->te('battery.dynamic_unsupported') ?></p>

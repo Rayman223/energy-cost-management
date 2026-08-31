@@ -911,6 +911,20 @@ return [
     'battery.dynamic_unsupported'                  => 'Mindestens ein Monat fällt unter einen marktindexierten Vertrag: eine Entladung zu Spotpreisen zu bewerten erfordert Stundenwerte, die die tägliche Erfassung nicht liefert. Diese Monate bleiben ohne Zahl statt mit einer falschen; ihr Wirkungsgrad wird dennoch berechnet.',
     'battery.no_tariff_warning'                    => 'Mindestens ein Monat wird von keinem Tarifraster abgedeckt: ohne kWh-Preis lässt sich die Ersparnis nicht berechnen. Ergänzen Sie Ihre Raster auf der Seite Tarife.',
 
+    // Amortisation (#26, Phase 4)
+    'battery.payback_title'                        => 'Amortisation',
+    'battery.payback_no_price'                     => 'Tragen Sie den investierten Betrag im Batteriedatenblatt ein, um eine Amortisationszeit zu erhalten.',
+    'battery.payback_done'                         => '✓ Amortisiert: die kumulierte Ersparnis übersteigt die investierten {amount}.',
+    'battery.payback_progress'                     => 'Amortisation: {pct} %',
+    'battery.payback_progress_detail'              => '{saved} gespart von {investment} investiert — noch {remaining} zu amortisieren.',
+    'battery.payback_eta'                          => 'Bei {rate} pro Monat wäre die Investition um {month} herum amortisiert.',
+    'battery.payback_beyond_horizon'               => 'Beim derzeitigen Tempo läge die Amortisation jenseits der Lebensdauer der Batterie: es wird kein Datum genannt.',
+    'battery.payback_no_rate'                      => 'Noch kein vollständiger Monat beziffert: das Spartempo steht nicht fest, ein Datum lässt sich nicht nennen.',
+    'battery.payback_biased'                       => 'Schätzung auf Basis von nur {months} Monaten: eine Batterie bringt im Winter nicht so viel wie im Sommer, das Datum ist also von der durchlaufenen Jahreszeit verzerrt. Es stabilisiert sich, sobald ein volles Jahr vergangen ist.',
+    'battery.payback_after_warranty'               => 'Die prognostizierte Amortisation liegt nach dem Ende der Batteriegarantie.',
+    'battery.cycles_used'                          => '{used} äquivalente Vollzyklen verbraucht.',
+    'battery.cycles_used_of'                       => '{used} äquivalente Vollzyklen von {rated} angegebenen verbraucht ({pct} %).',
+
     // Erfassung und Import von Batteriezählerständen (#26, Phase 2)
     'meter.battery_charge'                         => 'Eingangszählerstand (Laden)',
     'meter.battery_discharge'                      => 'Ausgangszählerstand (Entladen)',
