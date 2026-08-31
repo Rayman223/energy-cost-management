@@ -210,6 +210,42 @@ final class BatteryReadingRepositoryDbTest extends DatabaseTestCase
         self::assertFalse($repo->readingPresentInDay($this->at('2026-01-01 10:00:00'), 'UTC'));
     }
 
+    /**
+     * Les séries alimentent le bilan (#26) : un compteur NUL doit être omis de SA
+     * série. Y injecter un point à zéro creuserait une consommation négative, puis
+     * un rattrapage fantôme au relevé suivant — et le bilan afficherait une
+     * économie inventée.
+     */
+    public function testIndexSeriesSkipNullsCounterByCounter(): void
+    {
+        $repo = $this->repo();
+        $repo->insertIndexes($this->at('2026-06-01 08:00:00'), ['charge' => 1000.0, 'discharge' => 800.0]);
+        $repo->insertIndexes($this->at('2026-06-02 08:00:00'), ['charge' => 1050.0]);
+        $repo->insertIndexes($this->at('2026-06-03 08:00:00'), ['charge' => 1100.0, 'discharge' => 900.0]);
+
+        $series = $repo->indexSeries();
+
+        self::assertSame([1000.0, 1050.0, 1100.0], array_column($series['charge'], 'value'));
+        self::assertSame([800.0, 900.0], array_column($series['discharge'], 'value'), 'la ligne sans décharge ne doit pas y figurer');
+
+        // Ordre croissant : c'est ce qu'attend MonthlyConsumptionInterpolator.
+        $timestamps = array_column($series['charge'], 'ts');
+        $sorted     = $timestamps;
+        sort($sorted);
+        self::assertSame($sorted, $timestamps);
+    }
+
+    public function testIndexSeriesOfAForeignBatteryIsEmpty(): void
+    {
+        $owner = $this->repo($this->foreignBatteryId, $this->otherUserId);
+        $owner->insertIndexes($this->at('2026-06-01 08:00:00'), ['charge' => 1200.0]);
+
+        $series = $this->repo($this->foreignBatteryId, $this->userId)->indexSeries();
+
+        self::assertSame([], $series['charge']);
+        self::assertSame([], $series['discharge']);
+    }
+
     // ── Scope tenant ───────────────────────────────────────────────────────
 
     /**

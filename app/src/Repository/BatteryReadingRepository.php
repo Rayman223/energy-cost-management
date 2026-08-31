@@ -6,6 +6,7 @@ namespace App\Repository;
 
 use App\Domain\ReadingGranularity;
 use App\Repository\Contract\BatteryIngestionInterface;
+use App\Repository\Contract\BatteryReadingsInterface;
 use App\Support\Dates;
 use DateTimeImmutable;
 use DateTimeZone;
@@ -26,7 +27,7 @@ use PDO;
  * une seconde écriture au même horodatage viendra la compléter. Tous les calculs
  * de delta sautent donc les NULL colonne par colonne.
  */
-final class BatteryReadingRepository implements BatteryIngestionInterface
+final class BatteryReadingRepository implements BatteryIngestionInterface, BatteryReadingsInterface
 {
     /** Clé publique => colonne. Source unique des deux correspondances. */
     private const COLUMNS = [
@@ -164,6 +165,39 @@ final class BatteryReadingRepository implements BatteryIngestionInterface
         ]);
 
         return $stmt->fetchColumn() !== false;
+    }
+
+    /**
+     * @return array{charge: list<array{ts:int,value:float}>, discharge: list<array{ts:int,value:float}>}
+     */
+    public function indexSeries(): array
+    {
+        $stmt = $this->pdo->prepare(
+            'SELECT br.reading_at, br.charge_index_kwh, br.discharge_index_kwh
+             FROM battery_readings br
+             INNER JOIN batteries b ON b.id = br.battery_id
+             WHERE br.battery_id = :bid AND b.user_id = :uid
+             ORDER BY br.reading_at ASC'
+        );
+        $stmt->execute(['bid' => $this->batteryId, 'uid' => $this->userId]);
+
+        $series = ['charge' => [], 'discharge' => []];
+        foreach ($stmt->fetchAll() as $row) {
+            if (!is_array($row)) {
+                continue;
+            }
+
+            $ts = Dates::fromDbString((string) $row['reading_at'])->getTimestamp();
+            foreach (self::COLUMNS as $kind => $column) {
+                // NULL omis de SA série : un point à zéro y creuserait une
+                // consommation négative, suivie d'un rattrapage fantôme.
+                if ($row[$column] !== null) {
+                    $series[$kind][] = ['ts' => $ts, 'value' => (float) $row[$column]];
+                }
+            }
+        }
+
+        return $series;
     }
 
     /** Nombre de relevés de la batterie (pagination de l'historique). */

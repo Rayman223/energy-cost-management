@@ -894,6 +894,23 @@ return [
     'apiguide.battery_desc'                        => 'Übertragen Sie die kumulierten Lade- und Entladezählerstände Ihrer Batterie, wie an Ihrem Wechselrichter abgelesen.',
     'apiguide.battery_note'                        => 'Ergänzen Sie „battery_id“, wenn Sie mehrere Batterien erfasst haben; bei einer einzigen ist es optional. Die beiden Zähler sind unabhängig: senden Sie den, den Ihr Wechselrichter ausgibt, der andere lässt sich später ergänzen. Pro Tag wird ein Stand behalten — häufigere Übertragungen werden einfach entdoppelt.',
 
+    // Ersparnisbilanz (#26, Phase 3)
+    'battery.balance_title'                        => 'Was die Batterie Ihnen gespart hat',
+    'battery.balance_no_data'                      => 'Noch nicht genug Zählerstände für eine Bilanz: es braucht mindestens zwei, an verschiedenen Tagen.',
+    'battery.balance_method'                       => 'Die Bruttoersparnis bewertet jede kWh, die aus der Batterie kam, mit dem Preis der kWh, die Sie nicht aus dem Netz bezogen haben — Energie, Netz und Abgaben inkl. MwSt., ohne Grundgebühr (die fällt ohnehin an). Dieser Betrag amortisiert die Batterie. Die Opportunitätskosten beziffern zum Vergleich, was das Laden gekostet hat: entgangene Einspeisevergütung für den Photovoltaik-Anteil, bezahlter Strom für den Netzanteil.',
+    'battery.gross_savings'                        => 'Bruttoersparnis',
+    'battery.opportunity_cost'                     => 'Opportunitätskosten',
+    'battery.net_savings'                          => 'Nettoersparnis',
+    'battery.charged'                              => 'Geladen',
+    'battery.discharged'                           => 'Entladen',
+    'battery.efficiency'                           => 'Wirkungsgrad',
+    'battery.col_month'                            => 'Monat',
+    'battery.partial_month'                        => 'unvollständiger Monat',
+    'battery.month_dynamic'                        => 'Indexierter Vertrag: nicht beziffert',
+    'battery.month_no_tariff'                      => 'Kein Tarifraster',
+    'battery.dynamic_unsupported'                  => 'Mindestens ein Monat fällt unter einen marktindexierten Vertrag: eine Entladung zu Spotpreisen zu bewerten erfordert Stundenwerte, die die tägliche Erfassung nicht liefert. Diese Monate bleiben ohne Zahl statt mit einer falschen; ihr Wirkungsgrad wird dennoch berechnet.',
+    'battery.no_tariff_warning'                    => 'Mindestens ein Monat wird von keinem Tarifraster abgedeckt: ohne kWh-Preis lässt sich die Ersparnis nicht berechnen. Ergänzen Sie Ihre Raster auf der Seite Tarife.',
+
     // Erfassung und Import von Batteriezählerständen (#26, Phase 2)
     'meter.battery_charge'                         => 'Eingangszählerstand (Laden)',
     'meter.battery_discharge'                      => 'Ausgangszählerstand (Entladen)',

@@ -895,6 +895,23 @@ return [
     'apiguide.battery_desc'                        => 'Push the cumulative charge and discharge indexes of your battery, as read from your inverter.',
     'apiguide.battery_note'                        => 'Add “battery_id” if you declared several batteries; with a single one it is optional. The two counters are independent: send whichever your inverter exposes, the other can be filled in later. Only one reading per day is kept — more frequent pushes are simply deduplicated.',
 
+    // Savings balance (#26, phase 3)
+    'battery.balance_title'                        => 'What the battery has saved you',
+    'battery.balance_no_data'                      => 'Not enough readings yet to build a balance: at least two, on different dates, are needed.',
+    'battery.balance_method'                       => 'Gross savings value every kWh that came out of the battery at the price of the kWh you did not draw from the grid — energy, network and taxes, VAT included, excluding the standing charge (which is due either way). This is the amount that pays the battery back. The opportunity cost, shown for comparison, prices what charging cost: lost export revenue for the solar share, electricity paid for the grid share.',
+    'battery.gross_savings'                        => 'Gross savings',
+    'battery.opportunity_cost'                     => 'Opportunity cost',
+    'battery.net_savings'                          => 'Net savings',
+    'battery.charged'                              => 'Charged',
+    'battery.discharged'                           => 'Discharged',
+    'battery.efficiency'                           => 'Round-trip efficiency',
+    'battery.col_month'                            => 'Month',
+    'battery.partial_month'                        => 'incomplete month',
+    'battery.month_dynamic'                        => 'Market-indexed contract: not priced',
+    'battery.month_no_tariff'                      => 'No tariff grid',
+    'battery.dynamic_unsupported'                  => 'At least one month falls under a market-indexed contract: valuing a discharge at spot prices requires hourly readings, which daily entry does not provide. Those months are left without a figure rather than with a wrong one; their efficiency is still computed.',
+    'battery.no_tariff_warning'                    => 'At least one month is covered by no tariff grid: without a kWh price, savings cannot be computed. Complete your grids on the Tariffs page.',
+
     // Battery index entry and import (#26, phase 2)
     'meter.battery_charge'                         => 'Charge index (in)',
     'meter.battery_discharge'                      => 'Discharge index (out)',

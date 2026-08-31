@@ -894,6 +894,23 @@ return [
     'apiguide.battery_desc'                        => 'Stuur de cumulatieve laad- en ontlaadstanden van uw batterij door, zoals afgelezen op uw omvormer.',
     'apiguide.battery_note'                        => 'Voeg « battery_id » toe als u meerdere batterijen hebt opgegeven; met één enkele is het optioneel. De twee tellers zijn onafhankelijk: stuur degene die uw omvormer toont, de andere kan later worden aangevuld. Er wordt één stand per dag bewaard — vaker doorsturen wordt gewoon ontdubbeld.',
 
+    // Besparingsbalans (#26, fase 3)
+    'battery.balance_title'                        => 'Wat de batterij u heeft bespaard',
+    'battery.balance_no_data'                      => 'Nog niet genoeg meterstanden voor een balans: er zijn er minstens twee nodig, op verschillende data.',
+    'battery.balance_method'                       => 'De brutobesparing waardeert elke kWh die uit de batterij kwam tegen de prijs van de kWh die u niet van het net hebt afgenomen — energie, transport en taksen inclusief btw, zonder abonnement (dat betaalt u hoe dan ook). Dat bedrag verdient de batterij terug. De opportuniteitskost, ter vergelijking, becijfert wat het laden kostte: gederfde injectievergoeding voor het zonnedeel, betaalde elektriciteit voor het netdeel.',
+    'battery.gross_savings'                        => 'Brutobesparing',
+    'battery.opportunity_cost'                     => 'Opportuniteitskost',
+    'battery.net_savings'                          => 'Nettobesparing',
+    'battery.charged'                              => 'Geladen',
+    'battery.discharged'                           => 'Ontladen',
+    'battery.efficiency'                           => 'Rendement',
+    'battery.col_month'                            => 'Maand',
+    'battery.partial_month'                        => 'onvolledige maand',
+    'battery.month_dynamic'                        => 'Geïndexeerd contract: niet becijferd',
+    'battery.month_no_tariff'                      => 'Geen tariefrooster',
+    'battery.dynamic_unsupported'                  => 'Minstens één maand valt onder een marktgeïndexeerd contract: een ontlading tegen spotprijzen waarderen vergt uurstanden, die de dagelijkse invoer niet levert. Die maanden blijven zonder cijfer in plaats van met een verkeerd cijfer; hun rendement wordt wel berekend.',
+    'battery.no_tariff_warning'                    => 'Minstens één maand wordt door geen enkel tariefrooster gedekt: zonder kWh-prijs is de besparing niet berekenbaar. Vul uw roosters aan op de pagina Tarieven.',
+
     // Invoer en import van batterijstanden (#26, fase 2)
     'meter.battery_charge'                         => 'Ingangsstand (laden)',
     'meter.battery_discharge'                      => 'Uitgangsstand (ontladen)',

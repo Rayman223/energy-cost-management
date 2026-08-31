@@ -903,6 +903,23 @@ return [
     'apiguide.battery_desc'                        => 'Poussez les index cumulés d\'entrée et de sortie de votre batterie, relevés sur votre onduleur.',
     'apiguide.battery_note'                        => 'Ajoutez « battery_id » si vous avez déclaré plusieurs batteries ; avec une seule, il est facultatif. Les deux compteurs sont indépendants : envoyez celui que votre onduleur expose, l\'autre pourra être complété plus tard. Un seul relevé par jour est retenu — les envois plus fréquents sont simplement dédupliqués.',
 
+    // Bilan d'économie (#26, phase 3)
+    'battery.balance_title'                        => 'Ce que la batterie vous a fait économiser',
+    'battery.balance_no_data'                      => 'Pas encore assez de relevés pour établir un bilan : il en faut au moins deux, à des dates différentes.',
+    'battery.balance_method'                       => 'L\'économie brute valorise chaque kWh sorti de la batterie au prix du kWh que vous n\'avez pas prélevé au réseau — énergie, transport et taxes TTC, hors abonnement (celui-ci se paie de toute façon). C\'est ce montant qui amortira la batterie. Le coût d\'opportunité, à titre de comparaison, chiffre ce que la charge a coûté : injection perdue pour la part photovoltaïque, électricité payée pour la part réseau.',
+    'battery.gross_savings'                        => 'Économie brute',
+    'battery.opportunity_cost'                     => 'Coût d\'opportunité',
+    'battery.net_savings'                          => 'Économie nette',
+    'battery.charged'                              => 'Chargé',
+    'battery.discharged'                           => 'Déchargé',
+    'battery.efficiency'                           => 'Rendement',
+    'battery.col_month'                            => 'Mois',
+    'battery.partial_month'                        => 'mois incomplet',
+    'battery.month_dynamic'                        => 'Contrat indexé : non chiffré',
+    'battery.month_no_tariff'                      => 'Aucune grille tarifaire',
+    'battery.dynamic_unsupported'                  => 'Un mois au moins relève d\'un contrat indexé au marché : valoriser une décharge au prix spot exige des relevés horaires, que la saisie journalière ne fournit pas. Ces mois restent sans chiffre plutôt qu\'avec une valeur fausse ; leur rendement, lui, est bien calculé.',
+    'battery.no_tariff_warning'                    => 'Un mois au moins n\'est couvert par aucune grille tarifaire : sans prix du kWh, l\'économie n\'est pas calculable. Complétez vos grilles sur la page Tarifs.',
+
     // Saisie et import des index de batterie (#26, phase 2)
     'meter.battery_charge'                         => 'Index d\'entrée (charge)',
     'meter.battery_discharge'                      => 'Index de sortie (décharge)',
