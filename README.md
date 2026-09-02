@@ -68,6 +68,12 @@ dev tooling and the OIDC library only.
 - **Administration** (`admin.php`, admins only) — manage members (role, status) and the shared tariff catalog.
 - **Dashboard** — live consumption, monthly deltas, cost estimates, 30/60/90-day
   history, dynamic vs. regulated price comparison.
+- **Home batteries** (`/batteries`) — declare your batteries, record their charge
+  and discharge indexes (web, API or CSV import), and see what they saved you:
+  gross savings valued at the avoided import price, round-trip efficiency, and a
+  projected payback time. The opportunity cost of charging (lost export revenue or
+  grid electricity) is shown alongside, for comparison. Contracts indexed on the
+  market are left unpriced rather than estimated.
 - **Community statistics** (`/stats`, public) — average price per kWh and average
   consumption per country, plus a personal comparison when signed in. Aggregates
   are k-anonymised (a country appears only from 5 contributing households) and

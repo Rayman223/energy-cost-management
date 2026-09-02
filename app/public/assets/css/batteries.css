@@ -40,6 +40,47 @@
                   border-radius: 0 8px 8px 0; padding: 12px 16px; margin: 4px 0 0;
                   color: var(--muted); font-size: .82rem; line-height: 1.6; }
 
+/* Bandeau de bilan : la réponse à la question que pose la page. L'économie brute
+   et le rendement sont au premier plan ; le coût d'opportunité et l'économie
+   nette passent en retrait — ce sont des comparaisons, pas la réponse. */
+.bat-summary { background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+               padding: 24px; margin-top: 16px; display: flex; flex-wrap: wrap; gap: 32px;
+               align-items: flex-start; }
+.bat-summary-item  { display: flex; flex-direction: column; gap: 6px; }
+.bat-summary-label { font-size: .74rem; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+.bat-summary-value { font-family: var(--mono); font-size: 1.5rem; font-weight: 700; color: var(--text-strong); }
+.bat-summary-item--muted .bat-summary-value { font-size: 1.1rem; font-weight: 600; color: var(--muted); }
+.bat-summary-note  { flex-basis: 100%; margin: 0; font-size: .82rem; line-height: 1.6; color: var(--muted); }
+
+/* Amortissement : une carte par batterie. La barre de progression est doublée
+   des montants en toutes lettres — une barre seule ne dit ni combien il reste,
+   ni sur quoi elle est calculée. */
+.bat-payback { background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+               padding: 20px 24px; margin-top: 14px; }
+.bat-payback-head { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
+.bat-payback-title { font-size: .74rem; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+.bat-payback-head .bat-note { display: inline; margin: 0; }
+
+.bat-payback-bar { position: relative; height: 10px; border-radius: 999px; overflow: hidden;
+                   background: var(--surface2); }
+.bat-payback-bar > span { display: block; height: 100%; background: var(--green); border-radius: 999px; }
+
+.bat-payback-figures { margin: 10px 0 0; font-size: .86rem; line-height: 1.6; color: var(--muted); }
+.bat-payback-verdict { margin: 10px 0 0; font-size: .95rem; line-height: 1.6; color: var(--text); }
+.bat-payback-verdict--done { color: var(--green); font-weight: 600; }
+.bat-payback-cycles { margin: 10px 0 0; font-size: .82rem; color: var(--muted); }
+
+.bat-warn { background: var(--amber-dim, rgba(210,160,60,.15)); border-radius: 8px; padding: 10px 14px;
+            color: var(--amber); font-size: .84rem; line-height: 1.6; margin: 14px 0 0; }
+.bat-gap  { color: var(--muted); font-style: italic; font-size: .82rem; }
+.bat-muted { color: var(--muted); }
+.bat-table tr.is-unvalued { opacity: .75; }
+
+@media (max-width: 640px) {
+  .bat-summary { gap: 20px; }
+  .bat-summary-value { font-size: 1.25rem; }
+}
+
 /* Part T1 : n'a de sens que pour le profil « ratio ». Masquée sinon par
    batteries.js, qui suit le <select>. Sans JS le champ reste visible et saisissable
    — dégradation acceptable, le serveur l'ignore hors profil « ratio ». */

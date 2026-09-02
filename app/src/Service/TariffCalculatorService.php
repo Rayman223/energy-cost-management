@@ -349,6 +349,73 @@ final class TariffCalculatorService
     }
 
     /**
+     * Prix TTC du kWh qu'on ÉVITE de prélever au réseau (#26).
+     *
+     * Somme des composantes proportionnelles au kWh — énergie fournisseur, réseau,
+     * accises et contributions — pondérées entre heures pleines et heures creuses
+     * par `$t1Share`.
+     *
+     * Ce qui en est EXCLU, et pourquoi :
+     *  - `fixed_monthly` / `fixed_annual` : un abonnement se paie que l'on prélève
+     *    ou non. Les inclure ferait « économiser » un forfait qui tombe quand même ;
+     *  - `injection_t1/t2` : ces lignes rémunèrent l'énergie exportée, elles ne
+     *    facturent pas celle qu'on consomme ({@see injectionRate()} les traite à
+     *    part, comme manque à gagner) ;
+     *  - `spot_coefficient` / `spot_offset` : paramètres d'indexation, jamais un
+     *    montant ({@see ComponentKind::isSpotFormula()}).
+     *
+     * Même principe que l'économie d'auto-consommation solaire ({@see solarInfo()}),
+     * à une différence près : le solaire produit de jour, donc en T1, alors qu'une
+     * batterie se décharge à l'heure que son pilotage décide — d'où la pondération
+     * explicite plutôt qu'un T1 implicite.
+     *
+     * @param array{vat_rate?: float, currency?: string, lines?: list<array{key: string, kind: string, amount: float, label: string|null, category?: string|null}>} $tariff
+     * @param float $t1Share Part des kWh évités qui l'auraient été en heures pleines,
+     *                       dans [0, 1]. Bornée ici : une valeur hors plage viendrait
+     *                       d'une hypothèse mal saisie, et extrapolerait le tarif.
+     */
+    public function avoidedImportRate(array $tariff, float $t1Share): float
+    {
+        $t1 = max(0.0, min(1.0, $t1Share));
+        $t2 = 1.0 - $t1;
+
+        $rate = 0.0;
+        foreach ($tariff['lines'] ?? [] as $line) {
+            $kind = ComponentKind::tryFrom((string) $line['kind']);
+            $rate += match ($kind) {
+                // Sans distinction horaire : s'appliquent à chaque kWh prélevé.
+                ComponentKind::EnergyFlat, ComponentKind::PerKwh   => (float) $line['amount'],
+                ComponentKind::EnergyT1,   ComponentKind::PerKwhT1 => (float) $line['amount'] * $t1,
+                ComponentKind::EnergyT2,   ComponentKind::PerKwhT2 => (float) $line['amount'] * $t2,
+                default => 0.0,
+            };
+        }
+
+        return $rate;
+    }
+
+    /**
+     * Tarif d'injection TTC (€/kWh) de la grille : ce que rapporte un kWh réinjecté,
+     * donc ce qu'on PERD à le stocker plutôt qu'à l'exporter (#26).
+     *
+     * Le T1 est privilégié — même hypothèse que {@see solarInfo()} : le surplus
+     * photovoltaïque s'injecte en journée. Le T2 ne sert que de repli, pour les
+     * grilles qui ne déclarent qu'une ligne d'injection sans distinction horaire.
+     *
+     * Renvoie 0.0 quand la grille n'a aucune ligne d'injection : beaucoup de
+     * contrats ne rémunèrent pas l'injection, et stocker ne coûte alors aucun
+     * manque à gagner.
+     *
+     * @param array{vat_rate?: float, currency?: string, lines?: list<array{key: string, kind: string, amount: float, label: string|null, category?: string|null}>} $tariff
+     */
+    public function injectionRate(array $tariff): float
+    {
+        $t1 = $this->sumRatesForKinds($tariff, [ComponentKind::InjectionT1]);
+
+        return $t1 > 0.0 ? $t1 : $this->sumRatesForKinds($tariff, [ComponentKind::InjectionT2]);
+    }
+
+    /**
      * Somme des taux (€/kWh) des lignes appartenant à un ensemble de kinds.
      *
      * @param array{vat_rate?: float, currency?: string, lines?: list<array{key: string, kind: string, amount: float, label: string|null, category?: string|null}>} $tariff
