@@ -94,12 +94,32 @@ function canvas(id) {
   return el ? el.getContext('2d') : null;
 }
 
+/**
+ * Remplace le canvas par une phrase (#42).
+ *
+ * Un corpus vide est l'état NOMINAL d'un site jeune sous seuil de k-anonymat, pas
+ * une anomalie : sortir en silence laissait un cadre titré sans un mot, quand le
+ * bloc public explique déjà le sien (stats.not_enough_data). Le canvas est retiré
+ * plutôt que masqué — il n'a plus rien à porter, et .chart-empty tient sa place.
+ */
+function renderEmpty(id) {
+  const el = document.getElementById(id);
+  if (!el) return;
+
+  const note = document.createElement('p');
+  note.className = 'chart-empty';
+  note.textContent = tr('stats.chart.empty', 'No data to show here yet.');
+  el.replaceWith(note);
+}
+
 /** Prix moyen du kWh par pays : TVA empilée sur la part hors taxes. */
 function renderPriceChart(rows) {
   const ctx = canvas('priceChart');
+  if (!ctx) return;
+
   // Le bucket « Autres » n'a pas de prix (devises mélangées) : rien à tracer.
   const data = (rows || []).filter(r => r.ttc_per_kwh !== null);
-  if (!ctx || data.length === 0) return;
+  if (data.length === 0) return renderEmpty('priceChart');
 
   new Chart(ctx, {
     type: 'bar',
@@ -125,7 +145,8 @@ function renderPriceChart(rows) {
 /** Consommation moyenne par foyer. Un graphe par énergie : les unités diffèrent. */
 function renderUsageChart(id, rows, unit, color, line) {
   const ctx = canvas(id);
-  if (!ctx || !rows || rows.length === 0) return;
+  if (!ctx) return;
+  if (!rows || rows.length === 0) return renderEmpty(id);
 
   new Chart(ctx, {
     type: 'bar',
@@ -144,7 +165,8 @@ function renderUsageChart(id, rows, unit, color, line) {
 /** Répartition fixe / indexé, en part de 100 % pour comparer des pays inégaux. */
 function renderMixChart(rows) {
   const ctx = canvas('mixChart');
-  if (!ctx || !rows || rows.length === 0) return;
+  if (!ctx) return;
+  if (!rows || rows.length === 0) return renderEmpty('mixChart');
 
   const share = (row, key) => {
     const total = row.fixed + row.dynamic;
@@ -175,7 +197,8 @@ function renderMixChart(rows) {
 /** Prix spot par zone, dans la résolution retenue côté serveur. */
 function renderSpotChart(rows) {
   const ctx = canvas('spotChart');
-  if (!ctx || !rows || rows.length === 0) return;
+  if (!ctx) return;
+  if (!rows || rows.length === 0) return renderEmpty('spotChart');
 
   new Chart(ctx, {
     type: 'bar',
@@ -194,7 +217,15 @@ function renderSpotChart(rows) {
 /** Ma consommation mois par mois, face à la moyenne de mon pays. */
 function renderMonthlyChart(points) {
   const ctx = canvas('monthlyChart');
-  if (!ctx || !points || points.length === 0) return;
+  if (!ctx) return;
+
+  // Série CREUSE, pas vide : composeMonthly() émet un point par mois de la fenêtre,
+  // à null quand ni relevé ni moyenne pays. Compter les points tracerait donc une
+  // courbe de douze trous, axes compris, sur un compte qui n'a encore rien saisi.
+  if (!points || points.length === 0
+      || points.every(p => p.mine === null && p.average === null)) {
+    return renderEmpty('monthlyChart');
+  }
 
   new Chart(ctx, {
     type: 'line',
@@ -225,7 +256,8 @@ function renderMonthlyChart(points) {
 /** Comparaison poste par poste, en €/kWh. */
 function renderCategoryChart(rows) {
   const ctx = canvas('categoryChart');
-  if (!ctx || !rows || rows.length === 0) return;
+  if (!ctx) return;
+  if (!rows || rows.length === 0) return renderEmpty('categoryChart');
 
   new Chart(ctx, {
     type: 'bar',

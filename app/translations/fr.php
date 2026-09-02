@@ -816,6 +816,7 @@ return [
     'stats.method_privacy'                         => 'Aucune donnée individuelle n\'est publiée.',
     'stats.method_optout_link'                     => 'Me retirer des statistiques',
     'stats.chart.no_data'                          => 'donnée absente',
+    'stats.chart.empty'                            => 'Pas encore de données à afficher ici.',
     'stats.chart.htva'                             => 'Hors TVA',
     'stats.chart.vat'                              => 'TVA',
     'stats.chart.per_household'                    => 'Par foyer',

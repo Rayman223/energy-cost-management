@@ -808,6 +808,7 @@ return [
     'stats.method_privacy'                         => 'No individual data is published.',
     'stats.method_optout_link'                     => 'Opt out of statistics',
     'stats.chart.no_data'                          => 'no data',
+    'stats.chart.empty'                            => 'No data to show here yet.',
     'stats.chart.htva'                             => 'Excl. VAT',
     'stats.chart.vat'                              => 'VAT',
     'stats.chart.per_household'                    => 'Per household',

@@ -807,6 +807,7 @@ return [
     'stats.method_privacy'                         => 'Er worden geen individuele gegevens gepubliceerd.',
     'stats.method_optout_link'                     => 'Mij uit de statistieken halen',
     'stats.chart.no_data'                          => 'geen gegevens',
+    'stats.chart.empty'                            => 'Nog geen gegevens om hier te tonen.',
     'stats.chart.htva'                             => 'Excl. btw',
     'stats.chart.vat'                              => 'Btw',
     'stats.chart.per_household'                    => 'Per huishouden',
