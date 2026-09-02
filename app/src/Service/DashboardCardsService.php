@@ -84,10 +84,22 @@ final class DashboardCardsService
      *        en cours n'a aucun relevé électricité et ne fournit donc pas de borne de
      *        fin. Défaut : maintenant, en UTC (fuseau de stockage).
      *
+     * @param array<string, mixed>|null $batteryMonth Mois de batterie agrégé sur le
+     *        parc (#26), tel que produit par
+     *        {@see \App\Service\BatterySavingsService::fleetMonth()}. `null` = aucune
+     *        batterie déclarée, ou aucune mesure ce mois-ci ⇒ aucune card batterie.
+     * @param string $currencySymbol Symbole de la devise, pour la card d'économie.
+     *
      * @return list<DashboardCard>
      */
-    public function build(array $deltas, int $year, int $month, ?DateTimeImmutable $asOf = null): array
-    {
+    public function build(
+        array $deltas,
+        int $year,
+        int $month,
+        ?DateTimeImmutable $asOf = null,
+        ?array $batteryMonth = null,
+        string $currencySymbol = '€',
+    ): array {
         $now = $asOf ?? new DateTimeImmutable('now', Dates::utc());
 
         // Une fenêtre par source de relevés. L'électricité s'arrête au dernier index
@@ -170,6 +182,51 @@ final class DashboardCardsService
             true,
             'dash.water',
         );
+
+        return array_merge($cards, $this->batteryCards($batteryMonth, $currencySymbol));
+    }
+
+    /**
+     * Cards batterie (#26) : décharge, charge et économie brute du mois.
+     *
+     * Entièrement omises sans batterie ou sans mesure — comme la card solaire, elles
+     * n'occupent alors aucune colonne de la grille plutôt que d'afficher des zéros.
+     *
+     * Aucun badge de variation, volontairement : le bilan batterie est CALENDAIRE et
+     * son mois en cours est arrêté au dernier relevé, alors que le mois précédent
+     * est complet. Les comparer afficherait une chute systématique en début de mois
+     * — précisément le défaut que la fenêtre glissante des autres cards a corrigé
+     * (#5). Mieux vaut pas de badge qu'un badge faux.
+     *
+     * @param array<string, mixed>|null $month
+     * @return list<DashboardCard>
+     */
+    private function batteryCards(?array $month, string $currencySymbol): array
+    {
+        if ($month === null) {
+            return [];
+        }
+
+        $discharge = self::floatOrNull($month['discharge_kwh'] ?? null);
+        $charge    = self::floatOrNull($month['charge_kwh'] ?? null);
+        $savings   = self::floatOrNull($month['gross_savings'] ?? null);
+
+        $cards = [];
+
+        // La décharge d'abord : c'est elle qui produit l'économie, donc la card qui
+        // répond à la question que pose l'issue.
+        if ($discharge !== null && $discharge > 0.0) {
+            $cards[] = $this->card('battery_discharge', 'green', 'dot--green', $discharge, null, 'kWh', false);
+        }
+        if ($charge !== null && $charge > 0.0) {
+            $cards[] = $this->card('battery_charge', 'green', 'dot--green-dim', $charge, null, 'kWh', false);
+        }
+        if ($savings !== null && $savings > 0.0) {
+            $savingsCard = $this->card('battery_savings', 'green', 'dot--green', $savings, null, $currencySymbol, false);
+            // Un montant se lit à deux décimales, pas à trois comme des kWh.
+            $savingsCard['decimals'] = 2;
+            $cards[] = $savingsCard;
+        }
 
         return $cards;
     }
