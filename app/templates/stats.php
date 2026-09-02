@@ -137,11 +137,11 @@ $symbol = \App\Domain\Currency::symbol($currency ?? 'EUR');
   <div class="chart-grid">
     <div class="chart-box">
       <h3><?= $this->te('stats.me_monthly_title') ?></h3>
-      <canvas id="monthlyChart" height="220"></canvas>
+      <canvas id="monthlyChart" height="240"></canvas>
     </div>
     <div class="chart-box">
       <h3><?= $this->te('stats.me_categories_title') ?></h3>
-      <canvas id="categoryChart" height="220"></canvas>
+      <canvas id="categoryChart" height="240"></canvas>
       <p class="hint"><?= $this->te('stats.me_categories_hint') ?></p>
     </div>
   </div>

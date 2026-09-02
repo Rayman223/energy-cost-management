@@ -807,6 +807,7 @@ return [
     'stats.method_privacy'                         => 'Es werden keine individuellen Daten veröffentlicht.',
     'stats.method_optout_link'                     => 'Mich aus den Statistiken nehmen',
     'stats.chart.no_data'                          => 'keine Daten',
+    'stats.chart.empty'                            => 'Noch keine Daten zum Anzeigen.',
     'stats.chart.htva'                             => 'Ohne MwSt.',
     'stats.chart.vat'                              => 'MwSt.',
     'stats.chart.per_household'                    => 'Pro Haushalt',

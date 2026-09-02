@@ -78,6 +78,21 @@
     text-transform: uppercase; color: var(--muted);
     margin: 0 0 14px;
   }
+  /* Hauteur imposée, comme .chart-card canvas du dashboard (#42).
+     stats.js trace avec maintainAspectRatio:false : Chart.js dimensionne alors le
+     canvas d'après son parent. Or .chart-box est une cellule de grid dont la
+     hauteur vient de son contenu — le canvas se nourrirait de sa propre hauteur,
+     ligne de grid comprise, et croîtrait à chaque redimensionnement. L'attribut
+     height= du template ne borne rien : Chart.js écrit style.height par-dessus. */
+  .chart-box canvas { display: block; width: 100% !important; height: 240px !important; }
+
+  /* Occupe exactement la place du canvas qu'elle remplace : un cadre qui rétrécit
+     désalignerait la grille par rapport à ses voisins. */
+  .chart-empty {
+    display: flex; align-items: center; justify-content: center;
+    height: 240px; margin: 0; text-align: center;
+    color: var(--muted); font-size: .82rem; line-height: 1.6;
+  }
 
   /* ── Invitations (se connecter, renseigner son pays, corpus insuffisant) ── */
   .cta-box {
