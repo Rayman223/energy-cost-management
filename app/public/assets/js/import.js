@@ -43,6 +43,7 @@
   var columnList = document.getElementById('import-columns');
   var registersBox = document.getElementById('import-registers');
   var valueColBox = document.getElementById('import-value-col');
+  var batteryBox = document.getElementById('import-battery');
 
   var units;
   try {
@@ -64,13 +65,18 @@
     });
     // La 1re option (unité canonique) est sélectionnée par défaut.
 
-    // Électricité → mapping par index ; gaz/eau → colonne valeur unique.
+    // Trois formes de fichier : électricité → mapping par registre ; batterie
+    // (#26) → cible + mapping charge/décharge ; gaz/eau → colonne valeur unique.
     var isElectricity = typeSelect.value === 'electricity';
+    var isBattery = typeSelect.value === 'battery';
     if (registersBox) {
       registersBox.hidden = !isElectricity;
     }
+    if (batteryBox) {
+      batteryBox.hidden = !isBattery;
+    }
     if (valueColBox) {
-      valueColBox.hidden = isElectricity;
+      valueColBox.hidden = isElectricity || isBattery;
     }
   }
 

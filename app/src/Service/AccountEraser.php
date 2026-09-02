@@ -39,7 +39,8 @@ final class AccountEraser
             $this->delete("DELETE FROM tariff_templates WHERE user_id = :uid AND visibility = 'private'", $userId);
 
             // Cascade : user_profiles, meters→registers→readings, utility_readings,
-            // api_tokens, user_integrations, tariff_template_usages
+            // batteries→battery_readings (#26), api_tokens, user_integrations,
+            // tariff_template_usages
             // (les usages de CET utilisateur ; ceux d'autres comptes sur un template public restent).
             $this->delete('DELETE FROM users WHERE id = :uid', $userId);
 

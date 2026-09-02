@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use App\Domain\ReadingGranularity;
+use App\Http\Controller\BatteryReadingController;
 use App\Http\Controller\CostController;
 use App\Http\Controller\IngestController;
 use App\Http\Controller\MeterEntryController;
@@ -15,6 +16,8 @@ use App\Http\Router;
 use App\Http\SecurityHeaders;
 use App\Infrastructure\Database;
 use App\Repository\ApiTokenRepository;
+use App\Repository\BatteryReadingRepository;
+use App\Repository\BatteryRepository;
 use App\Repository\DynamicPriceRepository;
 use App\Repository\ElectricityReadingRepository;
 use App\Repository\TariffRepository;
@@ -148,6 +151,15 @@ $tariffs  = new TariffController($tariffRepo);
 $entries  = new MeterEntryController($gasRepo, $waterRepo, $elecRepo, $syncState, $elecThrottle);
 $deletion = new ReadingDeletionController($gasRepo, $waterRepo, $elecRepo);
 $ingest   = new IngestController($elecRepo, $gasRepo, $waterRepo, $elecThrottle);
+// Batteries (#26) : le repository d'index est scopé sur UNE batterie, connue
+// seulement à la lecture de la requête — d'où une fabrique plutôt qu'une instance.
+// Le plafond est d'un relevé par jour civil de l'utilisateur, sans lien avec la
+// grille tarifaire : la valorisation est mensuelle.
+$batteries = new BatteryReadingController(
+    new BatteryRepository($pdo, $userId),
+    static fn (int $batteryId): BatteryReadingRepository => new BatteryReadingRepository($pdo, $userId, $batteryId),
+    $userTimezone,
+);
 
 $router = new Router();
 
@@ -158,6 +170,7 @@ $router = new Router();
 $router->add('POST', 'ingest_electricity', $ingest->electricity(...));
 $router->add('POST', 'ingest_gas',         $ingest->gas(...));
 $router->add('POST', 'ingest_water',       $ingest->water(...));
+$router->add('POST', 'ingest_battery',     $batteries->ingest(...));
 
 // ── Routes de session (navigateur) : refusées aux requêtes par jeton ──────────
 if ($viaToken === false) {
@@ -171,6 +184,7 @@ if ($viaToken === false) {
     $router->add('GET', 'gas_monthly_series',   $readings->gasMonthlySeries(...));
     $router->add('GET', 'water_monthly_series', $readings->waterMonthlySeries(...));
     $router->add('GET', 'electricity_monthly_series', $readings->electricityMonthlySeries(...));
+    $router->add('GET', 'battery_history', $batteries->history(...));
     $router->add('GET', 'month_cost',     $cost->monthCost(...));
     $router->add('GET', 'cost_estimate',  $cost->costEstimate(...));
     $router->add('GET', 'gas_cost',       $cost->gasCost(...));
@@ -182,6 +196,7 @@ if ($viaToken === false) {
     $router->add('POST', 'electricity_entry', $entries->electricity(...));
     $router->add('POST', 'gas_entry',         $entries->gas(...));
     $router->add('POST', 'water_entry',       $entries->water(...));
+    $router->add('POST', 'battery_entry',     $batteries->entry(...));
     $router->add('POST', 'save_tariff', $tariffs->save(...));
 
     // POST (suppression de relevés) : par ligne (gaz/eau par id, élec par
@@ -192,6 +207,8 @@ if ($viaToken === false) {
     $router->add('POST', 'delete_gas_all',             $deletion->gasAll(...));
     $router->add('POST', 'delete_water_all',           $deletion->waterAll(...));
     $router->add('POST', 'delete_electricity_meter',   $deletion->electricityMeter(...));
+    $router->add('POST', 'delete_battery_reading',      $batteries->deleteReading(...));
+    $router->add('POST', 'delete_battery_readings_all', $batteries->deleteAll(...));
 
     // La gestion des jetons API se fait sur la page « Mon compte » (account.php).
 }

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Service\Import;
 
 use App\Infrastructure\MeterTopology;
+use App\Repository\Contract\BatteryIngestionInterface;
 use InvalidArgumentException;
 
 /**
@@ -17,7 +18,14 @@ use InvalidArgumentException;
  */
 final class ImportMapping
 {
-    public const ENERGY_TYPES = ['electricity', 'gas', 'water'];
+    /**
+     * `battery` (#26) n'est pas une énergie de plus mais un ÉQUIPEMENT : ses
+     * relevés vivent dans `battery_readings` et visent une batterie précise, pas
+     * un compteur du foyer. Il figure ici parce que la mécanique d'import — un
+     * horodatage, plusieurs colonnes d'index cumulés — est exactement celle de
+     * l'électricité ; la cible, elle, est résolue par l'appelant.
+     */
+    public const ENERGY_TYPES = ['electricity', 'gas', 'water', 'battery'];
 
     /**
      * Unités proposées par type d'énergie. La **première** est l'unité canonique
@@ -31,6 +39,7 @@ final class ImportMapping
         'electricity' => ['kwh', 'wh'],
         'gas'         => ['m3'],
         'water'       => ['m3', 'l'],
+        'battery'     => ['kwh', 'wh'],
     ];
 
     /** Facteur de conversion unité → unité canonique (kWh / m³). */
@@ -53,6 +62,12 @@ final class ImportMapping
     public function isElectricity(): bool
     {
         return $this->energyType === 'electricity';
+    }
+
+    /** Import d'index de batterie (#26) : cible `battery_readings`, pas un compteur. */
+    public function isBattery(): bool
+    {
+        return $this->energyType === 'battery';
     }
 
     /**
@@ -82,23 +97,32 @@ final class ImportMapping
             ? self::norm($overrides['ts_col'])
             : 'timestamp';
 
-        if ($energyType === 'electricity') {
+        // Deux cibles multi-colonnes : les registres du compteur électrique, et les
+        // deux compteurs d'une batterie (#26). Même mécanique, jeux de clés
+        // autorisées différents — d'où la table ci-dessous plutôt qu'un second bloc.
+        $multiColumnKeys = match ($energyType) {
+            'electricity' => MeterTopology::ELECTRICITY_REGISTERS,
+            'battery'     => BatteryIngestionInterface::KINDS,
+            default       => null,
+        };
+
+        if ($multiColumnKeys !== null) {
             $registers = [];
             if (isset($overrides['registers']) && $overrides['registers'] !== []) {
                 foreach ($overrides['registers'] as $col => $registerKey) {
                     $registerKey = strtolower(trim($registerKey));
-                    if (!in_array($registerKey, MeterTopology::ELECTRICITY_REGISTERS, true)) {
+                    if (!in_array($registerKey, $multiColumnKeys, true)) {
                         throw new InvalidArgumentException(sprintf(
                             'Registre invalide « %s » (attendu : %s).',
                             $registerKey,
-                            implode(', ', MeterTopology::ELECTRICITY_REGISTERS)
+                            implode(', ', $multiColumnKeys)
                         ));
                     }
                     $registers[self::norm($col)] = $registerKey;
                 }
             } else {
                 // Défaut : chaque registre est une colonne nommée comme sa clé.
-                foreach (MeterTopology::ELECTRICITY_REGISTERS as $key) {
+                foreach ($multiColumnKeys as $key) {
                     $registers[$key] = $key;
                 }
             }

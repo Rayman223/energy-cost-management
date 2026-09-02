@@ -75,10 +75,10 @@ function renderReadings(tbodyId, rows, emptyLabel) {
 // index les plus anciens restaient inatteignables.
 
 const PER_PAGE = 25;
-const pageState = { electricity: 1, gas: 1, water: 1 };
+const pageState = { electricity: 1, gas: 1, water: 1, battery: 1 };
 // Numéro du dernier chargement lancé par fluide : une réponse dont le numéro
 // n'est plus le courant est obsolète (cf. loadHistory).
-const loadSeq = { electricity: 0, gas: 0, water: 0 };
+const loadSeq = { electricity: 0, gas: 0, water: 0, battery: 0 };
 
 // Met à jour le libellé et l'état des boutons sous un tableau. `perPage` vient de
 // la réponse : c'est le serveur qui borne réellement la taille de page, la
@@ -122,10 +122,10 @@ function keepFocusInPager(prev, next) {
 // Charge une page et rend le tableau. `page` par défaut : celle affichée
 // (rechargement en place) ; la navigation passe la page visée. Renvoie la
 // réponse, ou null si le chargement a échoué ou a été dépassé par un plus récent.
-async function loadHistory(prefix, action, emptyLabel, render = renderReadings, page = pageState[prefix]) {
+async function loadHistory(prefix, action, emptyLabel, render = renderReadings, page = pageState[prefix], extraQuery = '') {
   const seq = ++loadSeq[prefix];
   try {
-    const res = await fetch(`api?action=${action}&page=${page}&per_page=${PER_PAGE}`);
+    const res = await fetch(`api?action=${action}&page=${page}&per_page=${PER_PAGE}${extraQuery}`);
     const data = await res.json();
     // Deux clics rapprochés sur « Suivant » lancent deux chargements concurrents :
     // sans ce test, la réponse la plus lente écraserait la plus récente et le
@@ -324,9 +324,106 @@ async function submitElectricity() {
   }
 }
 
+// ── Batteries (#26) ─────────────────────────────────────────────────────────
+// Les deux compteurs se relèvent indépendamment : l'un des deux suffit, et une
+// cellule vide s'affiche « — » plutôt que zéro — un compteur non relevé n'est
+// pas un compteur à zéro.
+
+const BATTERY_KEYS = ['charge', 'discharge'];
+
+// Batterie visée. Le <select> existe toujours (masqué s'il n'y en a qu'une) ;
+// son absence signifie que la section entière n'est pas rendue.
+function batteryTarget() {
+  return document.getElementById('battery-target')?.value || '';
+}
+
+function renderBatteryReadings(tbodyId, rows, emptyLabel) {
+  const tbody = document.getElementById(tbodyId);
+  if (!tbody) return;
+  if (!Array.isArray(rows) || rows.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="4" class="td-empty">${emptyLabel}</td></tr>`;
+    return;
+  }
+
+  // Même grammaire que l'électricité : index en valeur, delta « en petit dessous »
+  // (bleu, rouge si négatif — un index cumulé qui recule signale une anomalie).
+  const cell = (index, delta) => {
+    if (index === null || index === undefined) return '<td>—</td>';
+    const sub = delta === null || delta === undefined
+      ? ''
+      : `<span class="td-sub ${delta < 0 ? 'td-delta-neg' : 'td-delta'}">${delta >= 0 ? '+' : ''}${fmtIndex(delta)} kWh</span>`;
+    return `<td>${fmtIndex(index)}${sub}</td>`;
+  };
+
+  tbody.innerHTML = rows.map(r =>
+    `<tr><td>${window.TZ ? window.TZ.formatReadingAt(r.reading_at) : r.reading_at.slice(0, 16)}</td>`
+    + cell(r.charge, r.delta_charge)
+    + cell(r.discharge, r.delta_discharge)
+    + delButton('data-id', r.id) + '</tr>'
+  ).join('');
+}
+
+async function submitBattery() {
+  const btn = document.getElementById('battery-btn');
+  const { date, value: at } = readingAt('battery');
+  const payload = { reading_at: at, battery_id: batteryTarget() };
+  let hasValue = false;
+  let invalid = false;
+
+  BATTERY_KEYS.forEach((key) => {
+    const raw = document.getElementById(`battery-${key}`)?.value || '';
+    if (raw === '') return;
+    const value = parseFloat(raw);
+    if (!isValidIndex(value)) { invalid = true; return; }
+    payload[key] = value;
+    hasValue = true;
+  });
+
+  setFeedback('battery-feedback', '');
+  if (invalid) {
+    setFeedback('battery-feedback', tr('invalidUtility', '⚠ Enter a date and a valid value.'), 'err');
+    return;
+  }
+  if (!date || !hasValue) {
+    setFeedback('battery-feedback', tr('invalidBattery', '⚠ Enter a date and at least one battery index.'), 'err');
+    return;
+  }
+
+  btn.disabled = true;
+  const oldText = btn.textContent;
+  btn.textContent = tr('sending', 'Sending…');
+  try {
+    const res = await fetch('api?action=battery_entry', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json();
+    if (data.ok) {
+      setFeedback('battery-feedback', tr('saved', '✓ Saved.'), 'ok');
+      BATTERY_KEYS.forEach((key) => {
+        document.getElementById(`battery-${key}`).value = '';
+      });
+      const reloaded = await reloadBattery(1);
+      feedbackForSavedReading('battery-feedback', reloaded && reloaded.items, at);
+    } else {
+      setFeedback('battery-feedback', `✗ ${data.error || tr('unknownError', 'Unknown error.')}`, 'err');
+    }
+  } catch (e) {
+    setFeedback('battery-feedback', tr('networkError', '✗ Network error.'), 'err');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = oldText;
+  }
+}
+
 document.getElementById('electricity-btn')?.addEventListener('click', submitElectricity);
 document.getElementById('gas-btn')?.addEventListener('click', () => submitUtility('gas', 'gas_entry'));
 document.getElementById('water-btn')?.addEventListener('click', () => submitUtility('water', 'water_entry'));
+document.getElementById('battery-btn')?.addEventListener('click', submitBattery);
+// Changer de batterie recharge l'historique : le tableau appartient à la batterie
+// sélectionnée, le laisser tel quel afficherait les index d'une autre.
+document.getElementById('battery-target')?.addEventListener('change', () => reloadBattery(1));
 
 // ── Suppression de relevés ──────────────────────────────────────────────────
 
@@ -367,8 +464,12 @@ async function deleteAndReload(action, payload, feedbackId, reloadFn) {
 
 const reloadGas = (page) => loadHistory('gas', 'gas_history', tr('emptyGas', 'No gas reading recorded.'), renderReadings, page);
 const reloadWater = (page) => loadHistory('water', 'water_history', tr('emptyWater', 'No water reading recorded.'), renderReadings, page);
+const reloadBattery = (page) => loadHistory(
+  'battery', 'battery_history', tr('emptyBattery', 'No battery reading recorded.'),
+  renderBatteryReadings, page, `&battery_id=${batteryTarget()}`
+);
 
-const RELOADERS = { electricity: loadElectricityHistory, gas: reloadGas, water: reloadWater };
+const RELOADERS = { electricity: loadElectricityHistory, gas: reloadGas, water: reloadWater, battery: reloadBattery };
 
 // Délégation sur le <tbody> : les lignes sont re-rendues à chaque rechargement,
 // mais le tbody persiste, donc un seul écouteur suffit.
@@ -409,15 +510,25 @@ function wirePager(prefix) {
 wireRowDeletion('gas-tbody', 'delete_gas_reading', (btn) => ({ id: parseInt(btn.dataset.id, 10) }), 'gas-del-feedback', reloadGas);
 wireRowDeletion('water-tbody', 'delete_water_reading', (btn) => ({ id: parseInt(btn.dataset.id, 10) }), 'water-del-feedback', reloadWater);
 wireRowDeletion('electricity-tbody', 'delete_electricity_reading', (btn) => ({ reading_at: btn.dataset.at }), 'electricity-del-feedback', loadElectricityHistory);
+// La cible est relue au moment du clic : elle a pu changer depuis le rendu.
+wireRowDeletion('battery-tbody', 'delete_battery_reading', (btn) => ({ id: parseInt(btn.dataset.id, 10), battery_id: batteryTarget() }), 'battery-del-feedback', reloadBattery);
 
 wireDeleteAll('gas-delete-all', 'delete_gas_all', 'gas-del-feedback', reloadGas);
 wireDeleteAll('water-delete-all', 'delete_water_all', 'water-del-feedback', reloadWater);
 wireDeleteAll('electricity-delete-all', 'delete_electricity_meter', 'electricity-del-feedback', loadElectricityHistory);
+// « Tout supprimer » ne vide que la batterie sélectionnée : les autres gardent
+// leur historique. wireDeleteAll poste un corps vide, d'où le surcharge ici.
+document.getElementById('battery-delete-all')?.addEventListener('click', () => {
+  confirmDelete(tr('deleteAllConfirm', 'Delete all readings for this utility?'), tr('deleteAll', 'Delete all'),
+    () => deleteAndReload('delete_battery_readings_all', { battery_id: batteryTarget() }, 'battery-del-feedback', () => reloadBattery(1)));
+});
 
 wirePager('electricity');
 wirePager('gas');
 wirePager('water');
+wirePager('battery');
 
 loadElectricityHistory();
 reloadGas();
 reloadWater();
+if (document.getElementById('battery-tbody')) reloadBattery();

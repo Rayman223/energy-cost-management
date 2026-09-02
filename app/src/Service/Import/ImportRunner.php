@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Service\Import;
 
 use App\Domain\SyncStateKeys;
+use App\Repository\BatteryReadingRepository;
 use App\Repository\ElectricityReadingRepository;
 use App\Repository\UtilityReadingRepository;
 use App\Repository\WebhookSyncStateRepository;
@@ -36,21 +37,29 @@ final class ImportRunner
     /**
      * Extrait les champs d'import d'une requête POST et délègue au téléversement.
      *
-     * @param array<string, mixed> $post  Champs $_POST (energy_type, ts_col, value_col, unit, registers, dry_run, overwrite).
+     * @param array<string, mixed> $post  Champs $_POST (energy_type, ts_col, value_col, unit, registers, battery_id, dry_run, overwrite).
      * @param array<string, mixed> $files Entrée $_FILES (clé `import_file`).
+     * @param string $timezone Fuseau de l'utilisateur : délimite le jour civil du
+     *        plafond des index de batterie (#26). Sans objet pour les autres types.
      * @throws RuntimeException si le téléversement ou le format est invalide.
      * @throws \InvalidArgumentException si le mapping ou le type d'énergie est invalide.
      *         Message sûr à afficher (aucun détail interne) : la route le présente tel quel.
      */
-    public function runFromRequest(PDO $pdo, int $targetUserId, array $post, array $files, ?ReadingGranularityPolicy $throttle = null): ImportReport
+    public function runFromRequest(PDO $pdo, int $targetUserId, array $post, array $files, ?ReadingGranularityPolicy $throttle = null, string $timezone = 'UTC'): ImportReport
     {
         $energyType = strtolower(trim((string) ($post['energy_type'] ?? '')));
         $dryRun     = ($post['dry_run'] ?? '') === '1';
         $replace    = ($post['overwrite'] ?? '') === '1';
 
+        // Batteries (#26) : un import vise UNE batterie, jamais le foyer. La cible
+        // est donc portée par la requête et non déduite du fichier — deux batteries
+        // mêlées dans un même CSV seraient indétectables ligne par ligne.
+        $batteryId = filter_var($post['battery_id'] ?? null, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
+        $batteryId = $batteryId === false ? null : $batteryId;
+
         $file = is_array($files['import_file'] ?? null) ? $files['import_file'] : [];
 
-        return $this->runUploaded($pdo, $targetUserId, $energyType, self::parseOverrides($post), $file, $dryRun, $replace, $throttle);
+        return $this->runUploaded($pdo, $targetUserId, $energyType, self::parseOverrides($post), $file, $dryRun, $replace, $throttle, $batteryId, $timezone);
     }
 
     /**
@@ -127,6 +136,8 @@ final class ImportRunner
         bool $dryRun,
         bool $replace = false,
         ?ReadingGranularityPolicy $throttle = null,
+        ?int $batteryId = null,
+        string $timezone = 'UTC',
     ): ImportReport {
         $tmp  = is_string($file['tmp_name'] ?? null) ? $file['tmp_name'] : '';
         $name = is_string($file['name'] ?? null) ? $file['name'] : '';
@@ -157,7 +168,7 @@ final class ImportRunner
         // schéma/SQL vers l'utilisateur). La CLI, elle, appelle run() en direct et
         // affiche la cause réelle à l'opérateur.
         try {
-            return $this->run($pdo, $mapping, $this->openRows($tmp, $ext === 'json'), $targetUserId, $energyType, $dryRun, $replace, $throttle);
+            return $this->run($pdo, $mapping, $this->openRows($tmp, $ext === 'json'), $targetUserId, $energyType, $dryRun, $replace, $throttle, $batteryId, $timezone);
         } catch (\InvalidArgumentException $e) {
             // Erreurs « métier » (format/fichier) : message sûr à afficher.
             throw new RuntimeException($e->getMessage(), 0, $e);
@@ -191,14 +202,27 @@ final class ImportRunner
         bool $dryRun,
         bool $replace = false,
         ?ReadingGranularityPolicy $throttle = null,
+        ?int $batteryId = null,
+        string $timezone = 'UTC',
     ): ImportReport {
         $report = new ImportReport();
+
+        // Cible de l'import batterie exigée AVANT toute écriture : sans elle, il n'y
+        // a pas d'import « par défaut » raisonnable — écrire dans la première
+        // batterie venue rattacherait des index au mauvais matériel, et le bilan
+        // qui en découle serait faux sans que rien ne le signale.
+        if ($mapping->isBattery() && $batteryId === null) {
+            throw new \InvalidArgumentException('Sélectionnez la batterie à alimenter avant d\'importer.');
+        }
 
         $pdo->beginTransaction();
         try {
             $capped = $this->capped($rows, $report);
 
-            if ($mapping->isElectricity()) {
+            if ($mapping->isBattery()) {
+                /** @var int $batteryId garanti non nul par le contrôle ci-dessus */
+                $this->service->importBattery($capped, $mapping, new BatteryReadingRepository($pdo, $targetUserId, $batteryId), $report, $replace, $timezone);
+            } elseif ($mapping->isElectricity()) {
                 $this->service->importElectricity($capped, $mapping, new ElectricityReadingRepository($pdo, $targetUserId), $report, $replace, $throttle);
             } else {
                 $this->service->importUtility($capped, $mapping, new UtilityReadingRepository($pdo, $targetUserId, $energyType), $report, $replace);
@@ -239,6 +263,10 @@ final class ImportRunner
         $sources = match (strtolower($energyType)) {
             'gas'   => [SyncStateKeys::GAS],
             'water' => [SyncStateKeys::WATER],
+            // Les index de batterie (#26) ne sont poussés vers aucun connecteur
+            // d'export : reculer les watermarks élec ferait renvoyer à EnergyID des
+            // relevés de compteur que cet import n'a pas touchés.
+            'battery' => [],
             default => SyncStateKeys::ELEC,
         };
 

@@ -297,6 +297,59 @@ CREATE TABLE IF NOT EXISTS energy_advances (
     CONSTRAINT fk_energy_advances_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+-- ── Parc de batteries domestiques (#26) ──────────────────────────────────
+-- Ce que la batterie a fait économiser ne se lit PAS sur le compteur : les index
+-- import/export intègrent déjà son effet, l'énergie qu'elle a évité de prélever
+-- n'y figure nulle part. Elle porte donc ses propres index.
+--
+-- Un parc plutôt qu'un compteur unique : chaque batterie a son matériel, son
+-- investissement et ses hypothèses de calcul.
+--
+-- `pv_charge_share` et `discharge_profile` sont deux HYPOTHÈSES déclarées, non
+-- des mesures : ni l'origine de l'énergie chargée (PV ou réseau), ni la
+-- répartition jour/nuit de la décharge ne se déduisent des index de la batterie.
+-- `decommissioned_on` est une fin EXCLUE, comme `valid_to` ailleurs (#1).
+CREATE TABLE IF NOT EXISTS batteries (
+    id                   BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    user_id              BIGINT UNSIGNED NOT NULL,
+    brand                VARCHAR(80)  NOT NULL DEFAULT '' COMMENT 'Marque (libre)',
+    model                VARCHAR(120) NOT NULL DEFAULT '' COMMENT 'Modele (libre)',
+    capacity_kwh         DECIMAL(8,3) NOT NULL COMMENT 'Capacite nominale annoncee (kWh)',
+    usable_capacity_kwh  DECIMAL(8,3) NULL COMMENT 'Capacite utile (profondeur de decharge) ; NULL = non renseignee',
+    purchase_price       DECIMAL(10,2) NULL COMMENT 'Investissement TTC, primes deduites (devise du profil) ; NULL = amortissement non calculable',
+    commissioned_on      DATE NOT NULL COMMENT 'Date de mise en service : origine de l amortissement',
+    decommissioned_on    DATE NULL COMMENT 'Fin EXCLUE : premier jour hors service (#1) ; NULL = toujours en service',
+    warranty_until       DATE NULL COMMENT 'Fin de garantie constructeur (informatif)',
+    rated_cycles         SMALLINT UNSIGNED NULL COMMENT 'Nombre de cycles annonce par le constructeur (informatif)',
+    pv_charge_share      TINYINT UNSIGNED NOT NULL DEFAULT 100
+        COMMENT 'Hypothese : part de la charge venant du photovoltaique, en % (0-100). Le complement vient du reseau',
+    discharge_profile    ENUM('import_mix', 't1', 't2', 'ratio') NOT NULL DEFAULT 'import_mix'
+        COMMENT 'Hypothese de repartition jour/nuit de la decharge : mix reel des imports, tout T1, tout T2, ou ratio fixe',
+    discharge_t1_share   TINYINT UNSIGNED NULL
+        COMMENT 'Part T1 en % (0-100), utilisee UNIQUEMENT si discharge_profile = ratio',
+    note                 VARCHAR(255) NOT NULL DEFAULT '' COMMENT 'Annotation libre (onduleur, installateur, remarque)',
+    created_at           DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at           DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_batteries_user (user_id, commissioned_on),
+    CONSTRAINT fk_batteries_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Index CUMULÉS d'entrée et de sortie. Les DEUX colonnes sont NULLABLES : beaucoup
+-- d'onduleurs n'exposent qu'un seul des deux compteurs. Le delta d'une colonne se
+-- prend entre relevés consécutifs NON NULS de CETTE colonne, indépendamment de
+-- l'autre. `reading_at` est en UTC ; le plafond « un relevé par jour civil » se
+-- calcule dans le fuseau de l'utilisateur, côté applicatif.
+CREATE TABLE IF NOT EXISTS battery_readings (
+    id                  BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    battery_id          BIGINT UNSIGNED NOT NULL,
+    reading_at          DATETIME NOT NULL COMMENT 'Horodatage du releve (UTC)',
+    charge_index_kwh    DECIMAL(12,3) NULL COMMENT 'Index CUMULE de l energie entree dans la batterie (kWh) ; NULL = non releve',
+    discharge_index_kwh DECIMAL(12,3) NULL COMMENT 'Index CUMULE de l energie sortie de la batterie (kWh) ; NULL = non releve',
+    created_at          DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY uq_battery_readings (battery_id, reading_at),
+    CONSTRAINT fk_battery_readings_battery FOREIGN KEY (battery_id) REFERENCES batteries (id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 -- ── Suivi des migrations versionnées ─────────────────────────────────────
 CREATE TABLE IF NOT EXISTS schema_migrations (
     version    VARCHAR(255) NOT NULL PRIMARY KEY,

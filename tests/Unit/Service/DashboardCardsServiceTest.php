@@ -573,4 +573,115 @@ final class DashboardCardsServiceTest extends TestCase
         self::assertNull($this->card($cards, 'water')['value']);
         self::assertNull($this->card($cards, 'water')['delta_pct']);
     }
+
+    // ── Batteries (#26) ──────────────────────────────────────────────────────
+
+    /**
+     * Mois de batterie tel que le produit BatterySavingsService::fleetMonth().
+     *
+     * @return array<string, mixed>
+     */
+    private function batteryMonth(?float $charge, ?float $discharge, ?float $savings): array
+    {
+        return [
+            'month'            => '2026-06',
+            'charge_kwh'       => $charge,
+            'discharge_kwh'    => $discharge,
+            'avoided_rate'     => 0.25,
+            'injection_rate'   => 0.04,
+            't1_share'         => 1.0,
+            'gross_savings'    => $savings,
+            'opportunity_cost' => 4.8,
+            'net_savings'      => $savings,
+            'efficiency'       => 0.9,
+            'partial'          => false,
+            'unsupported_mode' => false,
+            'no_tariff'        => false,
+            'currency'         => 'EUR',
+        ];
+    }
+
+    /** Sans batterie déclarée, aucune card n'est ajoutée — pas même à zéro. */
+    public function testNoBatteryCardsWithoutABattery(): void
+    {
+        $cards = $this->makeService(new FakeLegacyDailyRepository(), $this->gasReadings(), $this->waterReadings())
+            ->build($this->deltas(30.0), 2026, 6);
+
+        self::assertSame([], array_filter($this->keys($cards), static fn (string $k): bool => str_starts_with($k, 'battery_')));
+    }
+
+    /** La décharge vient en premier : c'est elle qui produit l'économie. */
+    public function testBatteryCardsAreAppendedInReadingOrder(): void
+    {
+        $cards = $this->makeService(new FakeLegacyDailyRepository(), $this->gasReadings(), $this->waterReadings())
+            ->build($this->deltas(30.0), 2026, 6, null, $this->batteryMonth(120.0, 100.0, 25.0), '€');
+
+        $keys = $this->keys($cards);
+
+        self::assertSame(['battery_discharge', 'battery_charge', 'battery_savings'], array_values(array_filter(
+            $keys,
+            static fn (string $k): bool => str_starts_with($k, 'battery_'),
+        )));
+        // Ajoutées APRÈS les cards existantes : l'ordre du haut de page ne bouge pas
+        // pour qui n'a pas de batterie.
+        self::assertSame('water', $keys[array_search('battery_discharge', $keys, true) - 1]);
+    }
+
+    public function testBatterySavingsCardCarriesTheCurrencyAndTwoDecimals(): void
+    {
+        $cards = $this->makeService(new FakeLegacyDailyRepository(), $this->gasReadings(), $this->waterReadings())
+            ->build($this->deltas(30.0), 2026, 6, null, $this->batteryMonth(120.0, 100.0, 25.0), 'CHF');
+
+        $savings = $this->card($cards, 'battery_savings');
+
+        self::assertEqualsWithDelta(25.0, $savings['value'], 1e-9);
+        self::assertSame('CHF', $savings['unit'], 'le symbole ne doit jamais être codé en dur');
+        self::assertSame(2, $savings['decimals'], 'un montant se lit à deux décimales, pas comme des kWh');
+    }
+
+    /**
+     * Aucun badge de variation : le bilan batterie est calendaire et son mois en
+     * cours s'arrête au dernier relevé, alors que le mois précédent est complet.
+     * Les comparer afficherait une chute systématique en début de mois — le défaut
+     * que la fenêtre glissante des autres cards a justement corrigé (#5).
+     */
+    public function testBatteryCardsCarryNoVariationBadge(): void
+    {
+        $cards = $this->makeService(new FakeLegacyDailyRepository(), $this->gasReadings(), $this->waterReadings())
+            ->build($this->deltas(30.0), 2026, 6, null, $this->batteryMonth(120.0, 100.0, 25.0), '€');
+
+        foreach (['battery_discharge', 'battery_charge', 'battery_savings'] as $key) {
+            self::assertNull($this->card($cards, $key)['delta_pct'], $key);
+            self::assertFalse($this->card($cards, $key)['is_new'], $key);
+        }
+    }
+
+    /**
+     * Un mois non valorisé (contrat indexé, pas de grille) garde ses kWh mais perd
+     * sa card d'économie : afficher 0 € laisserait croire que la batterie n'a rien
+     * rapporté, alors que le montant est seulement inconnu.
+     */
+    public function testAnUnpricedMonthKeepsTheKwhCardsButDropsTheSavingsOne(): void
+    {
+        $cards = $this->makeService(new FakeLegacyDailyRepository(), $this->gasReadings(), $this->waterReadings())
+            ->build($this->deltas(30.0), 2026, 6, null, $this->batteryMonth(120.0, 100.0, null), '€');
+
+        $keys = $this->keys($cards);
+
+        self::assertContains('battery_discharge', $keys);
+        self::assertContains('battery_charge', $keys);
+        self::assertNotContains('battery_savings', $keys);
+    }
+
+    /** Un compteur non relevé n'est pas un compteur à zéro : sa card disparaît. */
+    public function testACounterWithoutAnyMeasureGetsNoCard(): void
+    {
+        $cards = $this->makeService(new FakeLegacyDailyRepository(), $this->gasReadings(), $this->waterReadings())
+            ->build($this->deltas(30.0), 2026, 6, null, $this->batteryMonth(null, 100.0, 25.0), '€');
+
+        $keys = $this->keys($cards);
+
+        self::assertContains('battery_discharge', $keys);
+        self::assertNotContains('battery_charge', $keys);
+    }
 }
