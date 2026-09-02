@@ -348,6 +348,9 @@
   .dot--blue      { background: var(--blue); }
   .dot--blue-dim  { background: var(--blue); opacity: .6; }
   .dot--green     { background: var(--green); }
+  /* Charge de batterie (#26) : même famille que la décharge, en retrait — c'est
+     l'entrée, la sortie est ce qui produit l'économie. */
+  .dot--green-dim { background: var(--green); opacity: .6; }
   .dot--orange    { background: var(--orange); }
   .dot--cyan      { background: var(--cyan); }
   .btn-row { display: flex; gap: 6px; }

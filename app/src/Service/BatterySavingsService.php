@@ -133,6 +133,45 @@ final class BatterySavingsService
     }
 
     /**
+     * Un SEUL mois calendaire, agrégé sur tout le parc (#26).
+     *
+     * Existe pour le tableau de bord, qui n'affiche que le mois en cours : lui
+     * faire calculer {@see self::balance()} lui coûterait une résolution de grille
+     * par mois depuis la mise en service, à chaque chargement de la page d'accueil.
+     *
+     * `null` quand aucune batterie du parc n'a de mesure ce mois-là — les cards
+     * disparaissent alors, plutôt que d'afficher des zéros.
+     *
+     * @param list<array{battery: Battery, readings: BatteryReadingsInterface}> $fleet
+     * @return BatteryMonth|null
+     */
+    public function fleetMonth(array $fleet, DateTimeImmutable $monthStart): ?array
+    {
+        $monthStart = $monthStart->setTimezone(Dates::utc())->modify('first day of this month')->setTime(0, 0, 0);
+
+        $merged = null;
+        foreach ($fleet as $entry) {
+            // Une batterie hors service ce mois-là ne doit rien y peser : ses index
+            // n'ont pas bougé, mais le dire explicitement évite de dépendre de cette
+            // coïncidence.
+            if (!$entry['battery']->isInServiceOn($monthStart)
+                && !$entry['battery']->isInServiceOn($monthStart->modify('+1 month')->modify('-1 day'))
+            ) {
+                continue;
+            }
+
+            $month = $this->valueMonth($entry['battery'], $entry['readings']->indexSeries(), $monthStart);
+            if ($month === null) {
+                continue;
+            }
+
+            $merged = $merged === null ? $month : $this->mergeMonths($merged, $month);
+        }
+
+        return $merged;
+    }
+
+    /**
      * @return BatteryBalance
      */
     private function balanceFor(Battery $battery, BatteryReadingsInterface $readings, DateTimeImmutable $asOf): array
