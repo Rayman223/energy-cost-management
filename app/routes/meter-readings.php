@@ -5,6 +5,7 @@ declare(strict_types=1);
 use App\Http\SecurityHeaders;
 use App\I18n\Locale;
 use App\Infrastructure\Database;
+use App\Repository\BatteryRepository;
 use App\Repository\UserRepository;
 use App\Repository\UtilityReadingRepository;
 use App\Security\AuthGuard;
@@ -19,6 +20,7 @@ $view    = null;
 $dbError = null;
 $gasLatest = null;
 $waterLatest = null;
+$batteries = [];
 $timezone = 'UTC';
 $isAdmin = false;
 
@@ -57,6 +59,9 @@ try {
     $waterRepo = new UtilityReadingRepository($pdo, $userId, 'water');
     $gasLatest = $gasRepo->getLatest();
     $waterLatest = $waterRepo->getLatest();
+    // Parc de batteries (#26) : la section de saisie n'apparaît que s'il y en a
+    // une — sans matériel déclaré, aucun index n'aurait où se rattacher.
+    $batteries = (new BatteryRepository($pdo, $userId))->listAll();
 } catch (\Throwable $e) {
     $dbError = $e->getMessage();
 }
@@ -71,6 +76,7 @@ echo $view->render('meter_readings', [
     'dbError' => $dbError,
     'gasLatest' => $gasLatest,
     'waterLatest' => $waterLatest,
+    'batteries' => $batteries,
     'available' => Locale::available($config),
     'timezone' => $timezone,
     // Fuseau BRUT du profil pour l'horloge (null ⇒ repli navigateur) ; $timezone

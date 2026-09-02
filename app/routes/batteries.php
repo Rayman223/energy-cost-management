@@ -6,11 +6,16 @@ use App\Domain\BatteryDischargeProfile;
 use App\Http\SecurityHeaders;
 use App\I18n\Locale;
 use App\Infrastructure\Database;
+use App\Repository\BatteryReadingRepository;
 use App\Repository\BatteryRepository;
+use App\Repository\ElectricityReadingRepository;
+use App\Repository\TariffRepository;
 use App\Repository\UserRepository;
 use App\Security\AuthGuard;
 use App\Security\Csrf;
 use App\Security\UserContext;
+use App\Service\BatteryPaybackService;
+use App\Service\BatterySavingsService;
 use App\Support\Adsense;
 use App\Support\Dates;
 use App\Support\DiscordLink;
@@ -245,6 +250,38 @@ $editing = ($editId !== false && $editId !== null) ? $batteryRepo->find($editId)
 // pour qui vit à l'est de Greenwich le soir d'une mise en service.
 $today = Dates::todayIn($profile->timezone ?? 'UTC');
 
+$fleet = $batteryRepo->listAll();
+
+// ── Bilan d'économie (#26) ────────────────────────────────────────────────
+// Calculé ici plutôt que dans le template : la composition du parc, la résolution
+// des grilles et la mensualisation sont de la logique métier. Un parc vide ne
+// déclenche aucune requête — ni tarifs, ni relevés élec.
+$balance  = null;
+$paybacks = [];
+if ($fleet !== []) {
+    $savings = new BatterySavingsService(
+        new TariffRepository($pdo, $userId, $isAdmin),
+        new ElectricityReadingRepository($pdo, $userId, $profile->timezone ?? 'UTC'),
+    );
+
+    $balance = $savings->balance(array_map(
+        static fn (Battery $battery): array => [
+            'battery'  => $battery,
+            'readings' => new BatteryReadingRepository($pdo, $userId, $battery->id),
+        ],
+        $fleet,
+    ));
+
+    // Amortissement, batterie par batterie : l'investissement, la garantie et les
+    // cycles sont propres à chaque matériel, il n'y a pas de projection « du parc »
+    // qui voudrait dire quelque chose. Indexé par identifiant pour que le template
+    // n'ait pas à réapparier deux listes.
+    $payback = new BatteryPaybackService();
+    foreach ($balance['batteries'] as $index => $batteryBalance) {
+        $paybacks[$batteryBalance['battery_id']] = $payback->project($fleet[$index], $batteryBalance);
+    }
+}
+
 echo $view->render('batteries', [
     'oidcEnabled'    => AuthGuard::isOidcEnabled($config),
     'discordUrl'     => DiscordLink::inviteUrl($config),
@@ -252,7 +289,9 @@ echo $view->render('batteries', [
     'error'          => $error,
     'success'        => $success,
     'isAdmin'        => $isAdmin,
-    'batteries'      => $batteryRepo->listAll(),
+    'batteries'      => $fleet,
+    'balance'        => $balance,
+    'paybacks'       => $paybacks,
     'editing'        => $editing,
     'profiles'       => BatteryDischargeProfile::cases(),
     'today'          => $today,

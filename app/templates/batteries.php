@@ -15,6 +15,8 @@ use App\Domain\BatteryDischargeProfile;
  * @var string|null                     $success
  * @var bool                            $isAdmin
  * @var list<Battery>                   $batteries   Parc, mise en service décroissante
+ * @var array{batteries: list<array<string,mixed>>, fleet: array<string,mixed>|null}|null $balance Bilan d'économie (#26), null sans batterie
+ * @var array<int, array<string,mixed>> $paybacks Amortissement par identifiant de batterie
  * @var Battery|null                    $editing     Batterie rouverte pour modification
  * @var list<BatteryDischargeProfile>   $profiles    Profils de décharge proposables
  * @var DateTimeImmutable               $today       Jour civil de l'utilisateur (badges de service)
@@ -59,7 +61,212 @@ use App\Domain\BatteryDischargeProfile;
 <?php endif; ?>
 
 <p class="bat-intro"><?= $this->te('battery.intro') ?></p>
+<?php if ($batteries === []): ?>
 <p class="bat-intro"><?= $this->te('battery.next_step') ?></p>
+<?php endif; ?>
+
+<?php
+// ── Bilan d'économie ──────────────────────────────────────────────────────
+// Trois chiffres, dans cet ordre : l'économie BRUTE (celle qui amortit), le coût
+// d'opportunité (comparatif) et l'économie nette. Les deux derniers sont
+// visuellement en retrait : les confondre avec le premier ferait lire une
+// comparaison comme la réponse à « combien ai-je économisé ».
+$fleetBalance = $balance['fleet'] ?? null;
+$perBattery   = $balance['batteries'] ?? [];
+$currency     = $fleetBalance['currency'] ?? $currency;
+?>
+<?php if ($fleetBalance !== null): ?>
+<div class="section-header">
+  <span class="section-title"><?= $this->te('battery.balance_title') ?></span>
+  <span class="section-line"></span>
+</div>
+
+<?php if ($fleetBalance['months'] === []): ?>
+<p class="bat-empty-hint"><?= $this->te('battery.balance_no_data') ?></p>
+<?php else: ?>
+<div class="bat-summary">
+  <div class="bat-summary-item">
+    <span class="bat-summary-label"><?= $this->te('battery.gross_savings') ?></span>
+    <span class="bat-summary-value"><?= $this->e($this->money($fleetBalance['gross_savings'], $currency)) ?></span>
+  </div>
+  <div class="bat-summary-item">
+    <span class="bat-summary-label"><?= $this->te('battery.discharged') ?></span>
+    <span class="bat-summary-value"><?= $this->e($this->num($fleetBalance['discharge_kwh'], 0)) ?> kWh</span>
+  </div>
+  <div class="bat-summary-item">
+    <span class="bat-summary-label"><?= $this->te('battery.efficiency') ?></span>
+    <span class="bat-summary-value">
+      <?= $fleetBalance['efficiency'] !== null ? $this->e($this->num($fleetBalance['efficiency'] * 100.0, 1)) . ' %' : '—' ?>
+    </span>
+  </div>
+  <div class="bat-summary-item bat-summary-item--muted">
+    <span class="bat-summary-label"><?= $this->te('battery.opportunity_cost') ?></span>
+    <span class="bat-summary-value"><?= $this->e($this->money($fleetBalance['opportunity_cost'], $currency)) ?></span>
+  </div>
+  <div class="bat-summary-item bat-summary-item--muted">
+    <span class="bat-summary-label"><?= $this->te('battery.net_savings') ?></span>
+    <span class="bat-summary-value"><?= $this->e($this->money($fleetBalance['net_savings'], $currency)) ?></span>
+  </div>
+  <p class="bat-summary-note"><?= $this->te('battery.balance_method') ?></p>
+</div>
+
+<?php
+// ── Amortissement ─────────────────────────────────────────────────────────
+// Une carte par batterie : investissement, garantie et cycles sont propres à
+// chaque matériel, il n'existe pas de projection « du parc » qui voudrait dire
+// quelque chose.
+?>
+<?php foreach ($batteries as $battery): ?>
+<?php $payback = $paybacks[$battery->id] ?? null; ?>
+<?php if ($payback !== null): ?>
+<div class="bat-payback">
+  <div class="bat-payback-head">
+    <span class="bat-payback-title"><?= $this->te('battery.payback_title') ?></span>
+    <?php if (count($batteries) > 1): ?>
+    <span class="bat-note"><?= $this->e($battery->label()) ?></span>
+    <?php endif; ?>
+  </div>
+
+  <?php if ($payback['investment'] === null): ?>
+  <p class="bat-gap"><?= $this->te('battery.payback_no_price') ?></p>
+  <?php elseif ($payback['paid_back']): ?>
+  <p class="bat-payback-verdict bat-payback-verdict--done">
+    <?= $this->te('battery.payback_done', ['amount' => $this->money($payback['investment'], $currency)]) ?>
+  </p>
+  <?php else: ?>
+  <div class="bat-payback-bar" role="img"
+       aria-label="<?= $this->e($this->t('battery.payback_progress', ['pct' => $this->num($payback['progress_pct'] ?? 0.0, 0)])) ?>">
+    <span style="width: <?= $this->e($this->num(min(100.0, max(0.0, $payback['progress_pct'] ?? 0.0)), 1)) ?>%"></span>
+  </div>
+  <p class="bat-payback-figures">
+    <?= $this->te('battery.payback_progress_detail', [
+        'saved'      => $this->money($payback['savings'], $currency),
+        'investment' => $this->money($payback['investment'], $currency),
+        'remaining'  => $this->money($payback['remaining'] ?? 0.0, $currency),
+    ]) ?>
+  </p>
+
+  <?php if ($payback['payback_on'] !== null): ?>
+  <p class="bat-payback-verdict">
+    <?= $this->te('battery.payback_eta', [
+        'month' => $payback['payback_on'],
+        'rate'  => $this->money($payback['monthly_rate'] ?? 0.0, $currency),
+    ]) ?>
+  </p>
+  <?php elseif ($payback['beyond_horizon']): ?>
+  <p class="bat-payback-verdict"><?= $this->te('battery.payback_beyond_horizon') ?></p>
+  <?php else: ?>
+  <p class="bat-payback-verdict"><?= $this->te('battery.payback_no_rate') ?></p>
+  <?php endif; ?>
+
+  <?php // L'avertissement de biais saisonnier n'est PAS optionnel : une moyenne
+        // prise sur quelques mois d'été promettrait un amortissement qui ne
+        // viendra pas. Il disparaît de lui-même dès qu'une année est couverte. ?>
+  <?php if ($payback['seasonally_biased'] && $payback['payback_on'] !== null): ?>
+  <p class="bat-warn">⚠ <?= $this->te('battery.payback_biased', ['months' => (string) $payback['months_observed']]) ?></p>
+  <?php endif; ?>
+  <?php if ($payback['after_warranty']): ?>
+  <p class="bat-warn">⚠ <?= $this->te('battery.payback_after_warranty') ?></p>
+  <?php endif; ?>
+  <?php endif; ?>
+
+  <?php if ($payback['cycles_used'] !== null): ?>
+  <p class="bat-payback-cycles">
+    <?= $payback['cycles_pct'] !== null
+        ? $this->te('battery.cycles_used_of', [
+            'used'  => $this->num($payback['cycles_used'], 0),
+            'rated' => (string) $payback['rated_cycles'],
+            'pct'   => $this->num($payback['cycles_pct'], 1),
+        ])
+        : $this->te('battery.cycles_used', ['used' => $this->num($payback['cycles_used'], 0)]) ?>
+  </p>
+  <?php endif; ?>
+</div>
+<?php endif; ?>
+<?php endforeach; ?>
+
+<?php if ($fleetBalance['has_unsupported_months']): ?>
+<p class="bat-warn">⚠ <?= $this->te('battery.dynamic_unsupported') ?></p>
+<?php endif; ?>
+<?php if ($fleetBalance['has_untariffed_months']): ?>
+<p class="bat-warn">⚠ <?= $this->te('battery.no_tariff_warning') ?></p>
+<?php endif; ?>
+
+<?php // Détail par batterie : masqué tant qu'il n'y en a qu'une, où il répéterait
+      // mot pour mot le bandeau du parc.
+      if (count($perBattery) > 1): ?>
+<div class="bat-table-wrap">
+  <table class="bat-table">
+    <thead>
+      <tr>
+        <th><?= $this->te('battery.col_battery') ?></th>
+        <th class="num"><?= $this->te('battery.charged') ?></th>
+        <th class="num"><?= $this->te('battery.discharged') ?></th>
+        <th class="num"><?= $this->te('battery.efficiency') ?></th>
+        <th class="num"><?= $this->te('battery.gross_savings') ?></th>
+        <th class="num"><?= $this->te('battery.net_savings') ?></th>
+      </tr>
+    </thead>
+    <tbody>
+    <?php foreach ($perBattery as $row): ?>
+      <tr>
+        <td>
+          <?= $this->e($row['label']) ?>
+          <span class="bat-note"><?= $this->te('battery.pv_share_short', ['value' => (string) $row['pv_charge_share']]) ?> · <?= $this->te('battery.discharge_profile.' . $row['discharge_profile']) ?></span>
+        </td>
+        <td class="num"><?= $this->e($this->num($row['charge_kwh'], 0)) ?> kWh</td>
+        <td class="num"><?= $this->e($this->num($row['discharge_kwh'], 0)) ?> kWh</td>
+        <td class="num"><?= $row['efficiency'] !== null ? $this->e($this->num($row['efficiency'] * 100.0, 1)) . ' %' : '—' ?></td>
+        <td class="num"><?= $this->e($this->money($row['gross_savings'], $row['currency'] ?? $currency)) ?></td>
+        <td class="num"><?= $this->e($this->money($row['net_savings'], $row['currency'] ?? $currency)) ?></td>
+      </tr>
+    <?php endforeach; ?>
+    </tbody>
+  </table>
+</div>
+<?php endif; ?>
+
+<div class="bat-table-wrap">
+  <table class="bat-table">
+    <thead>
+      <tr>
+        <th><?= $this->te('battery.col_month') ?></th>
+        <th class="num"><?= $this->te('battery.charged') ?></th>
+        <th class="num"><?= $this->te('battery.discharged') ?></th>
+        <th class="num"><?= $this->te('battery.efficiency') ?></th>
+        <th class="num"><?= $this->te('battery.gross_savings') ?></th>
+        <th class="num"><?= $this->te('battery.opportunity_cost') ?></th>
+      </tr>
+    </thead>
+    <tbody>
+    <?php foreach (array_reverse($fleetBalance['months']) as $month): ?>
+      <tr class="<?= $month['gross_savings'] === null ? 'is-unvalued' : '' ?>">
+        <td>
+          <?= $this->e($month['month']) ?>
+          <?php if ($month['partial']): ?>
+          <span class="bat-note"><?= $this->te('battery.partial_month') ?></span>
+          <?php endif; ?>
+        </td>
+        <td class="num"><?= $month['charge_kwh'] !== null ? $this->e($this->num($month['charge_kwh'], 0)) . ' kWh' : '—' ?></td>
+        <td class="num"><?= $month['discharge_kwh'] !== null ? $this->e($this->num($month['discharge_kwh'], 0)) . ' kWh' : '—' ?></td>
+        <td class="num"><?= $month['efficiency'] !== null ? $this->e($this->num($month['efficiency'] * 100.0, 1)) . ' %' : '—' ?></td>
+        <?php if ($month['gross_savings'] === null): ?>
+        <?php // Motif affiché plutôt qu'un tiret muet : « pas de chiffre » sans
+              // raison est indiagnosticable depuis l'écran. ?>
+        <td colspan="2" class="bat-gap">
+          <?= $month['unsupported_mode'] ? $this->te('battery.month_dynamic') : $this->te('battery.month_no_tariff') ?>
+        </td>
+        <?php else: ?>
+        <td class="num"><?= $this->e($this->money($month['gross_savings'], $month['currency'] ?? $currency)) ?></td>
+        <td class="num bat-muted"><?= $month['opportunity_cost'] !== null ? $this->e($this->money($month['opportunity_cost'], $month['currency'] ?? $currency)) : '—' ?></td>
+        <?php endif; ?>
+      </tr>
+    <?php endforeach; ?>
+    </tbody>
+  </table>
+</div>
+<?php endif; ?>
+<?php endif; ?>
 
 <!-- ── Formulaire ────────────────────────────────────────────────────────── -->
 <div class="section-header">

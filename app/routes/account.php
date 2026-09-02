@@ -17,6 +17,7 @@ use App\I18n\Locale;
 use App\Infrastructure\Database;
 use App\Integration\ModuleRegistry;
 use App\Repository\ApiTokenRepository;
+use App\Repository\BatteryRepository;
 use App\Repository\TariffRepository;
 use App\Repository\UserIdentityRepository;
 use App\Repository\UserIntegrationRepository;
@@ -287,6 +288,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 DynamicPricing::isEnabled($config)
                     ? ReadingGranularityPolicy::fromTariffs($tariffRepo, $importTimezone)
                     : ReadingGranularityPolicy::constant(ReadingGranularity::Day, $importTimezone),
+                // Fuseau où se délimite le jour civil du plafond des index de
+                // batterie (#26) : un relevé par batterie et par jour.
+                $importTimezone,
             );
             // Import tronqué (plafond atteint, données perdues) : pas de bannière
             // « terminé » trompeuse — l'avertissement du rapport tient lieu de signal.
@@ -394,6 +398,10 @@ echo $view->render('account', [
     'integrations' => $integrations,
     'available'  => Locale::available($config),
     'importReport' => $importReport,
+    // Parc de batteries (#26) : un import d'index vise UNE batterie, choisie dans
+    // le formulaire. Liste vide ⇒ le type « batterie » n'est pas proposé, plutôt
+    // qu'un sélecteur sans option qui échouerait à la soumission.
+    'batteries'    => (new BatteryRepository($pdo, $userId))->listAll(),
     'timezoneOptions' => $timezoneOptions,
     'countries'  => EuropeanCountries::sortedForLocale($view->locale()),
     'currencies' => EuropeanCountries::currencies(),

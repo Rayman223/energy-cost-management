@@ -69,6 +69,7 @@
 | `gas_cost` | — | `estimateLastGasPeriod()`. |
 | `gas_month_cost` | `year`, `month` (mêmes défauts/validations que `month_cost`) | `estimateMonthGas(year, month)`. |
 | `water_month_cost` | `year`, `month` (mêmes défauts/validations que `month_cost`) | `estimateMonthWater(year, month)` — **volume m³ uniquement** (pas de coût : aucun tarif eau). |
+| `battery_history` | `battery_id?`, `page`, `per_page` | Page d'index d'UNE batterie (#26) : `{ items:[{ id, reading_at, charge:number\|null, discharge:number\|null, delta_charge:number\|null, delta_discharge:number\|null }], total, page, per_page }`, du plus récent au plus ancien. `battery_id` facultatif si le compte n'a qu'une batterie (cf. § Batteries). Un delta se prend contre le dernier relevé où **ce** compteur figurait, pas contre la ligne précédente. |
 | `tariffs` | — | `{ electricity: [...], gas: [...] }` ; chaque grille : `{ id, name, valid_from (Y-m-d), valid_to (Y-m-d|null, **exclue**), lines, pricing_mode }`. |
 | *(autre)* | — | `400 { ok:false, error:"Unknown action" }`. |
 
@@ -121,7 +122,37 @@ comme `{}`.
 | `gas_entry` | `{ counter_m3: float>=0, reading_at?: date }` | `{ ok:true, saved_at (ISO), counter_m3 }` | `counter_m3` invalide/<0 ; date invalide ; relevé déjà existant à cette date ; `counter_m3` < relevé précédent ou > relevé suivant. |
 | `water_entry` | `{ counter_m3: float>=0, reading_at?: date }` | `{ ok:true, saved_at (ISO), counter_m3 }` | idem `gas_entry`. |
 | `save_tariff` | `{ energy_type: "electricity"\|"gas"\|"water", name, valid_from: date, valid_to?: date (**exclue**), lines: object, pricing_mode?: string }` | `{ ok:true, id }` | champ requis manquant (`energy_type`, `name`, `valid_from`, `lines`) ; `energy_type` hors énum ; `valid_from`/`valid_to` invalides ; `valid_to` ≤ `valid_from` (plage vide, la borne de fin étant exclue) ; clé de ligne hors format ; montant de ligne illisible ; aucune ligne exploitable. |
+| `battery_entry` | `{ battery_id?: int, charge?: float>=0, discharge?: float>=0, reading_at?: date }` | `{ ok:true, battery_id, saved_at (ISO), received, inserted }` | batterie inconnue ou ambiguë ; aucun des deux compteurs fourni ; valeur invalide/<0 ; ce **compteur** existe déjà à cet horodatage ; valeur < relevé précédent ou > relevé suivant **du même compteur** ; un autre relevé existe déjà dans le jour civil. |
+| `ingest_battery` | `{ battery_id?: int, readings: [{ timestamp: date, charge?, discharge? }] }` ou une lecture unique à la racine | `{ ok:true, battery_id, received, inserted }` | batterie inconnue ou ambiguë ; `readings` non tableau ; batch > 1000 ; horodatage invalide ; aucun compteur sur une lecture ; valeur invalide/<0. Un jour déjà servi est **ignoré en silence**, pas refusé. |
+| `delete_battery_reading` | `{ battery_id?: int, id: int }` | `{ ok:true, deleted: 0\|1 }` | batterie inconnue ou ambiguë ; `id` invalide. Un `id` appartenant à une autre batterie renvoie `deleted:0`. |
+| `delete_battery_readings_all` | `{ battery_id?: int }` | `{ ok:true, deleted: int }` | batterie inconnue ou ambiguë. Ne vide que la batterie visée. |
 | *(autre)* | — | — | `400 { ok:false, error:"Unknown POST action" }`. |
+
+### Batteries (#26)
+
+`ingest_battery` est la **seule** route batterie ouverte aux jetons Bearer, aux
+côtés de `ingest_electricity` / `ingest_gas` / `ingest_water`. Les autres sont
+réservées à la session navigateur.
+
+`battery_id` est **facultatif quand le compte ne possède qu'une batterie** — le
+cas de la grande majorité des installations, et l'exiger obligerait chaque agent à
+connaître un identifiant de base de données. Dès qu'il y en a plusieurs,
+l'ambiguïté est refusée en 422 avec la liste des identifiants
+(`battery_id is required (several batteries: 3, 7)`) : deviner écrirait dans la
+mauvaise batterie sans que rien ne le signale.
+
+`charge` et `discharge` sont des **index cumulés en kWh** (comme les registres
+élec), pas l'énergie d'une période. Les deux vivent sur une même ligne mais se
+relèvent **indépendamment** : beaucoup d'onduleurs n'en exposent qu'un. Un
+compteur encore vide à un horodatage est donc **complété** par une seconde
+écriture — ce n'est ni un doublon, ni un second relevé du jour. Un compteur déjà
+renseigné n'est jamais écrasé en silence.
+
+**Plafond : un relevé par batterie et par jour civil**, délimité dans le fuseau de
+l'utilisateur (`user_profiles.timezone`). La valorisation étant mensuelle, une
+granularité plus fine n'ajouterait aucune précision au bilan. `battery_entry` le
+refuse explicitement (422) ; `ingest_battery` ignore la lecture en silence, pour
+qu'un agent poussant toutes les heures soit dédupliqué plutôt que mis en échec.
 
 Un champ `date` (`reading_at`, `valid_from`, `valid_to`) doit porter une **date
 calendaire réelle** : `2026-07-31`, `2026-07-31 12:00:00`, ISO 8601 avec offset ou

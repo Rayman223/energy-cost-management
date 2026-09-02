@@ -262,6 +262,12 @@ $csrf = \App\Security\Csrf::field();
             <option value="electricity"><?= $this->te('import.type_electricity') ?></option>
             <option value="gas"><?= $this->te('import.type_gas') ?></option>
             <option value="water"><?= $this->te('import.type_water') ?></option>
+            <?php // Proposé seulement si le compte a déclaré au moins une batterie :
+                  // un import sans cible échouerait, et un sélecteur vide n'aiderait
+                  // pas à comprendre pourquoi (#26).
+                  if (($batteries ?? []) !== []): ?>
+            <option value="battery"><?= $this->te('import.type_battery') ?></option>
+            <?php endif; ?>
           </select>
         </div>
         <div>
@@ -307,6 +313,36 @@ $csrf = \App\Security\Csrf::field();
           <?php endforeach; ?>
         </div>
       </fieldset>
+
+      <!-- Mapping colonne → compteur de batterie (#26). Même mécanique que les
+           registres élec, jeu de clés différent : `charge` et `discharge`. La
+           batterie visée est choisie ici et non déduite du fichier — deux
+           batteries mêlées dans un même CSV seraient indétectables ligne à ligne.
+           Masqué hors type « batterie » par import.js ; sans JS tout reste visible
+           et le serveur ignore les champs hors sujet. -->
+      <?php if (($batteries ?? []) !== []): ?>
+      <fieldset id="import-battery" class="import-registers">
+        <legend><?= $this->te('import.battery_title') ?></legend>
+        <p class="hint"><?= $this->te('import.battery_hint') ?></p>
+        <div class="row">
+          <div>
+            <label for="battery_id"><?= $this->te('import.battery_target') ?></label>
+            <select id="battery_id" name="battery_id">
+              <?php foreach ($batteries as $battery): ?>
+              <option value="<?= $this->e((string) $battery->id) ?>"><?= $this->e($battery->label()) ?></option>
+              <?php endforeach; ?>
+            </select>
+          </div>
+          <?php foreach (\App\Repository\Contract\BatteryIngestionInterface::KINDS as $kind): ?>
+          <div>
+            <label for="reg_<?= $this->e($kind) ?>"><?= $this->te('import.reg_' . $kind) ?></label>
+            <input id="reg_<?= $this->e($kind) ?>" type="text" name="registers[<?= $this->e($kind) ?>]"
+                   list="import-columns" placeholder="<?= $this->e($kind) ?>">
+          </div>
+          <?php endforeach; ?>
+        </div>
+      </fieldset>
+      <?php endif; ?>
 
       <!-- Colonnes du fichier choisi, injectées par import.js (autocomplétion). -->
       <datalist id="import-columns"></datalist>

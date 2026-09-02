@@ -3,6 +3,7 @@
  * @var string|null $dbError
  * @var array<string,mixed>|null $gasLatest
  * @var array<string,mixed>|null $waterLatest
+ * @var list<\App\Domain\Battery> $batteries Parc déclaré (#26) ; vide ⇒ section masquée
  * @var list<string> $available
  * @var ?string $discordUrl
  * @var ?string $adsenseClient Identifiant éditeur AdSense (#185), null si publicité désactivée.
@@ -15,7 +16,9 @@ $now = date('H:i');
 <head>
 <?= $this->partial('_head', [
     'title' => $this->t('meter.title') . ' — ' . \App\Support\AppName::NAME,
-    'css'   => ['assets/css/app-header.css', 'assets/css/lang-switcher.css', 'assets/css/dashboard.css', 'assets/css/confirm.css'],
+    // batteries.css : uniquement pour `.bat-row-hidden`, qui masque le sélecteur
+    // de batterie quand le parc n'en compte qu'une (#26).
+    'css'   => ['assets/css/app-header.css', 'assets/css/lang-switcher.css', 'assets/css/dashboard.css', 'assets/css/confirm.css', 'assets/css/batteries.css'],
     'adsenseClient' => $adsenseClient ?? null,
 ]) ?>
 </head>
@@ -112,6 +115,38 @@ $now = date('H:i');
       <?= $this->partial('_pager', ['id' => 'water-pager']) ?>
     </div>
   </div>
+
+  <?php // Batteries (#26) : section affichée seulement si le compte en a déclaré
+        // au moins une — sans matériel, il n'y a pas d'index à rattacher, et un
+        // formulaire orphelin n'apprendrait rien. Le lien renvoie vers /batteries.
+        if (($batteries ?? []) !== []): ?>
+  <div class="section-header"><span class="section-title"><?= $this->te('battery.title') ?></span><span class="section-line"></span><button type="button" class="btn btn-red btn-sm" id="battery-delete-all"><?= $this->te('meter.delete_all') ?></button></div>
+  <div class="gas-grid">
+    <div class="gas-form">
+      <?php // Sélecteur masqué s'il n'y a qu'une batterie : le choix serait vide de
+            // sens, mais le champ reste dans le DOM — le JS y lit toujours la cible. ?>
+      <div class="form-row<?= count($batteries) > 1 ? '' : ' bat-row-hidden' ?>">
+        <label class="form-label" for="battery-target"><?= $this->te('battery.col_battery') ?></label>
+        <select id="battery-target" class="form-input">
+          <?php foreach ($batteries as $battery): ?>
+          <option value="<?= $this->e((string) $battery->id) ?>"><?= $this->e($battery->label()) ?></option>
+          <?php endforeach; ?>
+        </select>
+      </div>
+      <div class="cards cards-2"><div class="form-row"><label class="form-label" for="battery-date"><?= $this->te('meter.reading_date') ?></label><input id="battery-date" type="date" class="form-input" value="<?= $this->e($today) ?>"></div><div class="form-row"><label class="form-label" for="battery-time"><?= $this->te('meter.reading_time') ?></label><input id="battery-time" type="time" class="form-input" value="<?= $this->e($now) ?>"></div></div>
+      <div class="cards cards-2">
+        <div class="form-row"><label class="form-label" for="battery-charge"><?= $this->te('meter.battery_charge') ?></label><input id="battery-charge" type="number" step="0.001" min="0" class="form-input" placeholder="kWh"></div>
+        <div class="form-row"><label class="form-label" for="battery-discharge"><?= $this->te('meter.battery_discharge') ?></label><input id="battery-discharge" type="number" step="0.001" min="0" class="form-input" placeholder="kWh"></div>
+      </div>
+      <p class="card-sub"><?= $this->te('meter.battery_hint') ?></p>
+      <button class="btn btn-amber" id="battery-btn"><?= $this->te('common.save') ?></button><div class="form-feedback" id="battery-feedback"></div>
+    </div>
+    <div>
+      <div class="gas-history"><table><thead><tr><th><?= $this->te('meter.date_time') ?></th><th><?= $this->te('meter.battery_charge') ?></th><th><?= $this->te('meter.battery_discharge') ?></th><th aria-label="<?= $this->e($this->t('meter.actions')) ?>"></th></tr></thead><tbody id="battery-tbody"><tr><td colspan="4" class="td-empty">…</td></tr></tbody></table><div class="form-feedback" id="battery-del-feedback"></div></div>
+      <?= $this->partial('_pager', ['id' => 'battery-pager']) ?>
+    </div>
+  </div>
+  <?php endif; ?>
 </div>
 <?php
     // État serveur (libellés i18n) transmis à meter-readings.js via un data block
@@ -133,6 +168,8 @@ $now = date('H:i');
             'emptyGas' => $this->t('meter.empty_gas'),
             'emptyWater' => $this->t('meter.empty_water'),
             'emptyElectricity' => $this->t('meter.empty_electricity'),
+            'emptyBattery' => $this->t('meter.empty_battery'),
+            'invalidBattery' => $this->t('meter.battery_required'),
             'delete' => $this->t('meter.delete'),
             'deleteConfirm' => $this->t('meter.delete_confirm'),
             'deleteAll' => $this->t('meter.delete_all'),
