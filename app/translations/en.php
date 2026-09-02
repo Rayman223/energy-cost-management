@@ -314,6 +314,9 @@ return [
     'dash.card.export_t1'      => 'Δ Export T1',
     'dash.card.export_t2'      => 'Δ Export T2',
     'dash.card.solar'          => 'Δ PV production',
+    'dash.card.battery_discharge' => 'Δ Battery discharge',
+    'dash.card.battery_charge'    => 'Δ Battery charge',
+    'dash.card.battery_savings'   => 'Battery savings',
     'dash.card.vs_prev_period' => 'vs same period last month',
     'dash.card.new'            => 'new this month',
     'dash.db_error_hint'       => 'Check {file} and make sure the database is reachable.',
@@ -911,6 +914,20 @@ return [
     'battery.month_no_tariff'                      => 'No tariff grid',
     'battery.dynamic_unsupported'                  => 'At least one month falls under a market-indexed contract: valuing a discharge at spot prices requires hourly readings, which daily entry does not provide. Those months are left without a figure rather than with a wrong one; their efficiency is still computed.',
     'battery.no_tariff_warning'                    => 'At least one month is covered by no tariff grid: without a kWh price, savings cannot be computed. Complete your grids on the Tariffs page.',
+
+    // Payback (#26, phase 4)
+    'battery.payback_title'                        => 'Payback',
+    'battery.payback_no_price'                     => 'Enter the amount invested on the battery record to get a payback time.',
+    'battery.payback_done'                         => '✓ Paid back: cumulative savings exceed the {amount} invested.',
+    'battery.payback_progress'                     => 'Payback: {pct}%',
+    'battery.payback_progress_detail'              => '{saved} saved out of {investment} invested — {remaining} left to pay back.',
+    'battery.payback_eta'                          => 'At {rate} per month, the investment would be paid back around {month}.',
+    'battery.payback_beyond_horizon'               => 'At the current rate, payback would fall beyond the battery\'s lifetime: no date is given.',
+    'battery.payback_no_rate'                      => 'No complete month has been priced yet: the savings rate is not established, so no date can be given.',
+    'battery.payback_biased'                       => 'Estimate based on {months} months only: a battery does not earn as much in winter as in summer, so the date is biased by the season covered. It will settle once a full year has passed.',
+    'battery.payback_after_warranty'               => 'The projected payback falls after the end of the battery warranty.',
+    'battery.cycles_used'                          => '{used} equivalent full cycles used.',
+    'battery.cycles_used_of'                       => '{used} equivalent full cycles used out of the {rated} rated ({pct}%).',
 
     // Battery index entry and import (#26, phase 2)
     'meter.battery_charge'                         => 'Charge index (in)',

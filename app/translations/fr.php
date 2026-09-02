@@ -323,6 +323,9 @@ return [
     'dash.card.export_t1'      => 'Δ Export T1',
     'dash.card.export_t2'      => 'Δ Export T2',
     'dash.card.solar'          => 'Δ Production PV',
+    'dash.card.battery_discharge' => 'Δ Décharge batterie',
+    'dash.card.battery_charge'    => 'Δ Charge batterie',
+    'dash.card.battery_savings'   => 'Économie batterie',
     'dash.card.vs_prev_period' => 'vs même période mois préc.',
     'dash.card.new'            => 'nouveau ce mois-ci',
     'dash.db_error_hint'       => 'Vérifiez {file} et assurez-vous que la base est joignable.',
@@ -919,6 +922,20 @@ return [
     'battery.month_no_tariff'                      => 'Aucune grille tarifaire',
     'battery.dynamic_unsupported'                  => 'Un mois au moins relève d\'un contrat indexé au marché : valoriser une décharge au prix spot exige des relevés horaires, que la saisie journalière ne fournit pas. Ces mois restent sans chiffre plutôt qu\'avec une valeur fausse ; leur rendement, lui, est bien calculé.',
     'battery.no_tariff_warning'                    => 'Un mois au moins n\'est couvert par aucune grille tarifaire : sans prix du kWh, l\'économie n\'est pas calculable. Complétez vos grilles sur la page Tarifs.',
+
+    // Amortissement (#26, phase 4)
+    'battery.payback_title'                        => 'Amortissement',
+    'battery.payback_no_price'                     => 'Indiquez le montant investi sur la fiche de la batterie pour obtenir un temps de retour.',
+    'battery.payback_done'                         => '✓ Amortie : l\'économie cumulée dépasse les {amount} investis.',
+    'battery.payback_progress'                     => 'Amortissement : {pct} %',
+    'battery.payback_progress_detail'              => '{saved} économisés sur {investment} investis — il reste {remaining} à amortir.',
+    'battery.payback_eta'                          => 'Au rythme de {rate} par mois, l\'investissement serait amorti vers {month}.',
+    'battery.payback_beyond_horizon'               => 'Au rythme actuel, l\'amortissement se situerait au-delà de la durée de vie de la batterie : aucune date n\'est annoncée.',
+    'battery.payback_no_rate'                      => 'Pas encore de mois complet valorisé : le rythme d\'économie n\'est pas établi, aucune date ne peut être annoncée.',
+    'battery.payback_biased'                       => 'Estimation basée sur {months} mois seulement : une batterie ne rapporte pas autant en hiver qu\'en été, la date annoncée est donc biaisée par la saison traversée. Elle se stabilisera une fois une année complète écoulée.',
+    'battery.payback_after_warranty'               => 'L\'amortissement projeté tombe après la fin de garantie de la batterie.',
+    'battery.cycles_used'                          => '{used} cycles équivalents pleins consommés.',
+    'battery.cycles_used_of'                       => '{used} cycles équivalents pleins consommés sur les {rated} annoncés ({pct} %).',
 
     // Saisie et import des index de batterie (#26, phase 2)
     'meter.battery_charge'                         => 'Index d\'entrée (charge)',

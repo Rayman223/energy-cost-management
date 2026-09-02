@@ -2,13 +2,18 @@
 
 declare(strict_types=1);
 
+use App\Domain\Battery;
+use App\Domain\Currency;
 use App\Infrastructure\Database;
+use App\Repository\BatteryReadingRepository;
+use App\Repository\BatteryRepository;
 use App\Repository\DynamicPriceRepository;
 use App\Repository\ElectricityReadingRepository;
 use App\Repository\TariffRepository;
 use App\Repository\UserRepository;
 use App\Repository\UtilityReadingRepository;
 use App\Security\UserContext;
+use App\Service\BatterySavingsService;
 use App\Service\CostCalculationService;
 use App\Service\DashboardCardsService;
 use App\Service\TariffCalculatorService;
@@ -137,8 +142,26 @@ try {
     // service pour ne pas refaire l'interpolation du mois en cours (#215). Le
     // dernier paramètre n'est qu'un repli : il ne sert que si aucun relevé élec
     // du mois ne fournit de borne de fin à la fenêtre de comparaison (#5).
+    // Batteries (#26) : seulement le MOIS EN COURS, et seulement si le compte en a
+    // déclaré une. `fleetMonth()` et non `balance()` : la page d'accueil n'a pas à
+    // payer une résolution de grille par mois depuis la mise en service.
+    $batteryFleet = (new BatteryRepository($pdo, $userId))->listAll();
+    $batteryMonth = null;
+    if ($batteryFleet !== []) {
+        $batteryMonth = (new BatterySavingsService($tariffRepo, $elecRepo))->fleetMonth(
+            array_map(
+                static fn (Battery $battery): array => [
+                    'battery'  => $battery,
+                    'readings' => new BatteryReadingRepository($pdo, $userId, $battery->id),
+                ],
+                $batteryFleet,
+            ),
+            $now,
+        );
+    }
+
     $cards       = (new DashboardCardsService($elecRepo, $costSvc))
-        ->build($deltas, $currentYear, $currentMonth, $now);
+        ->build($deltas, $currentYear, $currentMonth, $now, $batteryMonth, Currency::symbol($currency));
     // Coût du mois : chaque sous-période dans le mode de sa grille (#245).
     $cost        = $costSvc->estimateCurrentMonthElectricity();
     // Tarif dynamique désactivé côté serveur ⇒ on n'expose pas la section (le JS

@@ -14,6 +14,7 @@ use App\Repository\UserRepository;
 use App\Security\AuthGuard;
 use App\Security\Csrf;
 use App\Security\UserContext;
+use App\Service\BatteryPaybackService;
 use App\Service\BatterySavingsService;
 use App\Support\Adsense;
 use App\Support\Dates;
@@ -255,7 +256,8 @@ $fleet = $batteryRepo->listAll();
 // Calculé ici plutôt que dans le template : la composition du parc, la résolution
 // des grilles et la mensualisation sont de la logique métier. Un parc vide ne
 // déclenche aucune requête — ni tarifs, ni relevés élec.
-$balance = null;
+$balance  = null;
+$paybacks = [];
 if ($fleet !== []) {
     $savings = new BatterySavingsService(
         new TariffRepository($pdo, $userId, $isAdmin),
@@ -269,6 +271,15 @@ if ($fleet !== []) {
         ],
         $fleet,
     ));
+
+    // Amortissement, batterie par batterie : l'investissement, la garantie et les
+    // cycles sont propres à chaque matériel, il n'y a pas de projection « du parc »
+    // qui voudrait dire quelque chose. Indexé par identifiant pour que le template
+    // n'ait pas à réapparier deux listes.
+    $payback = new BatteryPaybackService();
+    foreach ($balance['batteries'] as $index => $batteryBalance) {
+        $paybacks[$batteryBalance['battery_id']] = $payback->project($fleet[$index], $batteryBalance);
+    }
 }
 
 echo $view->render('batteries', [
@@ -280,6 +291,7 @@ echo $view->render('batteries', [
     'isAdmin'        => $isAdmin,
     'batteries'      => $fleet,
     'balance'        => $balance,
+    'paybacks'       => $paybacks,
     'editing'        => $editing,
     'profiles'       => BatteryDischargeProfile::cases(),
     'today'          => $today,

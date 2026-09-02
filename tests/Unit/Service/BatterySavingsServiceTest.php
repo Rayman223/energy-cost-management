@@ -492,6 +492,82 @@ final class BatterySavingsServiceTest extends TestCase
         self::assertNull($fleet['months'][0]['avoided_rate']);
     }
 
+    // ── Un seul mois (tableau de bord) ─────────────────────────────────────
+
+    /**
+     * `fleetMonth()` doit rendre exactement ce que `balance()` rendrait pour ce
+     * mois-là : le tableau de bord ne paie pas le calcul complet, mais il ne doit
+     * pas non plus afficher autre chose que la page /batteries.
+     */
+    public function testFleetMonthMatchesTheFullBalanceForThatMonth(): void
+    {
+        $service  = $this->service([$this->grid()]);
+        $readings = new FakeBatteryReadings(
+            ['2026-01-01' => 0.0, '2026-02-01' => 120.0, '2026-03-01' => 300.0],
+            ['2026-01-01' => 0.0, '2026-02-01' => 100.0, '2026-03-01' => 250.0],
+        );
+        $fleet = [['battery' => $this->battery(), 'readings' => $readings]];
+
+        $full  = $service->balance($fleet, $this->at('2026-03-15'));
+        $month = $service->fleetMonth($fleet, $this->at('2026-02-20'));
+
+        self::assertNotNull($month);
+        self::assertSame($full['batteries'][0]['months'][1], $month, 'février doit être identique par les deux voies');
+    }
+
+    public function testFleetMonthSumsEveryBatteryOfTheFleet(): void
+    {
+        $service = $this->service([$this->grid()]);
+
+        $month = $service->fleetMonth([
+            [
+                'battery'  => $this->battery(),
+                'readings' => new FakeBatteryReadings(
+                    ['2026-01-01' => 0.0, '2026-02-01' => 100.0],
+                    ['2026-01-01' => 0.0, '2026-02-01' => 90.0],
+                ),
+            ],
+            [
+                'battery'  => $this->battery(),
+                'readings' => new FakeBatteryReadings(
+                    ['2026-01-01' => 0.0, '2026-02-01' => 50.0],
+                    ['2026-01-01' => 0.0, '2026-02-01' => 40.0],
+                ),
+            ],
+        ], $this->at('2026-01-20'));
+
+        self::assertNotNull($month);
+        self::assertEqualsWithDelta(150.0, $month['charge_kwh'], 1e-9);
+        self::assertEqualsWithDelta(130.0, $month['discharge_kwh'], 1e-9);
+        self::assertEqualsWithDelta(130.0 * 0.25, $month['gross_savings'], 1e-6);
+    }
+
+    /** Batterie hors service ce mois-là : elle ne doit rien y peser. */
+    public function testFleetMonthIgnoresABatteryOutOfServiceThatMonth(): void
+    {
+        $service = $this->service([$this->grid()]);
+
+        $month = $service->fleetMonth([[
+            'battery'  => $this->battery(commissioned: '2026-06-01'),
+            'readings' => new FakeBatteryReadings(
+                ['2026-01-01' => 0.0, '2026-02-01' => 100.0],
+                ['2026-01-01' => 0.0, '2026-02-01' => 90.0],
+            ),
+        ]], $this->at('2026-01-20'));
+
+        self::assertNull($month);
+    }
+
+    public function testFleetMonthWithoutAnyMeasureIsNull(): void
+    {
+        $month = $this->service([$this->grid()])->fleetMonth(
+            [['battery' => $this->battery(), 'readings' => new FakeBatteryReadings()]],
+            $this->at('2026-01-20'),
+        );
+
+        self::assertNull($month, 'aucune mesure : pas de card, plutôt que des zéros');
+    }
+
     public function testAnEmptyFleetHasNoBalanceAtAll(): void
     {
         $result = $this->service([$this->grid()])->balance([], $this->at('2026-03-01'));
