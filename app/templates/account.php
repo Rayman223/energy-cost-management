@@ -20,6 +20,7 @@ use App\Domain\User;
  * @var array<string,string> $countries
  * @var list<string> $currencies
  * @var ?string $discordUrl
+ * @var ?string $donateUrl
  * @var ?string $adsenseClient Identifiant éditeur AdSense (#185), null si publicité désactivée.
  */
 $csrf = \App\Security\Csrf::field();
@@ -40,6 +41,7 @@ $csrf = \App\Security\Csrf::field();
       'current'     => 'account',
       'isAdmin'     => $user?->isAdmin() ?? false,
       'discordUrl'  => $discordUrl ?? null,
+      'donateUrl'   => $donateUrl ?? null,
       'available'   => $available,
       'timezone'    => $profile?->timezone ?? null,
   ]) ?>

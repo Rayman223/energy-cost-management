@@ -26,6 +26,7 @@ use App\Domain\AdvanceSchedule;
  * @var list<string>             $available
  * @var ?string                  $timezone
  * @var ?string                  $discordUrl
+ * @var ?string                  $donateUrl
  * @var ?string                  $adsenseClient
  */
 
@@ -50,6 +51,7 @@ $currency = $balance['currency'] ?? $currency;
     'current'    => 'advances',
     'isAdmin'    => $isAdmin ?? false,
     'discordUrl' => $discordUrl ?? null,
+    'donateUrl'  => $donateUrl ?? null,
     'available'  => $available,
     'timezone'   => $timezone ?? null,
 ]) ?>

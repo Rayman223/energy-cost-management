@@ -6,6 +6,7 @@
  * @var list<\App\Domain\Battery> $batteries Parc déclaré (#26) ; vide ⇒ section masquée
  * @var list<string> $available
  * @var ?string $discordUrl
+ * @var ?string $donateUrl
  * @var ?string $adsenseClient Identifiant éditeur AdSense (#185), null si publicité désactivée.
  */
 $today = date('Y-m-d');
@@ -29,6 +30,7 @@ $now = date('H:i');
       'current'     => 'meter-readings',
       'isAdmin'     => $isAdmin ?? false,
       'discordUrl'  => $discordUrl ?? null,
+      'donateUrl'   => $donateUrl ?? null,
       'available'   => $available,
       'timezone'    => $clockTimezone ?? null,
   ]) ?>

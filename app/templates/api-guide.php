@@ -32,6 +32,7 @@ $url   = $this->e($apiUrl);
       'current'     => 'api-guide',
       'isAdmin'     => $isAdmin ?? false,
       'discordUrl'  => $discordUrl ?? null,
+      'donateUrl'   => $donateUrl ?? null,
       'available'   => $available,
       'timezone'    => $timezone ?? null,
   ]) ?>
