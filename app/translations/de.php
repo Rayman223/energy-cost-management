@@ -344,6 +344,7 @@ return [
     'dash.annual.cost_total'  => 'Jahreskosten',
     'dash.annual.pcs'         => 'Brennwert {value} kWh/m³',
     'dash.annual.partial'     => 'Unvollständiges Jahr — Daten bis {date}',
+    'dash.annual.partial_open' => 'Unvollständiges Jahr: Die Summen umfassen keine zwölf Monate.',
     'dash.annual.no_data'     => 'Keine Daten für dieses Jahr.',
 
     // Dashboard — Periodennavigation und Diagrammzeiträume

@@ -19,7 +19,6 @@
   window.__INIT_WATER_COST__ = d.initWaterCost;
   window.__INIT_WATER_YEAR__ = d.initWaterYear;
   window.__INIT_WATER_MONTH__ = d.initWaterMonth;
-  window.__INIT_ANNUAL_YEAR__ = d.initAnnualYear;
   window.__TARIFF_LINE_LABELS__ = d.tariffLineLabels;
   window.__TARIFF_GROUP_LABELS__ = d.tariffGroupLabels;
   window.__I18N__ = d.i18n;
@@ -570,7 +569,12 @@ function tariffGapHtml(data) {
   const nextBtn = document.getElementById('annual-nav-next');
   if (!label || !content || !prevBtn || !nextBtn) return;
 
-  const NOW_YEAR = window.__INIT_ANNUAL_YEAR__ || new Date().getUTCFullYear();
+  // Année amorcée par le serveur (année courante UTC), déjà transmise pour la
+  // navigation des coûts : la redemander sous un second nom la ferait diverger.
+  const NOW_YEAR = window.__INIT_YEAR__ || new Date().getUTCFullYear();
+  // Plancher de navigation, aligné sur AnnualConsumptionService::MIN_YEAR : sans
+  // lui, la flèche « ← » descend indéfiniment sur des requêtes vouées au 422.
+  const MIN_YEAR = 2000;
   let annualYear = NOW_YEAR;
 
   // Volumes : deux décimales, séparateurs de la locale du profil — même exigence
@@ -667,10 +671,21 @@ function tariffGapHtml(data) {
   function partialHtml(data) {
     if (!data.partial) return '';
 
-    const end = data.electricity?.data_to || data.gas?.period_to || data.water?.period_to;
-    if (!end) return '';
+    // Fin la PLUS PRÉCOCE, et non la première trouvée : le bandeau doit annoncer
+    // la date jusqu'à laquelle TOUT le tableau est mesuré. Les bornes égales à la
+    // fin d'année demandée ne disent rien — le gaz et l'eau y prolongent leur
+    // dernière pente, donc leur `period_to` vaut toujours `data.to`.
+    const ends = [data.electricity?.data_to, data.gas?.period_to, data.water?.period_to]
+      .filter((e) => e)
+      .map((e) => String(e).slice(0, 10))
+      .filter((e) => e < data.to)
+      .sort();
 
-    return `<div class="annual-partial">${tr('dash.annual.partial', { date: escapeHtml(String(end).slice(0, 10)) })}</div>`;
+    // Aucune borne mesurée exploitable (gaz/eau seuls, tous deux extrapolés) :
+    // le bandeau reste, sans date — l'annoncer au 31/12 serait un mensonge.
+    if (ends.length === 0) return `<div class="annual-partial">${tr('dash.annual.partial_open')}</div>`;
+
+    return `<div class="annual-partial">${tr('dash.annual.partial', { date: escapeHtml(ends[0]) })}</div>`;
   }
 
   function render(data) {
@@ -706,7 +721,12 @@ function tariffGapHtml(data) {
 
     content.innerHTML = `<div class="async-note">${tr('common.loading')}</div>`;
     try {
-      const data = await (await fetch(`api?action=annual_consumption&year=${year}`)).json();
+      const res = await fetch(`api?action=annual_consumption&year=${year}`);
+      // Une erreur d'API (422 sur l'année, 500) répond un JSON `{error: …}` que
+      // `render()` prendrait pour un récapitulatif vide : trois lignes « aucune
+      // donnée » au lieu du message d'erreur, et mises en cache par-dessus le marché.
+      if (!res.ok) throw new Error(String(res.status));
+      const data = await res.json();
       annualCache[year] = data;
       // L'année a pu changer pendant la requête : ne rendre que la réponse
       // attendue, sinon un aller-retour rapide affiche l'année précédente.
@@ -718,11 +738,17 @@ function tariffGapHtml(data) {
 
   function updateNav() {
     label.textContent = String(annualYear);
+    prevBtn.disabled = (annualYear <= MIN_YEAR);
+    prevBtn.style.opacity = prevBtn.disabled ? '.3' : '';
     nextBtn.disabled = (annualYear >= NOW_YEAR);
     nextBtn.style.opacity = nextBtn.disabled ? '.3' : '';
   }
 
-  prevBtn.addEventListener('click', () => { annualYear -= 1; load(annualYear); });
+  prevBtn.addEventListener('click', () => {
+    if (annualYear <= MIN_YEAR) return;
+    annualYear -= 1;
+    load(annualYear);
+  });
   nextBtn.addEventListener('click', () => {
     if (annualYear >= NOW_YEAR) return;
     annualYear += 1;

@@ -354,6 +354,7 @@ return [
     'dash.annual.cost_total'  => 'Coût annuel',
     'dash.annual.pcs'         => 'PCS {value} kWh/m³',
     'dash.annual.partial'     => 'Année incomplète — données jusqu’au {date}',
+    'dash.annual.partial_open' => 'Année incomplète : les totaux ne couvrent pas douze mois.',
     'dash.annual.no_data'     => 'Aucune donnée pour cette année.',
 
     // Dashboard — navigation de période et plages de graphique

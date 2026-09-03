@@ -22,13 +22,17 @@ use DateTimeImmutable;
  * coup revient donc bien à sommer les mois, et non à appliquer un PCS unique.
  *
  * Les bornes sont celles de l'année en UTC — même référentiel que le reste du
- * dashboard (#21). La borne de fin EFFECTIVE, elle, est celle que rendent les
- * estimations : une année en cours est clampée sur le dernier relevé, sans
- * projection, et {@see build()} le signale par `partial`.
+ * dashboard (#21). La borne de fin EFFECTIVE, elle, dépend de l'énergie :
+ * l'électricité est clampée sur le dernier relevé, tandis que le gaz et l'eau
+ * PROLONGENT la dernière pente jusqu'à la borne demandée (`is_projection`). Un
+ * total peut donc porter sur moins que l'année, ou au contraire projeter des mois
+ * qui n'ont pas été relevés : {@see build()} l'annonce par `partial`, et chaque
+ * bloc par `complete`.
  *
  * @phpstan-type AnnualRegister array{key: string, kwh: float}
  * @phpstan-type AnnualBlock array{
  *     available: bool,
+ *     complete: bool,
  *     reason_key: string|null,
  *     period_from: string|null,
  *     period_to: string|null,
@@ -96,7 +100,7 @@ final class AnnualConsumptionService
             'year'        => $year,
             'from'        => $from->format('Y-m-d'),
             'to'          => $to->format('Y-m-d'),
-            'partial'     => self::isPartial([$electricity, $gas, $water], $to),
+            'partial'     => self::isPartial([$electricity, $gas, $water]),
             'electricity' => $electricity,
             'gas'         => $gas,
             'water'       => $water,
@@ -211,6 +215,13 @@ final class AnnualConsumptionService
 
         return [
             'available'   => true,
+            // Les relevés couvrent-ils VRAIMENT la fenêtre demandée ? Deux façons
+            // de ne pas la couvrir, une par moteur : le flux s'arrête avant la fin
+            // (`coverage_complete` à false, électricité comme gaz/eau), ou bien la
+            // borne de fin est extrapolée en avant (`is_projection`, gaz/eau) — et
+            // dans ce dernier cas le total AFFICHÉ contient des mois jamais relevés.
+            'complete'    => ($estimate['coverage_complete'] ?? true) !== false
+                && ($estimate['is_projection'] ?? false) !== true,
             'reason_key'  => null,
             'period_from' => self::stringOrNull($estimate['period_from'] ?? null),
             'period_to'   => self::stringOrNull($estimate['period_to'] ?? null),
@@ -231,6 +242,7 @@ final class AnnualConsumptionService
     {
         return [
             'available'   => false,
+            'complete'    => false,
             'reason_key'  => self::stringOrNull($estimate['reason_key'] ?? null),
             'period_from' => null,
             'period_to'   => null,
@@ -240,24 +252,21 @@ final class AnnualConsumptionService
     }
 
     /**
-     * L'année est partielle dès qu'une énergie disponible s'arrête avant sa fin :
-     * année en cours, ou flux de relevés interrompu. Aucune donnée du tout n'est
-     * pas « partiel » — c'est « indisponible », que chaque bloc porte déjà.
+     * L'année est partielle dès qu'une énergie disponible ne couvre pas toute la
+     * fenêtre : année en cours, ou flux de relevés interrompu. Aucune donnée du
+     * tout n'est pas « partiel » — c'est « indisponible », que chaque bloc porte déjà.
+     *
+     * Le verdict vient de `complete`, donc des estimations elles-mêmes, et non
+     * d'une comparaison de dates : `period_to` (gaz/eau) vaut TOUJOURS la borne
+     * demandée, y compris quand elle est extrapolée — la comparer à la fin d'année
+     * ne détecterait jamais rien.
      *
      * @param list<array<string, mixed>> $blocks
      */
-    private static function isPartial(array $blocks, DateTimeImmutable $to): bool
+    private static function isPartial(array $blocks): bool
     {
         foreach ($blocks as $block) {
-            if (($block['available'] ?? false) !== true) {
-                continue;
-            }
-
-            // `data_to` (électricité) est la borne réellement mesurée ; `period_to`
-            // (gaz/eau) est la borne interpolée de la fenêtre facturée. À défaut de
-            // l'une, l'autre décrit la même chose : jusqu'où portent les données.
-            $end = self::stringOrNull($block['data_to'] ?? null) ?? self::stringOrNull($block['period_to'] ?? null);
-            if ($end !== null && Dates::fromDbString($end) < $to) {
+            if (($block['available'] ?? false) === true && ($block['complete'] ?? true) !== true) {
                 return true;
             }
         }

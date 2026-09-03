@@ -344,6 +344,7 @@ return [
     'dash.annual.cost_total'  => 'Jaarkosten',
     'dash.annual.pcs'         => 'Bovenwaarde {value} kWh/m³',
     'dash.annual.partial'     => 'Onvolledig jaar — gegevens tot {date}',
+    'dash.annual.partial_open' => 'Onvolledig jaar: de totalen beslaan geen twaalf maanden.',
     'dash.annual.no_data'     => 'Geen gegevens voor dit jaar.',
 
     // Dashboard — periodenavigatie en grafiekbereiken

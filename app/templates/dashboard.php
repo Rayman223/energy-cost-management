@@ -203,9 +203,9 @@ $deltaBadge = function (?float $pct, bool $lowerIsBetter, bool $isNew = false): 
         'initWaterCost'     => $waterCostData ?? ['available' => false, 'reason' => 'No data'],
         'initWaterYear'     => (int) $waterInitYear,
         'initWaterMonth'    => (int) $waterInitMonth,
-        // Récapitulatif annuel (#41) : seule l'année amorcée est transmise, le
-        // contenu étant chargé après coup (cf. section « Consommation annuelle »).
-        'initAnnualYear'    => (int) $initYear,
+        // Récapitulatif annuel (#41) : rien à amorcer ici, le contenu étant chargé
+        // après coup et l'année de départ étant déjà `initYear` (cf. section
+        // « Consommation annuelle »).
         'tariffLineLabels'  => $tariffLineLabels,
         'tariffGroupLabels' => $tariffGroupLabels,
         // Sous-catalogue des libellés rendus côté client (#223). Extrait par

@@ -250,6 +250,27 @@ final class AnnualConsumptionServiceTest extends TestCase
         self::assertSame('dash.reason.no_tariff_gas', $gas['reason_key']);
     }
 
+    public function testGasStoppingMidYearIsFlaggedInsteadOfPassingForAFullYear(): void
+    {
+        // Sept relevés seulement (1er janvier → 1er juillet) : l'interpolateur
+        // PROLONGE la dernière pente jusqu'au 31/12, si bien que le bloc annonce
+        // ~1200 m³ là où 600 ont été mesurés. La valeur reste celle du moteur, mais
+        // elle ne doit pas passer pour une année complète — sinon le tableau donne
+        // le double de la consommation réelle sans un mot.
+        $svc = $this->service(
+            new FakeLegacyDailyRepository(deltasBetween: $this->elecDeltas()),
+            new FakeGasReadingRepository(forInterpolation: $this->monthlyReadings(100.0, months: 7)),
+            null,
+            ['electricity' => [$this->elecGrid()], 'gas' => [$this->gasGrid(2, 10.0)]],
+        );
+
+        $result = $svc->build(self::YEAR);
+
+        self::assertTrue($result['gas']['available']);
+        self::assertFalse($result['gas']['complete'], 'Un total gaz extrapolé ne couvre pas l’année.');
+        self::assertTrue($result['partial']);
+    }
+
     public function testWaterReportsVolumeAndCost(): void
     {
         $water = $this->fullService()->build(self::YEAR)['water'];

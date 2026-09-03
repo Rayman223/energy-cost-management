@@ -345,6 +345,7 @@ return [
     'dash.annual.cost_total'  => 'Annual cost',
     'dash.annual.pcs'         => 'GCV {value} kWh/m³',
     'dash.annual.partial'     => 'Incomplete year — data up to {date}',
+    'dash.annual.partial_open' => 'Incomplete year: the totals do not cover twelve months.',
     'dash.annual.no_data'     => 'No data for this year.',
 
     // Dashboard — period navigation and chart ranges
