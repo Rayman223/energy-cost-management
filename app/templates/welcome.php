@@ -7,6 +7,7 @@
  *
  * @var list<string> $available Locales proposées dans le sélecteur de langue.
  * @var ?string      $discordUrl URL d'invitation Discord, ou null si non configurée.
+ * @var ?string      $donateUrl URL de soutien au projet (#3), ou null si non configurée.
  * @var ?string      $adsenseClient Identifiant éditeur AdSense (#185), null si publicité désactivée.
  */
 ?>

@@ -22,6 +22,7 @@
  * @var ?string                $clockTimezone Fuseau de l'horloge du header
  * @var list<string>           $available     Locales du sélecteur
  * @var ?string                $discordUrl    Invitation Discord
+ * @var ?string                $donateUrl     Soutien au projet
  * @var ?string                $adsenseClient Identifiant éditeur AdSense
  */
 
@@ -74,6 +75,7 @@ $symbol = \App\Domain\Currency::symbol($currency ?? 'EUR');
       'current'       => 'stats',
       'isAdmin'       => $isAdmin ?? false,
       'discordUrl'    => $discordUrl ?? null,
+      'donateUrl'     => $donateUrl ?? null,
       'available'     => $available,
       'timezone'      => $clockTimezone ?? null,
       'authenticated' => $authenticated ?? false,
