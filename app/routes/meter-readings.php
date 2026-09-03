@@ -12,6 +12,7 @@ use App\Security\AuthGuard;
 use App\Security\UserContext;
 use App\Support\Adsense;
 use App\Support\DiscordLink;
+use App\Support\DonateLink;
 use App\Support\LocaleContext;
 use App\View\ViewFactory;
 
@@ -71,6 +72,7 @@ $view ??= ViewFactory::create(__DIR__ . '/../templates', Locale::resolve($config
 echo $view->render('meter_readings', [
     'oidcEnabled' => AuthGuard::isOidcEnabled($config),
     'discordUrl'  => DiscordLink::inviteUrl($config),
+    'donateUrl'   => DonateLink::url($config),
     'adsenseClient' => Adsense::clientId($config),
     'isAdmin' => $isAdmin,
     'dbError' => $dbError,

@@ -169,6 +169,13 @@ return [
         'invite_url' => '', // ex. https://discord.gg/xxxxxxx (vide = lien masqué)
     ],
 
+    // Lien de soutien au projet (#3), affiché dans l'en-tête des pages. Propre à
+    // chaque déploiement : laisser vide sur une instance auto-hébergée, sauf à
+    // vouloir y afficher sa propre cagnotte.
+    'donate' => [
+        'url' => '', // ex. https://buymeacoffee.com/xxxxxxx (vide = lien masqué)
+    ],
+
     // Publicité Google AdSense (#185), au format « Auto ads » : un seul script
     // dans le <head>, Google place les emplacements. Désactivée par défaut —
     // sans identifiant valide, aucun script tiers n'est chargé et la CSP reste

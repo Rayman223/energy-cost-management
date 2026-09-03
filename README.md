@@ -173,6 +173,9 @@ return [
     // Discord link shown in the page header. Empty = link hidden.
     'discord'      => [ 'invite_url' => '' ],                    // e.g. https://discord.gg/xxxxxxx
 
+    // "Support the project" link shown in the page header. Empty = link hidden.
+    'donate'       => [ 'url' => '' ],                           // e.g. https://buymeacoffee.com/xxxxxxx
+
     // Optional: day-ahead spot prices (ENTSO-E), EnergyID sync, local meter agent.
     // VAT and supplier markup are NOT configured here (see the dynamic-price notes below).
     'dynamic_prices' => [ 'enabled' => true, 'provider' => 'entsoe', 'security_token' => 'change_me',

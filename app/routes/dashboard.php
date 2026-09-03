@@ -25,6 +25,7 @@ use App\Security\WebAccessGuard;
 use App\Support\Adsense;
 use App\Support\Dates;
 use App\Support\DiscordLink;
+use App\Support\DonateLink;
 use App\Support\DynamicPricing;
 use App\Support\LocaleContext;
 use App\View\ViewFactory;
@@ -85,6 +86,7 @@ if ($dbError === null && AuthGuard::isOidcEnabled($config)) {
         echo $landing->render('welcome', [
             'available'     => Locale::available($config),
             'discordUrl'    => DiscordLink::inviteUrl($config),
+            'donateUrl'     => DonateLink::url($config),
             'adsenseClient' => Adsense::clientId($config),
         ]);
 
@@ -218,6 +220,7 @@ echo $view->render('dashboard', [
     'isAdmin'      => $isAdmin,
     'oidcEnabled'  => $oidcEnabled,
     'discordUrl'   => DiscordLink::inviteUrl($config),
+    'donateUrl'    => DonateLink::url($config),
     'adsenseClient' => Adsense::clientId($config),
     'currency'     => $currency,
     'timezone'     => $timezone,

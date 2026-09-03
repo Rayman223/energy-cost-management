@@ -20,6 +20,7 @@ use App\Service\TariffCalculatorService;
 use App\Support\Adsense;
 use App\Support\Dates;
 use App\Support\DiscordLink;
+use App\Support\DonateLink;
 use App\Support\DynamicPricing;
 use App\Support\LocaleContext;
 
@@ -330,6 +331,7 @@ if ($highlightFrom === null || $highlightTo === null || $highlightTo <= $highlig
 echo $view->render('advances', [
     'oidcEnabled'    => AuthGuard::isOidcEnabled($config),
     'discordUrl'     => DiscordLink::inviteUrl($config),
+    'donateUrl'      => DonateLink::url($config),
     'adsenseClient'  => Adsense::clientId($config),
     'error'          => $error,
     'success'        => $success,

@@ -302,6 +302,7 @@ return [
     'common.theme' => 'Thema umschalten',
 'common.discord' => 'Discord beitreten',
     'common.github' => 'Quellcode auf GitHub',
+    'common.donate' => 'Das Projekt unterstützen',
 
     'dash.subtitle'            => 'Verbrauchsverfolgung',
     'dash.month'               => 'Verbrauch — laufender Monat',
