@@ -33,6 +33,7 @@ use App\Service\Import\ImportRunner;
 use App\Service\ReadingGranularityPolicy;
 use App\Support\Adsense;
 use App\Support\DiscordLink;
+use App\Support\DonateLink;
 use App\Support\DynamicPricing;
 use App\Support\LocaleContext;
 
@@ -386,6 +387,7 @@ echo $view->render('account', [
     'dynamicEnabled' => $dynamicVisible,
     'dynamicServerEnabled' => $dynamicServer,
     'discordUrl'  => DiscordLink::inviteUrl($config),
+    'donateUrl'   => DonateLink::url($config),
     'adsenseClient' => Adsense::clientId($config),
     'error'      => $error,
     'success'    => $success,

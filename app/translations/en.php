@@ -303,6 +303,7 @@ return [
     'common.theme' => 'Toggle theme',
 'common.discord' => 'Join us on Discord',
     'common.github' => 'Source code on GitHub',
+    'common.donate' => 'Support the project',
 
     'dash.subtitle'            => 'Consumption tracking',
     'dash.month'               => 'Consumption — current month',

@@ -12,6 +12,7 @@ use App\Security\UserContext;
 use App\Security\WebAccessGuard;
 use App\Support\Adsense;
 use App\Support\DiscordLink;
+use App\Support\DonateLink;
 use App\View\ViewFactory;
 
 /**
@@ -91,6 +92,7 @@ echo $view->render('api-guide', [
     'available'   => Locale::available($config),
     'isAdmin'     => $isAdmin,
     'discordUrl'  => DiscordLink::inviteUrl($config),
+    'donateUrl'   => DonateLink::url($config),
     'adsenseClient' => Adsense::clientId($config),
     'timezone'    => $timezone,
 ]);

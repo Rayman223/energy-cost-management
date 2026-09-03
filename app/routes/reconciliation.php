@@ -20,6 +20,7 @@ use App\Service\SpotFormulaResolver;
 use App\Service\TariffCalculatorService;
 use App\Support\Adsense;
 use App\Support\DiscordLink;
+use App\Support\DonateLink;
 use App\Support\DynamicPricing;
 use App\Support\LocaleContext;
 
@@ -202,6 +203,7 @@ $defaultPeriod = (new DateTimeImmutable('first day of last month'))->format('Y-m
 echo $view->render('reconciliation', [
     'oidcEnabled'    => AuthGuard::isOidcEnabled($config),
     'discordUrl'     => DiscordLink::inviteUrl($config),
+    'donateUrl'      => DonateLink::url($config),
     'adsenseClient'  => Adsense::clientId($config),
     'error'          => $error,
     'success'        => $success,

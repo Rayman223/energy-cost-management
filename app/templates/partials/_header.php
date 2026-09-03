@@ -19,6 +19,7 @@
  *                                      des liens menant tous à /login seraient au mieux
  *                                      inutiles, au pire trompeurs.
  * @var string|null       $discordUrl  URL d'invitation Discord (partial discord-link)
+ * @var string|null       $donateUrl   URL de soutien au projet (partial donate-link)
  * @var list<string>|null $available   Locales disponibles pour le sélecteur (défaut [])
  * @var string|null       $timezone    Fuseau IANA du profil pour l'horloge ; null/vide ⇒
  *                                      l'horloge suit le fuseau du navigateur (heure locale
@@ -74,6 +75,7 @@ $navlink = function (string $page, string $url, string $icon, string $title) use
     <?php endif; ?>
     <?= $this->partial('discord-link', ['url' => $discordUrl ?? null]) ?>
     <?= $this->partial('github-link') ?>
+    <?= $this->partial('donate-link', ['url' => $donateUrl ?? null]) ?>
     <?= $this->partial('_lang-switcher', ['available' => $available]) ?>
     <button type="button" class="theme-toggle" id="theme-toggle" aria-label="<?= $this->te('common.theme') ?>">🌙</button>
   </div>

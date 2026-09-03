@@ -18,6 +18,7 @@ use App\Security\Csrf;
 use App\Security\UserContext;
 use App\Support\Adsense;
 use App\Support\DiscordLink;
+use App\Support\DonateLink;
 use App\Support\LocaleContext;
 
 // Bootstrap isolé : une configuration injoignable (ex. config.php absent) dégrade
@@ -103,6 +104,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 echo $view->render('admin', [
     'oidcEnabled' => AuthGuard::isOidcEnabled($config),
     'discordUrl'  => DiscordLink::inviteUrl($config),
+    'donateUrl'   => DonateLink::url($config),
     'adsenseClient' => Adsense::clientId($config),
     'error'     => $error,
     'success'   => $success,

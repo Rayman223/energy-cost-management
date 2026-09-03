@@ -20,6 +20,7 @@ use App\Security\UserContext;
 use App\Service\SpotFormulaResolver;
 use App\Support\Adsense;
 use App\Support\DiscordLink;
+use App\Support\DonateLink;
 use App\Support\DynamicPricing;
 use App\Support\LocaleContext;
 
@@ -564,6 +565,7 @@ foreach (ComponentKind::cases() as $k) {
 echo $view->render('tariffs', [
     'oidcEnabled'      => AuthGuard::isOidcEnabled($config),
     'discordUrl'       => DiscordLink::inviteUrl($config),
+    'donateUrl'        => DonateLink::url($config),
     'adsenseClient'    => Adsense::clientId($config),
     'error'            => $error,
     'success'          => $success,

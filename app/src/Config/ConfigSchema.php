@@ -150,6 +150,15 @@ final class ConfigSchema
                     ],
                 ],
 
+                'donate' => [
+                    // Lien de soutien au projet (#3) : absent ou vide ⇒ aucune icône
+                    // dans l'en-tête (App\Support\DonateLink). Propre au déploiement.
+                    'absentHint' => 'lien de don masqué',
+                    'children'   => [
+                        'url' => [],
+                    ],
+                ],
+
                 'adsense' => [
                     // Publicité Google AdSense (#185) : absent ⇒ off, aucun script
                     // tiers chargé et CSP stricte préservée (App\Support\Adsense,

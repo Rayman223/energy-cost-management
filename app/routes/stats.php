@@ -20,6 +20,7 @@ use App\Service\StatisticsService;
 use App\Service\TariffCalculatorService;
 use App\Support\Adsense;
 use App\Support\DiscordLink;
+use App\Support\DonateLink;
 use App\Support\DynamicPricing;
 use App\Support\LocaleContext;
 use App\View\ViewFactory;
@@ -168,5 +169,6 @@ echo $view->render('stats', [
     'clockTimezone' => $profile->timezone ?? null,
     'available'     => Locale::available($config),
     'discordUrl'    => DiscordLink::inviteUrl($config),
+    'donateUrl'     => DonateLink::url($config),
     'adsenseClient' => Adsense::clientId($config),
 ]);

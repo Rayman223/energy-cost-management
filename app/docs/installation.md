@@ -236,6 +236,9 @@ is in [entsoe-dynamic-prices.md](entsoe-dynamic-prices.md) (*in French*).
 `energyid` is opt-in: keep `enabled => false` (or omit the flag) to hide the
 connector card from the account page and skip the nightly push.
 Set `discord.invite_url` to show a Discord link in the page header (empty = hidden).
+Set `donate.url` likewise to show a "support the project" link there — Buy Me a
+Coffee, Ko-fi, GitHub Sponsors, any `http(s)` URL (empty = hidden). Self-hosted
+instances should leave it empty unless they point it at their own page.
 
 Fill in `legal` (publisher, address, contact e-mail, hosting provider,
 jurisdiction): those values feed `/legal-notice` and the "data controller"

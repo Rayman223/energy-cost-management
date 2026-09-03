@@ -302,6 +302,7 @@ return [
     'common.theme' => 'Thema wisselen',
 'common.discord' => 'Word lid van Discord',
     'common.github' => 'Broncode op GitHub',
+    'common.donate' => 'Steun het project',
 
     'dash.subtitle'            => 'Verbruiksopvolging',
     'dash.month'               => 'Verbruik — huidige maand',
