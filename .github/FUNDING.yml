@@ -1,0 +1,11 @@
+# Bouton « Sponsor » du dépôt (#3). Objectif : couvrir les frais d'hébergement,
+# pas monétiser le projet — l'application reste libre et auto-hébergeable.
+#
+# Une entrée pointant vers un compte inexistant n'affiche rien : commenter la
+# ligne plutôt que la laisser vide tant que le compte n'est pas ouvert.
+# Le lien affiché dans l'en-tête du site est distinct et se configure via
+# `donate.url` dans app/config/config.php (cf. app/docs/installation.md).
+
+github: [Rayman223]
+buy_me_a_coffee: rayman223
+ko_fi: rayman223
