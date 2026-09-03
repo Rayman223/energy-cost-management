@@ -338,6 +338,24 @@ return [
     'dash.history.gas'         => 'Historique gaz',
     'dash.history.water'       => 'Historique eau',
 
+    // Dashboard — récapitulatif annuel toutes énergies (#41)
+    'dash.annual.title'       => 'Consommation annuelle',
+    'dash.annual.electricity' => 'Électricité',
+    'dash.annual.col_item'    => 'Poste',
+    'dash.annual.col_total'   => 'Total',
+    'dash.annual.col_cost'    => 'Coût',
+    'dash.annual.import_t1'   => 'Import T1 (jour)',
+    'dash.annual.import_t2'   => 'Import T2 (nuit)',
+    'dash.annual.export_t1'   => 'Export T1 (jour)',
+    'dash.annual.export_t2'   => 'Export T2 (nuit)',
+    'dash.annual.production'  => 'Production PV',
+    'dash.annual.volume'      => 'Volume',
+    'dash.annual.energy'      => 'Énergie',
+    'dash.annual.cost_total'  => 'Coût annuel',
+    'dash.annual.pcs'         => 'PCS {value} kWh/m³',
+    'dash.annual.partial'     => 'Année incomplète — données jusqu’au {date}',
+    'dash.annual.no_data'     => 'Aucune donnée pour cette année.',
+
     // Dashboard — navigation de période et plages de graphique
     'dash.nav.month'       => 'Mois',
     'dash.nav.year'        => 'Année',
@@ -345,6 +363,8 @@ return [
     'dash.nav.next_month'  => 'Mois suivant',
     'dash.nav.prev_period' => 'Période précédente',
     'dash.nav.next_period' => 'Période suivante',
+    'dash.nav.prev_year'   => 'Année précédente',
+    'dash.nav.next_year'   => 'Année suivante',
     'dash.range.30d'       => '30j',
     'dash.range.1y'        => '1 an',
     'dash.range.12m'       => '12 mois',

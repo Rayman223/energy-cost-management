@@ -19,6 +19,7 @@
   window.__INIT_WATER_COST__ = d.initWaterCost;
   window.__INIT_WATER_YEAR__ = d.initWaterYear;
   window.__INIT_WATER_MONTH__ = d.initWaterMonth;
+  window.__INIT_ANNUAL_YEAR__ = d.initAnnualYear;
   window.__TARIFF_LINE_LABELS__ = d.tariffLineLabels;
   window.__TARIFF_GROUP_LABELS__ = d.tariffGroupLabels;
   window.__I18N__ = d.i18n;
@@ -555,6 +556,181 @@ function tariffGapHtml(data) {
   // Init
   updateNav();
   renderCostContent(window.__INIT_COST__);
+})();
+
+// ── Récapitulatif annuel toutes énergies (#41) ─────────────────────────────
+// Un tableau : registres électricité un par un, gaz en m³ ET en kWh, eau en m³,
+// chaque énergie close par son coût annuel. Chargé APRÈS le rendu de la page
+// (le serveur ne transmet que l'année amorcée) : l'estimation électricité sur
+// 365 jours est trop lourde pour le chemin synchrone du dashboard.
+(function () {
+  const label   = document.getElementById('annual-nav-label');
+  const content = document.getElementById('annual-content');
+  const prevBtn = document.getElementById('annual-nav-prev');
+  const nextBtn = document.getElementById('annual-nav-next');
+  if (!label || !content || !prevBtn || !nextBtn) return;
+
+  const NOW_YEAR = window.__INIT_ANNUAL_YEAR__ || new Date().getUTCFullYear();
+  let annualYear = NOW_YEAR;
+
+  // Volumes : deux décimales, séparateurs de la locale du profil — même exigence
+  // que formatMoney(), les `toFixed()` bruts affichant un point décimal partout.
+  const _qtyFmt = new Intl.NumberFormat(APP_LOCALE, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+  // Cache par année : revenir sur une année déjà consultée ne redéclenche pas
+  // trois estimations annuelles côté serveur. Même rôle que `yearCache`.
+  const annualCache = {};
+
+  // Libellés des registres en clés LITTÉRALES et non concaténées : une clé
+  // construite (`'dash.annual.' + key`) échapperait à DashboardJsCatalogTest, qui
+  // est le seul garde-fou contre une traduction manquante rendue à l'écran.
+  const REGISTER_LABELS = {
+    import_t1:  () => tr('dash.annual.import_t1'),
+    import_t2:  () => tr('dash.annual.import_t2'),
+    export_t1:  () => tr('dash.annual.export_t1'),
+    export_t2:  () => tr('dash.annual.export_t2'),
+    production: () => tr('dash.annual.production'),
+  };
+
+  // Une valeur absente se lit « — », jamais « 0 » : sans relevé, on ne sait pas
+  // que la consommation était nulle.
+  function qty(value, unit) {
+    if (value === null || value === undefined) return '<span class="t-muted">—</span>';
+    return `${_qtyFmt.format(Number(value))} ${unit}`;
+  }
+
+  function money(value) {
+    return value === null || value === undefined ? '<span class="t-muted">—</span>' : formatMoney(value);
+  }
+
+  function row(item, total, cost, cls) {
+    return `<tr class="${cls || ''}">
+      <td class="at-item">${item}</td>
+      <td class="at-total">${total}</td>
+      <td class="at-cost">${cost || ''}</td>
+    </tr>`;
+  }
+
+  function groupRow(title) {
+    return `<tr class="annual-group"><th colspan="3">${title}</th></tr>`;
+  }
+
+  /** Ligne « — » motivée, pour une énergie sans données ou sans tarif. */
+  function unavailableRow(block) {
+    return row(`<span class="t-muted">${reasonHtml(block, 'dash.annual.no_data')}</span>`, '', '');
+  }
+
+  function electricityRows(block) {
+    let html = groupRow(tr('dash.annual.electricity'));
+    if (!block || !block.available) return html + unavailableRow(block);
+
+    (block.registers || []).forEach((r) => {
+      const labelFn = REGISTER_LABELS[r.key];
+      html += row(labelFn ? labelFn() : escapeHtml(r.key), qty(r.kwh, 'kWh'), '');
+    });
+
+    return html + row(tr('dash.annual.cost_total'), '', money(block.cost), 'annual-subtotal');
+  }
+
+  function gasRows(block) {
+    let html = groupRow(tr('dash.gas'));
+    if (!block || (!block.available && block.m3 == null)) return html + unavailableRow(block);
+
+    html += row(tr('dash.annual.volume'), qty(block.m3, 'm³'), '');
+
+    // kWh absent = aucune grille gaz sur l'année : le volume reste affiché, et le
+    // motif porté par la réponse dit pourquoi la conversion manque.
+    const pcs = block.pcs != null ? ` <span class="at-note">${tr('dash.annual.pcs', { value: _qtyFmt.format(Number(block.pcs)) })}</span>` : '';
+    html += row(tr('dash.annual.energy'), qty(block.kwh, 'kWh') + (block.kwh != null ? pcs : ''), '');
+
+    if (block.kwh == null && block.reason_key) {
+      html += row(`<span class="t-muted">${tr(block.reason_key)}</span>`, '', '');
+    }
+
+    return html + row(tr('dash.annual.cost_total'), '', money(block.cost), 'annual-subtotal');
+  }
+
+  function waterRows(block) {
+    let html = groupRow(tr('dash.water'));
+    if (!block || !block.available) return html + unavailableRow(block);
+
+    return html
+      + row(tr('dash.annual.volume'), qty(block.m3, 'm³'), '')
+      + row(tr('dash.annual.cost_total'), '', money(block.cost), 'annual-subtotal');
+  }
+
+  /**
+   * Bandeau « année incomplète » : l'année en cours, mais aussi une année passée
+   * dont le flux de relevés s'est arrêté avant le 31/12 — dans les deux cas les
+   * totaux ne couvrent pas douze mois, ce que le tableau seul ne dirait pas.
+   */
+  function partialHtml(data) {
+    if (!data.partial) return '';
+
+    const end = data.electricity?.data_to || data.gas?.period_to || data.water?.period_to;
+    if (!end) return '';
+
+    return `<div class="annual-partial">${tr('dash.annual.partial', { date: escapeHtml(String(end).slice(0, 10)) })}</div>`;
+  }
+
+  function render(data) {
+    if (!data) {
+      content.innerHTML = `<div class="async-note async-note--error">${tr('dash.load_error')}</div>`;
+      return;
+    }
+
+    content.innerHTML = partialHtml(data) + `<div class="annual-wrap">
+      <table class="annual-table">
+        <thead>
+          <tr>
+            <th class="at-item">${tr('dash.annual.col_item')}</th>
+            <th class="at-total">${tr('dash.annual.col_total')}</th>
+            <th class="at-cost">${tr('dash.annual.col_cost')}</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${electricityRows(data.electricity)}
+          ${gasRows(data.gas)}
+          ${waterRows(data.water)}
+        </tbody>
+      </table>
+    </div>`;
+  }
+
+  async function load(year) {
+    updateNav();
+    if (annualCache[year]) {
+      render(annualCache[year]);
+      return;
+    }
+
+    content.innerHTML = `<div class="async-note">${tr('common.loading')}</div>`;
+    try {
+      const data = await (await fetch(`api?action=annual_consumption&year=${year}`)).json();
+      annualCache[year] = data;
+      // L'année a pu changer pendant la requête : ne rendre que la réponse
+      // attendue, sinon un aller-retour rapide affiche l'année précédente.
+      if (year === annualYear) render(data);
+    } catch (e) {
+      if (year === annualYear) render(null);
+    }
+  }
+
+  function updateNav() {
+    label.textContent = String(annualYear);
+    nextBtn.disabled = (annualYear >= NOW_YEAR);
+    nextBtn.style.opacity = nextBtn.disabled ? '.3' : '';
+  }
+
+  prevBtn.addEventListener('click', () => { annualYear -= 1; load(annualYear); });
+  nextBtn.addEventListener('click', () => {
+    if (annualYear >= NOW_YEAR) return;
+    annualYear += 1;
+    load(annualYear);
+  });
+
+  // Init
+  load(annualYear);
 })();
 
 // ── Gas cost navigation ────────────────────────────────────────────────────
