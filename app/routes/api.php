@@ -28,6 +28,7 @@ use App\Security\ApiToken;
 use App\Security\AuthGuard;
 use App\Security\UserContext;
 use App\Security\WebAccessGuard;
+use App\Service\AnnualConsumptionService;
 use App\Service\CostCalculationService;
 use App\Service\ReadingGranularityPolicy;
 use App\Service\TariffCalculatorService;
@@ -146,7 +147,7 @@ try {
 }
 
 $readings = new ReadingsController($elecRepo, $gasRepo, $waterRepo);
-$cost     = new CostController($costSvc, DynamicPricing::isEnabled($config));
+$cost     = new CostController($costSvc, new AnnualConsumptionService($costSvc), DynamicPricing::isEnabled($config));
 $tariffs  = new TariffController($tariffRepo);
 $entries  = new MeterEntryController($gasRepo, $waterRepo, $elecRepo, $syncState, $elecThrottle);
 $deletion = new ReadingDeletionController($gasRepo, $waterRepo, $elecRepo);
@@ -190,6 +191,7 @@ if ($viaToken === false) {
     $router->add('GET', 'gas_cost',       $cost->gasCost(...));
     $router->add('GET', 'gas_month_cost', $cost->gasMonthCost(...));
     $router->add('GET', 'water_month_cost', $cost->waterMonthCost(...));
+    $router->add('GET', 'annual_consumption', $cost->annualConsumption(...));
     $router->add('GET', 'tariffs',        $tariffs->index(...));
 
     // POST (saisie manuelle + tarifs)

@@ -10,6 +10,7 @@ use App\Domain\TariffLine;
 use App\Http\Controller\CostController;
 use App\Http\Request;
 use App\Http\ValidationException;
+use App\Service\AnnualConsumptionService;
 use App\Service\CostCalculationService;
 use App\Service\TariffCalculatorService;
 use DateTimeImmutable;
@@ -28,7 +29,7 @@ final class CostControllerTest extends TestCase
     {
         $svc = new CostCalculationService($legacy, $tariff, new FakeGasReadingRepository(), new TariffCalculatorService());
 
-        return new CostController($svc);
+        return new CostController($svc, new AnnualConsumptionService($svc));
     }
 
     /** @return array<string,mixed> */
@@ -82,6 +83,32 @@ final class CostControllerTest extends TestCase
 
         $this->expectException(ValidationException::class);
         $controller->monthCost(new Request('GET', ['action' => 'month_cost', 'month' => '13'], []));
+    }
+
+    public function testAnnualConsumptionReturnsTheThreeEnergies(): void
+    {
+        $controller = $this->controller(
+            new FakeLegacyDailyRepository(deltasBetween: $this->deltas()),
+            new FakeTariffRepository(grid: $this->grid()),
+        );
+
+        $res = $controller->annualConsumption(new Request('GET', ['action' => 'annual_consumption', 'year' => '2026'], []));
+
+        self::assertSame(200, $res->status);
+        self::assertIsArray($res->data);
+        self::assertSame(2026, $res->data['year']);
+        self::assertArrayHasKey('electricity', $res->data);
+        self::assertArrayHasKey('gas', $res->data);
+        self::assertArrayHasKey('water', $res->data);
+    }
+
+    public function testAnnualConsumptionRejectsOutOfRangeYear(): void
+    {
+        $controller = $this->controller(new FakeLegacyDailyRepository(), new FakeTariffRepository());
+
+        $this->expectException(ValidationException::class);
+        $this->expectExceptionMessage('Invalid year');
+        $controller->annualConsumption(new Request('GET', ['action' => 'annual_consumption', 'year' => '2199'], []));
     }
 
     public function testCostEstimateUnavailableWhenNoData(): void
