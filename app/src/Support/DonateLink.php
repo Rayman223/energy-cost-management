@@ -19,33 +19,12 @@ final class DonateLink
 {
     /**
      * Renvoie l'URL de don configurée, ou null si elle est absente, vide ou
-     * inexploitable. Seuls `http`/`https` sont acceptés : la config ne doit pas
-     * pouvoir injecter un `href` de schéma `javascript:` dans les pages.
+     * inexploitable — règles de validation dans {@see ConfigUrl::httpUrl()}.
      *
      * @param array<string, mixed> $config
      */
     public static function url(array $config): ?string
     {
-        $donate = $config['donate'] ?? [];
-        if (!is_array($donate)) {
-            return null;
-        }
-
-        $url = $donate['url'] ?? '';
-        if (!is_string($url)) {
-            return null;
-        }
-
-        $url = trim($url);
-        if ($url === '' || filter_var($url, FILTER_VALIDATE_URL) === false) {
-            return null;
-        }
-
-        $scheme = strtolower((string) parse_url($url, PHP_URL_SCHEME));
-        if ($scheme !== 'http' && $scheme !== 'https') {
-            return null;
-        }
-
-        return $url;
+        return ConfigUrl::httpUrl($config, 'donate', 'url');
     }
 }
