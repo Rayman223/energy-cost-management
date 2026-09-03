@@ -125,6 +125,26 @@ $deltaBadge = function (?float $pct, bool $lowerIsBetter, bool $isNew = false): 
     <?php endforeach; ?>
   </div>
 
+  <!-- ── Consommation annuelle (#41) ───────────────────────────────────── -->
+  <!-- Rendu côté client, comme les blocs de coûts : une estimation électricité
+       sur 365 jours déclenche le découpage tarifaire et, sous contrat dynamique,
+       la résolution d'une série de prix quart-horaire sur l'année. Trop lourd
+       pour être calculé à CHAQUE chargement du dashboard — d'où l'appel
+       paresseux à api?action=annual_consumption après le premier rendu. -->
+  <div class="section-header">
+    <span class="section-title"><?= $this->te('dash.annual.title') ?></span>
+    <span class="section-line"></span>
+    <div class="month-nav">
+      <button class="month-nav-btn" id="annual-nav-prev" title="<?= $this->te('dash.nav.prev_year') ?>">&#8592;</button>
+      <span class="month-nav-current" id="annual-nav-label">…</span>
+      <button class="month-nav-btn" id="annual-nav-next" title="<?= $this->te('dash.nav.next_year') ?>">&#8594;</button>
+    </div>
+  </div>
+
+  <div id="annual-content">
+    <div class="async-note"><?= $this->te('common.loading') ?></div>
+  </div>
+
   <!-- ── Cost estimate ─────────────────────────────────────────────────── -->
   <div class="section-header">
     <span class="section-title"><?= $this->te('dash.cost.electricity') ?></span>
@@ -183,6 +203,9 @@ $deltaBadge = function (?float $pct, bool $lowerIsBetter, bool $isNew = false): 
         'initWaterCost'     => $waterCostData ?? ['available' => false, 'reason' => 'No data'],
         'initWaterYear'     => (int) $waterInitYear,
         'initWaterMonth'    => (int) $waterInitMonth,
+        // Récapitulatif annuel (#41) : rien à amorcer ici, le contenu étant chargé
+        // après coup et l'année de départ étant déjà `initYear` (cf. section
+        // « Consommation annuelle »).
         'tariffLineLabels'  => $tariffLineLabels,
         'tariffGroupLabels' => $tariffGroupLabels,
         // Sous-catalogue des libellés rendus côté client (#223). Extrait par

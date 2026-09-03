@@ -7,11 +7,13 @@ namespace App\Http\Controller;
 use App\Http\JsonResponse;
 use App\Http\Request;
 use App\Http\ValidationException;
+use App\Service\AnnualConsumptionService;
 use App\Service\CostCalculationService;
 use App\Support\Dates;
 
 /**
- * Estimations de coûts (électricité mois courant/donné, gaz dernière période/mois).
+ * Estimations de coûts (électricité mois courant/donné, gaz dernière période/mois)
+ * et récapitulatif annuel toutes énergies.
  */
 final class CostController
 {
@@ -22,6 +24,7 @@ final class CostController
      */
     public function __construct(
         private readonly CostCalculationService $costSvc,
+        private readonly AnnualConsumptionService $annualSvc,
         private readonly bool $dynamicEnabled = true,
     ) {
     }
@@ -65,6 +68,38 @@ final class CostController
         [$year, $month] = $this->yearMonth($request);
 
         return JsonResponse::ok($this->costSvc->estimateMonthWater($year, $month));
+    }
+
+    /**
+     * Récapitulatif de consommation d'une année civile, toutes énergies (#41).
+     *
+     * Calcul PARESSEUX, appelé après le rendu du dashboard : une estimation
+     * électricité sur 365 jours déclenche le découpage tarifaire et, sous contrat
+     * dynamique, la résolution d'une série de prix quart-horaire sur l'année —
+     * trop lourd pour être exécuté à chaque chargement de page.
+     */
+    public function annualConsumption(Request $request): JsonResponse
+    {
+        return JsonResponse::ok($this->annualSvc->build($this->year($request)));
+    }
+
+    /**
+     * Année depuis la requête (défaut : année courante), validée.
+     *
+     * Défaut lu en UTC comme {@see yearMonth()}, pour la même raison (#21) : un
+     * appel sans paramètre doit retomber sur l'année que la page vient d'afficher.
+     */
+    private function year(Request $request): int
+    {
+        [$currentYear] = Dates::currentYearMonth();
+
+        $year = $request->queryInt('year', $currentYear);
+
+        if ($year < AnnualConsumptionService::MIN_YEAR || $year > AnnualConsumptionService::MAX_YEAR) {
+            throw new ValidationException('Invalid year');
+        }
+
+        return $year;
     }
 
     /**

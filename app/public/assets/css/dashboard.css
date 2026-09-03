@@ -368,6 +368,39 @@
   .async-note { font-family: var(--mono); font-size: .85rem; color: var(--muted); padding: 24px 0; }
   .async-note--error { color: var(--red); }
 
+  /* ── Récapitulatif annuel (#41) ─────────────────────────────────────────── */
+  /* `.stats-table` vit dans stats.css, que le dashboard ne charge pas : styles
+     propres, calqués visuellement sur `.daily-table` pour rester cohérent. */
+  .annual-wrap {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    /* Le tableau défile seul sur mobile : la page, elle, ne doit jamais partir
+       en scroll horizontal. */
+    overflow-x: auto;
+  }
+  .annual-table { width: 100%; border-collapse: collapse; font-size: .85rem; }
+  .annual-table th, .annual-table td { padding: 8px 16px; text-align: left; }
+  .annual-table thead th {
+    font-size: .72rem; font-weight: 700; letter-spacing: .1em; text-transform: uppercase;
+    color: var(--muted); border-bottom: 1px solid var(--border);
+  }
+  .annual-table .at-total, .annual-table .at-cost { text-align: right; font-family: var(--mono); white-space: nowrap; }
+  .annual-table thead .at-total, .annual-table thead .at-cost { font-family: var(--sans); }
+  .annual-table .at-item { color: var(--text); }
+  .annual-table .at-note { color: var(--muted); font-size: .75rem; margin-left: 6px; }
+  .annual-table .annual-group th {
+    font-size: .72rem; font-weight: 700; letter-spacing: .1em; text-transform: uppercase;
+    color: var(--muted); border-top: 1px solid var(--border); padding-top: 14px;
+  }
+  .annual-table tbody tr:first-child th { border-top: 0; padding-top: 10px; }
+  .annual-table .annual-subtotal td { color: var(--muted); padding-bottom: 12px; }
+  .annual-table .annual-subtotal .at-cost { color: var(--text); font-weight: 700; }
+  .annual-partial {
+    font-family: var(--mono); font-size: .78rem; color: var(--muted);
+    margin-bottom: 8px;
+  }
+
   /* ── Styles générés au runtime par dashboard.js, migrés en classes (#98) ─── */
   .t-muted { color: var(--muted); }
   .t-green { color: var(--green); }

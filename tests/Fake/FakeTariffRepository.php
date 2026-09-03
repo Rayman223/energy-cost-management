@@ -32,6 +32,19 @@ final class FakeTariffRepository implements TariffRepositoryInterface
     public array $gridsBetween = [];
 
     /**
+     * Grilles de findActiveGridsBetween() INDEXÉES PAR ÉNERGIE, pour les tests qui
+     * en couvrent plusieurs à la fois : `$grid` et `$gridsBetween` sont insensibles
+     * au type, donc une grille électricité y servirait aussi de grille gaz.
+     *
+     * Une clé absente (`'water' => []` non déclaré) rend une liste vide, ce qui
+     * simule une énergie sans tarif — le repli sur `$grid` ne s'applique plus dès
+     * que cette table est renseignée.
+     *
+     * @var array<string, list<TariffGrid>>
+     */
+    public array $gridsBetweenByType = [];
+
+    /**
      * Grilles parmi lesquelles findActiveGrid() choisit selon la DATE demandée
      * (première dont `isActiveOn()` répond vrai) ; vide → repli sur $grid, insensible
      * à la date. Permet de simuler une bascule fixe → dynamique dans l'historique.
@@ -64,6 +77,10 @@ final class FakeTariffRepository implements TariffRepositoryInterface
     /** @return list<TariffGrid> */
     public function findActiveGridsBetween(string $energyType, DateTimeImmutable $from, DateTimeImmutable $to): array
     {
+        if ($this->gridsBetweenByType !== []) {
+            return $this->gridsBetweenByType[$energyType] ?? [];
+        }
+
         if ($this->gridsBetween !== []) {
             return $this->gridsBetween;
         }
