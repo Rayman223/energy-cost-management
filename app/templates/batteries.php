@@ -27,6 +27,7 @@ use App\Domain\BatteryDischargeProfile;
  * @var list<string>                    $available
  * @var ?string                         $timezone
  * @var ?string                         $discordUrl
+ * @var ?string                         $donateUrl
  * @var ?string                         $adsenseClient
  */
 ?>
@@ -49,6 +50,7 @@ use App\Domain\BatteryDischargeProfile;
     'current'    => 'batteries',
     'isAdmin'    => $isAdmin ?? false,
     'discordUrl' => $discordUrl ?? null,
+    'donateUrl'  => $donateUrl ?? null,
     'available'  => $available,
     'timezone'   => $timezone ?? null,
 ]) ?>

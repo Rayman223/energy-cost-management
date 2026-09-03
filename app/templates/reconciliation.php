@@ -26,6 +26,7 @@ use App\Service\BillReconciliationService;
  * @var list<string>         $available
  * @var ?string              $timezone
  * @var ?string              $discordUrl
+ * @var ?string              $donateUrl
  * @var ?string              $adsenseClient
  */
 
@@ -56,6 +57,7 @@ $cur = $this->currencySymbol($currency);
     'current'    => 'reconciliation',
     'isAdmin'    => $isAdmin ?? false,
     'discordUrl' => $discordUrl ?? null,
+    'donateUrl'  => $donateUrl ?? null,
     'available'  => $available,
     'timezone'   => $timezone ?? null,
 ]) ?>

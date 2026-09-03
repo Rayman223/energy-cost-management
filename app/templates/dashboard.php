@@ -19,6 +19,7 @@
  * @var list<string>             $available
  * @var bool                     $isAdmin
  * @var ?string                  $discordUrl
+ * @var ?string                  $donateUrl
  * @var ?string                  $adsenseClient Identifiant éditeur AdSense (#185), null si publicité désactivée.
  */
 
@@ -81,6 +82,7 @@ $deltaBadge = function (?float $pct, bool $lowerIsBetter, bool $isNew = false): 
       'current'     => 'dashboard',
       'isAdmin'     => $isAdmin ?? false,
       'discordUrl'  => $discordUrl ?? null,
+      'donateUrl'   => $donateUrl ?? null,
       'available'   => $available,
       'timezone'    => $clockTimezone ?? null,
   ]) ?>

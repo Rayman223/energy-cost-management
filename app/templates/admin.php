@@ -9,6 +9,7 @@
  * @var int          $currentId
  * @var list<string> $available
  * @var ?string      $discordUrl
+ * @var ?string      $donateUrl
  * @var ?string      $adsenseClient Identifiant éditeur AdSense (#185), null si publicité désactivée.
  */
 $csrf = \App\Security\Csrf::field();
@@ -29,6 +30,7 @@ $csrf = \App\Security\Csrf::field();
       'current'     => 'admin',
       'isAdmin'     => true, // route réservée aux admins (admin.php)
       'discordUrl'  => $discordUrl ?? null,
+      'donateUrl'   => $donateUrl ?? null,
       'available'   => $available,
       'timezone'    => $timezone ?? null,
   ]) ?>

@@ -39,6 +39,7 @@ use App\Domain\TariffLineCatalog;
  * @var list<string>                                                         $supplierEnergyKinds  kinds grisés en dynamique
  * @var list<string>                                                         $spotFormulaKinds     kinds grisés en fixe
  * @var ?string                                                              $discordUrl
+ * @var ?string                                                              $donateUrl
  * @var ?string                                                              $adsenseClient Identifiant éditeur AdSense (#185)
  */
 
@@ -80,6 +81,7 @@ $energyLabels = [
     'current'     => 'tariffs',
     'isAdmin'     => $isAdmin ?? false,
     'discordUrl'  => $discordUrl ?? null,
+    'donateUrl'   => $donateUrl ?? null,
     'available'   => $available,
     'timezone'    => $timezone ?? null,
 ]) ?>
