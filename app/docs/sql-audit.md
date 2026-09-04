@@ -6,6 +6,12 @@ schéma ; les réécritures non vérifiables par exécution sont **reportées**.
 
 ## Couverture des index (schéma)
 
+> **Instantané daté.** Ce tableau reflète le schéma au moment de l'audit : les
+> tables `Data_*` sont l'ancien modèle mono-tenant, remplacé depuis par
+> `meter_readings` / `utility_readings`. Il n'est pas tenu à jour au fil des
+> migrations — seule la ligne `webhook_sync_state` en a été retirée, la table
+> ayant été supprimée avec l'intégration EnergyID (#53).
+
 | Table | Colonnes filtrées / triées / jointes | Index | Verdict |
 |---|---|---|---|
 | `Data_Dries` | `timestamp` (ranges, ORDER BY, JOIN) | `UNIQUE(timestamp)` | OK pour les ranges/tri ; **KO** pour les filtres `YEAR()/MONTH()/DATE()` (non-sargables) |
@@ -13,7 +19,6 @@ schéma ; les réécritures non vérifiables par exécution sont **reportées**.
 | `Data_gaz` / `Data_eau` | `reading_at` (ranges, ORDER BY) | `UNIQUE(reading_at)` **+ `INDEX(reading_at)` redondant** | sargable OK ; index simple **doublon** |
 | `tariff_grids` | `energy_type`, `valid_from` | `INDEX(energy_type, valid_from)` | OK |
 | `tariff_grid_lines` | `tariff_grid_id` (JOIN / IN) | index implicite de la FK | OK (N+1 déjà résolu par `fetchLinesForIds`) |
-| `webhook_sync_state` | `source_name` | `PRIMARY KEY` | OK |
 
 ## Corrigé dans cette PR (gains sûrs, sans risque non vérifiable)
 
