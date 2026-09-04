@@ -10,13 +10,11 @@ use App\Infrastructure\MeterTopology;
 use App\Repository\AdvanceScheduleRepository;
 use App\Repository\ApiTokenRepository;
 use App\Repository\BatteryRepository;
-use App\Repository\UserIntegrationRepository;
 use App\Repository\TariffRepository;
 use App\Repository\TariffTemplateRepository;
 use App\Repository\TariffTemplateUsageRepository;
 use App\Repository\UserRepository;
 use App\Repository\UtilityReadingRepository;
-use App\Repository\WebhookSyncStateRepository;
 use App\Service\AccountDataExporter;
 use App\Service\AccountEraser;
 use DateTimeImmutable;
@@ -40,9 +38,9 @@ final class AccountRgpdDbTest extends DatabaseTestCase
         foreach ([
             'meter_readings', 'meter_registers', 'meters', 'utility_readings',
             'battery_readings', 'batteries',
-            'tariff_grid_lines', 'tariff_grids', 'api_tokens', 'user_integrations',
+            'tariff_grid_lines', 'tariff_grids', 'api_tokens',
             'energy_advances',
-            'webhook_sync_state', 'tariff_template_usages', 'tariff_template_fields',
+            'tariff_template_usages', 'tariff_template_fields',
             'tariff_templates', 'user_profiles', 'users',
         ] as $table) {
             $this->pdo()->exec('DELETE FROM ' . $table);
@@ -63,8 +61,6 @@ final class AccountRgpdDbTest extends DatabaseTestCase
             ['key' => 'energy', 'amount' => 0.05, 'kind' => 'energy_flat', 'label' => null],
         ], 10.55);
         (new ApiTokenRepository($pdo))->create($this->userId, 'Agent');
-        (new UserIntegrationRepository($pdo))->enable($this->userId, 'energyid', ['device_id' => 'dev-u' . $this->userId]);
-        (new WebhookSyncStateRepository($pdo, $this->userId))->saveLastSentAt('gas-index', new DateTimeImmutable('2026-06-02 01:00:00'));
         (new AdvanceScheduleRepository($pdo, $this->userId))->insert(
             'electricity',
             120.0,
@@ -124,10 +120,6 @@ final class AccountRgpdDbTest extends DatabaseTestCase
         self::assertCount(1, $data['tariff_grids']);
         self::assertCount(1, $data['api_tokens']);
         self::assertArrayNotHasKey('token_hash', $data['api_tokens'][0]); // pas de secret
-        self::assertCount(1, $data['integrations']);
-        self::assertSame('energyid', $data['integrations'][0]['module_key']);
-        self::assertTrue((bool) $data['integrations'][0]['enabled']);
-        self::assertCount(1, $data['sync_state']);
         // Barèmes d'acomptes (#241) : données saisies par l'utilisateur, donc
         // exportables au même titre que ses grilles tarifaires.
         self::assertCount(1, $data['energy_advances']);
@@ -156,8 +148,6 @@ final class AccountRgpdDbTest extends DatabaseTestCase
             'utility_readings' => 'user_id',
             'tariff_grids' => 'user_id',
             'api_tokens' => 'user_id',
-            'user_integrations' => 'user_id',
-            'webhook_sync_state' => 'user_id',
             'energy_advances' => 'user_id',
             'batteries' => 'user_id',
         ] as $table => $col) {

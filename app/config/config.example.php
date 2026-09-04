@@ -12,25 +12,6 @@ return [
         'charset' => 'utf8mb4',
     ],
 
-    'energyid' => [
-        // Kill-switch global du module EnergyID (lu par cron_export_sync.php et
-        // par la page « Mon compte »). Opt-in explicite : absent ou false ⇒ module
-        // coupé, aucune carte connecteur sur /account et aucun push nocturne.
-        // Mettre à true pour l'activer.
-        'enabled'             => false,
-        'provisioning_key'    => 'change_me',
-        'provisioning_secret' => 'change_me',
-        'timeout'             => 15,
-        'device'              => [
-            'deviceId'       => 'manage-energy-costs-1',
-            'deviceName'     => 'Energy cost management Device',
-            'firmwareVersion'=> '2.0.0',
-            'ipAddress'      => '127.0.0.1',
-            'macAddress'     => '00:00:00:00:00:00',
-            'localDeviceUrl' => 'http://localhost',
-        ],
-    ],
-
     // Tarif dynamique (prix day-ahead du marché spot, ex. ENTSO-E).
     // Le token et l'URL d'API sont globaux au site ; la zone ci-dessous n'est que
     // le DÉFAUT — chaque utilisateur peut déclarer la sienne dans /account

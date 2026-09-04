@@ -104,9 +104,6 @@ final class BulkImportService
             }
             $report->addImported($inserted);
             $report->addDuplicate(count($indexes) - $inserted);
-            if ($inserted > 0) {
-                $report->noteImportedAt($ts);
-            }
         }
 
         return $report;
@@ -154,7 +151,6 @@ final class BulkImportService
             }
             if ($isNew) {
                 $report->addImported();
-                $report->noteImportedAt($ts);
             } else {
                 $report->addDuplicate();
             }
@@ -237,9 +233,6 @@ final class BulkImportService
 
             $report->addImported($written);
             $report->addDuplicate(count($indexes) - $written);
-            if ($written > 0) {
-                $report->noteImportedAt($ts);
-            }
         }
 
         return $report;

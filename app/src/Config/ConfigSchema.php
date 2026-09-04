@@ -16,16 +16,18 @@ namespace App\Config;
  *   - 'requiredKeys'  list   Clés dont l'absence rend la section incomplète (ERROR).
  *   - 'enabledDefault' bool  Défaut du drapeau `enabled` de CE nœud, utilisé pour
  *                            décider si ses sentinelles sont « actives » (le défaut
- *                            diffère par section : energyid=false, web_security=true).
+ *                            diffère par section : dynamic_prices=false, web_security=true).
  *   - 'children'      map    Clés connues → sous-nœuds (validation récursive +
  *                            détection de clé inconnue).
- *   - 'map'           bool   Clés libres (oidc.providers.*, energyid.device.*) :
+ *   - 'map'           bool   Clés libres (oidc.providers.*) :
  *                            pas de détection de clé inconnue, mais scan récursif
  *                            des sentinelles.
  *   - 'sentinel'      bool   Cette feuille scalaire doit être comparée aux sentinelles.
  *   - 'legacyFlatKeys' list  Clés supplémentaires tolérées (forme plate legacy OIDC).
- *   - 'moved'         string La clé a été déplacée (P3) : sa présence émet un WARNING
- *                            portant ce message d'instruction.
+ *   - 'moved'         string La clé a été déplacée (P3) ou supprimée (ex. `energyid`,
+ *                            #53) : sa présence émet un WARNING portant ce message
+ *                            d'instruction. Son absence, elle, est muette (le nœud
+ *                            n'a ni 'children' ni 'requiredKeys' : pas une section).
  *   - 'absentHint'    string Complément de message quand la section optionnelle manque.
  *
  * @phpstan-type Node array<string, mixed>
@@ -58,20 +60,14 @@ final class ConfigSchema
                     ],
                 ],
 
+                // Section supprimée avec l'intégration EnergyID (#53). Déclarée ici
+                // en `moved` — et non retirée du schéma — pour que les config.php
+                // existants reçoivent une consigne de nettoyage (WARNING remonté au
+                // runtime) au lieu d'un « clé inconnue (typo ?)» muet, qui laisserait
+                // les credentials partenaire traîner indéfiniment dans le fichier.
                 'energyid' => [
-                    // Module d'export (#70) : code dans app/src/Integration/EnergyId/.
-                    // Opt-in explicite (#233) : absent ⇒ off (ni carte /account, ni push
-                    // nocturne). Tout nouveau module d'export déclare sa section ici +
-                    // dans config.example.php.
-                    'enabledDefault' => false,
-                    'absentHint'     => 'push EnergyID indisponible',
-                    'children'       => [
-                        'enabled'             => [],
-                        'provisioning_key'    => ['sentinel' => true],
-                        'provisioning_secret' => ['sentinel' => true],
-                        'timeout'             => [],
-                        'device'              => ['map' => true],
-                    ],
+                    'moved' => "section supprimée avec l'intégration EnergyID (#53) — retirez-la de config.php, "
+                        . 'ainsi que provisioning_key / provisioning_secret devenus inutiles.',
                 ],
 
                 'dynamic_prices' => [

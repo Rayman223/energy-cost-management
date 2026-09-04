@@ -228,7 +228,6 @@ final class MeterEntryControllerTest extends TestCase
             new FakeMeterReadingRepository(),
             new FakeMeterReadingRepository(),
             $elec,
-            null,
             $policy,
         );
     }

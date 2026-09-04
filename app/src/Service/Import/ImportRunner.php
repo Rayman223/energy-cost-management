@@ -4,11 +4,9 @@ declare(strict_types=1);
 
 namespace App\Service\Import;
 
-use App\Domain\SyncStateKeys;
 use App\Repository\BatteryReadingRepository;
 use App\Repository\ElectricityReadingRepository;
 use App\Repository\UtilityReadingRepository;
-use App\Repository\WebhookSyncStateRepository;
 use App\Service\BulkImportService;
 use App\Service\ReadingGranularityPolicy;
 use PDO;
@@ -232,11 +230,6 @@ final class ImportRunner
                 $pdo->rollBack();
             } else {
                 $pdo->commit();
-                // Import possiblement antidaté : reculer le watermark de synchro
-                // EnergyID pour que les relevés antérieurs au dernier envoi soient
-                // repêchés (#130 B2). Hors transaction (déjà commit) et no-op si
-                // aucun flux jamais synchronisé (LEAST sur 0 ligne).
-                $this->rewindSyncWatermarks($pdo, $targetUserId, $energyType, $report);
             }
         } catch (\Throwable $e) {
             if ($pdo->inTransaction()) {
@@ -246,35 +239,6 @@ final class ImportRunner
         }
 
         return $report;
-    }
-
-    /**
-     * Recule le watermark de synchro des flux du type importé jusqu'au plus
-     * ancien relevé réellement inséré (moins 1 s — le filtre de sync relit en
-     * `>` strict). No-op si l'import n'a rien inséré.
-     */
-    private function rewindSyncWatermarks(PDO $pdo, int $targetUserId, string $energyType, ImportReport $report): void
-    {
-        $earliest = $report->earliestImportedAt();
-        if ($earliest === null) {
-            return;
-        }
-
-        $sources = match (strtolower($energyType)) {
-            'gas'   => [SyncStateKeys::GAS],
-            'water' => [SyncStateKeys::WATER],
-            // Les index de batterie (#26) ne sont poussés vers aucun connecteur
-            // d'export : reculer les watermarks élec ferait renvoyer à EnergyID des
-            // relevés de compteur que cet import n'a pas touchés.
-            'battery' => [],
-            default => SyncStateKeys::ELEC,
-        };
-
-        $syncState = new WebhookSyncStateRepository($pdo, $targetUserId);
-        $target    = $earliest->modify('-1 second');
-        foreach ($sources as $source) {
-            $syncState->rewindLastSentAt($source, $target);
-        }
     }
 
     /**

@@ -13,7 +13,7 @@ solaire) et les coûts mensuels sont chargés ensuite en **JS** via `api.php`.
 
 | État | Déclencheur | Rendu attendu |
 |------|-------------|---------------|
-| **Nominal** | BDD joignable, données présentes | Cartes consommation/production, deltas mensuels, estimation de coût, statut de synchro EnergyID (`d/m H:i`), historiques. |
+| **Nominal** | BDD joignable, données présentes | Cartes consommation/production, deltas mensuels, estimation de coût, historiques. |
 | **Erreur BDD** | Exception au bootstrap → `$dbError` | La page se charge quand même ; un bandeau d'erreur affiche `$dbError` ; les blocs dépendant de la BDD montrent les placeholders. |
 | **Données vides** | BDD OK mais relevés absents (`$deltas`, `$gasLatest`, `$waterLatest` nuls/false) | Helper `fmt()` affiche `—` (`<span class="nd">`) ; `fmtCost()` affiche `—` ; aucune valeur erronée. |
 | **Estimation indisponible** | `$cost['available'] === false` | Le bloc coût affiche la `reason` au lieu d'un montant. |

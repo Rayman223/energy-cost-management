@@ -10,7 +10,6 @@ use App\Domain\TariffCategory;
 use App\Domain\TariffTemplateCatalog;
 use App\I18n\Translator;
 use App\Infrastructure\MeterTopology;
-use App\Integration\ModuleRegistry;
 use App\Service\BillReconciliationService;
 use App\Service\Import\ImportMapping;
 use App\Support\LegalIdentity;
@@ -139,8 +138,7 @@ final class TemplateCatalogTest extends TestCase
     /**
      * Clés stockées dans un tableau puis traduites indirectement : `$features` de
      * welcome.php, `$titleKeys` et les listes de legal.php, la carte registre =>
-     * libellé de meter_readings.php, les lignes de statut construites par
-     * IntegrationStatus::line() dans app/src, les messages flash des routes.
+     * libellé de meter_readings.php, les messages flash des routes.
      *
      * Le filtre est le préfixe : seul un littéral dont le premier segment est un
      * préfixe réellement présent au catalogue est retenu, ce qui écarte formats de
@@ -229,14 +227,6 @@ final class TemplateCatalogTest extends TestCase
         }
         foreach (BillReconciliationService::SKIP_REASONS as $reason) {
             $keys[] = 'reconciliation.skipped.' . $reason;
-        }
-
-        // partials/integration-card.php — suffixes concaténés à `integration.<key>.`.
-        // Le registre s'instancie sans base ni configuration (parti pris documenté).
-        foreach (ModuleRegistry::all([]) as $module) {
-            foreach (['title', 'region', 'hint', 'on', 'disable', 'enable'] as $suffix) {
-                $keys[] = 'integration.' . $module->key() . '.' . $suffix;
-            }
         }
 
         return array_values(array_unique($keys));

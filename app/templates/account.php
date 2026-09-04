@@ -13,7 +13,6 @@ use App\Domain\User;
  * @var list<array{key:string,label:string}> $linkableProviders
  * @var array{country:?string,timezone:string,currency:string,bidding_zone:?string,supplier_markup_per_kwh:float,locale:string} $profile
  * @var list<array{id:int,name:string,prefix:string,scopes:string,last_used_at:?string,created_at:string,revoked_at:?string}> $tokens
- * @var list<array{key:string,enabled:bool,status:\App\Integration\IntegrationStatus}> $integrations
  * @var list<string> $available
  * @var \App\Service\Import\ImportReport|null $importReport
  * @var list<array{id:string,label:string}> $timezoneOptions
@@ -241,11 +240,6 @@ $csrf = \App\Security\Csrf::field();
     <p class="hint mt-12"><?= $this->te('account.tokens_usage') ?>
        <a href="<?= $this->url('api-guide') ?>"><?= $this->te('account.tokens_usage_link') ?></a></p>
   </div>
-
-  <!-- ── Connecteurs d'export (opt-in par module, ex. EnergyID) ─────────── -->
-  <?php foreach ($integrations as $integration): ?>
-    <?= $this->partial('integration-card', ['integration' => $integration, 'csrf' => $csrf]) ?>
-  <?php endforeach; ?>
 
   <!-- ── Import en masse (self-service : mes propres données) ───────────── -->
   <div class="card">

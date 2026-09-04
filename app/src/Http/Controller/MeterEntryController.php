@@ -4,13 +4,11 @@ declare(strict_types=1);
 
 namespace App\Http\Controller;
 
-use App\Domain\SyncStateKeys;
 use App\Http\JsonResponse;
 use App\Http\Request;
 use App\Http\ValidationException;
 use App\Repository\Contract\ElectricityIngestionInterface;
 use App\Repository\Contract\MeterReadingRepositoryInterface;
-use App\Repository\WebhookSyncStateRepository;
 use App\Service\ReadingGranularityPolicy;
 use App\Support\Dates;
 use DateTimeImmutable;
@@ -27,7 +25,6 @@ final class MeterEntryController
         private readonly MeterReadingRepositoryInterface $gasRepo,
         private readonly MeterReadingRepositoryInterface $waterRepo,
         private readonly ElectricityIngestionInterface $electricityRepo,
-        private readonly ?WebhookSyncStateRepository $syncState = null,
         // Plafonnement des index élec à un par registre et par créneau aligné
         // (issue #165) : la politique dit quel créneau s'applique au relevé, selon la
         // grille active à SA date (issue #10), et dans quel fuseau il se délimite.
@@ -38,12 +35,12 @@ final class MeterEntryController
 
     public function gas(Request $request): JsonResponse
     {
-        return $this->saveReading($request, $this->gasRepo, [SyncStateKeys::GAS]);
+        return $this->saveReading($request, $this->gasRepo);
     }
 
     public function water(Request $request): JsonResponse
     {
-        return $this->saveReading($request, $this->waterRepo, [SyncStateKeys::WATER]);
+        return $this->saveReading($request, $this->waterRepo);
     }
 
     public function electricity(Request $request): JsonResponse
@@ -98,14 +95,9 @@ final class MeterEntryController
             }
         }
 
+        // INSERT IGNORE : `inserted` compte les lignes réellement écrites (0 sur
+        // doublon déjà présent), valeur remontée telle quelle à l'appelant.
         $inserted = $this->electricityRepo->insertIndexes($ts, $indexes);
-
-        // Uniquement si au moins une ligne a réellement été insérée (INSERT IGNORE
-        // renvoie 0 sur doublon déjà présent/synchronisé) : cohérent avec gaz/eau,
-        // qui ne reculent le watermark qu'après un save() réussi.
-        if ($inserted > 0) {
-            $this->rewindSyncWatermarks(SyncStateKeys::ELEC, $ts);
-        }
 
         return JsonResponse::ok([
             'ok'       => true,
@@ -115,10 +107,7 @@ final class MeterEntryController
         ]);
     }
 
-    /**
-     * @param list<string> $sources Clés webhook_sync_state du/des flux concernés.
-     */
-    private function saveReading(Request $request, MeterReadingRepositoryInterface $repo, array $sources): JsonResponse
+    private function saveReading(Request $request, MeterReadingRepositoryInterface $repo): JsonResponse
     {
         $counterM3 = filter_var(self::normalizeDecimal($request->input('counter_m3')), FILTER_VALIDATE_FLOAT);
         // >= 0 (et non > 0) : un compteur neuf peut légitimement afficher 0 ; la
@@ -160,30 +149,7 @@ final class MeterEntryController
             throw $e;
         }
 
-        $this->rewindSyncWatermarks($sources, $ts);
-
         return JsonResponse::ok(['ok' => true, 'saved_at' => $ts->format('c'), 'counter_m3' => $counterM3]);
-    }
-
-    /**
-     * Après l'insertion d'un relevé (possiblement antidaté), recule le watermark
-     * de synchro EnergyID des flux concernés pour que le relevé soit repêché au
-     * prochain envoi (#130 B2). Le recul cible `reading_at moins 1 seconde` (le
-     * filtre de sync relit en `>` strict) ; `rewindLastSentAt` n'abaisse jamais
-     * à la hausse, donc un relevé récent (postérieur au watermark) est un no-op.
-     *
-     * @param list<string> $sources
-     */
-    private function rewindSyncWatermarks(array $sources, DateTimeImmutable $readingAt): void
-    {
-        if ($this->syncState === null) {
-            return;
-        }
-
-        $target = $readingAt->modify('-1 second');
-        foreach ($sources as $source) {
-            $this->syncState->rewindLastSentAt($source, $target);
-        }
     }
 
     /**

@@ -332,36 +332,4 @@ final class UtilityReadingRepository implements GasReadingRepositoryInterface, M
             $stmt->fetchAll(),
         );
     }
-
-    /**
-     * Relevés strictement après $fromExclusive et jusqu'à $toInclusive,
-     * au format {timestamp, value} attendu par le service de sync.
-     *
-     * @return array<int, array{timestamp: string, value: string}>
-     */
-    public function fetchReadingsSince(
-        ?DateTimeImmutable $fromExclusive,
-        DateTimeImmutable $toInclusive
-    ): array {
-        $sql    = 'SELECT reading_at AS timestamp, counter_m3 AS value
-                FROM utility_readings
-                WHERE user_id = :uid AND energy_type = :etype AND reading_at <= :to';
-        $params = [
-            'uid'   => $this->userId,
-            'etype' => $this->energyType,
-            'to'    => Dates::toDbString($toInclusive),
-        ];
-
-        if ($fromExclusive !== null) {
-            $sql           .= ' AND reading_at > :from';
-            $params['from'] = Dates::toDbString($fromExclusive);
-        }
-
-        $sql .= ' ORDER BY reading_at ASC';
-
-        $stmt = $this->pdo->prepare($sql);
-        $stmt->execute($params);
-
-        return $stmt->fetchAll();
-    }
 }
