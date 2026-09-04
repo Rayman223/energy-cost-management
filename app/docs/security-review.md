@@ -55,8 +55,8 @@ suivi · `⬜` non applicable en l'état.
   (`AccountEraser`), depuis la page compte.
 - ✅ **Pages légales** (CGU/confidentialité) traduites + consentement à
   l'inscription.
-- ✅ **Minimisation** : EnergyID **opt-in** par utilisateur (BE/NL), désactivé
-  par défaut.
+- ✅ **Minimisation** : aucune transmission de données personnelles à un tiers
+  (l'intégration EnergyID a été retirée, #53).
 
 ## Secrets & déploiement
 - ✅ **Secrets hors dépôt** : `app/config/config.php` (`.gitignore`), conservé au

@@ -5,16 +5,3 @@ parameters:
 			identifier: isset.offset
 			count: 1
 			path: app/src/Security/WebAccessGuard.php
-
-		-
-			message: '#^Parameter &\$session by\-ref type of method App\\Integration\\EnergyId\\DailyLegacyWebhookSyncService\:\:postWithRetry\(\) expects array\{webhookUrl\: string, headers\: array\<string, string\>, uploadInterval\: int\}, non\-empty\-array\<string, mixed\> given\.$#'
-			identifier: parameterByRef.type
-			count: 1
-			path: app/src/Integration/EnergyId/DailyLegacyWebhookSyncService.php
-
-		-
-			message: '#^Variable \$earliest on left side of \?\? always exists and is not nullable\.$#'
-			identifier: nullCoalesce.variable
-			count: 1
-			path: app/src/Integration/EnergyId/DailyLegacyWebhookSyncService.php
-

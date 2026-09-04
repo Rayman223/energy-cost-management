@@ -9,8 +9,8 @@ use PDO;
 /**
  * Effacement RGPD (droit à l'effacement) : supprime le compte et TOUTES ses
  * données, en transaction. La plupart des tables cascadent via FK ; celles sans
- * FK vers users (tariff_grids personnelles, webhook_sync_state) sont supprimées
- * explicitement avant le compte.
+ * FK vers users (tariff_grids personnelles) sont supprimées explicitement avant
+ * le compte.
  *
  * Exception « templates » : les templates de tarifs rendus PUBLICS sont
  * CONSERVÉS (ils servent aux autres comptes) mais ANONYMISÉS (user_id → NULL,
@@ -30,7 +30,6 @@ final class AccountEraser
         try {
             // Sans FK cascade vers users → suppression explicite.
             $this->delete('DELETE FROM tariff_grids WHERE user_id = :uid', $userId);
-            $this->delete('DELETE FROM webhook_sync_state WHERE user_id = :uid', $userId);
 
             // Templates : les publics sont conservés mais anonymisés (user_id → NULL,
             // plus de lien vers le compte) ; les privés sont supprimés (leurs
@@ -39,8 +38,7 @@ final class AccountEraser
             $this->delete("DELETE FROM tariff_templates WHERE user_id = :uid AND visibility = 'private'", $userId);
 
             // Cascade : user_profiles, meters→registers→readings, utility_readings,
-            // batteries→battery_readings (#26), api_tokens, user_integrations,
-            // tariff_template_usages
+            // batteries→battery_readings (#26), api_tokens, tariff_template_usages
             // (les usages de CET utilisateur ; ceux d'autres comptes sur un template public restent).
             $this->delete('DELETE FROM users WHERE id = :uid', $userId);
 

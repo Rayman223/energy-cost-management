@@ -96,15 +96,6 @@ CREATE TABLE IF NOT EXISTS dynamic_prices (
     INDEX idx_dynamic_prices_period (period_start)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
--- ── État de synchronisation webhook EnergyID (scopé par utilisateur) ─────
-CREATE TABLE IF NOT EXISTS webhook_sync_state (
-    user_id      BIGINT UNSIGNED NOT NULL DEFAULT 0,
-    source_name  VARCHAR(120) NOT NULL COMMENT 'prelevement-jour | prelevement-nuit | injection-jour | injection-nuit | production-solaire | gas-index | water-index',
-    last_sent_at DATETIME NULL,
-    updated_at   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    PRIMARY KEY (user_id, source_name)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-
 -- ── Comptes utilisateurs (identité OpenID Connect, sans mot de passe) ────
 CREATE TABLE IF NOT EXISTS users (
     id            BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
@@ -199,22 +190,6 @@ CREATE TABLE IF NOT EXISTS utility_readings (
     created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     UNIQUE KEY uq_utility_readings (user_id, energy_type, reading_at),
     CONSTRAINT fk_utility_readings_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-
--- ── Intégrations d'export par utilisateur (opt-in, générique #70) ────────
--- Système de modules « connecteurs d'export » : chaque module (energyid, ...)
--- range son opt-in et ses réglages propres dans `settings` (JSON). Remplace
--- l'ancienne table energyid_integrations (gelée par #70, supprimée par #166) :
--- device_id/claimed_at deviennent des clés du JSON.
-CREATE TABLE IF NOT EXISTS user_integrations (
-    user_id    BIGINT UNSIGNED NOT NULL,
-    module_key VARCHAR(60) NOT NULL COMMENT 'Clé du module (energyid, ...)',
-    enabled    TINYINT(1) NOT NULL DEFAULT 0,
-    settings   JSON NOT NULL COMMENT 'Réglages propres au module (device_id, claimed_at, ...)',
-    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    PRIMARY KEY (user_id, module_key),
-    CONSTRAINT fk_user_integrations_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- ── Jetons API (authentification machine des agents) ─────────────────────

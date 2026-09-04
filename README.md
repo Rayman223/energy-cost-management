@@ -40,7 +40,6 @@ dev tooling and the OIDC library only.
 - [Internationalization](#internationalization)
 - [Tests & quality](#tests--quality)
 - [Security](#security)
-- [EnergyID](#energyid)
 - [Documentation](#documentation)
 - [Contributing](#contributing)
 - [License](#license)
@@ -63,8 +62,8 @@ dev tooling and the OIDC library only.
   your own data.
 - **Full internationalization** — `fr / en / nl / de` (extensible), language
   switcher, localized dates/numbers/currencies. (Help needed for translations)
-- **Self-service & GDPR** — account page, EnergyID **opt-in** (BE/NL), JSON export
-  and cascading account deletion.
+- **Self-service & GDPR** — account page, JSON export and cascading account
+  deletion.
 - **Administration** (`admin.php`, admins only) — manage members (role, status) and the shared tariff catalog.
 - **Dashboard** — live consumption, monthly deltas, cost estimates, 30/60/90-day
   history, dynamic vs. regulated price comparison.
@@ -78,8 +77,6 @@ dev tooling and the OIDC library only.
   consumption per country, plus a personal comparison when signed in. Aggregates
   are k-anonymised (a country appears only from 5 contributing households) and
   every member can opt out from their account page.
-- **EnergyID sync** (optional, BE/NL) — daily push of readings via the V2
-  provisioning protocol.
 
 ---
 
@@ -176,11 +173,10 @@ return [
     // "Support the project" link shown in the page header. Empty = link hidden.
     'donate'       => [ 'url' => '' ],                           // e.g. https://buymeacoffee.com/xxxxxxx
 
-    // Optional: day-ahead spot prices (ENTSO-E), EnergyID sync, local meter agent.
+    // Optional: day-ahead spot prices (ENTSO-E), local meter agent.
     // VAT and supplier markup are NOT configured here (see the dynamic-price notes below).
     'dynamic_prices' => [ 'enabled' => true, 'provider' => 'entsoe', 'security_token' => 'change_me',
                           'bidding_zone' => '10YBE----------2' ],
-    'energyid'     => [ 'enabled' => true, 'provisioning_key' => 'change_me', 'provisioning_secret' => 'change_me' ],
 
     // Storage timezone: keep this at UTC. Per-user display timezones live in
     // `user_profiles.timezone`; `config_check.php` warns on any other value.
@@ -207,7 +203,6 @@ The full schema is in `app/sql/schema.sql`; incremental changes live in
 | `tariff_grids` / `tariff_grid_lines` | tariff catalog (`user_id NULL` = shared community grid, set = personal override) |
 | `dynamic_prices` | day-ahead spot prices per bidding zone |
 | `api_tokens` | per-user ingestion tokens (hashed, rate-limited, revocable) |
-| `user_integrations` / `webhook_sync_state` | per-user export-connector opt-in (EnergyID, …) and sync state |
 | `batteries` / `battery_readings` | home batteries: hardware, investment, calculation assumptions, and cumulative charge/discharge indexes |
 | `schema_migrations` | applied migration versions |
 
@@ -263,9 +258,6 @@ php app/scripts/gas_cost_audit.php --from=2026-01-01 --to=2026-07-01 --user=2 --
 ## Cron jobs
 
 ```cron
-# Daily export sync (01:15) — iterates over export modules & opted-in users
-# (EnergyID, …). `cron_daily_webhook.php` remains a deprecated alias.
-15 1 * * * /usr/bin/php /path/app/scripts/cron_export_sync.php      >> /var/log/energy-daily.log 2>&1
 # Day-ahead dynamic prices (13:30 after market publication, 18:30 catch-up).
 # Full setup — token, 15-min prices, Unraid script: app/docs/entsoe-dynamic-prices.md
 30 13,18 * * * /usr/bin/php /path/app/scripts/cron_dynamic_prices.php >> /var/log/energy-dynamic.log 2>&1
@@ -316,7 +308,7 @@ electricity) applies from its date onwards instead of rewriting the past.
 | `/advances` | Advance payment schedules and their balance |
 | `/batteries` | Home battery fleet: hardware, investment and calculation assumptions |
 | `/stats` | Community statistics — average price and consumption per country, k-anonymised at 5 households. **Public**; adds a personal comparison when signed in |
-| `/account` | Profile, API tokens, EnergyID opt-in, statistics opt-out, GDPR export/delete, self-service import |
+| `/account` | Profile, API tokens, statistics opt-out, GDPR export/delete, self-service import |
 | `/admin` | Admin: members (role/status) + import on behalf of a user |
 | `/api-guide` | Ingestion API guide (tokens, examples) |
 | `/login`, `/auth/login`, `/auth/logout` | Authentication (Basic / OIDC) |
@@ -376,17 +368,6 @@ Full posture and follow-ups (CSP, tokens, GDPR): [`app/docs/security-review.md`]
 
 Found a vulnerability? Please **do not open a public issue** — report it privately,
 see [`SECURITY.md`](SECURITY.md).
-
----
-
-## EnergyID
-
-Optional per-user integration (BE/NL). When enabled, readings are pushed nightly to
-[EnergyID](https://app.energyid.eu/) via the V2 provisioning protocol
-(`POST /hello` device provisioning, then the first daily value of each stream).
-Credentials live under `energyid` in `config.php`; users opt in from their account
-page. The module is **off by default**: without `energyid.enabled => true` the
-connector card is hidden from the account page and the nightly push is skipped.
 
 ---
 

@@ -137,8 +137,8 @@ Transformation du site mono-utilisateur belge en plateforme **multi-tenant**,
   (`?lang` > profil > cookie > Accept-Language > défaut), catalogues
   `fr/en/nl/de` extensibles, formatage localisé (`Formatter`, ext-intl optionnel
   avec repli).
-- **Self-service & RGPD** (`account.php`) : profil, jetons, EnergyID **opt-in**
-  (BE/NL), export JSON et suppression de compte en cascade.
+- **Self-service & RGPD** (`account.php`) : profil, jetons, export JSON et
+  suppression de compte en cascade.
 - **Administration** (`admin.php`, réservé aux `role=admin`) : gestion des
   membres (rôle `user`/`admin`, statut `active`/`blocked`). Un blocage prend
   effet **dès la requête suivante** (`AuthGuard` revérifie le statut, pas
@@ -154,4 +154,3 @@ Transformation du site mono-utilisateur belge en plateforme **multi-tenant**,
 - [security-review.md](security-review.md) — checklist de revue sécurité (P7).
 - [sql-audit.md](sql-audit.md) — audit SQL & optimisation.
 - [page-states.md](page-states.md) — états de référence des pages (anti-régression).
-- [energyid-v2-model.md](energyid-v2-model.md) — protocole EnergyID V2.

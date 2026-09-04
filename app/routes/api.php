@@ -23,7 +23,6 @@ use App\Repository\ElectricityReadingRepository;
 use App\Repository\TariffRepository;
 use App\Repository\UserRepository;
 use App\Repository\UtilityReadingRepository;
-use App\Repository\WebhookSyncStateRepository;
 use App\Security\ApiToken;
 use App\Security\AuthGuard;
 use App\Security\UserContext;
@@ -114,7 +113,6 @@ try {
     $elecRepo   = new ElectricityReadingRepository($pdo, $userId, $profile->timezone ?? 'UTC');
     $gasRepo    = new UtilityReadingRepository($pdo, $userId, 'gas');
     $waterRepo  = new UtilityReadingRepository($pdo, $userId, 'water');
-    $syncState  = new WebhookSyncStateRepository($pdo, $userId);
     $tariffRepo = new TariffRepository($pdo, $userId, $isAdmin);
     $dynPriceRepo = new DynamicPriceRepository($pdo, $zone);
     $costSvc    = new CostCalculationService(
@@ -149,7 +147,7 @@ try {
 $readings = new ReadingsController($elecRepo, $gasRepo, $waterRepo);
 $cost     = new CostController($costSvc, new AnnualConsumptionService($costSvc), DynamicPricing::isEnabled($config));
 $tariffs  = new TariffController($tariffRepo);
-$entries  = new MeterEntryController($gasRepo, $waterRepo, $elecRepo, $syncState, $elecThrottle);
+$entries  = new MeterEntryController($gasRepo, $waterRepo, $elecRepo, $elecThrottle);
 $deletion = new ReadingDeletionController($gasRepo, $waterRepo, $elecRepo);
 $ingest   = new IngestController($elecRepo, $gasRepo, $waterRepo, $elecThrottle);
 // Batteries (#26) : le repository d'index est scopé sur UNE batterie, connue

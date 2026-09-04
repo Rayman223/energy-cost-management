@@ -95,9 +95,9 @@ final class ElectricityReadingRepository implements LegacyDailyRepositoryInterfa
      * @param string $timezone Fuseau IANA de l'utilisateur (user_profiles.timezone).
      *        Sert à délimiter les « jours locaux » des lectures dashboard
      *        (index du jour, séries journalières). Défaut 'UTC' : les chemins
-     *        d'ingestion (import, EnergyId), insensibles au fuseau, gardent le
+     *        d'ingestion (import, API), insensibles au fuseau, gardent le
      *        comportement historique. Cf. {@see self::latestReadingToday()} et
-     *        {@see self::dailyFirstValuesSince()}.
+     *        {@see self::dailyFirstValuesByRegisterSince()}.
      */
     public function __construct(
         private readonly PDO $pdo,
@@ -1128,46 +1128,6 @@ final class ElectricityReadingRepository implements LegacyDailyRepositoryInterfa
         }
 
         return $rows;
-    }
-
-    // -------------------------------------------------------------------------
-    // Webhook quotidien : premières valeurs du jour par registre
-    // -------------------------------------------------------------------------
-
-    /** @return array<int,array{timestamp:string,value:string}> */
-    public function fetchDailyFirstValues(
-        string $registerKey,
-        ?DateTimeImmutable $fromExclusive,
-        DateTimeImmutable $toInclusive
-    ): array {
-        $rid = $this->registerId($registerKey);
-        if ($rid === null) {
-            return [];
-        }
-
-        $boundsWhere = 'register_id = :rid AND reading_at <= :to';
-        $params      = ['rid' => $rid, 'to' => Dates::toDbString($toInclusive)];
-
-        if ($fromExclusive !== null) {
-            $boundsWhere       .= ' AND DATE(reading_at) > :from_day';
-            $params['from_day'] = $fromExclusive->format('Y-m-d');
-        }
-
-        $sql = 'SELECT r.reading_at AS timestamp, r.index_value AS value
-                FROM meter_readings r
-                INNER JOIN (
-                    SELECT MIN(reading_at) AS min_at
-                    FROM meter_readings
-                    WHERE ' . $boundsWhere . '
-                    GROUP BY DATE(reading_at)
-                ) f ON f.min_at = r.reading_at
-                WHERE r.register_id = :rid2
-                ORDER BY r.reading_at ASC';
-
-        $stmt = $this->pdo->prepare($sql);
-        $stmt->execute($params + ['rid2' => $rid]);
-
-        return $stmt->fetchAll();
     }
 
     // -------------------------------------------------------------------------

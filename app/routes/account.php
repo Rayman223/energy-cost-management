@@ -3,8 +3,8 @@
 declare(strict_types=1);
 
 /**
- * Page « Mon compte » (self-service) : profil, jetons API, connecteurs d'export
- * (opt-in par module, ex. EnergyID), et RGPD (export + suppression). Session uniquement.
+ * Page « Mon compte » (self-service) : profil, jetons API, et RGPD (export +
+ * suppression). Session uniquement.
  */
 
 use App\Domain\EuropeanCountries;
@@ -15,12 +15,10 @@ use App\Http\SecurityHeaders;
 use App\Http\UploadLimits;
 use App\I18n\Locale;
 use App\Infrastructure\Database;
-use App\Integration\ModuleRegistry;
 use App\Repository\ApiTokenRepository;
 use App\Repository\BatteryRepository;
 use App\Repository\TariffRepository;
 use App\Repository\UserIdentityRepository;
-use App\Repository\UserIntegrationRepository;
 use App\Repository\UserRepository;
 use App\Security\AuthGuard;
 use App\Security\Csrf;
@@ -59,10 +57,9 @@ $db     = new Database($config['database']);
 $pdo    = $db->pdo();
 $userId = UserContext::currentWebUserId($pdo, $config);
 
-$users           = new UserRepository($pdo);
-$tokensRepo      = new ApiTokenRepository($pdo);
-$integrationRepo = new UserIntegrationRepository($pdo);
-$identityRepo    = new UserIdentityRepository($pdo);
+$users        = new UserRepository($pdo);
+$tokensRepo   = new ApiTokenRepository($pdo);
+$identityRepo = new UserIdentityRepository($pdo);
 
 // Locale = celle du profil (surchargée par ?lang) → View configurée.
 $profileForLocale = $users->getProfile($userId);
@@ -256,22 +253,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             // rendue plus bas n'afficherait le badge « primaire » sur aucune ligne.
             $user    = $users->findById($userId);
             $success = $view->t('account.identity_unlinked');
-        } elseif ($action === 'integration_enable' || $action === 'integration_disable') {
-            $moduleKey = (string) ($_POST['module_key'] ?? '');
-            $module    = ModuleRegistry::find($moduleKey, $config);
-            // Un module coupé en config n'a pas de carte affichée (#233) : son
-            // action est refusée aussi côté serveur, pour qu'un POST forgé ne
-            // puisse pas basculer l'opt-in d'un connecteur inactif.
-            if ($module === null || !$module->isGloballyEnabled()) {
-                throw new \RuntimeException($view->t('account.integration_unknown'));
-            }
-            if ($action === 'integration_enable') {
-                $integrationRepo->enable($userId, $moduleKey, $module->defaultSettings($userId));
-                $success = $view->t('integration.' . $moduleKey . '.enabled_msg');
-            } else {
-                $integrationRepo->disable($userId, $moduleKey);
-                $success = $view->t('integration.' . $moduleKey . '.disabled_msg');
-            }
         } elseif ($action === 'import') {
             // Import self-service : la cible est TOUJOURS l'utilisateur courant
             // (aucun champ « utilisateur cible » — l'import ne concerne que soi).
@@ -361,19 +342,6 @@ foreach ($providerLabels as $pKey => $label) {
 $profile  = $users->getProfile($userId) ?? UserProfile::defaults();
 $tokens   = $tokensRepo->listForUser($userId);
 
-// Connecteurs d'export (opt-in) : une carte par module actif en config. Un
-// module coupé (`<key>.enabled` absent ou false) ne rend aucune carte (#233) ;
-// l'opt-in déjà enregistré en base est conservé pour sa réactivation.
-$integrations = [];
-foreach (ModuleRegistry::enabled($config) as $module) {
-    $row = $integrationRepo->get($userId, $module->key());
-    $integrations[] = [
-        'key'     => $module->key(),
-        'enabled' => $row !== null && $row['enabled'],
-        'status'  => $module->statusFor($userId, $row),
-    ];
-}
-
 // Garantit que le fuseau courant du profil reste sélectionnable même s'il n'est
 // plus listé par la timezone database installée (sinon le <select> retomberait
 // silencieusement sur la 1re option au prochain enregistrement).
@@ -397,7 +365,6 @@ echo $view->render('account', [
     'linkableProviders' => $linkableProviders,
     'profile'    => $profile,
     'tokens'     => $tokens,
-    'integrations' => $integrations,
     'available'  => Locale::available($config),
     'importReport' => $importReport,
     // Parc de batteries (#26) : un import d'index vise UNE batterie, choisie dans

@@ -16,10 +16,10 @@ namespace App\Config;
  *   - 'requiredKeys'  list   Clés dont l'absence rend la section incomplète (ERROR).
  *   - 'enabledDefault' bool  Défaut du drapeau `enabled` de CE nœud, utilisé pour
  *                            décider si ses sentinelles sont « actives » (le défaut
- *                            diffère par section : energyid=false, web_security=true).
+ *                            diffère par section : dynamic_prices=false, web_security=true).
  *   - 'children'      map    Clés connues → sous-nœuds (validation récursive +
  *                            détection de clé inconnue).
- *   - 'map'           bool   Clés libres (oidc.providers.*, energyid.device.*) :
+ *   - 'map'           bool   Clés libres (oidc.providers.*) :
  *                            pas de détection de clé inconnue, mais scan récursif
  *                            des sentinelles.
  *   - 'sentinel'      bool   Cette feuille scalaire doit être comparée aux sentinelles.
@@ -55,22 +55,6 @@ final class ConfigSchema
                         'user'     => [],
                         'password' => ['sentinel' => true],
                         'charset'  => [],
-                    ],
-                ],
-
-                'energyid' => [
-                    // Module d'export (#70) : code dans app/src/Integration/EnergyId/.
-                    // Opt-in explicite (#233) : absent ⇒ off (ni carte /account, ni push
-                    // nocturne). Tout nouveau module d'export déclare sa section ici +
-                    // dans config.example.php.
-                    'enabledDefault' => false,
-                    'absentHint'     => 'push EnergyID indisponible',
-                    'children'       => [
-                        'enabled'             => [],
-                        'provisioning_key'    => ['sentinel' => true],
-                        'provisioning_secret' => ['sentinel' => true],
-                        'timeout'             => [],
-                        'device'              => ['map' => true],
                     ],
                 ],
 
