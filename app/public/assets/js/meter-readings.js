@@ -26,9 +26,28 @@ function tr(key, fallback, params) {
 // silencieusement en `null` vers l'API. Partagé par les trois énergies.
 const isValidIndex = (v) => Number.isFinite(v) && v >= 0;
 
+// Chaque énergie a deux zones de retour — une sous le formulaire de saisie
+// (`<prefix>-feedback`), une sous le tableau d'historique
+// (`<prefix>-del-feedback`) — mais elles forment un seul canal : écrire dans
+// l'une efface l'autre. Sinon le message de l'action précédente survit à côté du
+// résultat de la nouvelle et se lit comme le sien — « ✓ Supprimé. » restait
+// affiché sous le tableau pendant que l'ajout suivant confirmait sous le bouton
+// (#58, visible surtout sur la batterie : le plafond d'un relevé par jour oblige
+// à supprimer puis ré-ajouter pour corriger la valeur du jour).
+function twinFeedbackId(id) {
+  return id.endsWith('-del-feedback')
+    ? id.replace('-del-feedback', '-feedback')
+    : id.replace('-feedback', '-del-feedback');
+}
+
 function setFeedback(id, text, cls = '') {
   const feedback = document.getElementById(id);
   if (!feedback) return;
+  const twin = document.getElementById(twinFeedbackId(id));
+  if (twin) {
+    twin.textContent = '';
+    twin.className = 'form-feedback';
+  }
   feedback.textContent = text;
   feedback.className = `form-feedback ${cls}`.trim();
 }
