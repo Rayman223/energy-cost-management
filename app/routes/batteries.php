@@ -8,6 +8,7 @@ use App\I18n\Locale;
 use App\Infrastructure\Database;
 use App\Repository\BatteryReadingRepository;
 use App\Repository\BatteryRepository;
+use App\Repository\Exception\LimitReachedException;
 use App\Repository\ElectricityReadingRepository;
 use App\Repository\TariffRepository;
 use App\Repository\UserRepository;
@@ -20,6 +21,7 @@ use App\Support\Adsense;
 use App\Support\Dates;
 use App\Support\DiscordLink;
 use App\Support\DonateLink;
+use App\Support\Limits;
 use App\Support\LocaleContext;
 
 // Bootstrap isolé : une configuration injoignable (ex. config.php absent) dégrade
@@ -50,7 +52,10 @@ $view    = LocaleContext::viewFor($config, $users, $userId, $profile?->locale, _
 $error   = null;
 $success = null;
 
-$batteryRepo = new BatteryRepository($pdo, $userId);
+// Plafond anti-abus partagé avec les compteurs (#55) : une batterie pose le même
+// problème d'exploitation. Passé explicitement plutôt que laissé au défaut du
+// repository, pour que le réglage de config.php ait réellement effet ici.
+$batteryRepo = new BatteryRepository($pdo, $userId, Limits::metersPerEnergy($config));
 
 /**
  * Nombre décimal saisi. `$required` distingue le champ obligatoire (capacité) du
@@ -232,6 +237,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $batteryRepo->delete($id);
             $success = $view->t('battery.deleted');
         }
+    } catch (LimitReachedException $e) {
+        // Le repository porte le refus, la route porte la phrase : lui seul connaît
+        // la langue du lecteur. Sans ce catch, le message brut de l'exception —
+        // en anglais — s'afficherait tel quel.
+        $error = $view->t('battery.limit_reached', ['limit' => $e->limit]);
     } catch (\Throwable $e) {
         $error = $e->getMessage();
     }

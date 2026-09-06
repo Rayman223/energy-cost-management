@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Infrastructure;
 
+use App\Domain\Meter;
 use InvalidArgumentException;
 use PDO;
 
@@ -23,8 +24,15 @@ final class MeterTopology
     /** Registres électricité connus (jusqu'à 5 index par compteur). */
     public const ELECTRICITY_REGISTERS = ['import_t1', 'import_t2', 'export_t1', 'export_t2', 'production'];
 
-    /** Énergies portées par la table `meters` (miroir de l'ENUM energy_type). */
-    public const ENERGIES = ['electricity', 'gas', 'water'];
+    /**
+     * Énergies portées par la table `meters`. Alias de {@see Meter::ENERGIES},
+     * qui est la source unique depuis #55 — la liste avait déjà trois copies
+     * dans le dépôt côté registres, ce n'était pas la peine d'en créer une
+     * quatrième côté énergies.
+     *
+     * @var list<string>
+     */
+    public const ENERGIES = Meter::ENERGIES;
 
     public function __construct(private readonly PDO $pdo)
     {

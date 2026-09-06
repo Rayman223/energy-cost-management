@@ -7,6 +7,7 @@ namespace Tests\Integration;
 use App\Domain\Battery;
 use App\Domain\BatteryDischargeProfile;
 use App\Repository\BatteryRepository;
+use App\Repository\Exception\LimitReachedException;
 use App\Repository\UserRepository;
 use DateTimeImmutable;
 use DateTimeZone;
@@ -205,5 +206,34 @@ final class BatteryRepositoryDbTest extends DatabaseTestCase
         $repo->delete($id);
 
         self::assertSame(0, (int) $this->pdo()->query('SELECT COUNT(*) FROM battery_readings')->fetchColumn());
+    }
+
+    /**
+     * Plafond anti-abus (#55), partagé avec les compteurs. Le refus doit être une
+     * exception portant le chiffre — jamais un `return 0` silencieux qui ferait
+     * afficher « ✓ enregistré » sans rien écrire.
+     */
+    public function testFleetIsCappedAndTheRefusalCarriesTheLimit(): void
+    {
+        $repo = new BatteryRepository($this->pdo(), $this->userId, 2);
+        $repo->insert($this->draft());
+        $repo->insert($this->draft(brand: 'Sonnen'));
+
+        try {
+            $repo->insert($this->draft(brand: 'Tesla'));
+            self::fail('La troisième batterie aurait dû être refusée.');
+        } catch (LimitReachedException $e) {
+            self::assertSame(2, $e->limit);
+            // Pas d'énergie : une batterie n'en porte aucune, contrairement à un
+            // compteur.
+            self::assertNull($e->energyType);
+        }
+
+        self::assertCount(2, $repo->listAll());
+
+        // Le plafond se compte par utilisateur : le parc du voisin n'entre pas
+        // dans le calcul.
+        (new BatteryRepository($this->pdo(), $this->otherUserId, 2))->insert($this->draft());
+        self::assertCount(1, (new BatteryRepository($this->pdo(), $this->otherUserId))->listAll());
     }
 }

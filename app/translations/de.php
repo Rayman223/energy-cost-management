@@ -947,4 +947,48 @@ return [
     'import.battery_target'                        => 'Zielbatterie',
     'import.reg_charge'                            => 'Eingangszählerstand (Laden)',
     'import.reg_discharge'                         => 'Ausgangszählerstand (Entladen)',
+
+    // ── Zählerpark (#55) ────────────────────────────────────────────────────
+    // `meters.*` und nicht `meter.*`: Letzteres gehört bereits zur Seite für die
+    // ERFASSUNG der Zählerstände. Zwei benachbarte Seiten, zwei getrennte
+    // Schlüsselräume.
+    'nav.meters'                                   => 'Zähler',
+    'meters.title'                                 => 'Meine Zähler',
+    'meters.subtitle'                              => 'Der Park, den Sie ablesen',
+    'meters.intro'                                 => 'Erfassen Sie hier jeden Zähler Ihrer Anlage. Sie können mehrere pro Energieart haben — ein Haus und eine Werkstatt, oder einen im Laufe des Jahres ausgetauschten Zähler. Die Auswertungen addieren alle Zähler derselben Energieart.',
+    'meters.next_step'                             => 'Sobald Ihre Zähler erfasst sind, tragen Sie deren Stände auf der Seite « Zählerstände erfassen » ein.',
+    'meters.fleet_title'                           => 'Erfasste Zähler',
+    'meters.add_title'                             => 'Zähler hinzufügen',
+    'meters.edit_title'                            => 'Zähler umbenennen',
+    // Bezeichnung für einen Zähler ohne eigenen Namen. Bei der Anzeige
+    // abgeleitet, also in der Sprache des Lesers statt fest in der Datenbank.
+    'meters.default_label.electricity'             => 'Stromzähler',
+    'meters.default_label.gas'                     => 'Gaszähler',
+    'meters.default_label.water'                   => 'Wasserzähler',
+    'meters.energy.electricity'                    => 'Strom',
+    'meters.energy.gas'                            => 'Gas',
+    'meters.energy.water'                          => 'Wasser',
+    'meters.col_meter'                             => 'Zähler',
+    'meters.col_energy'                            => 'Energie',
+    'meters.col_readings'                          => 'Zählerstände',
+    'meters.unnamed_hint'                          => 'Ohne Namen — vergeben Sie einen, um ihn von den anderen zu unterscheiden.',
+    'meters.closed_on'                             => 'geschlossen am {date}',
+    'meters.energy_field'                          => 'Energie',
+    'meters.energy_frozen'                         => 'Die Energieart lässt sich nicht mehr ändern: Sie bestimmt, woher die Stände des Zählers kommen.',
+    'meters.label_field'                           => 'Name des Zählers',
+    'meters.label_placeholder'                     => 'z. B. Haus, Werkstatt, Garage',
+    'meters.label_hint'                            => 'Leer lassen für einen allgemeinen, in Ihre Sprache übersetzten Namen.',
+    'meters.save_new'                              => 'Hinzufügen',
+    'meters.save_edit'                             => 'Speichern',
+    'meters.edit'                                  => 'Umbenennen',
+    'meters.delete'                                => 'Löschen',
+    'meters.delete_confirm'                        => 'Diesen Zähler löschen? Seine {count} Zählerstände werden endgültig mitgelöscht.',
+    'meters.saved'                                 => '✓ Zähler gespeichert.',
+    'meters.deleted'                               => '✓ Zähler gelöscht.',
+    'meters.no_meter'                              => 'Noch kein Zähler erfasst.',
+    'meters.invalid_meter'                         => 'Zähler nicht gefunden.',
+    'meters.invalid_energy'                        => 'Unbekannte Energieart.',
+    'meters.limit_reached'                         => 'Sie haben das Limit von {limit} Zählern für diese Energieart erreicht. Löschen Sie einen, bevor Sie einen weiteren hinzufügen.',
+    'meters.all_full'                              => 'Sie haben das Limit von {limit} Zählern für jede Energieart erreicht.',
+    'battery.limit_reached'                        => 'Sie haben das Limit von {limit} Batterien erreicht. Löschen Sie eine, bevor Sie eine weitere hinzufügen.',
 ];

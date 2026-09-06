@@ -145,6 +145,16 @@ return [
         'rate_limit_per_hour' => 600, // requêtes/heure par jeton
     ],
 
+    // Plafonds anti-abus (#55). Ils ne décrivent pas une limite fonctionnelle mais
+    // une limite d'exploitation : sans eux, un compte peut créer des lignes sans
+    // fin, et chaque compteur supplémentaire alourdit toutes les agrégations de
+    // rapport. Toute valeur inexploitable retombe sur le défaut (App\Support\Limits).
+    'limits' => [
+        // Compteurs PAR ÉNERGIE (électricité, gaz, eau) et par utilisateur. Sert
+        // aussi de plafond au parc de batteries. Ramené dans [1, 50] à la lecture.
+        'meters_per_energy' => 5,
+    ],
+
     // Lien vers le serveur Discord, affiché dans l'en-tête des pages.
     'discord' => [
         'invite_url' => '', // ex. https://discord.gg/xxxxxxx (vide = lien masqué)
