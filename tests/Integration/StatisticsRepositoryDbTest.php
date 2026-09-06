@@ -47,8 +47,8 @@ final class StatisticsRepositoryDbTest extends DatabaseTestCase
     protected function clean(): void
     {
         foreach ([
-            'meter_readings', 'meter_registers', 'meters',
-            'utility_readings', 'tariff_grid_lines', 'tariff_grids',
+            'meter_readings', 'meter_registers', 'utility_readings', 'meters',
+            'tariff_grid_lines', 'tariff_grids',
             'dynamic_prices', 'user_profiles', 'users',
         ] as $table) {
             $this->pdo()->exec('DELETE FROM ' . $table);

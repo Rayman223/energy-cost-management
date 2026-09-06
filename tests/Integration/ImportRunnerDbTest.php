@@ -200,8 +200,8 @@ final class ImportRunnerDbTest extends DatabaseTestCase
         $pdo = $this->pdo();
         $pdo->exec('DELETE FROM meter_readings');
         $pdo->exec('DELETE FROM meter_registers');
-        $pdo->exec('DELETE FROM meters');
         $pdo->exec('DELETE FROM utility_readings');
+        $pdo->exec('DELETE FROM meters');
         $pdo->exec('DELETE FROM user_profiles');
         $pdo->exec('DELETE FROM users');
     }

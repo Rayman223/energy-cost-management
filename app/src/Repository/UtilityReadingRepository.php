@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Repository;
 
+use App\Infrastructure\MeterTopology;
 use App\Repository\Contract\GasReadingRepositoryInterface;
 use App\Repository\Contract\MeterReadingRepositoryInterface;
 use App\Repository\Contract\UtilityIngestionInterface;
@@ -16,9 +17,18 @@ use PDO;
  * Relevés gaz/eau unifiés (table utility_readings), scopés par utilisateur.
  * Un seul repository pour les deux fluides : la structure est identique
  * (un index m³ par relevé) — l'energy_type distingue les flux.
+ *
+ * Depuis #55 chaque relevé porte un `meter_id`, qui est la source de vérité de
+ * son unicité. `user_id` et `energy_type` restent dénormalisés sur la table —
+ * ils gardent la frontière multi-tenant sous forme de prédicat de colonne — mais
+ * les écritures les DÉRIVENT du compteur résolu, jamais du constructeur : c'est
+ * ce qui empêche les deux sources de diverger.
  */
 final class UtilityReadingRepository implements GasReadingRepositoryInterface, MeterReadingRepositoryInterface, UtilityIngestionInterface
 {
+    /** Compteur d'écriture, résolu paresseusement (créé au premier relevé). */
+    private ?int $meterId = null;
+
     public function __construct(
         private readonly PDO $pdo,
         private readonly int $userId,
@@ -32,11 +42,12 @@ final class UtilityReadingRepository implements GasReadingRepositoryInterface, M
     public function save(DateTimeImmutable $readingAt, float $counterM3): void
     {
         $stmt = $this->pdo->prepare(
-            'INSERT INTO utility_readings (user_id, energy_type, reading_at, counter_m3)
-             VALUES (:uid, :etype, :reading_at, :counter_m3)'
+            'INSERT INTO utility_readings (user_id, meter_id, energy_type, reading_at, counter_m3)
+             VALUES (:uid, :mid, :etype, :reading_at, :counter_m3)'
         );
         $stmt->execute([
             'uid'        => $this->userId,
+            'mid'        => $this->writeMeterId(),
             'etype'      => $this->energyType,
             'reading_at' => Dates::toDbString($readingAt),
             'counter_m3' => $counterM3,
@@ -45,7 +56,7 @@ final class UtilityReadingRepository implements GasReadingRepositoryInterface, M
 
     /**
      * Variante idempotente pour l'ingestion API/batch : INSERT IGNORE sur
-     * l'unicité (user, type, horodatage). Contrairement à save(), n'échoue pas
+     * l'unicité (compteur, horodatage). Contrairement à save(), n'échoue pas
      * sur un renvoi du même relevé.
      *
      * En mode $replace (ré-import « écraser »), un relevé déjà présent au même
@@ -57,21 +68,36 @@ final class UtilityReadingRepository implements GasReadingRepositoryInterface, M
     public function saveIgnore(DateTimeImmutable $readingAt, float $counterM3, bool $replace = false): bool
     {
         $sql = $replace
-            ? 'INSERT INTO utility_readings (user_id, energy_type, reading_at, counter_m3)
-               VALUES (:uid, :etype, :reading_at, :counter_m3)
+            ? 'INSERT INTO utility_readings (user_id, meter_id, energy_type, reading_at, counter_m3)
+               VALUES (:uid, :mid, :etype, :reading_at, :counter_m3)
                ON DUPLICATE KEY UPDATE counter_m3 = VALUES(counter_m3)'
-            : 'INSERT IGNORE INTO utility_readings (user_id, energy_type, reading_at, counter_m3)
-               VALUES (:uid, :etype, :reading_at, :counter_m3)';
+            : 'INSERT IGNORE INTO utility_readings (user_id, meter_id, energy_type, reading_at, counter_m3)
+               VALUES (:uid, :mid, :etype, :reading_at, :counter_m3)';
 
         $stmt = $this->pdo->prepare($sql);
         $stmt->execute([
             'uid'        => $this->userId,
+            'mid'        => $this->writeMeterId(),
             'etype'      => $this->energyType,
             'reading_at' => Dates::toDbString($readingAt),
             'counter_m3' => $counterM3,
         ]);
 
         return $stmt->rowCount() > 0;
+    }
+
+    /**
+     * Compteur visé par les écritures : le compteur par défaut de l'utilisateur
+     * pour ce fluide, créé s'il n'en possède pas encore.
+     *
+     * Résolution PARESSEUSE, et non dans le constructeur : le repository est
+     * instancié à chaque requête sur les pages de lecture (dashboard, stats),
+     * où créer un compteur à vide polluerait la table et fausserait le décompte
+     * de la limite par énergie.
+     */
+    private function writeMeterId(): int
+    {
+        return $this->meterId ??= (new MeterTopology($this->pdo))->ensureMeter($this->userId, $this->energyType);
     }
 
     /**
