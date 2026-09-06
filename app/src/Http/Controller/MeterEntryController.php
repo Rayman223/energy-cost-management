@@ -142,7 +142,8 @@ final class MeterEntryController
             $repo->save($ts, $counterM3);
         } catch (PDOException $e) {
             // Course entre la vérification de doublon et l'INSERT : la contrainte
-            // uq_utility_readings (SQLSTATE 23000) tranche → erreur métier, pas un 500.
+            // uq_utility_readings_meter (SQLSTATE 23000) tranche → erreur métier,
+            // pas un 500.
             if ($e->getCode() === '23000') {
                 throw new ValidationException('A reading already exists at this date (' . $tsStr . ')');
             }

@@ -955,7 +955,7 @@ return [
     'nav.meters'                                   => 'Zähler',
     'meters.title'                                 => 'Meine Zähler',
     'meters.subtitle'                              => 'Der Park, den Sie ablesen',
-    'meters.intro'                                 => 'Erfassen Sie hier jeden Zähler Ihrer Anlage. Sie können mehrere pro Energieart haben — ein Haus und eine Werkstatt, oder einen im Laufe des Jahres ausgetauschten Zähler. Die Auswertungen addieren alle Zähler derselben Energieart.',
+    'meters.intro'                                 => 'Erfassen Sie hier jeden Zähler Ihrer Anlage. Sie können mehrere pro Energieart haben — ein Haus und eine Werkstatt, oder einen im Laufe des Jahres ausgetauschten Zähler.',
     'meters.next_step'                             => 'Sobald Ihre Zähler erfasst sind, tragen Sie deren Stände auf der Seite « Zählerstände erfassen » ein.',
     'meters.fleet_title'                           => 'Erfasste Zähler',
     'meters.add_title'                             => 'Zähler hinzufügen',

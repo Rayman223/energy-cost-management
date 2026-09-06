@@ -201,12 +201,17 @@ final class MeterRepositoryDbTest extends DatabaseTestCase
         $gasId    = $repo->insert(new Meter(id: 0, energyType: 'gas', label: 'Gaz'));
         $emptyId  = $repo->insert(new Meter(id: 0, energyType: 'water', label: 'Eau'));
 
+        // Deux SAISIES électriques, chacune alimentant les cinq registres — c'est
+        // ce que fait une saisie réelle. Compter les lignes de `meter_readings`
+        // annoncerait 10 relevés là où l'utilisateur en a saisi 2, et ce chiffre
+        // faux s'afficherait dans la confirmation d'une suppression irréversible.
         $this->seedElectricityReadings($elecId, ['2026-01-01 10:00:00', '2026-01-02 10:00:00']);
+        self::assertSame(10, $this->countRows('meter_readings'), 'Le seed doit bien écrire 5 lignes par saisie.');
         $this->seedUtilityReadings($gasId, 'gas', ['2026-01-01 10:00:00']);
 
         $counts = $repo->readingCounts();
 
-        // 2 index électriques (un seul registre alimenté) + 1 relevé gaz.
+        // 2 saisies électriques (et non 10 lignes) + 1 relevé gaz.
         self::assertSame(2, $counts[$elecId] ?? null);
         self::assertSame(1, $counts[$gasId] ?? null);
         // Présent avec un zéro : l'absence de clé signifierait « compteur inconnu »,
@@ -234,17 +239,22 @@ final class MeterRepositoryDbTest extends DatabaseTestCase
         self::assertSame(0, $this->countRows('meter_readings'));
         self::assertSame(0, $this->countRows('meter_registers'));
         self::assertSame(0, $this->countRows('utility_readings'));
+        self::assertSame(0, $this->countRows('meters'));
     }
 
     /** @param list<string> $timestamps */
     private function seedElectricityReadings(int $meterId, array $timestamps): void
     {
+        // Tous les registres, comme une saisie réelle : c'est ce qui distingue le
+        // nombre de SAISIES du nombre de lignes.
         $registers = (new MeterTopology($this->pdo()))->ensureRegisters($meterId);
         $stmt      = $this->pdo()->prepare(
             'INSERT INTO meter_readings (register_id, reading_at, index_value) VALUES (:r, :a, :v)'
         );
         foreach ($timestamps as $index => $at) {
-            $stmt->execute(['r' => $registers['import_t1'], 'a' => $at, 'v' => 100.0 + $index]);
+            foreach ($registers as $registerId) {
+                $stmt->execute(['r' => $registerId, 'a' => $at, 'v' => 100.0 + $index]);
+            }
         }
     }
 

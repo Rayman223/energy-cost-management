@@ -120,6 +120,12 @@ final class MeterRepository
      * est présent avec un zéro — l'absence de clé signifierait « compteur
      * inconnu », ce qui n'est pas la même chose.
      *
+     * Côté électricité, on compte les HORODATAGES DISTINCTS, pas les lignes :
+     * une saisie alimente jusqu'à cinq registres, donc jusqu'à cinq lignes de
+     * `meter_readings`. Compter les lignes annoncerait « 1 000 relevés » à qui
+     * en a saisi 200 — un chiffre faux, et affiché précisément là où il compte
+     * le plus, dans la confirmation d'une suppression irréversible.
+     *
      * Rendu pour tout le parc en une requête : la page affiche ce compte sur
      * chaque ligne, et une requête par compteur ferait un N+1 pour un chiffre
      * purement informatif.
@@ -130,7 +136,7 @@ final class MeterRepository
     {
         $stmt = $this->pdo->prepare(
             'SELECT m.id,
-                    (SELECT COUNT(*) FROM meter_readings mr
+                    (SELECT COUNT(DISTINCT mr.reading_at) FROM meter_readings mr
                        JOIN meter_registers reg ON reg.id = mr.register_id
                       WHERE reg.meter_id = m.id)
                   + (SELECT COUNT(*) FROM utility_readings ur WHERE ur.meter_id = m.id) AS total

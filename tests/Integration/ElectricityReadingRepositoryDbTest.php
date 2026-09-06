@@ -608,6 +608,34 @@ final class ElectricityReadingRepositoryDbTest extends DatabaseTestCase
     }
 
     /**
+     * Depuis #55, l'utilisateur déclare lui-même son parc sur /meters et peut
+     * posséder PLUSIEURS compteurs électriques. `deleteMeter()` — exposé en un
+     * seul POST `delete_electricity_meter` — ne doit en emporter qu'UN, celui
+     * qu'il résout par ailleurs : sans borne, cet appel détruirait tout le parc
+     * électrique et son historique d'un coup, là où /meters ne supprime qu'une
+     * ligne à la fois derrière une confirmation chiffrée.
+     */
+    public function testDeleteMeterOnlyRemovesTheDefaultMeterOfTheFleet(): void
+    {
+        $topology = new MeterTopology($this->pdo());
+        $defaultId = $topology->findElectricityMeter($this->userId);
+        self::assertNotNull($defaultId);
+
+        // Second compteur électrique, tel que /meters en crée.
+        $this->pdo()
+            ->prepare("INSERT INTO meters (user_id, energy_type, label) VALUES (:uid, 'electricity', 'Atelier')")
+            ->execute(['uid' => $this->userId]);
+        $secondId = (int) $this->pdo()->lastInsertId();
+
+        self::assertSame(1, $this->repo()->deleteMeter());
+
+        $remaining = $this->pdo()->query('SELECT id FROM meters ORDER BY id')->fetchAll(\PDO::FETCH_COLUMN);
+        // Le seul compteur restant est le SECOND : c'est donc bien le plus ancien
+        // — celui que résout MeterTopology — qui a été supprimé.
+        self::assertSame([$secondId], array_map('intval', $remaining), 'Le second compteur a été emporté à tort.');
+    }
+
+    /**
      * Tarif dynamique quart-horaire (#230) : des relevés au pas de 15 min donnent
      * un créneau par MTU, chacun portant exactement le delta mesuré, et tous marqués
      * natifs — c'est ce drapeau qui autorise le service à facturer au quart d'heure.

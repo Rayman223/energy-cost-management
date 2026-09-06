@@ -954,7 +954,7 @@ return [
     'nav.meters'                                   => 'Meters',
     'meters.title'                                 => 'Mijn meters',
     'meters.subtitle'                              => 'Het park dat u opneemt',
-    'meters.intro'                                 => 'Geef hier elke meter van uw installatie op. U kunt er meerdere per energiesoort hebben — een woning en een werkplaats, of een meter die in de loop van het jaar vervangen is. Rapporten tellen alle meters van dezelfde energiesoort bij elkaar op.',
+    'meters.intro'                                 => 'Geef hier elke meter van uw installatie op. U kunt er meerdere per energiesoort hebben — een woning en een werkplaats, of een meter die in de loop van het jaar vervangen is.',
     'meters.next_step'                             => 'Zodra uw meters zijn opgegeven, voert u hun standen in via de pagina « Mijn standen invoeren ».',
     'meters.fleet_title'                           => 'Opgegeven meters',
     'meters.add_title'                             => 'Een meter toevoegen',
