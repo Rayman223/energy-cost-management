@@ -394,6 +394,81 @@ final class StatisticsRepositoryDbTest extends DatabaseTestCase
         self::assertGreaterThan(50.0, $rows[0]['value']);
     }
 
+    /**
+     * Multi-compteur (#55) : la consommation publiée d'un foyer est la SOMME des
+     * taux annualisés de chacun de ses compteurs.
+     *
+     * Sans le chaînage par compteur, les deux odomètres seraient entrelacés par
+     * horodatage et chaque alternance produirait un faux delta — ici un écart de
+     * ~495 m³ à chaque bascule. Le résultat ne serait pas une erreur mais un
+     * chiffre publié, faux et crédible.
+     */
+    public function testUtilityUsageSumsTheRatesOfEachMeterOfAHousehold(): void
+    {
+        [$from, $to] = StatisticsRepository::defaultWindow();
+
+        for ($i = 0; $i < self::K; $i++) {
+            $userId = $this->user('multi-gas-' . $i);
+            $this->profile($userId, 'BE');
+
+            // Compteur par défaut : odomètre parti de 500, +10 m³/mois.
+            $repo    = new UtilityReadingRepository($this->pdo(), $userId, 'gas');
+            $counter = 500.0;
+            for ($m = 11; $m >= 0; $m--) {
+                $repo->save($this->monthPoint($m), $counter);
+                $counter += 10.0;
+            }
+
+            // Second compteur, relevé aux mêmes dates, odomètre parti de 5.
+            $second  = [];
+            $counter = 5.0;
+            for ($m = 11; $m >= 0; $m--) {
+                $second[] = [$this->monthPoint($m), $counter];
+                $counter += 10.0;
+            }
+            $this->extraMeter($userId, 'gas', $second);
+        }
+
+        $rows = $this->stats->utilityUsageByCountry('gas', $from, $to);
+
+        self::assertCount(1, $rows);
+        // ~120 m³/an par compteur, deux compteurs ⇒ ~240. Marge large : la fenêtre
+        // couvre onze intervalles mensuels de longueurs inégales.
+        self::assertEqualsWithDelta(240.0, $rows[0]['value'], 30.0);
+    }
+
+    /**
+     * Multi-compteur (#55) : le premier mois d'un compteur ajouté en cours de
+     * fenêtre est structurellement partiel — son relevé initial tombe en cours de
+     * mois — et doit être écarté comme l'est celui du premier compteur.
+     *
+     * Le premier mois est donc déterminé PAR COMPTEUR. Déterminé par foyer, il ne
+     * retirerait que le premier mois du compteur le plus ancien et laisserait
+     * passer, pour les suivants, un mois amputé : une sous-estimation invisible.
+     */
+    public function testElectricityIgnoresThePartialFirstMonthOfEachMeter(): void
+    {
+        [$from, $to] = StatisticsRepository::defaultWindow();
+
+        $userId = $this->steadyHousehold('partial-first', 'BE', 100.0);
+        $before = $this->stats->householdMonthlySeries($userId, $from, $to);
+        self::assertNotSame([], $before);
+
+        // Compteur ajouté il y a six mois, avec deux relevés dans SON premier
+        // mois : c'est ce qui rend le mois partiel mesurable, et donc comptable à
+        // tort si la fenêtre est partitionnée par foyer.
+        $this->extraMeter($userId, 'electricity', [
+            [$this->monthPoint(6, 5), 1000.0],
+            [$this->monthPoint(6, 25), 1030.0],
+        ]);
+
+        self::assertSame(
+            $before,
+            $this->stats->householdMonthlySeries($userId, $from, $to),
+            'Le mois partiel du compteur ajouté a été compté.',
+        );
+    }
+
     public function testSpotPricesAreGroupedByResolutionToAvoidDoubleCounting(): void
     {
         [$from, $to] = StatisticsRepository::defaultWindow();
@@ -515,6 +590,50 @@ final class StatisticsRepositoryDbTest extends DatabaseTestCase
         }
 
         return $userId;
+    }
+
+    /**
+     * Crée un compteur supplémentaire et y écrit des index, en SQL direct.
+     *
+     * Les repositories ne visent que le compteur par défaut (la saisie ciblée est
+     * la phase suivante de #55) : monter un parc demande donc d'écrire à la main.
+     *
+     * @param list<array{0: DateTimeImmutable, 1: float}> $readings
+     */
+    private function extraMeter(int $userId, string $energyType, array $readings): int
+    {
+        $this->pdo()
+            ->prepare('INSERT INTO meters (user_id, energy_type, label) VALUES (:uid, :etype, :label)')
+            ->execute(['uid' => $userId, 'etype' => $energyType, 'label' => 'second']);
+        $meterId = (int) $this->pdo()->lastInsertId();
+
+        if ($energyType === 'electricity') {
+            $registers = (new \App\Infrastructure\MeterTopology($this->pdo()))->ensureRegisters($meterId);
+            $stmt      = $this->pdo()->prepare(
+                'INSERT INTO meter_readings (register_id, reading_at, index_value) VALUES (:r, :a, :v)'
+            );
+            foreach ($readings as [$at, $value]) {
+                $stmt->execute(['r' => $registers['import_t1'], 'a' => Dates::toDbString($at), 'v' => $value]);
+            }
+
+            return $meterId;
+        }
+
+        $stmt = $this->pdo()->prepare(
+            'INSERT INTO utility_readings (user_id, meter_id, energy_type, reading_at, counter_m3)
+             VALUES (:uid, :mid, :etype, :a, :v)'
+        );
+        foreach ($readings as [$at, $value]) {
+            $stmt->execute([
+                'uid'   => $userId,
+                'mid'   => $meterId,
+                'etype' => $energyType,
+                'a'     => Dates::toDbString($at),
+                'v'     => $value,
+            ]);
+        }
+
+        return $meterId;
     }
 
     /** Horodatage dans le mois situé $monthsAgo mois avant le mois courant. */

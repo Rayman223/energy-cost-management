@@ -955,7 +955,7 @@ return [
     'nav.meters'                                   => 'Meters',
     'meters.title'                                 => 'My meters',
     'meters.subtitle'                              => 'The meters you read',
-    'meters.intro'                                 => 'Declare here every meter of your installation. You can have several per energy — a house and a workshop, or a meter replaced mid-year.',
+    'meters.intro'                                 => 'Declare here every meter of your installation. You can have several per energy — a house and a workshop, or a meter replaced mid-year. Reports add up all the meters of a given energy.',
     'meters.next_step'                             => 'Once your meters are declared, enter their indexes from the “Enter my indexes” page.',
     'meters.fleet_title'                           => 'Declared meters',
     'meters.add_title'                             => 'Add a meter',

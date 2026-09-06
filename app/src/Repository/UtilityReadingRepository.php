@@ -271,20 +271,47 @@ final class UtilityReadingRepository implements GasReadingRepositoryInterface, M
         return $row ?: null;
     }
 
-    /** @return array{from: array<string, mixed>|null, to: array<string, mixed>|null} */
+    /**
+     * Les deux relevés les plus récents du parc, AGRÉGÉS (#55).
+     *
+     * Prendre les deux dernières LIGNES ne marche plus dès qu'un foyer a deux
+     * compteurs : elles peuvent appartenir à des compteurs différents, et leur
+     * différence ne serait alors la consommation de rien du tout. On prend donc
+     * les deux derniers horodatages du parc, et à chacun la somme des index de
+     * tous les compteurs — la même série que {@see getReadingsForRange()}.
+     *
+     * `id` ne figure plus dans les lignes rendues : une somme de compteurs n'a
+     * pas d'identifiant de relevé. Aucun appelant ne le lisait.
+     *
+     * @return array{from: array<string, mixed>|null, to: array<string, mixed>|null}
+     */
     public function getLastTwoReadings(): array
     {
         $stmt = $this->pdo->prepare(
-            'SELECT id, reading_at, counter_m3 FROM utility_readings
+            'SELECT DISTINCT reading_at FROM utility_readings
              WHERE user_id = :uid AND energy_type = :etype
              ORDER BY reading_at DESC LIMIT 2'
         );
         $stmt->execute(['uid' => $this->userId, 'etype' => $this->energyType]);
-        $rows = $stmt->fetchAll();
+        $instants = $stmt->fetchAll(PDO::FETCH_COLUMN);
+
+        if (count($instants) < 2) {
+            return ['from' => null, 'to' => null];
+        }
+
+        $to   = (string) $instants[0];
+        $from = (string) $instants[1];
+
+        // Borne haute EXCLUE dans windowRows : `$to` revient par le relevé
+        // d'encadrement « premier >= $to », qui est exactement lui.
+        $byTs = [];
+        foreach (self::aggregate($this->windowRows($from, $to)) as $row) {
+            $byTs[$row['reading_at']] = $row;
+        }
 
         return [
-            'from' => $rows[1] ?? null,
-            'to'   => $rows[0] ?? null,
+            'from' => $byTs[$from] ?? null,
+            'to'   => $byTs[$to] ?? null,
         ];
     }
 
@@ -321,41 +348,149 @@ final class UtilityReadingRepository implements GasReadingRepositoryInterface, M
      */
     public function getReadingsForRange(string $from, string $to): array
     {
-        // Placeholders suffixés : PDO (mode natif) n'autorise pas la
+        return self::aggregate($this->windowRows($from, $to));
+    }
+
+    /**
+     * Fenêtre brute, PAR COMPTEUR : pour chacun, son dernier relevé avant $from,
+     * ses relevés de [$from, $to[ et son premier relevé à/après $to.
+     *
+     * Les relevés d'encadrement sont pris par compteur (`MAX`/`MIN … GROUP BY
+     * meter_id`) et non globalement : un seul relevé d'encadrement pour tout le
+     * parc laisserait les autres compteurs sans borne, et leur index à cette
+     * borne serait alors extrapolé au lieu d'être lu.
+     *
+     * L'agrégat borné se résout par seek sur `uq_utility_readings_meter
+     * (meter_id, reading_at)`, puis la jointure sur cette même clé unique
+     * récupère `counter_m3` — pas de balayage de l'historique.
+     *
+     * @return list<array{meter_id: int, reading_at: string, counter_m3: float}>
+     */
+    private function windowRows(string $from, string $to): array
+    {
+        // Placeholders positionnels : PDO (mode natif) n'autorise pas la
         // réutilisation d'un placeholder nommé dans une même requête.
-        $sql = '(SELECT reading_at, counter_m3 FROM utility_readings'
-            . '   WHERE user_id = :uid AND energy_type = :etype AND reading_at < :start'
-            . '   ORDER BY reading_at DESC LIMIT 1)'
+        $sql = '(SELECT ur.meter_id, ur.reading_at, ur.counter_m3 FROM utility_readings ur'
+            . '   JOIN (SELECT meter_id, MAX(reading_at) AS bound_at FROM utility_readings'
+            . '          WHERE user_id = ? AND energy_type = ? AND reading_at < ?'
+            . '          GROUP BY meter_id) b'
+            . '     ON b.meter_id = ur.meter_id AND b.bound_at = ur.reading_at)'
             . ' UNION ALL '
-            . '(SELECT reading_at, counter_m3 FROM utility_readings'
-            . '   WHERE user_id = :uid2 AND energy_type = :etype2 AND reading_at >= :start2 AND reading_at < :next'
-            . '   ORDER BY reading_at ASC)'
+            . '(SELECT meter_id, reading_at, counter_m3 FROM utility_readings'
+            . '   WHERE user_id = ? AND energy_type = ? AND reading_at >= ? AND reading_at < ?)'
             . ' UNION ALL '
-            . '(SELECT reading_at, counter_m3 FROM utility_readings'
-            . '   WHERE user_id = :uid3 AND energy_type = :etype3 AND reading_at >= :next2'
-            . '   ORDER BY reading_at ASC LIMIT 1)'
+            . '(SELECT ur.meter_id, ur.reading_at, ur.counter_m3 FROM utility_readings ur'
+            . '   JOIN (SELECT meter_id, MIN(reading_at) AS bound_at FROM utility_readings'
+            . '          WHERE user_id = ? AND energy_type = ? AND reading_at >= ?'
+            . '          GROUP BY meter_id) b'
+            . '     ON b.meter_id = ur.meter_id AND b.bound_at = ur.reading_at)'
             . ' ORDER BY reading_at ASC';
 
         $stmt = $this->pdo->prepare($sql);
         $stmt->execute([
-            'uid'    => $this->userId,
-            'etype'  => $this->energyType,
-            'uid2'   => $this->userId,
-            'etype2' => $this->energyType,
-            'uid3'   => $this->userId,
-            'etype3' => $this->energyType,
-            'start'  => $from,
-            'start2' => $from,
-            'next'   => $to,
-            'next2'  => $to,
+            $this->userId, $this->energyType, $from,
+            $this->userId, $this->energyType, $from, $to,
+            $this->userId, $this->energyType, $to,
         ]);
 
         return array_map(
             static fn (array $row): array => [
+                'meter_id'   => (int) $row['meter_id'],
                 'reading_at' => (string) $row['reading_at'],
                 'counter_m3' => (float) $row['counter_m3'],
             ],
             $stmt->fetchAll(),
         );
+    }
+
+    /**
+     * Somme les compteurs en UNE série : union de leurs horodatages, et à chaque
+     * instant la somme de leurs index (#55).
+     *
+     * L'index d'un compteur à un instant qu'il n'a pas relevé est INTERPOLÉ entre
+     * ses deux relevés encadrants, et CLAMPÉ hors de sa plage — constante avant
+     * son premier relevé, constante après son dernier. C'est le clamp qui rend
+     * l'opération sûre : un compteur posé en cours d'année apporte une constante
+     * jusqu'à sa mise en service, donc un delta nul, et non un saut d'index égal
+     * à tout son odomètre. Extrapoler la pente, comme le fait le service
+     * d'interpolation mensuelle sur la série déjà agrégée, inventerait au
+     * contraire de la consommation avant l'existence du compteur.
+     *
+     * Avec un seul compteur, l'union est sa propre liste d'horodatages et chaque
+     * valeur est lue telle quelle : sortie identique à celle d'avant #55.
+     *
+     * Balayage à curseurs : les horodatages sont parcourus dans l'ordre et le
+     * curseur de chaque compteur n'avance jamais en arrière — coût linéaire, là
+     * où une recherche du segment encadrant à chaque instant serait quadratique.
+     *
+     * @param  list<array{meter_id: int, reading_at: string, counter_m3: float}> $rows
+     * @return list<array{reading_at: string, counter_m3: float}>
+     */
+    private static function aggregate(array $rows): array
+    {
+        if ($rows === []) {
+            return [];
+        }
+
+        /** @var array<int, list<array{ts: int, value: float}>> $series */
+        $series = [];
+        /** @var array<int, string> $labels horodatage unix => forme 'Y-m-d H:i:s' */
+        $labels = [];
+        foreach ($rows as $row) {
+            $ts = Dates::fromDbString($row['reading_at'])->getTimestamp();
+            $labels[$ts] = $row['reading_at'];
+            $series[$row['meter_id']][] = ['ts' => $ts, 'value' => $row['counter_m3']];
+        }
+
+        // Un seul compteur : rien à interpoler, la série EST le résultat. Chemin
+        // court volontaire — il garantit l'identité bit à bit du cas courant.
+        if (count($series) === 1) {
+            return array_map(
+                static fn (array $row): array => [
+                    'reading_at' => $row['reading_at'],
+                    'counter_m3' => $row['counter_m3'],
+                ],
+                $rows,
+            );
+        }
+
+        foreach ($series as &$points) {
+            usort($points, static fn (array $a, array $b): int => $a['ts'] <=> $b['ts']);
+        }
+        unset($points);
+
+        $instants = array_keys($labels);
+        sort($instants);
+
+        $cursors = array_fill_keys(array_keys($series), 0);
+        $out     = [];
+        foreach ($instants as $ts) {
+            $sum = 0.0;
+            foreach ($series as $meterId => $points) {
+                $i = $cursors[$meterId];
+                $n = count($points);
+                while ($i + 1 < $n && $points[$i + 1]['ts'] <= $ts) {
+                    ++$i;
+                }
+                $cursors[$meterId] = $i;
+
+                $a = $points[$i];
+                // Avant/sur le point courant, ou après le dernier : clamp.
+                if ($ts <= $a['ts'] || $i + 1 >= $n) {
+                    $sum += $a['value'];
+                    continue;
+                }
+
+                $b    = $points[$i + 1];
+                $span = $b['ts'] - $a['ts'];
+                $sum += $span > 0
+                    ? $a['value'] + ($b['value'] - $a['value']) * (($ts - $a['ts']) / $span)
+                    : $a['value'];
+            }
+
+            $out[] = ['reading_at' => $labels[$ts], 'counter_m3' => round($sum, 3)];
+        }
+
+        return $out;
     }
 }
