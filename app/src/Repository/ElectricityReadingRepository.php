@@ -1358,7 +1358,7 @@ final class ElectricityReadingRepository implements LegacyDailyRepositoryInterfa
             $topology = new MeterTopology($this->pdo);
             $meterId  = $this->meterId ?? $topology->findElectricityMeter($this->userId);
 
-            $this->closedOn         = $meterId === null ? null : $topology->closedOn($meterId);
+            $this->closedOn         = $meterId === null ? null : $topology->closedOn($this->userId, $meterId);
             $this->closureAt        = Meter::closureInstantFor($this->closedOn, $this->timezone);
             $this->closureResolved  = true;
         }

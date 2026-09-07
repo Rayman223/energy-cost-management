@@ -203,14 +203,25 @@ final class MeterTopology
      * Date de fermeture d'un compteur (#55), ou `null` s'il est ouvert — ou
      * inconnu, ce qui revient au même pour l'appelant : rien à opposer.
      *
+     * Scopée sur le propriétaire ET l'énergie, comme {@see ownsMeter()} : un
+     * identifiant étranger ou d'une autre énergie rend `null`, donc « rien à
+     * opposer », et l'appelant le refuse ensuite comme un compteur INCONNU.
+     * Sans ce scope, un identifiant deviné se distinguerait d'un identifiant
+     * inexistant — « fermé le 15/06 » d'un côté, « compteur inconnu » de
+     * l'autre — et dirait à un tiers quels compteurs existent et quand ils ont
+     * été fermés.
+     *
      * Rendue brute ('Y-m-d') : c'est {@see Meter::closureInstantFor()} qui la
      * situe dans le fuseau du lecteur, une seule fois, plutôt que chaque
      * repository à sa façon.
      */
-    public function closedOn(int $meterId): ?string
+    public function closedOn(int $userId, int $meterId, string $energyType = 'electricity'): ?string
     {
-        $stmt = $this->pdo->prepare('SELECT closed_on FROM meters WHERE id = :mid LIMIT 1');
-        $stmt->execute(['mid' => $meterId]);
+        $stmt = $this->pdo->prepare(
+            'SELECT closed_on FROM meters
+              WHERE id = :mid AND user_id = :uid AND energy_type = :etype LIMIT 1'
+        );
+        $stmt->execute(['mid' => $meterId, 'uid' => $userId, 'etype' => $this->assertEnergy($energyType)]);
         $value = $stmt->fetchColumn();
 
         return ($value === false || $value === null) ? null : (string) $value;

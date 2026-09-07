@@ -13,6 +13,13 @@
 $today = date('Y-m-d');
 $now = date('H:i');
 
+// Jour courant DANS LE FUSEAU DU FOYER, pour décider ce qui est déjà fermé (#55).
+// La date de fermeture est une date, pas un instant : à 20 h le 14 à Montréal il
+// est déjà le 15 à Greenwich, et grimer le compteur en « fermé » une soirée avant
+// que le serveur ne refuse quoi que ce soit décalerait la fermeture d'un jour.
+// Même construction que la page /meters, qui affiche le même état.
+$closureToday = \App\Support\Dates::todayIn($timezone ?? 'UTC');
+
 /**
  * Sélecteur du compteur visé par une saisie (#55).
  *
@@ -29,18 +36,18 @@ $now = date('H:i');
  *
  * Le libellé vide est dérivé à l'affichage, dans la langue du lecteur.
  */
-$meterSelect = function (string $prefix, string $energyType) use ($metersByEnergy, $today): string {
+$meterSelect = function (string $prefix, string $energyType) use ($metersByEnergy, $closureToday): string {
     $meters = $metersByEnergy[$energyType] ?? [];
 
     $open = array_filter(
         $meters,
-        static fn (\App\Domain\Meter $meter): bool => !$meter->isClosedOn(new DateTimeImmutable($today)),
+        static fn (\App\Domain\Meter $meter): bool => !$meter->isClosedOn($closureToday),
     );
     $hidden = count($open) > 1 ? '' : ' bat-row-hidden';
 
     $options = '';
     foreach ($meters as $meter) {
-        $closed = $meter->isClosedOn(new DateTimeImmutable($today));
+        $closed = $meter->isClosedOn($closureToday);
         $label  = $meter->isNamed() ? $this->e($meter->label) : $this->te($meter->defaultLabelKey());
         if ($closed && $meter->closedOn !== null) {
             $label .= ' — ' . $this->te('meters.closed_on', ['date' => $meter->closedOn->format('Y-m-d')]);

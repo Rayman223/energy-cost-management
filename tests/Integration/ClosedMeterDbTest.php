@@ -242,6 +242,105 @@ final class ClosedMeterDbTest extends DatabaseTestCase
     }
 
     /**
+     * Un import visant une BATTERIE DÉPOSÉE est refusé avant sa première ligne,
+     * exactement comme un compteur fermé.
+     *
+     * `battery_id` ne passe pas par le pré-contrôle des compteurs : sans garde
+     * propre, les N lignes du fichier partiraient dans la boucle et
+     * BulkImportService attraperait N fois `ClosedMeterException` ligne à ligne —
+     * N « erreurs d'écriture » muettes au lieu d'un message.
+     */
+    public function testImportIntoADecommissionedBatteryIsRefusedBeforeItsFirstRow(): void
+    {
+        $batteryId = (new BatteryRepository($this->pdo(), $this->userId))->insert(new Battery(
+            id: 0,
+            brand: 'BYD',
+            model: 'HVS',
+            capacityKwh: 10.24,
+            commissionedOn: $this->at('2026-01-01 00:00:00'),
+            decommissionedOn: $this->at('2026-06-15 00:00:00'),
+            pvChargeShare: 80,
+            dischargeProfile: BatteryDischargeProfile::ImportMix,
+        ));
+
+        $rows = [];
+        for ($i = 1; $i <= 20; ++$i) {
+            $rows[$i] = [
+                'timestamp' => sprintf('2026-06-%02dT10:00:00Z', min(28, 15 + $i)),
+                'charge'    => (string) (1000 + $i),
+                'discharge' => (string) (500 + $i),
+            ];
+        }
+
+        try {
+            (new ImportRunner())->run(
+                $this->pdo(),
+                ImportMapping::preset('battery'),
+                $rows,
+                $this->userId,
+                'battery',
+                false,
+                false,
+                null,
+                $batteryId,
+            );
+            self::fail("L'import sur une batterie déposée aurait dû être refusé.");
+        } catch (\InvalidArgumentException $e) {
+            self::assertStringContainsString('déposée', $e->getMessage());
+        }
+
+        $stmt = $this->pdo()->prepare('SELECT COUNT(*) FROM battery_readings WHERE battery_id = :bid');
+        $stmt->execute(['bid' => $batteryId]);
+        self::assertSame(0, (int) $stmt->fetchColumn(), 'Des lignes ont été écrites avant le refus.');
+    }
+
+    /**
+     * La fermeture d'un compteur d'AUTRUI ne se lit pas.
+     *
+     * `meter_id` arrive du POST sans contrôle d'appartenance — c'est le
+     * repository qui le fait, juste avant d'écrire. Si la fermeture était relue
+     * sans le même scope, « fermé le 15/06 » se distinguerait de « compteur
+     * inconnu » et dirait à un tiers quels identifiants existent, et quand ils
+     * ont été fermés. Les deux cas doivent rester le même refus.
+     */
+    public function testAForeignClosedMeterIsRefusedAsUnknown(): void
+    {
+        $otherUserId = (new UserRepository($this->pdo()))
+            ->create('https://iss.test', 'other', 'test', 'Other')->id;
+        $foreignMeterId = (new MeterRepository($this->pdo(), $otherUserId))->insert(new Meter(
+            id: 0,
+            energyType: 'gas',
+            closedOn: $this->at('2026-06-15 00:00:00'),
+        ));
+
+        try {
+            (new UtilityReadingRepository($this->pdo(), $this->userId, 'gas', $foreignMeterId))
+                ->save($this->at('2026-06-20 10:00:00'), 60.0);
+            self::fail('Un compteur étranger aurait dû être refusé.');
+        } catch (\RuntimeException $e) {
+            self::assertNotInstanceOf(ClosedMeterException::class, $e);
+            self::assertStringNotContainsString('2026-06-15', $e->getMessage());
+        }
+
+        // Même règle sur l'électricité, où la garde de fermeture précède le
+        // contrôle d'appartenance dans insertIndexes().
+        $foreignElecId = (new MeterRepository($this->pdo(), $otherUserId))->insert(new Meter(
+            id: 0,
+            energyType: 'electricity',
+            closedOn: $this->at('2026-06-15 00:00:00'),
+        ));
+
+        try {
+            (new ElectricityReadingRepository($this->pdo(), $this->userId, 'UTC', $foreignElecId))
+                ->insertIndexes($this->at('2026-06-20 10:00:00'), ['import_t1' => 100.0]);
+            self::fail('Un compteur électrique étranger aurait dû être refusé.');
+        } catch (\RuntimeException $e) {
+            self::assertNotInstanceOf(ClosedMeterException::class, $e);
+            self::assertStringNotContainsString('2026-06-15', $e->getMessage());
+        }
+    }
+
+    /**
      * Le refus est une erreur de REQUÊTE, pas une panne : le routeur le traduit
      * en 422, une fois, plutôt que dans chacun des contrôleurs d'écriture.
      */

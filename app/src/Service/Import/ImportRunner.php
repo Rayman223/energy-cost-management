@@ -6,6 +6,7 @@ namespace App\Service\Import;
 
 use App\Infrastructure\MeterTopology;
 use App\Repository\BatteryReadingRepository;
+use App\Repository\BatteryRepository;
 use App\Repository\ElectricityReadingRepository;
 use App\Repository\UtilityReadingRepository;
 use App\Service\BulkImportService;
@@ -191,19 +192,35 @@ final class ImportRunner
      * Date de fermeture de la cible d'import, ou null si elle accepte encore des
      * relevés (#55).
      *
-     * Ne concerne pas les imports de batterie : leur cible a sa propre date de
-     * dépose, opposée par {@see \App\Repository\BatteryReadingRepository}.
+     * Couvre AUSSI les batteries : `decommissioned_on` est opposée aux écritures
+     * depuis #55, et {@see \App\Service\BulkImportService} attrape les exceptions
+     * ligne à ligne — sans ce pré-contrôle, un fichier visant une batterie déposée
+     * produirait N « erreurs d'écriture » muettes au lieu d'un message, exactement
+     * ce que le refus anticipé évite pour les compteurs.
+     *
+     * La cible est relue SCOPÉE sur son propriétaire : `meter_id` et `battery_id`
+     * viennent du POST sans contrôle d'appartenance (c'est le repository qui le
+     * fait, juste avant d'écrire). Une lecture non scopée dirait ici quels
+     * identifiants d'autrui existent, et quand ils ont été fermés.
      */
-    private function closureOf(PDO $pdo, int $targetUserId, string $energyType, ?int $meterId, bool $isBattery): ?string
-    {
+    private function closureOf(
+        PDO $pdo,
+        int $targetUserId,
+        string $energyType,
+        ?int $meterId,
+        bool $isBattery,
+        ?int $batteryId,
+    ): ?string {
         if ($isBattery) {
-            return null;
+            return $batteryId === null
+                ? null
+                : (new BatteryRepository($pdo, $targetUserId))->find($batteryId)?->decommissionedOn?->format('Y-m-d');
         }
 
         $topology = new MeterTopology($pdo);
         $target   = $meterId ?? $topology->findDefaultMeter($targetUserId, $energyType);
 
-        return $target === null ? null : $topology->closedOn($target);
+        return $target === null ? null : $topology->closedOn($targetUserId, $target, $energyType);
     }
 
     /**
@@ -247,11 +264,11 @@ final class ImportRunner
         // exceptions ligne par ligne, si bien qu'un compteur fermé produirait
         // 200 000 « erreurs d'écriture » au lieu d'un message. Un rapport
         // d'import inexploitable vaut moins qu'un refus net.
-        $closedOn = $this->closureOf($pdo, $targetUserId, $energyType, $meterId, $mapping->isBattery());
+        $closedOn = $this->closureOf($pdo, $targetUserId, $energyType, $meterId, $mapping->isBattery(), $batteryId);
         if ($closedOn !== null) {
-            throw new \InvalidArgumentException(
-                'Ce compteur est fermé depuis le ' . $closedOn . ' : il n\'accepte plus de relevé.'
-            );
+            throw new \InvalidArgumentException($mapping->isBattery()
+                ? 'Cette batterie est déposée depuis le ' . $closedOn . ' : elle n\'accepte plus de relevé.'
+                : 'Ce compteur est fermé depuis le ' . $closedOn . ' : il n\'accepte plus de relevé.');
         }
 
         $pdo->beginTransaction();

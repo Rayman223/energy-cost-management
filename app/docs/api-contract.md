@@ -204,7 +204,8 @@ refuse dès le 15, le 14 reste ouvert. Rouvrir un compteur se fait en vidant le
 champ. Il n'existe pas de date d'ouverture : le premier relevé fait foi.
 
 `batteries.decommissioned_on` suit désormais exactement la même règle
-(`ingest_battery`, `battery_entry`).
+(`ingest_battery`, `battery_entry`, et l'import de fichier — refusé lui aussi
+avant sa première ligne).
 
 En mode batch, `meter_id` se pose **à la racine du corps**, à côté de `readings`,
 jamais par lecture : un import vise un compteur, et deux compteurs mêlés dans un

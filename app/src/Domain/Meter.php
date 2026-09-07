@@ -122,15 +122,9 @@ final class Meter
      *
      * Borne EXCLUE (#1) : l'instant rendu est le premier NON couvert, donc un
      * relevé daté exactement dessus est déjà de trop.
-     */
-    public function closureInstant(string $timezone): ?DateTimeImmutable
-    {
-        return self::closureInstantFor($this->closedOn?->format('Y-m-d'), $timezone);
-    }
-
-    /**
-     * Même calcul depuis la date brute de la colonne, pour les repositories qui
-     * n'ont qu'un identifiant de compteur en main et pas l'entité.
+     *
+     * Statique et prenant la date BRUTE : les repositories qui opposent la
+     * fermeture n'ont qu'un identifiant de compteur en main, jamais l'entité.
      *
      * @param string|null $closedOn Date 'Y-m-d' de `meters.closed_on`.
      */

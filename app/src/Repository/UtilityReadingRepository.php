@@ -205,7 +205,8 @@ final class UtilityReadingRepository implements GasReadingRepositoryInterface, M
         $meterId = $this->writeMeterId();
 
         if (!$this->closureResolved) {
-            $this->closedOn        = (new MeterTopology($this->pdo))->closedOn($meterId);
+            $this->closedOn        = (new MeterTopology($this->pdo))
+                ->closedOn($this->userId, $meterId, $this->energyType);
             $this->closureAt       = Meter::closureInstantFor($this->closedOn, $this->timezone);
             $this->closureResolved = true;
         }
