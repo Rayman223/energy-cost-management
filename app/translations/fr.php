@@ -961,6 +961,11 @@ return [
     'import.meter_hint'                            => 'Choisissez le compteur que ce fichier alimente : un import ne peut en viser qu\'un, deux compteurs mêlés dans un même fichier seraient indétectables. Laissez « compteur par défaut » si vous n\'en avez qu\'un.',
     'import.meter_target'                          => 'Compteur visé',
     'import.meter_default'                         => 'Compteur par défaut',
+    // Fermeture d'un compteur (#55).
+    'meters.closed_field'                          => 'Date de fermeture',
+    'meters.closed_hint'                           => 'À partir de cette date, le compteur n\'accepte plus aucun relevé. Ses relevés existants restent comptés dans tous les rapports : la dépense a bien eu lieu. Laissez vide pour un compteur en service.',
+    'meters.invalid_closed_on'                     => 'Date de fermeture invalide.',
+    'meters.entry_closed'                          => '⚠ Ce compteur est fermé : aucun nouveau relevé ne peut y être ajouté.',
 
     // ── Parc de compteurs (#55) ─────────────────────────────────────────────
     // `meters.*` et non `meter.*` : ce dernier appartient déjà à la page de

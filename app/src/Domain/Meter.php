@@ -6,6 +6,8 @@ namespace App\Domain;
 
 use App\Support\Dates;
 use DateTimeImmutable;
+use DateTimeZone;
+use Exception;
 use InvalidArgumentException;
 
 /**
@@ -29,9 +31,11 @@ use InvalidArgumentException;
  * tel quel à un lecteur néerlandophone et le figeait pour toujours.
  *
  * `closedOn` est une borne de fin EXCLUE — premier jour hors service (#1,
- * cf. app/docs/date-bounds.md), comme `Battery::decommissionedOn`. Elle est
- * portée ici dès maintenant mais n'est pas encore opposée aux écritures : c'est
- * l'objet de la phase suivante.
+ * cf. app/docs/date-bounds.md), comme `Battery::decommissionedOn`. Un compteur
+ * fermé n'accepte plus AUCUNE écriture datée de ce jour ou après, mais tous ses
+ * relevés continuent de compter dans tous les rapports : la dépense a bien eu
+ * lieu, la fermeture ne la rétracte pas. Les lectures ne sont donc jamais
+ * filtrées sur cette date.
  *
  * Les colonnes `country` et `timezone` de la table ne sont pas reprises : plus
  * aucun code ne les lit depuis le passage au modèle à registres. Les faire
@@ -105,6 +109,47 @@ final class Meter
     {
         return $this->closedOn !== null
             && $this->closedOn->setTime(0, 0, 0) <= $date->setTime(0, 0, 0);
+    }
+
+    /**
+     * Premier instant où le compteur n'accepte plus d'écriture, en UTC ; `null`
+     * s'il est ouvert.
+     *
+     * La date de fermeture est une DATE, pas un instant : elle se lit dans le
+     * fuseau de l'utilisateur, pas dans celui du stockage. Un foyer en UTC−5 qui
+     * ferme le 15 doit pouvoir saisir un relevé du 14 à 20 h locales — soit le
+     * 15 à 01 h UTC. Comparer les instants bruts le lui refuserait.
+     *
+     * Borne EXCLUE (#1) : l'instant rendu est le premier NON couvert, donc un
+     * relevé daté exactement dessus est déjà de trop.
+     */
+    public function closureInstant(string $timezone): ?DateTimeImmutable
+    {
+        return self::closureInstantFor($this->closedOn?->format('Y-m-d'), $timezone);
+    }
+
+    /**
+     * Même calcul depuis la date brute de la colonne, pour les repositories qui
+     * n'ont qu'un identifiant de compteur en main et pas l'entité.
+     *
+     * @param string|null $closedOn Date 'Y-m-d' de `meters.closed_on`.
+     */
+    public static function closureInstantFor(?string $closedOn, string $timezone): ?DateTimeImmutable
+    {
+        if ($closedOn === null || $closedOn === '') {
+            return null;
+        }
+
+        // Fuseau illisible (profil corrompu, identifiant IANA retiré) : on retombe
+        // sur UTC plutôt que de laisser une exception casser une écriture. Le
+        // décalage est d'au plus quelques heures, une écriture perdue serait pire.
+        try {
+            $zone = new DateTimeZone($timezone);
+        } catch (Exception) {
+            $zone = Dates::utc();
+        }
+
+        return (new DateTimeImmutable($closedOn . ' 00:00:00', $zone))->setTimezone(Dates::utc());
     }
 
     /**

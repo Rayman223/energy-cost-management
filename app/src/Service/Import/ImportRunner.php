@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Service\Import;
 
+use App\Infrastructure\MeterTopology;
 use App\Repository\BatteryReadingRepository;
 use App\Repository\ElectricityReadingRepository;
 use App\Repository\UtilityReadingRepository;
@@ -187,6 +188,25 @@ final class ImportRunner
     }
 
     /**
+     * Date de fermeture de la cible d'import, ou null si elle accepte encore des
+     * relevés (#55).
+     *
+     * Ne concerne pas les imports de batterie : leur cible a sa propre date de
+     * dépose, opposée par {@see \App\Repository\BatteryReadingRepository}.
+     */
+    private function closureOf(PDO $pdo, int $targetUserId, string $energyType, ?int $meterId, bool $isBattery): ?string
+    {
+        if ($isBattery) {
+            return null;
+        }
+
+        $topology = new MeterTopology($pdo);
+        $target   = $meterId ?? $topology->findDefaultMeter($targetUserId, $energyType);
+
+        return $target === null ? null : $topology->closedOn($target);
+    }
+
+    /**
      * Cœur transactionnel partagé (UI + CLI) : plafonne les lignes, importe dans
      * une transaction, puis commit (ou rollback en dry-run). Au-delà du plafond,
      * le rapport est marqué **tronqué** et les N premières lignes sont conservées
@@ -222,20 +242,32 @@ final class ImportRunner
             throw new \InvalidArgumentException('Sélectionnez la batterie à alimenter avant d\'importer.');
         }
 
+        // Cible fermée : refus AVANT la boucle (#55). La cible d'un import est
+        // connue d'avance, comme battery_id — et BulkImportService attrape les
+        // exceptions ligne par ligne, si bien qu'un compteur fermé produirait
+        // 200 000 « erreurs d'écriture » au lieu d'un message. Un rapport
+        // d'import inexploitable vaut moins qu'un refus net.
+        $closedOn = $this->closureOf($pdo, $targetUserId, $energyType, $meterId, $mapping->isBattery());
+        if ($closedOn !== null) {
+            throw new \InvalidArgumentException(
+                'Ce compteur est fermé depuis le ' . $closedOn . ' : il n\'accepte plus de relevé.'
+            );
+        }
+
         $pdo->beginTransaction();
         try {
             $capped = $this->capped($rows, $report);
 
             if ($mapping->isBattery()) {
                 /** @var int $batteryId garanti non nul par le contrôle ci-dessus */
-                $this->service->importBattery($capped, $mapping, new BatteryReadingRepository($pdo, $targetUserId, $batteryId), $report, $replace, $timezone);
+                $this->service->importBattery($capped, $mapping, new BatteryReadingRepository($pdo, $targetUserId, $batteryId, $timezone), $report, $replace, $timezone);
             } elseif ($mapping->isElectricity()) {
                 // Compteur visé passé au constructeur : les bornes de créneau comme
                 // l'écriture doivent porter sur LE compteur choisi. null garde le
                 // compteur par défaut, et le crée si le compte n'en a aucun.
                 $this->service->importElectricity($capped, $mapping, new ElectricityReadingRepository($pdo, $targetUserId, $timezone, $meterId), $report, $replace, $throttle);
             } else {
-                $this->service->importUtility($capped, $mapping, new UtilityReadingRepository($pdo, $targetUserId, $energyType, $meterId), $report, $replace);
+                $this->service->importUtility($capped, $mapping, new UtilityReadingRepository($pdo, $targetUserId, $energyType, $meterId, $timezone), $report, $replace);
             }
 
             if ($dryRun) {

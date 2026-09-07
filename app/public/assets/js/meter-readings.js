@@ -60,6 +60,29 @@ function meterTarget(prefix) {
   return document.getElementById(`${prefix}-meter`)?.value || '';
 }
 
+// Aucun compteur OUVERT pour ce fluide : toutes les options sont `disabled`, le
+// navigateur n'en sélectionne aucune et la valeur reste vide alors que la liste
+// n'est pas vide. Sans ce contrôle, l'envoi partirait sans cible et le serveur
+// répondrait 422 après coup — mieux vaut le dire avant, et neutraliser le bouton.
+function meterAllClosed(prefix) {
+  const select = document.getElementById(`${prefix}-meter`);
+
+  return !!select && select.options.length > 0 && select.value === '';
+}
+
+// Neutralise la saisie d'un fluide dont tous les compteurs sont fermés. Les
+// historiques, eux, restent consultables : fermer un compteur n'efface rien.
+function syncClosedState(prefix) {
+  const closed = meterAllClosed(prefix);
+  const btn = document.getElementById(`${prefix}-btn`);
+  if (btn) {
+    btn.disabled = closed;
+  }
+  if (closed) {
+    setFeedback(`${prefix}-feedback`, tr('meterClosed', 'This meter is closed: no new reading can be added.'), 'err');
+  }
+}
+
 function readingAt(prefix) {
   const date = document.getElementById(`${prefix}-date`)?.value || '';
   const time = document.getElementById(`${prefix}-time`)?.value || '00:00';
@@ -566,7 +589,11 @@ document.getElementById('battery-delete-all')?.addEventListener('click', () => {
 // Changer de compteur recharge son historique : la liste affichée doit toujours
 // être celle de la cible que la saisie et la suppression viseront.
 ['electricity', 'gas', 'water'].forEach((prefix) => {
-  document.getElementById(`${prefix}-meter`)?.addEventListener('change', () => RELOADERS[prefix](1));
+  document.getElementById(`${prefix}-meter`)?.addEventListener('change', () => {
+    syncClosedState(prefix);
+    RELOADERS[prefix](1);
+  });
+  syncClosedState(prefix);
 });
 
 wirePager('electricity');

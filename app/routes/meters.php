@@ -65,6 +65,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             // maladresse, pas une erreur.
             $label = mb_substr(trim((string) ($_POST['label'] ?? '')), 0, Meter::MAX_LABEL);
 
+            // Fermeture (#55) : facultative, et réversible — la vider rouvre le
+            // compteur. Le format est revérifié ici, `<input type="date">` n'étant
+            // qu'une aide de saisie : un POST direct peut envoyer n'importe quoi.
+            // Parsée en UTC comme toutes les dates du projet ; c'est au moment de
+            // l'opposer à une écriture qu'elle se lit dans le fuseau du foyer.
+            $closedRaw = trim((string) ($_POST['closed_on'] ?? ''));
+            $closedOn  = null;
+            if ($closedRaw !== '') {
+                $parsed = DateTimeImmutable::createFromFormat('!Y-m-d', $closedRaw, Dates::utc());
+                if ($parsed === false || $parsed->format('Y-m-d') !== $closedRaw) {
+                    throw new \InvalidArgumentException($view->t('meters.invalid_closed_on'));
+                }
+                $closedOn = $parsed;
+            }
+
             $editId = filter_var($_POST['meter_id'] ?? null, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
             $editId = $editId === false ? null : $editId;
 
@@ -77,15 +92,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     throw new \InvalidArgumentException($view->t('meters.invalid_meter'));
                 }
 
-                // Énergie et date de fermeture reprises de l'existant : la première
-                // est immuable (elle décide de quelle table viennent les relevés),
-                // la seconde n'est pas encore offerte à la saisie. Les relire ici
-                // évite qu'un POST forgé les écrase.
+                // Énergie reprise de l'existant : elle est immuable — elle décide
+                // de quelle table viennent les relevés — et la relire ici évite
+                // qu'un POST forgé l'écrase.
                 $meterRepo->update($editId, new Meter(
                     id:         $editId,
                     energyType: $existing->energyType,
                     label:      $label,
-                    closedOn:   $existing->closedOn,
+                    closedOn:   $closedOn,
                 ));
             } else {
                 $energyType = (string) ($_POST['energy_type'] ?? '');
@@ -93,7 +107,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     throw new \InvalidArgumentException($view->t('meters.invalid_energy'));
                 }
 
-                $meterRepo->insert(new Meter(id: 0, energyType: $energyType, label: $label));
+                $meterRepo->insert(new Meter(id: 0, energyType: $energyType, label: $label, closedOn: $closedOn));
             }
 
             $success = $view->t('meters.saved');

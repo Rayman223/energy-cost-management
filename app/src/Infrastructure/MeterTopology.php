@@ -200,6 +200,23 @@ final class MeterTopology
     }
 
     /**
+     * Date de fermeture d'un compteur (#55), ou `null` s'il est ouvert — ou
+     * inconnu, ce qui revient au même pour l'appelant : rien à opposer.
+     *
+     * Rendue brute ('Y-m-d') : c'est {@see Meter::closureInstantFor()} qui la
+     * situe dans le fuseau du lecteur, une seule fois, plutôt que chaque
+     * repository à sa façon.
+     */
+    public function closedOn(int $meterId): ?string
+    {
+        $stmt = $this->pdo->prepare('SELECT closed_on FROM meters WHERE id = :mid LIMIT 1');
+        $stmt->execute(['mid' => $meterId]);
+        $value = $stmt->fetchColumn();
+
+        return ($value === false || $value === null) ? null : (string) $value;
+    }
+
+    /**
      * Registres de TOUS les compteurs électriques de l'utilisateur, groupés par
      * clé de registre (#55).
      *

@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Http;
 
+use App\Repository\Exception\ClosedMeterException;
+
 /**
  * Routeur minimal : associe (méthode HTTP, action) à un handler, puis dispatche.
  *
@@ -12,6 +14,7 @@ namespace App\Http;
  *  - action inconnue en GET                                  -> 400 "Unknown action"
  *  - action inconnue en POST                                 -> 400 "Unknown POST action"
  *  - ValidationException levée par un handler                -> 422
+ *  - ClosedMeterException (écriture sur compteur fermé, #55) -> 422
  *  - toute autre exception                                   -> 500
  */
 final class Router
@@ -44,6 +47,12 @@ final class Router
         try {
             return $handler($request);
         } catch (ValidationException $e) {
+            return JsonResponse::error($e->getMessage(), 422);
+        } catch (ClosedMeterException $e) {
+            // Écriture sur un compteur fermé (#55) : l'appelant a envoyé un relevé
+            // que la cible ne peut pas accepter — c'est une erreur de requête, pas
+            // une panne. La traduction se fait ICI, une fois, plutôt que dans
+            // chacun des quatre contrôleurs d'écriture.
             return JsonResponse::error($e->getMessage(), 422);
         } catch (\Throwable $e) {
             return JsonResponse::error($e->getMessage(), 500);

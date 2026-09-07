@@ -185,6 +185,12 @@ $openEnergies = array_values(array_filter(
                value="<?= $this->e($editing->label ?? '') ?>">
         <p class="dates-hint"><?= $this->te('meters.label_hint') ?></p>
       </div>
+      <div class="form-row">
+        <label class="form-label" for="mtr-closed"><?= $this->te('meters.closed_field') ?> <span class="unit"><?= $this->te('common.end_exclusive') ?></span></label>
+        <input type="date" id="mtr-closed" name="closed_on" class="form-input"
+               value="<?= $this->e($editing?->closedOn?->format('Y-m-d') ?? '') ?>">
+        <p class="dates-hint"><?= $this->te('meters.closed_hint') ?></p>
+      </div>
     </div>
 
     <div class="form-actions">

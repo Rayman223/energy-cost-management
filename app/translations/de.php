@@ -952,6 +952,11 @@ return [
     'import.meter_hint'                            => 'Wählen Sie den Zähler, den diese Datei speist: ein Import zielt auf genau einen Zähler, zwei vermischte Zähler in derselben Datei blieben unentdeckt. Lassen Sie « Standardzähler » stehen, wenn Sie nur einen haben.',
     'import.meter_target'                          => 'Zielzähler',
     'import.meter_default'                         => 'Standardzähler',
+    // Schließung eines Zählers (#55).
+    'meters.closed_field'                          => 'Schließungsdatum',
+    'meters.closed_hint'                           => 'Ab diesem Datum nimmt der Zähler keinen Stand mehr an. Seine bisherigen Stände zählen weiterhin in allen Auswertungen: die Ausgabe hat ja stattgefunden. Für einen Zähler in Betrieb leer lassen.',
+    'meters.invalid_closed_on'                     => 'Ungültiges Schließungsdatum.',
+    'meters.entry_closed'                          => '⚠ Dieser Zähler ist geschlossen: es kann kein neuer Stand hinzugefügt werden.',
 
     // ── Zählerpark (#55) ────────────────────────────────────────────────────
     // `meters.*` und nicht `meter.*`: Letzteres gehört bereits zur Seite für die

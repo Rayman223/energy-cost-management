@@ -4,9 +4,11 @@ declare(strict_types=1);
 
 namespace App\Repository;
 
+use App\Domain\Meter;
 use App\Domain\ReadingGranularity;
 use App\Repository\Contract\BatteryIngestionInterface;
 use App\Repository\Contract\BatteryReadingsInterface;
+use App\Repository\Exception\ClosedMeterException;
 use App\Support\Dates;
 use DateTimeImmutable;
 use DateTimeZone;
@@ -38,10 +40,22 @@ final class BatteryReadingRepository implements BatteryIngestionInterface, Batte
     /** Mémoïsation du contrôle d'appartenance : une seule requête par instance. */
     private ?bool $owned = null;
 
+    /** Date de dépose ('Y-m-d') lue avec l'appartenance ; null si en service. */
+    private ?string $decommissionedOn = null;
+
+    /** Premier instant refusé à l'écriture, en UTC ; null si la batterie est en service. */
+    private ?DateTimeImmutable $closureAt = null;
+
+    /**
+     * @param string $timezone Fuseau de l'utilisateur, où se lit la date de DÉPOSE :
+     *        elle est une date, pas un instant. Défaut UTC pour les chemins de
+     *        lecture, qui n'opposent jamais la dépose.
+     */
     public function __construct(
         private readonly PDO $pdo,
         private readonly int $userId,
         private readonly int $batteryId,
+        private readonly string $timezone = 'UTC',
     ) {
     }
 
@@ -50,6 +64,15 @@ final class BatteryReadingRepository implements BatteryIngestionInterface, Batte
         $indexByKind = $this->onlyKnownKinds($indexByKind);
         if ($indexByKind === [] || !$this->assertOwnedBattery()) {
             return 0;
+        }
+
+        // Batterie déposée : refus explicite, jamais un `return 0` silencieux.
+        // Jusqu'à #55, `decommissioned_on` n'était opposée à AUCUNE écriture —
+        // elle n'était lue que par le bilan et validée au formulaire. Une batterie
+        // retirée continuait donc d'accepter des index, et de peser sur des
+        // économies qu'elle ne produisait plus.
+        if ($this->closureAt !== null && $this->decommissionedOn !== null && $timestamp >= $this->closureAt) {
+            throw ClosedMeterException::battery($this->decommissionedOn);
         }
 
         $at = Dates::toDbString($timestamp);
@@ -288,9 +311,19 @@ final class BatteryReadingRepository implements BatteryIngestionInterface, Batte
     private function assertOwnedBattery(): bool
     {
         if ($this->owned === null) {
-            $stmt = $this->pdo->prepare('SELECT 1 FROM batteries WHERE id = :bid AND user_id = :uid LIMIT 1');
+            // La date de dépose voyage avec l'appartenance : les deux décident de
+            // la même écriture, une seule requête suffit à les connaître.
+            $stmt = $this->pdo->prepare(
+                'SELECT decommissioned_on FROM batteries WHERE id = :bid AND user_id = :uid LIMIT 1'
+            );
             $stmt->execute(['bid' => $this->batteryId, 'uid' => $this->userId]);
-            $this->owned = $stmt->fetchColumn() !== false;
+            $row = $stmt->fetch();
+
+            $this->owned = is_array($row);
+            if (is_array($row) && $row['decommissioned_on'] !== null) {
+                $this->decommissionedOn = (string) $row['decommissioned_on'];
+                $this->closureAt        = Meter::closureInstantFor($this->decommissionedOn, $this->timezone);
+            }
         }
 
         return $this->owned;

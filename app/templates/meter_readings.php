@@ -17,21 +17,37 @@ $now = date('H:i');
  * Sélecteur du compteur visé par une saisie (#55).
  *
  * Toujours présent dans le DOM — c'est lui que meter-readings.js lit pour poser
- * `meter_id` — mais masqué tant qu'il n'y a qu'un compteur : choisir entre une
- * seule option n'apprend rien, et l'API accepte l'absence de cible dans ce cas.
- * Aucun compteur ⇒ aucune option ⇒ valeur vide, et le premier relevé crée le
- * compteur comme il l'a toujours fait.
+ * `meter_id` — mais masqué tant qu'il n'y a qu'un compteur OUVERT : choisir entre
+ * une seule option n'apprend rien, et l'API accepte l'absence de cible dans ce
+ * cas. Aucun compteur ⇒ aucune option ⇒ valeur vide, et le premier relevé crée
+ * le compteur comme il l'a toujours fait.
+ *
+ * Un compteur FERMÉ reste listé — il garde son historique, consultable — mais son
+ * option est `disabled` : le navigateur ne peut plus la sélectionner, donc plus
+ * poster de relevé dessus. Le masquer ferait disparaître son historique sans
+ * explication ; le laisser sélectionnable produirait un 422 à chaque envoi.
  *
  * Le libellé vide est dérivé à l'affichage, dans la langue du lecteur.
  */
-$meterSelect = function (string $prefix, string $energyType) use ($metersByEnergy): string {
+$meterSelect = function (string $prefix, string $energyType) use ($metersByEnergy, $today): string {
     $meters = $metersByEnergy[$energyType] ?? [];
-    $hidden = count($meters) > 1 ? '' : ' bat-row-hidden';
+
+    $open = array_filter(
+        $meters,
+        static fn (\App\Domain\Meter $meter): bool => !$meter->isClosedOn(new DateTimeImmutable($today)),
+    );
+    $hidden = count($open) > 1 ? '' : ' bat-row-hidden';
 
     $options = '';
     foreach ($meters as $meter) {
-        $label = $meter->isNamed() ? $this->e($meter->label) : $this->te($meter->defaultLabelKey());
-        $options .= '<option value="' . $this->e((string) $meter->id) . '">' . $label . '</option>';
+        $closed = $meter->isClosedOn(new DateTimeImmutable($today));
+        $label  = $meter->isNamed() ? $this->e($meter->label) : $this->te($meter->defaultLabelKey());
+        if ($closed && $meter->closedOn !== null) {
+            $label .= ' — ' . $this->te('meters.closed_on', ['date' => $meter->closedOn->format('Y-m-d')]);
+        }
+
+        $options .= '<option value="' . $this->e((string) $meter->id) . '"'
+            . ($closed ? ' disabled data-closed="1"' : '') . '>' . $label . '</option>';
     }
 
     return '<div class="form-row' . $hidden . '">'
@@ -214,6 +230,9 @@ $meterSelect = function (string $prefix, string $energyType) use ($metersByEnerg
             // substitués côté client, comme Translator::t() côté PHP.
             'pageStatus' => $this->t('meter.page_status'),
             'savedElsewhere' => $this->t('meter.saved_elsewhere'),
+            // Aucun compteur ouvert pour ce fluide (#55) : la saisie est bloquée
+            // côté client plutôt que refusée en 422 après coup.
+            'meterClosed' => $this->t('meters.entry_closed'),
         ],
     ];
 ?>

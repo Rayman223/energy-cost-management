@@ -953,6 +953,11 @@ return [
     'import.meter_hint'                            => 'Pick the meter this file feeds: one import targets one meter, and two meters mixed in a single file would be undetectable. Leave “default meter” if you only have one.',
     'import.meter_target'                          => 'Target meter',
     'import.meter_default'                         => 'Default meter',
+    // Meter closure (#55).
+    'meters.closed_field'                          => 'Closing date',
+    'meters.closed_hint'                           => 'From this date on, the meter accepts no further reading. Its existing readings still count in every report: the spending did happen. Leave empty for a meter in service.',
+    'meters.invalid_closed_on'                     => 'Invalid closing date.',
+    'meters.entry_closed'                          => '⚠ This meter is closed: no new reading can be added.',
 
     // ── Meter fleet (#55) ───────────────────────────────────────────────────
     // `meters.*`, not `meter.*`: the latter already belongs to the index ENTRY

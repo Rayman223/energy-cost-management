@@ -115,8 +115,11 @@ try {
         : (string) ($config['dynamic_prices']['bidding_zone'] ?? DynamicPriceRepository::DEFAULT_ZONE);
 
     $elecRepo   = new ElectricityReadingRepository($pdo, $userId, $profile->timezone ?? 'UTC');
-    $gasRepo    = new UtilityReadingRepository($pdo, $userId, 'gas');
-    $waterRepo  = new UtilityReadingRepository($pdo, $userId, 'water');
+    // Fuseau passé au repository : il y lit la date de FERMETURE d'un compteur
+    // (#55), qui est une date et non un instant. Sans lui, un foyer à l'ouest de
+    // Greenwich se verrait refuser un relevé encore daté de la veille chez lui.
+    $gasRepo    = new UtilityReadingRepository($pdo, $userId, 'gas', null, $profile->timezone ?? 'UTC');
+    $waterRepo  = new UtilityReadingRepository($pdo, $userId, 'water', null, $profile->timezone ?? 'UTC');
     $tariffRepo = new TariffRepository($pdo, $userId, $isAdmin);
     $dynPriceRepo = new DynamicPriceRepository($pdo, $zone);
     $costSvc    = new CostCalculationService(
@@ -165,7 +168,7 @@ $ingest   = new IngestController($elecRepo, $gasRepo, $waterRepo, $elecThrottle,
 // grille tarifaire : la valorisation est mensuelle.
 $batteries = new BatteryReadingController(
     new BatteryRepository($pdo, $userId),
-    static fn (int $batteryId): BatteryReadingRepository => new BatteryReadingRepository($pdo, $userId, $batteryId),
+    static fn (int $batteryId): BatteryReadingRepository => new BatteryReadingRepository($pdo, $userId, $batteryId, $userTimezone),
     $userTimezone,
 );
 
