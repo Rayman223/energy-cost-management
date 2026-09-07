@@ -60,26 +60,24 @@ function meterTarget(prefix) {
   return document.getElementById(`${prefix}-meter`)?.value || '';
 }
 
-// Aucun compteur OUVERT pour ce fluide : toutes les options sont `disabled`, le
-// navigateur n'en sélectionne aucune et la valeur reste vide alors que la liste
-// n'est pas vide. Sans ce contrôle, l'envoi partirait sans cible et le serveur
-// répondrait 422 après coup — mieux vaut le dire avant, et neutraliser le bouton.
-function meterAllClosed(prefix) {
+// Le compteur sélectionné est-il fermé ? L'option reste sélectionnable — la borne
+// de fermeture est EXCLUE, un relevé antérieur y a toute sa place — mais l'état
+// mérite d'être dit : sans cela, un relevé du jour partirait pour revenir en 422.
+function selectedMeterClosed(prefix) {
   const select = document.getElementById(`${prefix}-meter`);
+  const option = select?.selectedOptions?.[0];
 
-  return !!select && select.options.length > 0 && select.value === '';
+  return !!option && option.hasAttribute('data-closed');
 }
 
-// Neutralise la saisie d'un fluide dont tous les compteurs sont fermés. Les
-// historiques, eux, restent consultables : fermer un compteur n'efface rien.
+// Signale la fermeture sans rien bloquer. Le bouton reste actif : c'est le
+// serveur qui tranche, et il tranche sur la DATE du relevé, pas sur l'état du
+// compteur. Les historiques restent consultables — fermer n'efface rien.
 function syncClosedState(prefix) {
-  const closed = meterAllClosed(prefix);
-  const btn = document.getElementById(`${prefix}-btn`);
-  if (btn) {
-    btn.disabled = closed;
-  }
-  if (closed) {
-    setFeedback(`${prefix}-feedback`, tr('meterClosed', 'This meter is closed: no new reading can be added.'), 'err');
+  if (selectedMeterClosed(prefix)) {
+    setFeedback(`${prefix}-feedback`, tr('meterClosed', 'This meter is closed: only readings dated before its closing date are accepted.'), '');
+  } else {
+    setFeedback(`${prefix}-feedback`, '');
   }
 }
 

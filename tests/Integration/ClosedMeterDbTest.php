@@ -205,52 +205,70 @@ final class ClosedMeterDbTest extends DatabaseTestCase
     }
 
     /**
-     * L'import refuse AVANT sa première ligne. BulkImportService attrape les
-     * exceptions ligne par ligne : sans ce pré-contrôle, un fichier de
-     * 200 000 lignes produirait 200 000 « erreurs d'écriture » au lieu d'un
-     * message — un rapport d'import illisible.
+     * L'import s'arrête à la PREMIÈRE ligne datée du jour de fermeture ou après,
+     * et annule tout — il ne compte pas N « erreurs d'écriture » muettes, ce que
+     * la capture par ligne de BulkImportService produirait sinon.
+     *
+     * Refuser le fichier d'AVANCE serait plus simple, mais rejetterait aussi
+     * l'import dont toutes les lignes précèdent la fermeture (cf. le test
+     * suivant) — le carnet recopié après coup, que la borne exclue autorise
+     * précisément.
      */
-    public function testImportIsRefusedBeforeItsFirstRow(): void
+    public function testImportStopsAtTheFirstRowOnOrAfterClosureAndWritesNothing(): void
+    {
+        $meterId = $this->closedGasMeter('2026-06-15');
+
+        // Dix lignes avant la fermeture, dix après.
+        $rows = [];
+        for ($i = 1; $i <= 20; ++$i) {
+            $rows[$i] = [
+                'timestamp' => sprintf('2026-06-%02dT10:00:00Z', $i + 5),
+                'value'     => (string) (100 + $i),
+            ];
+        }
+
+        try {
+            $this->importGas($rows, $meterId);
+            self::fail("L'import touchant la fermeture aurait dû être refusé.");
+        } catch (ClosedMeterException $e) {
+            self::assertSame('2026-06-15', $e->closedOn);
+        }
+
+        // Transaction annulée : même les lignes antérieures ne restent pas.
+        self::assertSame(0, $this->countReadings($meterId), 'Des lignes ont survécu au refus.');
+    }
+
+    /**
+     * Un import ENTIÈREMENT antidaté passe, compteur fermé ou non : c'est le
+     * carnet recopié, ou l'historique du fournisseur récupéré après la
+     * fermeture. La règle porte sur `reading_at`, pas sur l'état du compteur —
+     * la refuser ici contredirait ce que la saisie manuelle et l'API acceptent.
+     */
+    public function testFullyBackdatedImportIsAcceptedOnAClosedMeter(): void
     {
         $meterId = $this->closedGasMeter('2026-06-15');
 
         $rows = [];
-        for ($i = 1; $i <= 50; ++$i) {
-            $rows[$i] = ['timestamp' => sprintf('2026-06-%02dT10:00:00Z', min(28, $i)), 'value' => (string) (100 + $i)];
+        for ($i = 1; $i <= 10; ++$i) {
+            $rows[$i] = [
+                'timestamp' => sprintf('2026-06-%02dT10:00:00Z', $i),
+                'value'     => (string) (100 + $i),
+            ];
         }
 
-        try {
-            (new ImportRunner())->run(
-                $this->pdo(),
-                ImportMapping::preset('gas'),
-                $rows,
-                $this->userId,
-                'gas',
-                false,
-                false,
-                null,
-                null,
-                'UTC',
-                $meterId,
-            );
-            self::fail("L'import sur un compteur fermé aurait dû être refusé.");
-        } catch (\InvalidArgumentException $e) {
-            self::assertStringContainsString('fermé', $e->getMessage());
-        }
+        $report = $this->importGas($rows, $meterId);
 
-        self::assertSame(0, $this->countReadings($meterId), 'Des lignes ont été écrites avant le refus.');
+        self::assertSame(10, $report->imported());
+        self::assertSame(10, $this->countReadings($meterId));
     }
 
     /**
-     * Un import visant une BATTERIE DÉPOSÉE est refusé avant sa première ligne,
-     * exactement comme un compteur fermé.
-     *
-     * `battery_id` ne passe pas par le pré-contrôle des compteurs : sans garde
-     * propre, les N lignes du fichier partiraient dans la boucle et
-     * BulkImportService attraperait N fois `ClosedMeterException` ligne à ligne —
-     * N « erreurs d'écriture » muettes au lieu d'un message.
+     * Un import visant une BATTERIE DÉPOSÉE suit exactement la même règle : arrêt
+     * à la première ligne fautive, transaction annulée, message clair. Sans le
+     * relais de l'exception, BulkImportService la compterait comme une simple
+     * « erreur d'écriture » et poursuivrait, N fois, en silence.
      */
-    public function testImportIntoADecommissionedBatteryIsRefusedBeforeItsFirstRow(): void
+    public function testImportIntoADecommissionedBatteryStopsAndWritesNothing(): void
     {
         $batteryId = (new BatteryRepository($this->pdo(), $this->userId))->insert(new Battery(
             id: 0,
@@ -285,8 +303,8 @@ final class ClosedMeterDbTest extends DatabaseTestCase
                 $batteryId,
             );
             self::fail("L'import sur une batterie déposée aurait dû être refusé.");
-        } catch (\InvalidArgumentException $e) {
-            self::assertStringContainsString('déposée', $e->getMessage());
+        } catch (ClosedMeterException $e) {
+            self::assertSame('2026-06-15', $e->closedOn);
         }
 
         $stmt = $this->pdo()->prepare('SELECT COUNT(*) FROM battery_readings WHERE battery_id = :bid');
@@ -399,6 +417,26 @@ final class ClosedMeterDbTest extends DatabaseTestCase
 
         $this->expectException(ClosedMeterException::class);
         $repo->insertIndexes($this->at('2026-06-15 10:00:00'), ['charge' => 1300.0]);
+    }
+
+    /**
+     * @param array<int, array<string, string>> $rows
+     */
+    private function importGas(array $rows, int $meterId): \App\Service\Import\ImportReport
+    {
+        return (new ImportRunner())->run(
+            $this->pdo(),
+            ImportMapping::preset('gas'),
+            $rows,
+            $this->userId,
+            'gas',
+            false,
+            false,
+            null,
+            null,
+            'UTC',
+            $meterId,
+        );
     }
 
     private function countReadings(int $meterId): int

@@ -956,7 +956,7 @@ return [
     'meters.closed_field'                          => 'Afsluitdatum',
     'meters.closed_hint'                           => 'Vanaf deze datum aanvaardt de meter geen enkele stand meer. Zijn bestaande standen blijven in alle rapporten meetellen: de uitgave heeft wel degelijk plaatsgevonden. Laat leeg voor een meter in dienst.',
     'meters.invalid_closed_on'                     => 'Ongeldige afsluitdatum.',
-    'meters.entry_closed'                          => '⚠ Deze meter is afgesloten: er kan geen nieuwe stand meer worden toegevoegd.',
+    'meters.entry_closed'                          => 'Deze meter is afgesloten: alleen standen van vóór de afsluitdatum worden aanvaard.',
 
     // ── Meterpark (#55) ─────────────────────────────────────────────────────
     // `meters.*` en niet `meter.*`: dat laatste hoort al bij de pagina voor het

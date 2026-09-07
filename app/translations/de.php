@@ -956,7 +956,7 @@ return [
     'meters.closed_field'                          => 'Schließungsdatum',
     'meters.closed_hint'                           => 'Ab diesem Datum nimmt der Zähler keinen Stand mehr an. Seine bisherigen Stände zählen weiterhin in allen Auswertungen: die Ausgabe hat ja stattgefunden. Für einen Zähler in Betrieb leer lassen.',
     'meters.invalid_closed_on'                     => 'Ungültiges Schließungsdatum.',
-    'meters.entry_closed'                          => '⚠ Dieser Zähler ist geschlossen: es kann kein neuer Stand hinzugefügt werden.',
+    'meters.entry_closed'                          => 'Dieser Zähler ist geschlossen: nur Stände vor dem Schließungsdatum werden angenommen.',
 
     // ── Zählerpark (#55) ────────────────────────────────────────────────────
     // `meters.*` und nicht `meter.*`: Letzteres gehört bereits zur Seite für die

@@ -24,26 +24,24 @@ $closureToday = \App\Support\Dates::todayIn($timezone ?? 'UTC');
  * Sélecteur du compteur visé par une saisie (#55).
  *
  * Toujours présent dans le DOM — c'est lui que meter-readings.js lit pour poser
- * `meter_id` — mais masqué tant qu'il n'y a qu'un compteur OUVERT : choisir entre
- * une seule option n'apprend rien, et l'API accepte l'absence de cible dans ce
- * cas. Aucun compteur ⇒ aucune option ⇒ valeur vide, et le premier relevé crée
- * le compteur comme il l'a toujours fait.
+ * `meter_id` — mais masqué tant qu'il n'y a qu'un compteur : choisir entre une
+ * seule option n'apprend rien, et l'API accepte l'absence de cible dans ce cas.
+ * Aucun compteur ⇒ aucune option ⇒ valeur vide, et le premier relevé crée le
+ * compteur comme il l'a toujours fait.
  *
- * Un compteur FERMÉ reste listé — il garde son historique, consultable — mais son
- * option est `disabled` : le navigateur ne peut plus la sélectionner, donc plus
- * poster de relevé dessus. Le masquer ferait disparaître son historique sans
- * explication ; le laisser sélectionnable produirait un 422 à chaque envoi.
+ * Un compteur FERMÉ reste listé et reste SÉLECTIONNABLE, suffixé « fermé le … »
+ * pour que son état se voie. Le désactiver interdirait depuis le web ce que la
+ * borne EXCLUE autorise justement : saisir le dernier relevé pris la veille de la
+ * fermeture, ou rattraper un carnet plus ancien — le cas d'usage le plus fréquent
+ * d'un compteur qu'on vient de fermer. C'est le serveur qui tranche, et il
+ * tranche sur `reading_at`, pas sur l'état du compteur.
  *
  * Le libellé vide est dérivé à l'affichage, dans la langue du lecteur.
  */
 $meterSelect = function (string $prefix, string $energyType) use ($metersByEnergy, $closureToday): string {
     $meters = $metersByEnergy[$energyType] ?? [];
 
-    $open = array_filter(
-        $meters,
-        static fn (\App\Domain\Meter $meter): bool => !$meter->isClosedOn($closureToday),
-    );
-    $hidden = count($open) > 1 ? '' : ' bat-row-hidden';
+    $hidden = count($meters) > 1 ? '' : ' bat-row-hidden';
 
     $options = '';
     foreach ($meters as $meter) {
@@ -54,7 +52,7 @@ $meterSelect = function (string $prefix, string $energyType) use ($metersByEnerg
         }
 
         $options .= '<option value="' . $this->e((string) $meter->id) . '"'
-            . ($closed ? ' disabled data-closed="1"' : '') . '>' . $label . '</option>';
+            . ($closed ? ' data-closed="1"' : '') . '>' . $label . '</option>';
     }
 
     return '<div class="form-row' . $hidden . '">'

@@ -4,9 +4,8 @@ declare(strict_types=1);
 
 namespace App\Service\Import;
 
-use App\Infrastructure\MeterTopology;
 use App\Repository\BatteryReadingRepository;
-use App\Repository\BatteryRepository;
+use App\Repository\Exception\ClosedMeterException;
 use App\Repository\ElectricityReadingRepository;
 use App\Repository\UtilityReadingRepository;
 use App\Service\BulkImportService;
@@ -180,47 +179,22 @@ final class ImportRunner
         } catch (\InvalidArgumentException $e) {
             // Erreurs « métier » (format/fichier) : message sûr à afficher.
             throw new RuntimeException($e->getMessage(), 0, $e);
+        } catch (ClosedMeterException $e) {
+            // Cible fermée (#55) : l'import s'est arrêté à la première ligne datée
+            // du jour de fermeture ou après, et tout a été annulé. Le dire, plutôt
+            // que de le noyer dans le message générique ci-dessous — l'utilisateur
+            // n'a rien à corriger dans son fichier, sinon sa cible.
+            throw new RuntimeException(sprintf(
+                'Cible fermée depuis le %s : les relevés datés de ce jour ou après ne peuvent pas être importés. '
+                . "Aucune ligne n'a été enregistrée.",
+                $e->closedOn,
+            ), 0, $e);
         } catch (\Throwable $e) {
             // Toute autre erreur (base, driver…) : détail journalisé, message
             // générique côté utilisateur.
             error_log('[import] ' . $e->getMessage());
             throw new RuntimeException('L\'import a échoué (erreur interne). Vérifiez le fichier ou réessayez.', 0, $e);
         }
-    }
-
-    /**
-     * Date de fermeture de la cible d'import, ou null si elle accepte encore des
-     * relevés (#55).
-     *
-     * Couvre AUSSI les batteries : `decommissioned_on` est opposée aux écritures
-     * depuis #55, et {@see \App\Service\BulkImportService} attrape les exceptions
-     * ligne à ligne — sans ce pré-contrôle, un fichier visant une batterie déposée
-     * produirait N « erreurs d'écriture » muettes au lieu d'un message, exactement
-     * ce que le refus anticipé évite pour les compteurs.
-     *
-     * La cible est relue SCOPÉE sur son propriétaire : `meter_id` et `battery_id`
-     * viennent du POST sans contrôle d'appartenance (c'est le repository qui le
-     * fait, juste avant d'écrire). Une lecture non scopée dirait ici quels
-     * identifiants d'autrui existent, et quand ils ont été fermés.
-     */
-    private function closureOf(
-        PDO $pdo,
-        int $targetUserId,
-        string $energyType,
-        ?int $meterId,
-        bool $isBattery,
-        ?int $batteryId,
-    ): ?string {
-        if ($isBattery) {
-            return $batteryId === null
-                ? null
-                : (new BatteryRepository($pdo, $targetUserId))->find($batteryId)?->decommissionedOn?->format('Y-m-d');
-        }
-
-        $topology = new MeterTopology($pdo);
-        $target   = $meterId ?? $topology->findDefaultMeter($targetUserId, $energyType);
-
-        return $target === null ? null : $topology->closedOn($targetUserId, $target, $energyType);
     }
 
     /**
@@ -257,18 +231,6 @@ final class ImportRunner
         // qui en découle serait faux sans que rien ne le signale.
         if ($mapping->isBattery() && $batteryId === null) {
             throw new \InvalidArgumentException('Sélectionnez la batterie à alimenter avant d\'importer.');
-        }
-
-        // Cible fermée : refus AVANT la boucle (#55). La cible d'un import est
-        // connue d'avance, comme battery_id — et BulkImportService attrape les
-        // exceptions ligne par ligne, si bien qu'un compteur fermé produirait
-        // 200 000 « erreurs d'écriture » au lieu d'un message. Un rapport
-        // d'import inexploitable vaut moins qu'un refus net.
-        $closedOn = $this->closureOf($pdo, $targetUserId, $energyType, $meterId, $mapping->isBattery(), $batteryId);
-        if ($closedOn !== null) {
-            throw new \InvalidArgumentException($mapping->isBattery()
-                ? 'Cette batterie est déposée depuis le ' . $closedOn . ' : elle n\'accepte plus de relevé.'
-                : 'Ce compteur est fermé depuis le ' . $closedOn . ' : il n\'accepte plus de relevé.');
         }
 
         $pdo->beginTransaction();

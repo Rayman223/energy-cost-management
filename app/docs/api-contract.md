@@ -184,8 +184,10 @@ Un compteur peut porter une **date de fermeture** (`closed_on`, saisie sur
 `/meters`). À partir de ce jour, toute écriture le visant est refusée en 422
 (`Meter closed on 2026-06-15 — no reading accepted from that date on`), sur les
 quatre chemins d'écriture : saisie manuelle, ingestion d'agent, import de fichier
-et scripts CLI. Un import entier est refusé **avant sa première ligne**, pas
-ligne à ligne.
+et scripts CLI. Un import s'arrête à la **première ligne** datée du jour de
+fermeture ou après, annule tout et rend un message — jamais N « erreurs
+d'écriture » muettes. Un import dont toutes les lignes précèdent la fermeture
+passe donc normalement.
 
 Trois précisions qui décident du comportement observable :
 
