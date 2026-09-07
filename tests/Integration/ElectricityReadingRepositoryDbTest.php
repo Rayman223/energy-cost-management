@@ -608,6 +608,41 @@ final class ElectricityReadingRepositoryDbTest extends DatabaseTestCase
     }
 
     /**
+     * Même portée pour la suppression d'un relevé : celle de l'HISTORIQUE qui
+     * expose la ligne. La page n'affiche que le compteur par défaut ; supprimer
+     * une de ses lignes ne doit pas emporter le même horodatage sur les autres
+     * compteurs du parc, que l'utilisateur ne voit pas et ne peut pas prévoir.
+     */
+    public function testDeleteReadingAtOnlyTouchesTheDefaultMeterOfTheFleet(): void
+    {
+        // Second compteur électrique, tel que /meters en crée, relevé au MÊME
+        // instant que le compteur historique.
+        $this->pdo()
+            ->prepare("INSERT INTO meters (user_id, energy_type, label) VALUES (:uid, 'electricity', 'Atelier')")
+            ->execute(['uid' => $this->userId]);
+        $secondId  = (int) $this->pdo()->lastInsertId();
+        $registers = (new MeterTopology($this->pdo()))->ensureRegisters($secondId);
+
+        $ins = $this->pdo()->prepare(
+            'INSERT INTO meter_readings (register_id, reading_at, index_value) VALUES (:r, :a, :v)'
+        );
+        foreach ($registers as $rid) {
+            $ins->execute(['r' => $rid, 'a' => '2026-07-10 12:00:00', 'v' => 999.0]);
+        }
+
+        // Les 4 registres alimentés du compteur par défaut, et eux seuls.
+        self::assertSame(4, $this->repo()->deleteReadingAt(new \DateTimeImmutable('2026-07-10 12:00:00')));
+
+        $stmt = $this->pdo()->prepare(
+            'SELECT COUNT(*) FROM meter_readings mr
+               JOIN meter_registers reg ON reg.id = mr.register_id
+              WHERE reg.meter_id = :mid'
+        );
+        $stmt->execute(['mid' => $secondId]);
+        self::assertSame(5, (int) $stmt->fetchColumn(), 'Le second compteur a perdu des relevés.');
+    }
+
+    /**
      * Depuis #55, l'utilisateur déclare lui-même son parc sur /meters et peut
      * posséder PLUSIEURS compteurs électriques. `deleteMeter()` — exposé en un
      * seul POST `delete_electricity_meter` — ne doit en emporter qu'UN, celui

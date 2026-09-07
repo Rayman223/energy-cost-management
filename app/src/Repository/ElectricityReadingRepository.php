@@ -204,25 +204,33 @@ final class ElectricityReadingRepository implements LegacyDailyRepositoryInterfa
     }
 
     /**
-     * Supprime tous les index (les 5 registres) à un horodatage donné pour le
-     * compteur de l'utilisateur. La jointure sur meters.user_id garantit qu'on ne
-     * touche que le compteur du bon utilisateur.
+     * Supprime tous les index (les 5 registres) à un horodatage donné sur LE
+     * compteur électricité par défaut de l'utilisateur.
+     *
+     * La portée est celle de l'historique qui expose la ligne à supprimer
+     * ({@see historyRegisterMap()}), et celle de {@see deleteMeter()}. Un DELETE
+     * joint sur `meters.user_id` emporterait au contraire le même horodatage sur
+     * TOUS les compteurs électriques du parc (#55) — y compris ceux que la page
+     * n'affiche pas, donc sans que l'utilisateur puisse le voir ni le prévoir.
+     *
+     * Le filtre par identifiants de registres garde la frontière multi-tenant :
+     * ces identifiants viennent du compteur de CET utilisateur, un autre compte
+     * n'en résout aucun et ne supprime donc rien.
      *
      * @return int Nombre de lignes meter_readings supprimées (0 à 5).
      */
     public function deleteReadingAt(DateTimeImmutable $timestamp): int
     {
+        $ids = array_keys($this->historyRegisterMap());
+        if ($ids === []) {
+            return 0;
+        }
+
+        $placeholders = implode(', ', array_fill(0, count($ids), '?'));
         $stmt = $this->pdo->prepare(
-            'DELETE mr FROM meter_readings mr
-             JOIN meter_registers reg ON reg.id = mr.register_id
-             JOIN meters m ON m.id = reg.meter_id
-             WHERE m.user_id = :uid AND m.energy_type = :etype AND mr.reading_at = :at'
+            "DELETE FROM meter_readings WHERE register_id IN ($placeholders) AND reading_at = ?"
         );
-        $stmt->execute([
-            'uid'   => $this->userId,
-            'etype' => 'electricity',
-            'at'    => Dates::toDbString($timestamp),
-        ]);
+        $stmt->execute([...$ids, Dates::toDbString($timestamp)]);
 
         $this->invalidateMonthlyDeltaCaches();
 
