@@ -37,6 +37,27 @@ final class FakeMeterReadingRepository implements MeterReadingRepositoryInterfac
         $this->saved = ['reading_at' => $readingAt, 'counter_m3' => $counterM3];
     }
 
+    /**
+     * Le faux ne modélise qu'un compteur : il se rend lui-même. Les tests qui
+     * portent sur le CHOIX du compteur passent par la base (#55).
+     */
+    public function forMeter(?int $meterId): self
+    {
+        return $this;
+    }
+
+    /** @return list<array{reading_at: string, counter_m3: float}> */
+    public function getFleetSeries(): array
+    {
+        return array_values(array_map(
+            static fn (array $row): array => [
+                'reading_at' => $row['reading_at'],
+                'counter_m3' => $row['counter_m3'],
+            ],
+            $this->all,
+        ));
+    }
+
     /** @return array<int,array{id:int,reading_at:string,counter_m3:float,delta_m3:float|null}> */
     public function getAllReadings(): array
     {

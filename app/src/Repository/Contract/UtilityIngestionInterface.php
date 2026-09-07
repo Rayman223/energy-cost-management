@@ -15,6 +15,12 @@ use DateTimeImmutable;
 interface UtilityIngestionInterface
 {
     /**
+     * Même repository, scopé sur un compteur DÉSIGNÉ (#55) ; `null` rend
+     * l'instance courante.
+     */
+    public function forMeter(?int $meterId): self;
+
+    /**
      * @param bool $replace Si true, un relevé déjà présent au même horodatage est
      *        écrasé (ON DUPLICATE KEY UPDATE) au lieu d'être ignoré — pour corriger
      *        un import fautif. Par défaut false (INSERT IGNORE idempotent).

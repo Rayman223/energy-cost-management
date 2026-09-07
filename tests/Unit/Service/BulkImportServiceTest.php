@@ -262,6 +262,11 @@ final class BulkImportServiceTest extends TestCase
         // Une erreur base sur une ligne (ex. dépassement DECIMAL) est comptée et
         // n'annule pas les autres lignes (bug #2), sans fuiter de détail (bug #4).
         $sink = new class implements UtilityIngestionInterface {
+            public function forMeter(?int $meterId): self
+            {
+                return $this;
+            }
+
             public function saveIgnore(DateTimeImmutable $readingAt, float $counterM3, bool $replace = false): bool
             {
                 if ($counterM3 === 999.0) {

@@ -35,7 +35,7 @@ final class ImportRunner
     /**
      * Extrait les champs d'import d'une requête POST et délègue au téléversement.
      *
-     * @param array<string, mixed> $post  Champs $_POST (energy_type, ts_col, value_col, unit, registers, battery_id, dry_run, overwrite).
+     * @param array<string, mixed> $post  Champs $_POST (energy_type, ts_col, value_col, unit, registers, battery_id, meter_id, dry_run, overwrite).
      * @param array<string, mixed> $files Entrée $_FILES (clé `import_file`).
      * @param string $timezone Fuseau de l'utilisateur : délimite le jour civil du
      *        plafond des index de batterie (#26). Sans objet pour les autres types.
@@ -55,9 +55,16 @@ final class ImportRunner
         $batteryId = filter_var($post['battery_id'] ?? null, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
         $batteryId = $batteryId === false ? null : $batteryId;
 
+        // Compteur visé (#55), à côté de battery_id et de la même façon : un
+        // import alimente UN compteur. Absent ⇒ compteur par défaut, comme avant
+        // le multi-compteur. Un identifiant étranger est refusé par le repository
+        // lui-même, qui vérifie l'appartenance avant d'écrire.
+        $meterId = filter_var($post['meter_id'] ?? null, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
+        $meterId = $meterId === false ? null : $meterId;
+
         $file = is_array($files['import_file'] ?? null) ? $files['import_file'] : [];
 
-        return $this->runUploaded($pdo, $targetUserId, $energyType, self::parseOverrides($post), $file, $dryRun, $replace, $throttle, $batteryId, $timezone);
+        return $this->runUploaded($pdo, $targetUserId, $energyType, self::parseOverrides($post), $file, $dryRun, $replace, $throttle, $batteryId, $timezone, $meterId);
     }
 
     /**
@@ -136,6 +143,7 @@ final class ImportRunner
         ?ReadingGranularityPolicy $throttle = null,
         ?int $batteryId = null,
         string $timezone = 'UTC',
+        ?int $meterId = null,
     ): ImportReport {
         $tmp  = is_string($file['tmp_name'] ?? null) ? $file['tmp_name'] : '';
         $name = is_string($file['name'] ?? null) ? $file['name'] : '';
@@ -166,7 +174,7 @@ final class ImportRunner
         // schéma/SQL vers l'utilisateur). La CLI, elle, appelle run() en direct et
         // affiche la cause réelle à l'opérateur.
         try {
-            return $this->run($pdo, $mapping, $this->openRows($tmp, $ext === 'json'), $targetUserId, $energyType, $dryRun, $replace, $throttle, $batteryId, $timezone);
+            return $this->run($pdo, $mapping, $this->openRows($tmp, $ext === 'json'), $targetUserId, $energyType, $dryRun, $replace, $throttle, $batteryId, $timezone, $meterId);
         } catch (\InvalidArgumentException $e) {
             // Erreurs « métier » (format/fichier) : message sûr à afficher.
             throw new RuntimeException($e->getMessage(), 0, $e);
@@ -202,6 +210,7 @@ final class ImportRunner
         ?ReadingGranularityPolicy $throttle = null,
         ?int $batteryId = null,
         string $timezone = 'UTC',
+        ?int $meterId = null,
     ): ImportReport {
         $report = new ImportReport();
 
@@ -221,9 +230,12 @@ final class ImportRunner
                 /** @var int $batteryId garanti non nul par le contrôle ci-dessus */
                 $this->service->importBattery($capped, $mapping, new BatteryReadingRepository($pdo, $targetUserId, $batteryId), $report, $replace, $timezone);
             } elseif ($mapping->isElectricity()) {
-                $this->service->importElectricity($capped, $mapping, new ElectricityReadingRepository($pdo, $targetUserId), $report, $replace, $throttle);
+                // Compteur visé passé au constructeur : les bornes de créneau comme
+                // l'écriture doivent porter sur LE compteur choisi. null garde le
+                // compteur par défaut, et le crée si le compte n'en a aucun.
+                $this->service->importElectricity($capped, $mapping, new ElectricityReadingRepository($pdo, $targetUserId, $timezone, $meterId), $report, $replace, $throttle);
             } else {
-                $this->service->importUtility($capped, $mapping, new UtilityReadingRepository($pdo, $targetUserId, $energyType), $report, $replace);
+                $this->service->importUtility($capped, $mapping, new UtilityReadingRepository($pdo, $targetUserId, $energyType, $meterId), $report, $replace);
             }
 
             if ($dryRun) {

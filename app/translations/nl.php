@@ -947,6 +947,11 @@ return [
     'import.battery_target'                        => 'Doelbatterij',
     'import.reg_charge'                            => 'Ingangsstand (laden)',
     'import.reg_discharge'                         => 'Uitgangsstand (ontladen)',
+    // Doelmeter bij import met meerdere meters (#55).
+    'import.meter_title'                           => 'Te voeden meter',
+    'import.meter_hint'                            => 'Kies de meter die dit bestand voedt: één import richt zich op één meter, en twee meters door elkaar in hetzelfde bestand zouden onopgemerkt blijven. Laat « standaardmeter » staan als u er maar één hebt.',
+    'import.meter_target'                          => 'Doelmeter',
+    'import.meter_default'                         => 'Standaardmeter',
 
     // ── Meterpark (#55) ─────────────────────────────────────────────────────
     // `meters.*` en niet `meter.*`: dat laatste hoort al bij de pagina voor het

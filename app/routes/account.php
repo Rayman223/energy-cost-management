@@ -17,6 +17,7 @@ use App\I18n\Locale;
 use App\Infrastructure\Database;
 use App\Repository\ApiTokenRepository;
 use App\Repository\BatteryRepository;
+use App\Repository\MeterRepository;
 use App\Repository\TariffRepository;
 use App\Repository\UserIdentityRepository;
 use App\Repository\UserRepository;
@@ -32,6 +33,7 @@ use App\Service\ReadingGranularityPolicy;
 use App\Support\Adsense;
 use App\Support\DiscordLink;
 use App\Support\DonateLink;
+use App\Support\Limits;
 use App\Support\DynamicPricing;
 use App\Support\LocaleContext;
 
@@ -371,6 +373,15 @@ echo $view->render('account', [
     // le formulaire. Liste vide ⇒ le type « batterie » n'est pas proposé, plutôt
     // qu'un sélecteur sans option qui échouerait à la soumission.
     'batteries'    => (new BatteryRepository($pdo, $userId))->listAll(),
+    // Parc de compteurs groupé par énergie (#55) : cible optionnelle de l'import.
+    'metersByEnergy' => (static function () use ($pdo, $userId, $config): array {
+        $byEnergy = [];
+        foreach ((new MeterRepository($pdo, $userId, Limits::metersPerEnergy($config)))->listAll() as $meter) {
+            $byEnergy[$meter->energyType][] = $meter;
+        }
+
+        return $byEnergy;
+    })(),
     'timezoneOptions' => $timezoneOptions,
     'countries'  => EuropeanCountries::sortedForLocale($view->locale()),
     'currencies' => EuropeanCountries::currencies(),

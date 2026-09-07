@@ -11,6 +11,7 @@ use App\Http\Controller\ReadingDeletionController;
 use App\Http\Controller\ReadingsController;
 use App\Http\Controller\TariffController;
 use App\Http\JsonResponse;
+use App\Http\MeterResolver;
 use App\Http\Request;
 use App\Http\Router;
 use App\Http\SecurityHeaders;
@@ -20,6 +21,7 @@ use App\Repository\BatteryReadingRepository;
 use App\Repository\BatteryRepository;
 use App\Repository\DynamicPriceRepository;
 use App\Repository\ElectricityReadingRepository;
+use App\Repository\MeterRepository;
 use App\Repository\TariffRepository;
 use App\Repository\UserRepository;
 use App\Repository\UtilityReadingRepository;
@@ -31,7 +33,9 @@ use App\Service\AnnualConsumptionService;
 use App\Service\CostCalculationService;
 use App\Service\ReadingGranularityPolicy;
 use App\Service\TariffCalculatorService;
+use App\Service\UtilityConsumptionSeriesService;
 use App\Support\DynamicPricing;
+use App\Support\Limits;
 
 header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-store');
@@ -144,12 +148,17 @@ try {
     exit;
 }
 
-$readings = new ReadingsController($elecRepo, $gasRepo, $waterRepo);
+// Compteur visé par les écritures et les historiques (#55). Les rapports, eux,
+// somment tout le parc et n'acceptent pas de `meter_id` : ce résolveur ne sert
+// qu'aux chemins qui désignent UN compteur.
+$meterResolver = new MeterResolver(new MeterRepository($pdo, $userId, Limits::metersPerEnergy($config)));
+
+$readings = new ReadingsController($elecRepo, $gasRepo, $waterRepo, new UtilityConsumptionSeriesService(), $meterResolver);
 $cost     = new CostController($costSvc, new AnnualConsumptionService($costSvc), DynamicPricing::isEnabled($config));
 $tariffs  = new TariffController($tariffRepo);
-$entries  = new MeterEntryController($gasRepo, $waterRepo, $elecRepo, $elecThrottle);
-$deletion = new ReadingDeletionController($gasRepo, $waterRepo, $elecRepo);
-$ingest   = new IngestController($elecRepo, $gasRepo, $waterRepo, $elecThrottle);
+$entries  = new MeterEntryController($gasRepo, $waterRepo, $elecRepo, $elecThrottle, $meterResolver);
+$deletion = new ReadingDeletionController($gasRepo, $waterRepo, $elecRepo, $meterResolver);
+$ingest   = new IngestController($elecRepo, $gasRepo, $waterRepo, $elecThrottle, $meterResolver);
 // Batteries (#26) : le repository d'index est scopé sur UNE batterie, connue
 // seulement à la lecture de la requête — d'où une fabrique plutôt qu'une instance.
 // Le plafond est d'un relevé par jour civil de l'utilisateur, sans lien avec la

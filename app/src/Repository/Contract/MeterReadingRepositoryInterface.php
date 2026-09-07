@@ -15,8 +15,34 @@ interface MeterReadingRepositoryInterface
 {
     public function save(DateTimeImmutable $readingAt, float $counterM3): void;
 
-    /** @return array<int,array{id:int,reading_at:string,counter_m3:float,delta_m3:float|null}> */
+    /**
+     * Même repository, scopé sur un compteur DÉSIGNÉ (#55) ; `null` rend
+     * l'instance courante.
+     *
+     * Ne change que les chemins mono-compteur — écriture, historique, dernier
+     * index, bornes d'antidatage. Les séries de rapport restent celles du parc.
+     */
+    public function forMeter(?int $meterId): self;
+
+    /**
+     * Historique complet DU COMPTEUR, du plus récent au plus ancien, chaque
+     * relevé avec son delta.
+     *
+     * Un seul compteur, pas le parc : chaîner les deltas entre compteurs ferait
+     * alterner des écarts positifs et négatifs qui ne sont la consommation de
+     * rien. Pour la série du parc, cf. {@see getFleetSeries()}.
+     *
+     * @return array<int,array{id:int,reading_at:string,counter_m3:float,delta_m3:float|null}>
+     */
     public function getAllReadings(): array;
+
+    /**
+     * Série cumulée de TOUT le parc, du plus ancien au plus récent (#55) : union
+     * des horodatages, somme des index interpolés-clampés par compteur.
+     *
+     * @return list<array{reading_at: string, counter_m3: float}>
+     */
+    public function getFleetSeries(): array;
 
     /** Nombre total de relevés du fluide (pagination, #257). */
     public function countReadings(): int;

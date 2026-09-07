@@ -956,6 +956,11 @@ return [
     'import.battery_target'                        => 'Batterie visée',
     'import.reg_charge'                            => 'Index d\'entrée (charge)',
     'import.reg_discharge'                         => 'Index de sortie (décharge)',
+    // Cible d'import multi-compteur (#55).
+    'import.meter_title'                           => 'Compteur à alimenter',
+    'import.meter_hint'                            => 'Choisissez le compteur que ce fichier alimente : un import ne peut en viser qu\'un, deux compteurs mêlés dans un même fichier seraient indétectables. Laissez « compteur par défaut » si vous n\'en avez qu\'un.',
+    'import.meter_target'                          => 'Compteur visé',
+    'import.meter_default'                         => 'Compteur par défaut',
 
     // ── Parc de compteurs (#55) ─────────────────────────────────────────────
     // `meters.*` et non `meter.*` : ce dernier appartient déjà à la page de

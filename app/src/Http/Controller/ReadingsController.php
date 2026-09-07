@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Controller;
 
 use App\Http\JsonResponse;
+use App\Http\MeterResolver;
 use App\Http\Pagination;
 use App\Http\Request;
 use App\Repository\Contract\MeterReadingRepositoryInterface;
@@ -23,12 +24,27 @@ final class ReadingsController
         private readonly MeterReadingRepositoryInterface $gasRepo,
         private readonly MeterReadingRepositoryInterface $waterRepo,
         private readonly UtilityConsumptionSeriesService $volumeSeries = new UtilityConsumptionSeriesService(),
+        // Compteur visé par les lectures MONO-COMPTEUR (index du jour,
+        // historiques). null = compteur par défaut, comportement d'avant #55.
+        private readonly ?MeterResolver $meters = null,
     ) {
     }
 
+    /** Compteur visé, résolu à la demande ; null si aucun résolveur câblé. */
+    private function meterFor(Request $request, string $energyType): ?int
+    {
+        return $this->meters?->resolve($request->param('meter_id'), $energyType);
+    }
+
+    /**
+     * Index du jour d'UN compteur : ce sont des odomètres, les sommer n'aurait
+     * pas de sens. Les rapports, eux, restent en flotte.
+     */
     public function today(Request $request): JsonResponse
     {
-        return JsonResponse::ok($this->electricityRepo->getTodayIndexValues());
+        $repo = $this->electricityRepo->forMeter($this->meterFor($request, 'electricity'));
+
+        return JsonResponse::ok($repo->getTodayIndexValues());
     }
 
     public function monthlyDelta(Request $request): JsonResponse
@@ -48,19 +64,24 @@ final class ReadingsController
      */
     public function gasHistory(Request $request): JsonResponse
     {
-        return $this->utilityHistory($request, $this->gasRepo);
+        return $this->utilityHistory($request, $this->gasRepo->forMeter($this->meterFor($request, 'gas')));
     }
 
     public function waterHistory(Request $request): JsonResponse
     {
-        return $this->utilityHistory($request, $this->waterRepo);
+        return $this->utilityHistory($request, $this->waterRepo->forMeter($this->meterFor($request, 'water')));
     }
 
+    /**
+     * Historique d'UN compteur : entrelacer les index de plusieurs compteurs
+     * rendrait la liste illisible, et sa colonne de delta franchement fausse.
+     */
     public function electricityHistory(Request $request): JsonResponse
     {
-        $total = $this->electricityRepo->countHistory();
+        $repo  = $this->electricityRepo->forMeter($this->meterFor($request, 'electricity'));
+        $total = $repo->countHistory();
         $page  = Pagination::fromRequest($request)->clampTo($total);
-        $data  = $this->electricityRepo->getHistoryPage($page->perPage(), $page->offset());
+        $data  = $repo->getHistoryPage($page->perPage(), $page->offset());
 
         // `previous` : relevé immédiatement plus ancien que la page, hors liste.
         // Les deltas électricité sont calculés par registre côté client, qui en a

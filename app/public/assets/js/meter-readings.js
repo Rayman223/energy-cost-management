@@ -52,6 +52,14 @@ function setFeedback(id, text, cls = '') {
   feedback.className = `form-feedback ${cls}`.trim();
 }
 
+// Compteur visé par une saisie ou une lecture d'historique (#55). Le <select>
+// existe toujours (masqué s'il n'y a qu'un compteur) ; vide quand le compte n'en
+// a encore aucun, auquel cas l'API résout le compteur par défaut — et le crée au
+// premier relevé, comme avant le multi-compteur.
+function meterTarget(prefix) {
+  return document.getElementById(`${prefix}-meter`)?.value || '';
+}
+
 function readingAt(prefix) {
   const date = document.getElementById(`${prefix}-date`)?.value || '';
   const time = document.getElementById(`${prefix}-time`)?.value || '00:00';
@@ -244,7 +252,10 @@ function renderElectricityReadings(tbodyId, rows, emptyLabel, data) {
 }
 
 const loadElectricityHistory = (page) =>
-  loadHistory('electricity', 'electricity_history', tr('emptyElectricity', 'No electricity reading recorded.'), renderElectricityReadings, page);
+  loadHistory(
+    'electricity', 'electricity_history', tr('emptyElectricity', 'No electricity reading recorded.'),
+    renderElectricityReadings, page, `&meter_id=${meterTarget('electricity')}`
+  );
 
 async function submitUtility(prefix, action) {
   const btn = document.getElementById(`${prefix}-btn`);
@@ -265,7 +276,7 @@ async function submitUtility(prefix, action) {
     const res = await fetch(`api?action=${action}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ counter_m3: value, reading_at: at }),
+      body: JSON.stringify({ counter_m3: value, reading_at: at, meter_id: meterTarget(prefix) }),
     });
     const data = await res.json();
     if (data.ok) {
@@ -288,7 +299,7 @@ async function submitUtility(prefix, action) {
 async function submitElectricity() {
   const btn = document.getElementById('electricity-btn');
   const { date, value: at } = readingAt('electricity');
-  const payload = { reading_at: at };
+  const payload = { reading_at: at, meter_id: meterTarget('electricity') };
   let hasValue = false;
   let invalid = false;
 
@@ -481,8 +492,14 @@ async function deleteAndReload(action, payload, feedbackId, reloadFn) {
   }
 }
 
-const reloadGas = (page) => loadHistory('gas', 'gas_history', tr('emptyGas', 'No gas reading recorded.'), renderReadings, page);
-const reloadWater = (page) => loadHistory('water', 'water_history', tr('emptyWater', 'No water reading recorded.'), renderReadings, page);
+const reloadGas = (page) => loadHistory(
+  'gas', 'gas_history', tr('emptyGas', 'No gas reading recorded.'), renderReadings, page,
+  `&meter_id=${meterTarget('gas')}`
+);
+const reloadWater = (page) => loadHistory(
+  'water', 'water_history', tr('emptyWater', 'No water reading recorded.'), renderReadings, page,
+  `&meter_id=${meterTarget('water')}`
+);
 const reloadBattery = (page) => loadHistory(
   'battery', 'battery_history', tr('emptyBattery', 'No battery reading recorded.'),
   renderBatteryReadings, page, `&battery_id=${batteryTarget()}`
@@ -503,11 +520,14 @@ function wireRowDeletion(tbodyId, action, payloadFromBtn, feedbackId, reloadFn) 
   });
 }
 
-function wireDeleteAll(btnId, action, feedbackId, reloadFn) {
+// `payloadFn` : la cible est relue au clic, comme pour les suppressions de ligne.
+// Sans elle, « tout supprimer » viderait le compteur par défaut quel que soit
+// celui affiché à l'écran (#55).
+function wireDeleteAll(btnId, action, feedbackId, reloadFn, payloadFn = () => ({})) {
   document.getElementById(btnId)?.addEventListener('click', () => {
     confirmDelete(tr('deleteAllConfirm', 'Delete all readings for this utility?'), tr('deleteAll', 'Delete all'),
       // L'historique est vidé : toute page au-delà de la première disparaîtrait.
-      () => deleteAndReload(action, {}, feedbackId, () => reloadFn(1)));
+      () => deleteAndReload(action, payloadFn(), feedbackId, () => reloadFn(1)));
   });
 }
 
@@ -526,20 +546,27 @@ function wirePager(prefix) {
   });
 }
 
-wireRowDeletion('gas-tbody', 'delete_gas_reading', (btn) => ({ id: parseInt(btn.dataset.id, 10) }), 'gas-del-feedback', reloadGas);
-wireRowDeletion('water-tbody', 'delete_water_reading', (btn) => ({ id: parseInt(btn.dataset.id, 10) }), 'water-del-feedback', reloadWater);
-wireRowDeletion('electricity-tbody', 'delete_electricity_reading', (btn) => ({ reading_at: btn.dataset.at }), 'electricity-del-feedback', loadElectricityHistory);
+// La cible est relue au moment du clic : elle a pu changer depuis le rendu.
+wireRowDeletion('gas-tbody', 'delete_gas_reading', (btn) => ({ id: parseInt(btn.dataset.id, 10), meter_id: meterTarget('gas') }), 'gas-del-feedback', reloadGas);
+wireRowDeletion('water-tbody', 'delete_water_reading', (btn) => ({ id: parseInt(btn.dataset.id, 10), meter_id: meterTarget('water') }), 'water-del-feedback', reloadWater);
+wireRowDeletion('electricity-tbody', 'delete_electricity_reading', (btn) => ({ reading_at: btn.dataset.at, meter_id: meterTarget('electricity') }), 'electricity-del-feedback', loadElectricityHistory);
 // La cible est relue au moment du clic : elle a pu changer depuis le rendu.
 wireRowDeletion('battery-tbody', 'delete_battery_reading', (btn) => ({ id: parseInt(btn.dataset.id, 10), battery_id: batteryTarget() }), 'battery-del-feedback', reloadBattery);
 
-wireDeleteAll('gas-delete-all', 'delete_gas_all', 'gas-del-feedback', reloadGas);
-wireDeleteAll('water-delete-all', 'delete_water_all', 'water-del-feedback', reloadWater);
-wireDeleteAll('electricity-delete-all', 'delete_electricity_meter', 'electricity-del-feedback', loadElectricityHistory);
+wireDeleteAll('gas-delete-all', 'delete_gas_all', 'gas-del-feedback', reloadGas, () => ({ meter_id: meterTarget('gas') }));
+wireDeleteAll('water-delete-all', 'delete_water_all', 'water-del-feedback', reloadWater, () => ({ meter_id: meterTarget('water') }));
+wireDeleteAll('electricity-delete-all', 'delete_electricity_meter', 'electricity-del-feedback', loadElectricityHistory, () => ({ meter_id: meterTarget('electricity') }));
 // « Tout supprimer » ne vide que la batterie sélectionnée : les autres gardent
 // leur historique. wireDeleteAll poste un corps vide, d'où le surcharge ici.
 document.getElementById('battery-delete-all')?.addEventListener('click', () => {
   confirmDelete(tr('deleteAllConfirm', 'Delete all readings for this utility?'), tr('deleteAll', 'Delete all'),
     () => deleteAndReload('delete_battery_readings_all', { battery_id: batteryTarget() }, 'battery-del-feedback', () => reloadBattery(1)));
+});
+
+// Changer de compteur recharge son historique : la liste affichée doit toujours
+// être celle de la cible que la saisie et la suppression viseront.
+['electricity', 'gas', 'water'].forEach((prefix) => {
+  document.getElementById(`${prefix}-meter`)?.addEventListener('change', () => RELOADERS[prefix](1));
 });
 
 wirePager('electricity');

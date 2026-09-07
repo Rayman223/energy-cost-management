@@ -4,6 +4,7 @@
  * @var array<string,mixed>|null $gasLatest
  * @var array<string,mixed>|null $waterLatest
  * @var list<\App\Domain\Battery> $batteries Parc déclaré (#26) ; vide ⇒ section masquée
+ * @var array<string, list<\App\Domain\Meter>> $metersByEnergy Compteurs par énergie (#55)
  * @var list<string> $available
  * @var ?string $discordUrl
  * @var ?string $donateUrl
@@ -11,6 +12,33 @@
  */
 $today = date('Y-m-d');
 $now = date('H:i');
+
+/**
+ * Sélecteur du compteur visé par une saisie (#55).
+ *
+ * Toujours présent dans le DOM — c'est lui que meter-readings.js lit pour poser
+ * `meter_id` — mais masqué tant qu'il n'y a qu'un compteur : choisir entre une
+ * seule option n'apprend rien, et l'API accepte l'absence de cible dans ce cas.
+ * Aucun compteur ⇒ aucune option ⇒ valeur vide, et le premier relevé crée le
+ * compteur comme il l'a toujours fait.
+ *
+ * Le libellé vide est dérivé à l'affichage, dans la langue du lecteur.
+ */
+$meterSelect = function (string $prefix, string $energyType) use ($metersByEnergy): string {
+    $meters = $metersByEnergy[$energyType] ?? [];
+    $hidden = count($meters) > 1 ? '' : ' bat-row-hidden';
+
+    $options = '';
+    foreach ($meters as $meter) {
+        $label = $meter->isNamed() ? $this->e($meter->label) : $this->te($meter->defaultLabelKey());
+        $options .= '<option value="' . $this->e((string) $meter->id) . '">' . $label . '</option>';
+    }
+
+    return '<div class="form-row' . $hidden . '">'
+        . '<label class="form-label" for="' . $this->e($prefix) . '-meter">' . $this->te('meters.col_meter') . '</label>'
+        . '<select id="' . $this->e($prefix) . '-meter" class="form-input">' . $options . '</select>'
+        . '</div>';
+};
 ?>
 <!DOCTYPE html>
 <html lang="<?= $this->e($this->locale()) ?>" data-confirm-title="<?= $this->e($this->t('common.confirm_title')) ?>" data-confirm-ok="<?= $this->e($this->t('common.confirm')) ?>" data-confirm-cancel="<?= $this->e($this->t('common.cancel')) ?>">
@@ -45,6 +73,7 @@ $now = date('H:i');
     <button type="button" class="btn btn-red btn-sm" id="electricity-delete-all"><?= $this->te('meter.delete_all') ?></button>
   </div>
   <div class="gas-form">
+    <?= $meterSelect('electricity', 'electricity') ?>
     <div class="cards cards-2">
       <div class="form-row">
         <label class="form-label" for="electricity-date"><?= $this->te('meter.reading_date') ?></label>
@@ -93,6 +122,7 @@ $now = date('H:i');
   <div class="section-header"><span class="section-title"><?= $this->te('dash.gas') ?></span><span class="section-line"></span><button type="button" class="btn btn-red btn-sm" id="gas-delete-all"><?= $this->te('meter.delete_all') ?></button></div>
   <div class="gas-grid">
     <div class="gas-form">
+      <?= $meterSelect('gas', 'gas') ?>
       <?php if ($gasLatest): ?><div class="card-sub"><?= $this->te('meter.latest') ?> : <strong><?= $this->num((float) $gasLatest['counter_m3'], 3) ?> m³</strong></div><?php endif; ?>
       <div class="cards cards-2"><div class="form-row"><label class="form-label" for="gas-date"><?= $this->te('meter.reading_date') ?></label><input id="gas-date" type="date" class="form-input" value="<?= $this->e($today) ?>"></div><div class="form-row"><label class="form-label" for="gas-time"><?= $this->te('meter.reading_time') ?></label><input id="gas-time" type="time" class="form-input" value="<?= $this->e($now) ?>"></div></div>
       <div class="form-row"><label class="form-label" for="gas-value"><?= $this->te('meter.counter_m3') ?></label><input id="gas-value" type="number" step="0.001" min="0" class="form-input" placeholder="8523.456"></div>
@@ -107,6 +137,7 @@ $now = date('H:i');
   <div class="section-header"><span class="section-title"><?= $this->te('dash.water') ?></span><span class="section-line"></span><button type="button" class="btn btn-red btn-sm" id="water-delete-all"><?= $this->te('meter.delete_all') ?></button></div>
   <div class="gas-grid">
     <div class="gas-form">
+      <?= $meterSelect('water', 'water') ?>
       <?php if ($waterLatest): ?><div class="card-sub"><?= $this->te('meter.latest') ?> : <strong><?= $this->num((float) $waterLatest['counter_m3'], 3) ?> m³</strong></div><?php endif; ?>
       <div class="cards cards-2"><div class="form-row"><label class="form-label" for="water-date"><?= $this->te('meter.reading_date') ?></label><input id="water-date" type="date" class="form-input" value="<?= $this->e($today) ?>"></div><div class="form-row"><label class="form-label" for="water-time"><?= $this->te('meter.reading_time') ?></label><input id="water-time" type="time" class="form-input" value="<?= $this->e($now) ?>"></div></div>
       <div class="form-row"><label class="form-label" for="water-value"><?= $this->te('meter.counter_m3') ?></label><input id="water-value" type="number" step="0.001" min="0" class="form-input" placeholder="1234.567"></div>

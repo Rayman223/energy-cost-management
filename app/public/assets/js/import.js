@@ -44,6 +44,8 @@
   var registersBox = document.getElementById('import-registers');
   var valueColBox = document.getElementById('import-value-col');
   var batteryBox = document.getElementById('import-battery');
+  var meterBox = document.getElementById('import-meter');
+  var meterSelect = document.getElementById('meter_id');
 
   var units;
   try {
@@ -77,6 +79,31 @@
     }
     if (valueColBox) {
       valueColBox.hidden = isElectricity || isBattery;
+    }
+
+    // Compteur visé (#55) : hors sujet pour un import de batterie, qui a sa
+    // propre cible. Les options des AUTRES énergies sont désactivées et non
+    // seulement masquées — une option cachée reste sélectionnable au clavier, et
+    // le serveur refuserait alors un compteur d'eau pour un fichier d'électricité.
+    if (meterBox) {
+      meterBox.hidden = isBattery;
+    }
+    if (meterSelect && !isBattery) {
+      var matches = false;
+      Array.prototype.forEach.call(meterSelect.options, function (opt) {
+        var energy = opt.getAttribute('data-energy') || '';
+        var usable = energy === '' || energy === typeSelect.value;
+        opt.hidden = !usable;
+        opt.disabled = !usable;
+        if (usable && opt.selected) {
+          matches = true;
+        }
+      });
+      // La sélection courante appartenait à une autre énergie : retour au
+      // compteur par défaut plutôt qu'à une cible invalide restée à l'écran.
+      if (!matches) {
+        meterSelect.value = '';
+      }
     }
   }
 
