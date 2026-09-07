@@ -29,8 +29,12 @@ use RuntimeException;
  */
 final class UtilityReadingRepository implements GasReadingRepositoryInterface, MeterReadingRepositoryInterface, UtilityIngestionInterface
 {
-    /** Compteur d'écriture par défaut, résolu paresseusement (créé au premier relevé). */
-    private ?int $defaultMeterId = null;
+    /**
+     * Compteur d'écriture, résolu paresseusement puis mémoïsé — désigné comme par
+     * défaut. La résolution coûte une requête : la refaire à chaque ligne
+     * doublerait le nombre d'allers-retours d'un import.
+     */
+    private ?int $writeMeterId = null;
 
     /** Compteur des lectures d'HISTORIQUE, résolu une fois (null = aucun). */
     private ?int $historyMeterId = null;
@@ -171,6 +175,14 @@ final class UtilityReadingRepository implements GasReadingRepositoryInterface, M
      */
     private function writeMeterId(): int
     {
+        // Mémoïsé pour les DEUX branches : un import de 200 000 lignes ne doit pas
+        // ajouter 200 000 contrôles d'appartenance, pas plus que 200 000 lectures
+        // de fermeture. Le compteur d'écriture ne change pas au cours d'une
+        // instance — il est fixé par le constructeur, ou créé une fois.
+        if ($this->writeMeterId !== null) {
+            return $this->writeMeterId;
+        }
+
         if ($this->meterId !== null) {
             // Compteur DÉSIGNÉ : vérifié en appartenance, jamais créé à la volée —
             // un identifiant inconnu est une erreur de l'appelant, pas une
@@ -179,10 +191,10 @@ final class UtilityReadingRepository implements GasReadingRepositoryInterface, M
                 throw new RuntimeException('Unknown ' . $this->energyType . ' meter: ' . $this->meterId);
             }
 
-            return $this->meterId;
+            return $this->writeMeterId = $this->meterId;
         }
 
-        return $this->defaultMeterId ??= (new MeterTopology($this->pdo))
+        return $this->writeMeterId = (new MeterTopology($this->pdo))
             ->ensureMeter($this->userId, $this->energyType);
     }
 

@@ -1473,7 +1473,9 @@ final class ElectricityReadingRepository implements LegacyDailyRepositoryInterfa
 
     /**
      * Index interpolé à un instant pour PLUSIEURS registres en 2 requêtes (au
-     * lieu de 2 par registre). Même sémantique que {@see interpolatedValueAt}.
+     * lieu de 2 par registre) : interpolation linéaire entre les deux relevés
+     * encadrants, CLAMPÉE sur le plus proche quand l'instant sort de la plage du
+     * registre, et `null` quand le registre n'a aucun relevé.
      *
      * @param list<int> $registerIds
      * @return array<int, array{value: float, timestamp: string}|null> register_id => valeur interpolée (ou null si registre vide)
