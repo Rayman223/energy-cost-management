@@ -199,6 +199,14 @@ $outbound = fn (string $url, string $labelKey): string =>
     </dl>
     <?= $paras(['legal.notice.contact_body']) ?>
 
+    <?php // AGPL §13 (#73) : le service tournant sur un logiciel sous AGPL doit
+          // offrir son code source à ses utilisateurs. Le lien du dépôt, déjà
+          // présent dans l'en-tête, est ici rattaché à la licence pour que
+          // l'offre soit explicite et opposable. ?>
+    <?= $h2('legal.notice.source_title') ?>
+    <p><?= $this->te('legal.notice.source_body') ?>
+       <a href="https://github.com/Rayman223/energy-cost-management" target="_blank" rel="noopener noreferrer"><?= $this->te('legal.notice.source_link') ?></a>.</p>
+
   <?php else: ?>
 
     <?= $paras(['legal.terms.intro']) ?>
