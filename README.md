@@ -12,7 +12,7 @@
 [![Live app](https://img.shields.io/badge/Live%20app-energy--cost.eu-2ea44f?style=for-the-badge)](https://energy-cost.eu)
 
 [![CI](https://github.com/Rayman223/energy-cost-management/actions/workflows/ci.yml/badge.svg)](https://github.com/Rayman223/energy-cost-management/actions/workflows/ci.yml)
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![License: AGPL v3](https://img.shields.io/badge/License-AGPL%20v3-blue.svg)](LICENSE)
 [![PHP 8.4+](https://img.shields.io/badge/PHP-8.4%2B-777bb4.svg)](https://www.php.net/)
 
 A self-hostable **multi-tenant European platform** to track and estimate energy
@@ -401,4 +401,12 @@ issue → branch → PR workflow. By participating you agree to the
 
 ## License
 
-Released under the [MIT License](LICENSE).
+Copyright (C) 2026 Rayman223.
+
+Released under the [GNU Affero General Public License v3.0 or later](LICENSE)
+(`AGPL-3.0-or-later`). You are free to use, study, modify and redistribute this
+software; in exchange, any modified version you run as a network service must
+offer its complete source code to the users of that service (AGPL section 13).
+
+Versions published before this relicensing commit remain available under the
+MIT License, under which they were originally released.
