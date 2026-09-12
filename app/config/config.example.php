@@ -152,7 +152,7 @@ return [
     'limits' => [
         // Compteurs PAR ÉNERGIE (électricité, gaz, eau) et par utilisateur. Sert
         // aussi de plafond au parc de batteries. Ramené dans [1, 50] à la lecture.
-        'meters_per_energy' => 2,
+        'meters_per_energy' => 5,
     ],
 
     // Lien vers le serveur Discord, affiché dans l'en-tête des pages.

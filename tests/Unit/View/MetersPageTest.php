@@ -164,7 +164,7 @@ final class MetersPageTest extends TestCase
 
         $html = $this->render([$meter], editing: $meter);
 
-        self::assertStringContainsString('Renommer un compteur', $html);
+        self::assertStringContainsString('Modifier un compteur', $html);
         self::assertStringNotContainsString('name="energy_type"', $html);
         self::assertStringContainsString('L&#039;énergie ne peut plus changer', $html);
         self::assertStringContainsString('value="Cuisine"', $html);
