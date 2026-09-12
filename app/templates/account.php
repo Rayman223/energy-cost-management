@@ -344,8 +344,13 @@ $csrf = \App\Security\Csrf::field();
            un import alimente UN compteur, et deux compteurs mêlés dans un même
            fichier seraient indétectables ligne à ligne. Toutes les énergies sont
            listées dans un seul <select>, groupées ; import.js n'affiche que les
-           options de l'énergie choisie. Laisser « par défaut » reste possible et
-           reproduit le comportement d'avant le multi-compteur. -->
+           options de l'énergie choisie.
+
+           « Compteur par défaut » n'est proposé que si l'énergie choisie compte au
+           plus UN compteur : au-delà, il n'existe pas de défaut, et le serveur
+           refuse l'ambiguïté plutôt que d'écrire dans le plus ancien. C'est
+           import.js qui le montre ou le cache, la liste étant partagée par les
+           trois énergies. -->
       <?php if (($metersByEnergy ?? []) !== []): ?>
       <fieldset id="import-meter" class="import-registers">
         <legend><?= $this->te('import.meter_title') ?></legend>
@@ -354,7 +359,7 @@ $csrf = \App\Security\Csrf::field();
           <div>
             <label for="meter_id"><?= $this->te('import.meter_target') ?></label>
             <select id="meter_id" name="meter_id">
-              <option value="" data-energy=""><?= $this->te('import.meter_default') ?></option>
+              <option value="" data-energy="" data-default="1"><?= $this->te('import.meter_default') ?></option>
               <?php foreach ($metersByEnergy as $energy => $meters): ?>
                 <?php foreach ($meters as $meter): ?>
                 <option value="<?= $this->e((string) $meter->id) ?>" data-energy="<?= $this->e($energy) ?>">

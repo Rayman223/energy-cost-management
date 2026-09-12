@@ -4,9 +4,11 @@ declare(strict_types=1);
 
 namespace App\Service\Import;
 
+use App\Domain\Meter;
 use App\Repository\BatteryReadingRepository;
 use App\Repository\Exception\ClosedMeterException;
 use App\Repository\ElectricityReadingRepository;
+use App\Repository\MeterRepository;
 use App\Repository\UtilityReadingRepository;
 use App\Service\BulkImportService;
 use App\Service\ReadingGranularityPolicy;
@@ -57,11 +59,21 @@ final class ImportRunner
         $batteryId = $batteryId === false ? null : $batteryId;
 
         // Compteur visé (#55), à côté de battery_id et de la même façon : un
-        // import alimente UN compteur. Absent ⇒ compteur par défaut, comme avant
-        // le multi-compteur. Un identifiant étranger est refusé par le repository
-        // lui-même, qui vérifie l'appartenance avant d'écrire.
+        // import alimente UN compteur. Un identifiant étranger est refusé par le
+        // repository lui-même, qui vérifie l'appartenance avant d'écrire.
         $meterId = filter_var($post['meter_id'] ?? null, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
         $meterId = $meterId === false ? null : $meterId;
+
+        // Cible absente ET plusieurs compteurs : refus, même règle que l'API
+        // (App\Http\MeterResolver). Il n'existe alors PAS de « compteur par
+        // défaut » — se replier sur le plus ancien écrirait des milliers de lignes
+        // dans le mauvais compteur, et le rapport d'import n'en dirait rien.
+        // Absent avec un seul compteur, ou aucun, reste accepté : c'est le cas de
+        // tout le parc existant, et celui d'un compte neuf.
+        if ($meterId === null && Meter::isEnergy($energyType)
+            && count((new MeterRepository($pdo, $targetUserId))->listByEnergy($energyType)) > 1) {
+            throw new \InvalidArgumentException('Sélectionnez le compteur à alimenter avant d\'importer.');
+        }
 
         $file = is_array($files['import_file'] ?? null) ? $files['import_file'] : [];
 

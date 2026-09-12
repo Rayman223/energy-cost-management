@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Tests\Integration;
 
+use App\Domain\Meter;
+use App\Repository\MeterRepository;
 use App\Repository\UserRepository;
 use App\Service\BulkImportService;
 use App\Service\Import\ImportMapping;
@@ -139,6 +141,44 @@ final class ImportRunnerDbTest extends DatabaseTestCase
     }
 
     /** Index eau (counter_m3) d'un utilisateur à un horodatage donné (null si absent). */
+    /**
+     * Plusieurs compteurs d'une énergie et aucune cible : refus, comme sur l'API
+     * (#55). Il n'existe alors PAS de « compteur par défaut » — se replier sur le
+     * plus ancien écrirait tout le fichier dans le mauvais compteur, et le rapport
+     * d'import, qui compte des lignes et non des cibles, n'en dirait rien.
+     *
+     * Le refus tombe AVANT la lecture du fichier : le test n'en fournit aucun.
+     */
+    public function testWebImportRefusesAnAmbiguousTargetBeforeReadingTheFile(): void
+    {
+        $userId = (new UserRepository($this->pdo()))->create('https://iss.example', 'ambig', 'example', 'Ambig')->id;
+        $meters = new MeterRepository($this->pdo(), $userId);
+        $meters->insert(new Meter(id: 0, energyType: 'electricity', label: 'Maison'));
+        $meters->insert(new Meter(id: 0, energyType: 'electricity', label: 'Atelier'));
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('Sélectionnez le compteur');
+
+        (new ImportRunner())->runFromRequest($this->pdo(), $userId, ['energy_type' => 'electricity'], []);
+    }
+
+    /**
+     * Un seul compteur : la cible reste implicite. C'est le cas de tout le parc
+     * existant, et l'exiger casserait les imports en place.
+     */
+    public function testWebImportStillAcceptsAnImplicitTargetWithASingleMeter(): void
+    {
+        $userId = (new UserRepository($this->pdo()))->create('https://iss.example', 'single', 'example', 'Single')->id;
+        (new MeterRepository($this->pdo(), $userId))->insert(new Meter(id: 0, energyType: 'electricity'));
+
+        // Pas de fichier fourni : on doit dépasser la garde de cible et échouer
+        // plus loin, sur le téléversement — preuve que l'ambiguïté n'a pas bloqué.
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('Aucun fichier fourni');
+
+        (new ImportRunner())->runFromRequest($this->pdo(), $userId, ['energy_type' => 'electricity'], []);
+    }
+
     private function waterValue(int $userId, string $readingAt): ?float
     {
         $stmt = $this->pdo()->prepare(
