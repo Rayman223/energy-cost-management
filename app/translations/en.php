@@ -957,6 +957,7 @@ return [
     'meters.closed_field'                          => 'Closing date',
     'meters.closed_hint'                           => 'From this date on, the meter accepts no further reading. Its existing readings still count in every report: the spending did happen. Leave empty for a meter in service.',
     'meters.invalid_closed_on'                     => 'Invalid closing date.',
+    'meters.none_yet'                              => 'No meter declared for this energy: your first reading will create one, which you can then name on',
     'meters.entry_closed'                          => 'This meter is closed: only readings dated before its closing date are accepted.',
 
     // ── Meter fleet (#55) ───────────────────────────────────────────────────

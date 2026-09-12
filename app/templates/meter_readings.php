@@ -43,6 +43,17 @@ $meterSelect = function (string $prefix, string $energyType) use ($metersByEnerg
 
     $hidden = count($meters) > 1 ? '' : ' bat-row-hidden';
 
+    // Parc VIDE : le premier relevé créera le compteur à la volée — comportement
+    // d'avant #55, conservé pour ne pas imposer un détour par /meters à un compte
+    // neuf. Mais le DIRE : sans ce mot, l'utilisateur crée un compteur sans le
+    // savoir, et ignore qu'il pourra le nommer. Le message vit HORS de la ligne du
+    // sélecteur, qui est masquée tant qu'il y a moins de deux compteurs.
+    $hint = '';
+    if ($meters === []) {
+        $hint = '<p class="dates-hint">' . $this->te('meters.none_yet')
+            . ' <a href="' . $this->e($this->url('meters')) . '">' . $this->te('nav.meters') . '</a>.</p>';
+    }
+
     $options = '';
     foreach ($meters as $meter) {
         $closed = $meter->isClosedOn($closureToday);
@@ -55,7 +66,8 @@ $meterSelect = function (string $prefix, string $energyType) use ($metersByEnerg
             . ($closed ? ' data-closed="1"' : '') . '>' . $label . '</option>';
     }
 
-    return '<div class="form-row' . $hidden . '">'
+    return $hint
+        . '<div class="form-row' . $hidden . '">'
         . '<label class="form-label" for="' . $this->e($prefix) . '-meter">' . $this->te('meters.col_meter') . '</label>'
         . '<select id="' . $this->e($prefix) . '-meter" class="form-input">' . $options . '</select>'
         . '</div>';
