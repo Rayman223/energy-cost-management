@@ -969,7 +969,7 @@ return [
     'meters.next_step'                             => 'Zodra uw meters zijn opgegeven, voert u hun standen in via de pagina « Mijn standen invoeren ».',
     'meters.fleet_title'                           => 'Opgegeven meters',
     'meters.add_title'                             => 'Een meter toevoegen',
-    'meters.edit_title'                            => 'Een meter hernoemen',
+    'meters.edit_title'                            => 'Meter wijzigen',
     // Naam die wordt getoond voor een meter zonder eigen naam. Bij weergave
     // afgeleid, dus in de taal van de lezer in plaats van vast in de databank.
     'meters.default_label.electricity'             => 'Elektriciteitsmeter',
@@ -990,7 +990,7 @@ return [
     'meters.label_hint'                            => 'Laat leeg voor een algemene naam, vertaald in uw taal.',
     'meters.save_new'                              => 'Toevoegen',
     'meters.save_edit'                             => 'Opslaan',
-    'meters.edit'                                  => 'Hernoemen',
+    'meters.edit'                                  => 'Wijzigen',
     'meters.delete'                                => 'Verwijderen',
     'meters.delete_confirm'                        => 'Deze meter verwijderen? Zijn {count} standen worden definitief mee verwijderd.',
     'meters.saved'                                 => '✓ Meter opgeslagen.',

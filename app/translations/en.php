@@ -970,7 +970,7 @@ return [
     'meters.next_step'                             => 'Once your meters are declared, enter their indexes from the “Enter my indexes” page.',
     'meters.fleet_title'                           => 'Declared meters',
     'meters.add_title'                             => 'Add a meter',
-    'meters.edit_title'                            => 'Rename a meter',
+    'meters.edit_title'                            => 'Edit a meter',
     // Label shown for a meter the user has not named. Derived at display time,
     // hence rendered in the reader's language rather than frozen in the database.
     'meters.default_label.electricity'             => 'Electricity meter',
@@ -991,7 +991,7 @@ return [
     'meters.label_hint'                            => 'Leave empty for a generic name, translated into your language.',
     'meters.save_new'                              => 'Add',
     'meters.save_edit'                             => 'Save',
-    'meters.edit'                                  => 'Rename',
+    'meters.edit'                                  => 'Edit',
     'meters.delete'                                => 'Delete',
     'meters.delete_confirm'                        => 'Delete this meter? Its {count} readings will be deleted with it, permanently.',
     'meters.saved'                                 => '✓ Meter saved.',

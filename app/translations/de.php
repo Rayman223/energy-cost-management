@@ -970,7 +970,7 @@ return [
     'meters.next_step'                             => 'Sobald Ihre Zähler erfasst sind, tragen Sie deren Stände auf der Seite « Zählerstände erfassen » ein.',
     'meters.fleet_title'                           => 'Erfasste Zähler',
     'meters.add_title'                             => 'Zähler hinzufügen',
-    'meters.edit_title'                            => 'Zähler umbenennen',
+    'meters.edit_title'                            => 'Zähler bearbeiten',
     // Bezeichnung für einen Zähler ohne eigenen Namen. Bei der Anzeige
     // abgeleitet, also in der Sprache des Lesers statt fest in der Datenbank.
     'meters.default_label.electricity'             => 'Stromzähler',
@@ -991,7 +991,7 @@ return [
     'meters.label_hint'                            => 'Leer lassen für einen allgemeinen, in Ihre Sprache übersetzten Namen.',
     'meters.save_new'                              => 'Hinzufügen',
     'meters.save_edit'                             => 'Speichern',
-    'meters.edit'                                  => 'Umbenennen',
+    'meters.edit'                                  => 'Bearbeiten',
     'meters.delete'                                => 'Löschen',
     'meters.delete_confirm'                        => 'Diesen Zähler löschen? Seine {count} Zählerstände werden endgültig mitgelöscht.',
     'meters.saved'                                 => '✓ Zähler gespeichert.',

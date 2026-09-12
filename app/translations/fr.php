@@ -978,7 +978,7 @@ return [
     'meters.next_step'                             => 'Une fois vos compteurs déclarés, saisissez leurs index depuis la page « Saisir mes index ».',
     'meters.fleet_title'                           => 'Compteurs déclarés',
     'meters.add_title'                             => 'Ajouter un compteur',
-    'meters.edit_title'                            => 'Renommer un compteur',
+    'meters.edit_title'                            => 'Modifier un compteur',
     // Libellé affiché pour un compteur que l'utilisateur n'a pas nommé. Dérivé à
     // l'affichage, donc rendu dans la langue du lecteur plutôt que figé en base.
     'meters.default_label.electricity'             => 'Compteur électrique',
@@ -999,7 +999,7 @@ return [
     'meters.label_hint'                            => 'Laissez vide pour un nom générique, traduit dans votre langue.',
     'meters.save_new'                              => 'Ajouter',
     'meters.save_edit'                             => 'Enregistrer',
-    'meters.edit'                                  => 'Renommer',
+    'meters.edit'                                  => 'Modifier',
     'meters.delete'                                => 'Supprimer',
     'meters.delete_confirm'                        => 'Supprimer ce compteur ? Ses {count} relevés seront supprimés avec lui, définitivement.',
     'meters.saved'                                 => '✓ Compteur enregistré.',
