@@ -957,6 +957,7 @@ return [
     'meters.closed_hint'                           => 'Ab diesem Datum nimmt der Zähler keinen Stand mehr an. Seine bisherigen Stände zählen weiterhin in allen Auswertungen: die Ausgabe hat ja stattgefunden. Für einen Zähler in Betrieb leer lassen.',
     'meters.invalid_closed_on'                     => 'Ungültiges Schließungsdatum.',
     'meters.none_yet'                              => 'Kein Zähler für diese Energieart erfasst: Ihr erster Stand legt einen an, den Sie anschließend benennen können.',
+    'meters.entry_blocked'                         => '⚠ Dieser Zähler ist seit dem {date} geschlossen: wählen Sie ein früheres Datum, um einen Stand zu erfassen.',
     'meters.entry_closed'                          => 'Dieser Zähler ist geschlossen: nur Stände vor dem Schließungsdatum werden angenommen.',
 
     // ── Zählerpark (#55) ────────────────────────────────────────────────────

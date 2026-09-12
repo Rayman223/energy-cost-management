@@ -63,18 +63,52 @@ function meterTarget(prefix) {
 // Le compteur sélectionné est-il fermé ? L'option reste sélectionnable — la borne
 // de fermeture est EXCLUE, un relevé antérieur y a toute sa place — mais l'état
 // mérite d'être dit : sans cela, un relevé du jour partirait pour revenir en 422.
-function selectedMeterClosed(prefix) {
+function selectedMeterClosedOn(prefix) {
   const select = document.getElementById(`${prefix}-meter`);
   const option = select?.selectedOptions?.[0];
 
-  return !!option && option.hasAttribute('data-closed');
+  return option?.getAttribute('data-closed') || null;
+}
+
+// Champs de VALEUR d'un fluide — ceux qu'on verrouille quand le relevé serait
+// refusé. La date et l'heure restent actives : c'est en les corrigeant que
+// l'utilisateur débloque la saisie, les verrouiller l'enfermerait.
+function valueFieldsOf(prefix) {
+  const ids = prefix === 'electricity'
+    ? ELEC_KEYS.map((key) => `electricity-${key}`)
+    : [`${prefix}-value`];
+
+  return ids.map((id) => document.getElementById(id)).filter(Boolean);
 }
 
 // Signale la fermeture sans rien bloquer. Le bouton reste actif : c'est le
 // serveur qui tranche, et il tranche sur la DATE du relevé, pas sur l'état du
 // compteur. Les historiques restent consultables — fermer n'efface rien.
+// Verrouille la saisie quand elle SERAIT REFUSÉE, et seulement alors.
+//
+// Le critère est la DATE saisie, pas l'état du compteur : la fermeture est une
+// borne EXCLUE, un relevé antérieur reste valable — c'est même le geste le plus
+// courant juste après une fermeture, saisir le dernier index relevé la veille.
+// Griser dès qu'un compteur fermé est sélectionné interdirait depuis le web ce
+// que le serveur accepte.
 function syncClosedState(prefix) {
-  if (selectedMeterClosed(prefix)) {
+  const closedOn = selectedMeterClosedOn(prefix);
+  const date = document.getElementById(`${prefix}-date`)?.value || '';
+  // Comparaison lexicographique sur 'YYYY-MM-DD' : équivalente à l'ordre
+  // chronologique, et sans fuseau — la borne est une date, pas un instant.
+  const blocked = closedOn !== null && date !== '' && date >= closedOn;
+
+  const btn = document.getElementById(`${prefix}-btn`);
+  if (btn) {
+    btn.disabled = blocked;
+  }
+  valueFieldsOf(prefix).forEach((field) => {
+    field.disabled = blocked;
+  });
+
+  if (blocked) {
+    setFeedback(`${prefix}-feedback`, tr('meterClosedOn', 'This meter closed on {date}: pick an earlier date.', { date: closedOn }), 'err');
+  } else if (closedOn !== null) {
     setFeedback(`${prefix}-feedback`, tr('meterClosed', 'This meter is closed: only readings dated before its closing date are accepted.'), '');
   } else {
     setFeedback(`${prefix}-feedback`, '');
@@ -603,6 +637,11 @@ document.getElementById('battery-delete-all')?.addEventListener('click', () => {
   document.getElementById(`${prefix}-meter`)?.addEventListener('change', () => {
     syncClosedState(prefix);
     RELOADERS[prefix](1);
+  });
+  // La date décide du verrouillage : la changer doit le réévaluer aussitôt,
+  // sinon corriger la date laisserait le formulaire grisé.
+  ['change', 'input'].forEach((event) => {
+    document.getElementById(`${prefix}-date`)?.addEventListener(event, () => syncClosedState(prefix));
   });
   syncClosedState(prefix);
 });

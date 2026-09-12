@@ -957,6 +957,7 @@ return [
     'meters.closed_hint'                           => 'Vanaf deze datum aanvaardt de meter geen enkele stand meer. Zijn bestaande standen blijven in alle rapporten meetellen: de uitgave heeft wel degelijk plaatsgevonden. Laat leeg voor een meter in dienst.',
     'meters.invalid_closed_on'                     => 'Ongeldige afsluitdatum.',
     'meters.none_yet'                              => 'Geen meter opgegeven voor deze energiesoort: uw eerste stand maakt er een aan, die u daarna kunt benoemen.',
+    'meters.entry_blocked'                         => '⚠ Deze meter is afgesloten sinds {date}: kies een eerdere datum om een stand in te voeren.',
     'meters.entry_closed'                          => 'Deze meter is afgesloten: alleen standen van vóór de afsluitdatum worden aanvaard.',
 
     // ── Meterpark (#55) ─────────────────────────────────────────────────────

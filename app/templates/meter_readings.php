@@ -68,8 +68,13 @@ $meterSelect = function (string $prefix, string $energyType) use ($metersByEnerg
             $label .= ' — ' . $this->te('meters.closed_on', ['date' => $meter->closedOn->format('Y-m-d')]);
         }
 
+        // La DATE de fermeture, et pas un simple drapeau : c'est elle que le JS
+        // compare à la date saisie. La borne étant exclue, un relevé antérieur
+        // reste légitime — seul celui daté du jour de fermeture ou après est
+        // bloqué à l'écran, comme il le serait par le serveur.
         $options .= '<option value="' . $this->e((string) $meter->id) . '"'
-            . ($closed ? ' data-closed="1"' : '') . '>' . $label . '</option>';
+            . ($closed && $meter->closedOn !== null ? ' data-closed="' . $this->e($meter->closedOn->format('Y-m-d')) . '"' : '')
+            . '>' . $label . '</option>';
     }
 
     return $hint
@@ -256,6 +261,9 @@ $meterSelect = function (string $prefix, string $energyType) use ($metersByEnerg
             // Aucun compteur ouvert pour ce fluide (#55) : la saisie est bloquée
             // côté client plutôt que refusée en 422 après coup.
             'meterClosed' => $this->t('meters.entry_closed'),
+            // Relevé daté du jour de fermeture ou après : la saisie est verrouillée
+            // à l'écran, comme elle le serait par le serveur.
+            'meterClosedOn' => $this->t('meters.entry_blocked'),
         ],
     ];
 ?>
