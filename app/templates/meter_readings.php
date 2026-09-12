@@ -48,10 +48,16 @@ $meterSelect = function (string $prefix, string $energyType) use ($metersByEnerg
     // neuf. Mais le DIRE : sans ce mot, l'utilisateur crée un compteur sans le
     // savoir, et ignore qu'il pourra le nommer. Le message vit HORS de la ligne du
     // sélecteur, qui est masquée tant qu'il y a moins de deux compteurs.
+    // `card-sub` et `tool-link` viennent de dashboard.css, chargée par cette page —
+    // `dates-hint` vit dans tariffs.css, qu'elle ne charge pas : le message serait
+    // resté sans style. `card-sub` est déjà la classe du conseil batteries, plus
+    // bas, et l'icône reprend celle de la barre de navigation : c'est là qu'il faut
+    // aller, autant la montrer.
     $hint = '';
     if ($meters === []) {
-        $hint = '<p class="dates-hint">' . $this->te('meters.none_yet')
-            . ' <a href="' . $this->e($this->url('meters')) . '">' . $this->te('nav.meters') . '</a>.</p>';
+        $hint = '<p class="card-sub" id="' . $this->e($prefix) . '-meter-hint">' . $this->te('meters.none_yet')
+            . ' <a class="tool-link" href="' . $this->e($this->url('meters')) . '">📟 '
+            . $this->te('nav.meters') . '</a></p>';
     }
 
     $options = '';

@@ -81,6 +81,17 @@ function syncClosedState(prefix) {
   }
 }
 
+// Le message « aucun compteur déclaré » est rendu au CHARGEMENT de la page, mais
+// la saisie passe par AJAX : la page n'est jamais re-rendue. Dès qu'un relevé
+// aboutit, le compteur existe et le message cesse d'être vrai — il faut donc le
+// retirer soi-même, sinon il contredit l'action que l'utilisateur vient de faire.
+function markMeterDeclared(prefix) {
+  const hint = document.getElementById(`${prefix}-meter-hint`);
+  if (hint) {
+    hint.hidden = true;
+  }
+}
+
 function readingAt(prefix) {
   const date = document.getElementById(`${prefix}-date`)?.value || '';
   const time = document.getElementById(`${prefix}-time`)?.value || '00:00';
@@ -302,6 +313,7 @@ async function submitUtility(prefix, action) {
     const data = await res.json();
     if (data.ok) {
       setFeedback(feedbackId, tr('saved', '✓ Saved.'), 'ok');
+      markMeterDeclared(prefix);
       document.getElementById(`${prefix}-value`).value = '';
       // Retour en page 1 : le cas courant est un relevé du jour, donc en tête.
       const reloaded = await RELOADERS[prefix](1);
@@ -359,6 +371,7 @@ async function submitElectricity() {
     const data = await res.json();
     if (data.ok) {
       setFeedback('electricity-feedback', tr('saved', '✓ Saved.'), 'ok');
+      markMeterDeclared('electricity');
       ELEC_KEYS.forEach((key) => {
         document.getElementById(`electricity-${key}`).value = '';
       });

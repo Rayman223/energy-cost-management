@@ -965,7 +965,7 @@ return [
     'meters.closed_field'                          => 'Date de fermeture',
     'meters.closed_hint'                           => 'À partir de cette date, le compteur n\'accepte plus aucun relevé. Ses relevés existants restent comptés dans tous les rapports : la dépense a bien eu lieu. Laissez vide pour un compteur en service.',
     'meters.invalid_closed_on'                     => 'Date de fermeture invalide.',
-    'meters.none_yet'                              => 'Aucun compteur déclaré pour cette énergie : votre premier relevé en créera un, que vous pourrez ensuite nommer sur',
+    'meters.none_yet'                              => 'Aucun compteur déclaré pour cette énergie : votre premier relevé en créera un, que vous pourrez ensuite nommer.',
     'meters.entry_closed'                          => 'Ce compteur est fermé : seuls les relevés datés d\'avant sa date de fermeture sont acceptés.',
 
     // ── Parc de compteurs (#55) ─────────────────────────────────────────────
