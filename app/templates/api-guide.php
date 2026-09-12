@@ -45,6 +45,15 @@ $url   = $this->e($apiUrl);
 <pre><code>Authorization: Bearer mec_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx</code></pre>
   <p class="muted"><?= $this->te('apiguide.auth_note') ?></p>
 
+  <!-- ── Compteur visé (#55) ──────────────────────────────────────────────── -->
+  <h2><?= $this->te('apiguide.meter_title') ?></h2>
+  <p><?= $this->te('apiguide.meter_desc') ?></p>
+<pre><code>curl -X POST "<?= $url ?>?action=ingest_electricity" \
+  -H "Authorization: Bearer mec_votre_jeton" \
+  -H "Content-Type: application/json" \
+  -d '{"meter_id":3,"readings":[{"timestamp":"2026-07-16T10:00:00+02:00","import_t1":1234.5}]}'</code></pre>
+  <p class="muted"><?= $this->te('apiguide.meter_note') ?></p>
+
   <!-- ── Électricité ──────────────────────────────────────────────────────── -->
   <h2><?= $this->te('apiguide.elec_title') ?></h2>
   <p><?= $this->te('apiguide.elec_desc') ?></p>

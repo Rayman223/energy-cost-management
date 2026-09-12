@@ -959,6 +959,11 @@ return [
     'meters.none_yet'                              => 'Geen meter opgegeven voor deze energiesoort: uw eerste stand maakt er een aan, die u daarna kunt benoemen.',
     'meters.entry_blocked'                         => '⚠ Deze meter is afgesloten sinds {date}: kies een eerdere datum om een stand in te voeren.',
     'meters.entry_closed'                          => 'Deze meter is afgesloten: alleen standen van vóór de afsluitdatum worden aanvaard.',
+    // Doelmeter bij ingestie (#55).
+    'meters.api_id'                                => 'meter_id: {id}',
+    'apiguide.meter_title'                         => 'De meter kiezen',
+    'apiguide.meter_desc'                          => 'Eén verzending voedt ÉÉN meter. Het doel geeft u op met « meter_id »: dat is een GETAL, de identificatie van de meter, niet zijn naam. U vindt het op de pagina « Meters », onder het label van elke regel. Met één enkele meter voor die energiesoort is het optioneel; met meerdere wordt het verplicht — de API weigert te gokken, want schrijven in de verkeerde meter zou geen enkele fout opleveren, alleen een standsprong die voor verbruik wordt aangezien.',
+    'apiguide.meter_note'                          => 'Bij een groepsverzending staat « meter_id » in de WORTEL van de body, naast « readings », nooit in elke stand: twee door elkaar gehaalde meters in één verzending zouden onopgemerkt blijven. Zonder doel en met meerdere meters is het antwoord een 422 met de beschikbare identificaties. Rapporten tellen altijd al uw meters van een energiesoort op: « meter_id » betreft alleen het schrijven.',
 
     // ── Meterpark (#55) ─────────────────────────────────────────────────────
     // `meters.*` en niet `meter.*`: dat laatste hoort al bij de pagina voor het

@@ -72,8 +72,15 @@ $meterSelect = function (string $prefix, string $energyType) use ($metersByEnerg
         // compare à la date saisie. La borne étant exclue, un relevé antérieur
         // reste légitime — seul celui daté du jour de fermeture ou après est
         // bloqué à l'écran, comme il le serait par le serveur.
+        //
+        // Portée DÈS QU'ELLE EXISTE, même si le jour n'est pas encore venu : une
+        // fermeture PROGRAMMÉE refuse déjà les relevés datés d'après elle, et ne
+        // pas la porter ici laisserait partir la saisie pour la voir revenir en
+        // 422 — précisément ce que ce verrou évite. `data-closed-now` dit à part
+        // si la fermeture a déjà pris effet, ce qui n'est pas la même question.
         $options .= '<option value="' . $this->e((string) $meter->id) . '"'
-            . ($closed && $meter->closedOn !== null ? ' data-closed="' . $this->e($meter->closedOn->format('Y-m-d')) . '"' : '')
+            . ($meter->closedOn !== null ? ' data-closed="' . $this->e($meter->closedOn->format('Y-m-d')) . '"' : '')
+            . ($closed && $meter->closedOn !== null ? ' data-closed-now="1"' : '')
             . '>' . $label . '</option>';
     }
 
@@ -167,7 +174,10 @@ $meterSelect = function (string $prefix, string $energyType) use ($metersByEnerg
   <div class="gas-grid">
     <div class="gas-form">
       <?= $meterSelect('gas', 'gas') ?>
-      <?php if ($gasLatest): ?><div class="card-sub"><?= $this->te('meter.latest') ?> : <strong><?= $this->num((float) $gasLatest['counter_m3'], 3) ?> m³</strong></div><?php endif; ?>
+      <?php // Toujours dans le DOM, masqué quand le compteur visé n'a aucun relevé :
+            // c'est meter-readings.js qui le réécrit à chaque rechargement d'historique,
+            // et un encart absent ne pourrait pas être rempli en changeant de compteur (#55). ?>
+      <div class="card-sub" id="gas-latest"<?= $gasLatest ? '' : ' hidden' ?>><?= $this->te('meter.latest') ?> : <strong id="gas-latest-value"><?= $gasLatest ? $this->e($this->num((float) $gasLatest['counter_m3'], 3)) : '' ?> m³</strong></div>
       <div class="cards cards-2"><div class="form-row"><label class="form-label" for="gas-date"><?= $this->te('meter.reading_date') ?></label><input id="gas-date" type="date" class="form-input" value="<?= $this->e($today) ?>"></div><div class="form-row"><label class="form-label" for="gas-time"><?= $this->te('meter.reading_time') ?></label><input id="gas-time" type="time" class="form-input" value="<?= $this->e($now) ?>"></div></div>
       <div class="form-row"><label class="form-label" for="gas-value"><?= $this->te('meter.counter_m3') ?></label><input id="gas-value" type="number" step="0.001" min="0" class="form-input" placeholder="8523.456"></div>
       <button class="btn btn-amber" id="gas-btn"><?= $this->te('common.save') ?></button><div class="form-feedback" id="gas-feedback"></div>
@@ -182,7 +192,7 @@ $meterSelect = function (string $prefix, string $energyType) use ($metersByEnerg
   <div class="gas-grid">
     <div class="gas-form">
       <?= $meterSelect('water', 'water') ?>
-      <?php if ($waterLatest): ?><div class="card-sub"><?= $this->te('meter.latest') ?> : <strong><?= $this->num((float) $waterLatest['counter_m3'], 3) ?> m³</strong></div><?php endif; ?>
+      <div class="card-sub" id="water-latest"<?= $waterLatest ? '' : ' hidden' ?>><?= $this->te('meter.latest') ?> : <strong id="water-latest-value"><?= $waterLatest ? $this->e($this->num((float) $waterLatest['counter_m3'], 3)) : '' ?> m³</strong></div>
       <div class="cards cards-2"><div class="form-row"><label class="form-label" for="water-date"><?= $this->te('meter.reading_date') ?></label><input id="water-date" type="date" class="form-input" value="<?= $this->e($today) ?>"></div><div class="form-row"><label class="form-label" for="water-time"><?= $this->te('meter.reading_time') ?></label><input id="water-time" type="time" class="form-input" value="<?= $this->e($now) ?>"></div></div>
       <div class="form-row"><label class="form-label" for="water-value"><?= $this->te('meter.counter_m3') ?></label><input id="water-value" type="number" step="0.001" min="0" class="form-input" placeholder="1234.567"></div>
       <button class="btn btn-amber" id="water-btn"><?= $this->te('common.save') ?></button><div class="form-feedback" id="water-feedback"></div>

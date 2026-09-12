@@ -959,6 +959,11 @@ return [
     'meters.none_yet'                              => 'Kein Zähler für diese Energieart erfasst: Ihr erster Stand legt einen an, den Sie anschließend benennen können.',
     'meters.entry_blocked'                         => '⚠ Dieser Zähler ist seit dem {date} geschlossen: wählen Sie ein früheres Datum, um einen Stand zu erfassen.',
     'meters.entry_closed'                          => 'Dieser Zähler ist geschlossen: nur Stände vor dem Schließungsdatum werden angenommen.',
+    // Zielzähler bei der Erfassung (#55).
+    'meters.api_id'                                => 'meter_id: {id}',
+    'apiguide.meter_title'                         => 'Den Zähler wählen',
+    'apiguide.meter_desc'                          => 'Eine Übertragung speist GENAU EINEN Zähler. Das Ziel geben Sie mit « meter_id » an: das ist eine ZAHL, die Kennung des Zählers, nicht sein Name. Sie finden sie auf der Seite « Zähler », unter der Bezeichnung jeder Zeile. Bei einem einzigen Zähler dieser Energieart ist sie optional; bei mehreren wird sie Pflicht — die API rät nicht, denn in den falschen Zähler zu schreiben erzeugt keinerlei Fehler, nur einen Zählerstandssprung, der als Verbrauch gelesen wird.',
+    'apiguide.meter_note'                          => 'Im Stapelbetrieb steht « meter_id » in der WURZEL des Rumpfes, neben « readings », niemals in jedem einzelnen Stand: zwei vermischte Zähler in einer Übertragung blieben unentdeckt. Ohne Ziel und mit mehreren Zählern lautet die Antwort 422 und nennt die verfügbaren Kennungen. Auswertungen addieren stets alle Ihre Zähler einer Energieart: « meter_id » betrifft nur das Schreiben.',
 
     // ── Zählerpark (#55) ────────────────────────────────────────────────────
     // `meters.*` und nicht `meter.*`: Letzteres gehört bereits zur Seite für die

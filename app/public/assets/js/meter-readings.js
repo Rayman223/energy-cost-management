@@ -70,6 +70,15 @@ function selectedMeterClosedOn(prefix) {
   return option?.getAttribute('data-closed') || null;
 }
 
+// La fermeture a-t-elle DÉJÀ pris effet ? Distinct de la question précédente :
+// une fermeture programmée refuse les relevés datés d'après elle sans que le
+// compteur soit fermé aujourd'hui. Seul l'état déjà acquis se dit au présent.
+function selectedMeterAlreadyClosed(prefix) {
+  const select = document.getElementById(`${prefix}-meter`);
+
+  return select?.selectedOptions?.[0]?.hasAttribute('data-closed-now') === true;
+}
+
 // Champs de VALEUR d'un fluide — ceux qu'on verrouille quand le relevé serait
 // refusé. La date et l'heure restent actives : c'est en les corrigeant que
 // l'utilisateur débloque la saisie, les verrouiller l'enfermerait.
@@ -108,7 +117,7 @@ function syncClosedState(prefix) {
 
   if (blocked) {
     setFeedback(`${prefix}-feedback`, tr('meterClosedOn', 'This meter closed on {date}: pick an earlier date.', { date: closedOn }), 'err');
-  } else if (closedOn !== null) {
+  } else if (closedOn !== null && selectedMeterAlreadyClosed(prefix)) {
     setFeedback(`${prefix}-feedback`, tr('meterClosed', 'This meter is closed: only readings dated before its closing date are accepted.'), '');
   } else {
     setFeedback(`${prefix}-feedback`, '');
@@ -560,14 +569,38 @@ async function deleteAndReload(action, payload, feedbackId, reloadFn) {
   }
 }
 
-const reloadGas = (page) => loadHistory(
-  'gas', 'gas_history', tr('emptyGas', 'No gas reading recorded.'), renderReadings, page,
-  `&meter_id=${meterTarget('gas')}`
-);
-const reloadWater = (page) => loadHistory(
-  'water', 'water_history', tr('emptyWater', 'No water reading recorded.'), renderReadings, page,
-  `&meter_id=${meterTarget('water')}`
-);
+// L'encart « dernier relevé » est rendu par le serveur pour le compteur PAR
+// DÉFAUT. Changer de compteur recharge son historique mais ne re-rend pas la
+// page : sans cette mise à jour, l'index d'un AUTRE compteur resterait affiché
+// comme étant le sien (#55). Une saisie ou une suppression le rafraîchit de la
+// même façon, au lieu de laisser l'ancien index en place.
+//
+// Seule la page 1 porte le relevé le plus récent (liste décroissante) : sur une
+// page plus ancienne, l'encart garde ce qu'il affiche déjà, qui reste vrai.
+function updateLatest(prefix, data) {
+  const box   = document.getElementById(`${prefix}-latest`);
+  const value = document.getElementById(`${prefix}-latest-value`);
+  if (!box || !value || Number(data?.page) !== 1) return;
+
+  const latest = (Array.isArray(data?.items) ? data.items : [])[0];
+  box.hidden = latest === undefined;
+  if (latest !== undefined) {
+    value.textContent = `${fmtIndex(latest.counter_m3)} m³`;
+  }
+}
+
+const reloadUtility = async (prefix, action, emptyLabel, page) => {
+  const data = await loadHistory(
+    prefix, action, emptyLabel, renderReadings, page, `&meter_id=${meterTarget(prefix)}`
+  );
+  // `null` = chargement obsolète (cf. loadHistory) : ne rien réécrire.
+  if (data) updateLatest(prefix, data);
+
+  return data;
+};
+
+const reloadGas = (page) => reloadUtility('gas', 'gas_history', tr('emptyGas', 'No gas reading recorded.'), page);
+const reloadWater = (page) => reloadUtility('water', 'water_history', tr('emptyWater', 'No water reading recorded.'), page);
 const reloadBattery = (page) => loadHistory(
   'battery', 'battery_history', tr('emptyBattery', 'No battery reading recorded.'),
   renderBatteryReadings, page, `&battery_id=${batteryTarget()}`

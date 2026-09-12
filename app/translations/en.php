@@ -960,6 +960,11 @@ return [
     'meters.none_yet'                              => 'No meter declared for this energy: your first reading will create one, which you can name afterwards.',
     'meters.entry_blocked'                         => '⚠ This meter closed on {date}: pick an earlier date to record a reading.',
     'meters.entry_closed'                          => 'This meter is closed: only readings dated before its closing date are accepted.',
+    // Ingestion target meter (#55).
+    'meters.api_id'                                => 'meter_id: {id}',
+    'apiguide.meter_title'                         => 'Choosing the meter',
+    'apiguide.meter_desc'                          => 'One push feeds ONE meter. The target is given by “meter_id”: it is a NUMBER, the meter\'s identifier, not its name. You will find it on the “Meters” page, under each row\'s label. With a single meter for that energy it is optional; with several it becomes required — the API refuses to guess, because writing into the wrong meter would raise no error at all, only an index jump read as consumption.',
+    'apiguide.meter_note'                          => 'In batch mode, “meter_id” goes at the ROOT of the body, next to “readings”, never inside each reading: two meters mixed in one push would be undetectable. With no target and several meters, the answer is a 422 listing the available identifiers. Reports always add up all your meters of an energy: “meter_id” only concerns writing.',
 
     // ── Meter fleet (#55) ───────────────────────────────────────────────────
     // `meters.*`, not `meter.*`: the latter already belongs to the index ENTRY

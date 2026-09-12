@@ -968,6 +968,11 @@ return [
     'meters.none_yet'                              => 'Aucun compteur déclaré pour cette énergie : votre premier relevé en créera un, que vous pourrez ensuite nommer.',
     'meters.entry_blocked'                         => '⚠ Ce compteur est fermé depuis le {date} : choisissez une date antérieure pour saisir un relevé.',
     'meters.entry_closed'                          => 'Ce compteur est fermé : seuls les relevés datés d\'avant sa date de fermeture sont acceptés.',
+    // Compteur visé par l'ingestion (#55).
+    'meters.api_id'                                => 'meter_id : {id}',
+    'apiguide.meter_title'                         => 'Choisir le compteur',
+    'apiguide.meter_desc'                          => 'Un envoi alimente UN compteur. La cible se donne par « meter_id » : c\'est un NOMBRE, l\'identifiant du compteur, pas son nom. Vous le lisez sur la page « Compteurs », sous le libellé de chaque ligne. Avec un seul compteur pour cette énergie, il est facultatif ; avec plusieurs, il devient obligatoire — l\'API refuse de deviner, car écrire dans le mauvais compteur ne produirait aucune erreur, seulement un saut d\'index pris pour de la consommation.',
+    'apiguide.meter_note'                          => 'En envoi groupé, « meter_id » se place à la RACINE du corps, à côté de « readings », jamais dans chaque relevé : deux compteurs mêlés dans un même envoi seraient indétectables. Sans cible et avec plusieurs compteurs, la réponse est un 422 qui liste les identifiants disponibles. Les rapports, eux, additionnent toujours tous vos compteurs d\'une énergie : « meter_id » ne concerne que l\'écriture.',
 
     // ── Parc de compteurs (#55) ─────────────────────────────────────────────
     // `meters.*` et non `meter.*` : ce dernier appartient déjà à la page de
