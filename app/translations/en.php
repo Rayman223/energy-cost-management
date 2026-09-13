@@ -523,6 +523,9 @@ return [
     'legal.notice.host'           => 'Hosting provider',
     'legal.notice.jurisdiction'   => 'Applicable law',
     'legal.notice.contact_body'   => 'Any request about the site, its content or your personal data can be sent to the publisher using the details above.',
+    'legal.notice.source_title'   => 'Source code and licence',
+    'legal.notice.source_body'    => 'This service is free software, distributed under the GNU Affero General Public License v3 or later (AGPL-3.0-or-later). Its complete source code is published on',
+    'legal.notice.source_link'    => 'the project\'s GitHub repository',
 
     // Terms of service
     'legal.terms.intro'           => 'Using the service implies acceptance of the terms below.',
