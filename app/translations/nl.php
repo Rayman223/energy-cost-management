@@ -522,6 +522,9 @@ return [
     'legal.notice.host'           => 'Hostingprovider',
     'legal.notice.jurisdiction'   => 'Toepasselijk recht',
     'legal.notice.contact_body'   => 'Elke vraag over de site, de inhoud ervan of uw persoonsgegevens kan aan de uitgever worden gericht via bovenstaande gegevens.',
+    'legal.notice.source_title'   => 'Broncode en licentie',
+    'legal.notice.source_body'    => 'Deze dienst is vrije software, verspreid onder de GNU Affero General Public License v3 of later (AGPL-3.0-or-later). De volledige broncode is gepubliceerd op',
+    'legal.notice.source_link'    => 'de GitHub-repository van het project',
 
     // Gebruiksvoorwaarden
     'legal.terms.intro'           => 'Het gebruik van de dienst houdt de aanvaarding van onderstaande voorwaarden in.',
