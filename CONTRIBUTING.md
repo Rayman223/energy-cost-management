@@ -142,3 +142,18 @@ fit without a schema change. The line keys are declared in
 from `/tariffs.php` by admins. Open an issue describing the structure of your
 country's bill before adding keys — the goal is a catalog that stays readable
 across Europe.
+
+---
+
+## License of contributions
+
+The project is distributed under the
+[GNU Affero General Public License v3.0 or later](LICENSE) (`AGPL-3.0-or-later`).
+By opening a pull request you agree that your contribution is licensed under
+those same terms — there is no CLA and no separate copyright assignment to sign.
+
+Practical consequence for anyone deploying a modified copy: the AGPL section 13
+requires the users of that network service to be offered its complete source
+code. The link to the repository is shown in the application header and in the
+legal notice page, which is what satisfies that obligation for the official
+instance.

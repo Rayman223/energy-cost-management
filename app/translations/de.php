@@ -522,6 +522,9 @@ return [
     'legal.notice.host'           => 'Hosting-Anbieter',
     'legal.notice.jurisdiction'   => 'Anwendbares Recht',
     'legal.notice.contact_body'   => 'Anfragen zur Website, zu ihren Inhalten oder zu Ihren personenbezogenen Daten richten Sie bitte über die oben genannten Angaben an den Betreiber.',
+    'legal.notice.source_title'   => 'Quellcode und Lizenz',
+    'legal.notice.source_body'    => 'Dieser Dienst ist freie Software und wird unter der GNU Affero General Public License v3 oder später (AGPL-3.0-or-later) verbreitet. Der vollständige Quellcode ist veröffentlicht auf',
+    'legal.notice.source_link'    => 'dem GitHub-Repository des Projekts',
 
     // Nutzungsbedingungen
     'legal.terms.intro'           => 'Die Nutzung des Dienstes setzt die Annahme der nachstehenden Bedingungen voraus.',
