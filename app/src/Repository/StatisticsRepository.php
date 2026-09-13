@@ -85,7 +85,14 @@ final class StatisticsRepository implements StatisticsRepositoryInterface
         chained AS (
             SELECT user_id, register_id, month_start, idx_min, idx_max,
                    LAG(idx_max) OVER (PARTITION BY register_id ORDER BY month_start) AS prev_idx_max,
-                   MIN(month_start) OVER (PARTITION BY user_id)                      AS first_month
+                   -- Par REGISTRE et non par foyer (#55) : depuis le multi-compteur,
+                   -- un compteur ajouté en cours de fenêtre a son propre premier
+                   -- mois, structurellement partiel. Partitionner par foyer ne
+                   -- retirerait que le premier mois du plus ancien compteur et
+                   -- laisserait passer, pour les autres, un mois amputé — une
+                   -- sous-estimation invisible. À un compteur, les deux registres
+                   -- d'import démarrent dans la même trame : résultat identique.
+                   MIN(month_start) OVER (PARTITION BY register_id)                  AS first_month
             FROM monthly
         ),
         register_month AS (
@@ -105,8 +112,8 @@ final class StatisticsRepository implements StatisticsRepositoryInterface
                        ELSE idx_max - prev_idx_max
                    END AS kwh
             FROM chained
-            -- Le premier mois observé d'un foyer est structurellement partiel (le
-            -- relevé initial tombe en cours de mois) : le garder sous-compterait
+            -- Le premier mois observé d'un registre est structurellement partiel
+            -- (le relevé initial tombe en cours de mois) : le garder sous-compterait
             -- jusqu'à un mois entier.
             WHERE month_start > first_month
         ),
@@ -293,16 +300,21 @@ final class StatisticsRepository implements StatisticsRepositoryInterface
         $sql = sprintf(
             <<<'SQL'
             WITH deltas AS (
-                SELECT user_id, reading_at, counter_m3,
-                       LAG(counter_m3) OVER (PARTITION BY user_id ORDER BY reading_at) AS prev_m3,
-                       LAG(reading_at)  OVER (PARTITION BY user_id ORDER BY reading_at) AS prev_at
+                -- Chaînage PAR COMPTEUR (#55). Partitionner par foyer entrelacerait
+                -- les odomètres de deux compteurs : chaque changement de compteur
+                -- produirait un faux delta, positif ou négatif selon l'ordre des
+                -- index — un chiffre faux, pas une erreur. À un compteur, la
+                -- partition est la même qu'avant.
+                SELECT user_id, meter_id, reading_at, counter_m3,
+                       LAG(counter_m3) OVER (PARTITION BY meter_id ORDER BY reading_at) AS prev_m3,
+                       LAG(reading_at)  OVER (PARTITION BY meter_id ORDER BY reading_at) AS prev_at
                 FROM utility_readings
                 WHERE energy_type = :etype
                   AND reading_at >= :from
                   AND reading_at <  :to
             ),
-            household AS (
-                SELECT user_id,
+            per_meter AS (
+                SELECT user_id, meter_id,
                        -- Un delta négatif (remise à zéro, compteur remplacé) est
                        -- écarté AVEC sa durée : le taux m³/jour reste cohérent au
                        -- lieu d'être dilué par une période non mesurée.
@@ -311,13 +323,24 @@ final class StatisticsRepository implements StatisticsRepositoryInterface
                        SUM(CASE WHEN prev_m3 IS NOT NULL AND counter_m3 >= prev_m3
                                 THEN TIMESTAMPDIFF(DAY, prev_at, reading_at) ELSE 0 END) AS days
                 FROM deltas
-                GROUP BY user_id
+                GROUP BY user_id, meter_id
                 -- Sous un trimestre, annualiser un relevé de gaz projetterait une
-                -- saison sur l'année entière. Garantit aussi days > 0.
+                -- saison sur l'année entière. Garantit aussi days > 0. Appliqué par
+                -- compteur : un compteur trop peu relevé est écarté sans emporter
+                -- les autres.
                 HAVING days >= 90 AND m3 > 0
             ),
+            household AS (
+                -- Somme de TAUX annualisés, et non de m³ sur un dénominateur commun :
+                -- deux compteurs n'ont ni la même période de relevé ni la même durée
+                -- observée, et rapporter leurs m³ cumulés à l'une des deux durées
+                -- fabriquerait une consommation annuelle sans rapport avec le foyer.
+                SELECT user_id, SUM(m3 / days * 365.0) AS value
+                FROM per_meter
+                GROUP BY user_id
+            ),
             scoped AS (
-                SELECT up.country AS country, h.m3 / h.days * 365.0 AS value
+                SELECT up.country AS country, h.value AS value
                 FROM household h
                 JOIN user_profiles up ON up.user_id = h.user_id
                 JOIN users u ON u.id = h.user_id AND u.status = 'active'

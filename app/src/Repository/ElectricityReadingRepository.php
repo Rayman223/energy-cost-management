@@ -58,8 +58,17 @@ final class ElectricityReadingRepository implements LegacyDailyRepositoryInterfa
         'export_t2' => 'Injec_nuit',
     ];
 
-    /** @var array<string, int>|null Cache register_key => register_id. */
+    /** @var array<string, int>|null Cache register_key => register_id (compteur par défaut). */
     private ?array $registerMap = null;
+
+    /**
+     * Cache register_key => ids de TOUS les compteurs électriques (#55).
+     * Distinct de $registerMap : les lectures de rapport couvrent la flotte, les
+     * chemins de saisie et d'historique restent sur un compteur unique.
+     *
+     * @var array<string, list<int>>|null
+     */
+    private ?array $fleetRegisterMap = null;
 
     /**
      * Topologie (compteur + registres) créée/résolue une seule fois par requête.
@@ -129,6 +138,9 @@ final class ElectricityReadingRepository implements LegacyDailyRepositoryInterfa
             $meterId = $topology->ensureElectricityMeter($this->userId);
             $this->registerMap = $topology->ensureRegisters($meterId);
             $this->topologyEnsured = true;
+            // ensureRegisters a pu CRÉER le compteur et ses registres : une vue
+            // « flotte » mémoïsée avant cet appel serait vide à tort.
+            $this->fleetRegisterMap = null;
         }
         $map = $this->registerMap ?? [];
 
@@ -192,25 +204,33 @@ final class ElectricityReadingRepository implements LegacyDailyRepositoryInterfa
     }
 
     /**
-     * Supprime tous les index (les 5 registres) à un horodatage donné pour le
-     * compteur de l'utilisateur. La jointure sur meters.user_id garantit qu'on ne
-     * touche que le compteur du bon utilisateur.
+     * Supprime tous les index (les 5 registres) à un horodatage donné sur LE
+     * compteur électricité par défaut de l'utilisateur.
+     *
+     * La portée est celle de l'historique qui expose la ligne à supprimer
+     * ({@see historyRegisterMap()}), et celle de {@see deleteMeter()}. Un DELETE
+     * joint sur `meters.user_id` emporterait au contraire le même horodatage sur
+     * TOUS les compteurs électriques du parc (#55) — y compris ceux que la page
+     * n'affiche pas, donc sans que l'utilisateur puisse le voir ni le prévoir.
+     *
+     * Le filtre par identifiants de registres garde la frontière multi-tenant :
+     * ces identifiants viennent du compteur de CET utilisateur, un autre compte
+     * n'en résout aucun et ne supprime donc rien.
      *
      * @return int Nombre de lignes meter_readings supprimées (0 à 5).
      */
     public function deleteReadingAt(DateTimeImmutable $timestamp): int
     {
+        $ids = array_keys($this->historyRegisterMap());
+        if ($ids === []) {
+            return 0;
+        }
+
+        $placeholders = implode(', ', array_fill(0, count($ids), '?'));
         $stmt = $this->pdo->prepare(
-            'DELETE mr FROM meter_readings mr
-             JOIN meter_registers reg ON reg.id = mr.register_id
-             JOIN meters m ON m.id = reg.meter_id
-             WHERE m.user_id = :uid AND m.energy_type = :etype AND mr.reading_at = :at'
+            "DELETE FROM meter_readings WHERE register_id IN ($placeholders) AND reading_at = ?"
         );
-        $stmt->execute([
-            'uid'   => $this->userId,
-            'etype' => 'electricity',
-            'at'    => Dates::toDbString($timestamp),
-        ]);
+        $stmt->execute([...$ids, Dates::toDbString($timestamp)]);
 
         $this->invalidateMonthlyDeltaCaches();
 
@@ -242,8 +262,9 @@ final class ElectricityReadingRepository implements LegacyDailyRepositoryInterfa
 
         // La topologie mémoïsée pointe sur un compteur qui n'existe plus : la
         // réinitialiser pour qu'un insertIndexes ultérieur le recrée proprement.
-        $this->topologyEnsured = false;
-        $this->registerMap     = null;
+        $this->topologyEnsured  = false;
+        $this->registerMap      = null;
+        $this->fleetRegisterMap = null;
         $this->invalidateMonthlyDeltaCaches();
 
         return $stmt->rowCount();
@@ -622,14 +643,14 @@ final class ElectricityReadingRepository implements LegacyDailyRepositoryInterfa
         // ces deltas au total de la période, qui vient de là.
         $outKeys = ['import_t1' => 'prelev_jour', 'import_t2' => 'prelev_nuit', 'export_t1' => 'injec_jour', 'export_t2' => 'injec_nuit', 'production' => 'solar'];
 
-        $rids   = [];
-        $allIds = [];
+        // Tous les compteurs du parc (#55) : les sous-périodes d'une facture
+        // couvrent le foyer entier, pas un compteur choisi.
+        $idsByKey = [];
+        $allIds   = [];
         foreach (array_keys($outKeys) as $registerKey) {
-            $rid                = $this->registerId($registerKey);
-            $rids[$registerKey] = $rid;
-            if ($rid !== null) {
-                $allIds[] = $rid;
-            }
+            $ids                    = $this->registerIds($registerKey);
+            $idsByKey[$registerKey] = $ids;
+            $allIds                 = [...$allIds, ...$ids];
         }
 
         if ($allIds === []) {
@@ -649,12 +670,15 @@ final class ElectricityReadingRepository implements LegacyDailyRepositoryInterfa
 
             $row = [];
             foreach ($outKeys as $registerKey => $outKey) {
-                $rid = $rids[$registerKey];
-                // boundedDelta() plafonne déjà à 0 : un compteur qui recule sur une
-                // sous-période ne contamine pas ses voisines.
-                $row[$outKey] = $rid === null
-                    ? 0.0
-                    : self::boundedDelta($valuesAt[$start][$rid] ?? null, $valuesAt[$end][$rid] ?? null);
+                // boundedDelta() plafonne déjà à 0, et le fait PAR COMPTEUR : un
+                // compteur qui recule sur une sous-période ne contamine ni ses
+                // voisines ni les autres compteurs. Un registre vide rend 0, donc
+                // un compteur muet contribue 0 au lieu d'annuler la sous-période.
+                $sum = 0.0;
+                foreach ($idsByKey[$registerKey] as $rid) {
+                    $sum += self::boundedDelta($valuesAt[$start][$rid] ?? null, $valuesAt[$end][$rid] ?? null);
+                }
+                $row[$outKey] = round($sum, 3);
             }
 
             /** @var array{prelev_jour: float, prelev_nuit: float, injec_jour: float, injec_nuit: float, solar: float} $row */
@@ -695,51 +719,79 @@ final class ElectricityReadingRepository implements LegacyDailyRepositoryInterfa
      */
     private function interpolatedDeltasBetween(string $from, string $to): array
     {
-        $refId = $this->registerId('import_t1');
-        if ($refId === null || $this->hasReadingInRange($refId, $from, $to) === false) {
+        // Abandon SEULEMENT si aucun compteur du parc n'a de relevé dans la
+        // fenêtre. Avec un seul compteur, c'est le test d'avant mot pour mot ;
+        // avec plusieurs, un compteur muet sur la période ne doit pas annuler le
+        // rapport de ses voisins.
+        $refIds = $this->registerIds('import_t1');
+        if ($this->hasReadingInAnyRange($refIds, $from, $to) === false) {
             return [];
         }
 
         $outKeys = ['import_t1' => 'prelev_jour', 'import_t2' => 'prelev_nuit', 'export_t1' => 'injec_jour', 'export_t2' => 'injec_nuit'];
 
-        // rid par clé (null si le registre est absent) + liste des rid présents à
-        // interpoler en une passe. Chaque borne est résolue par un batch (2 requêtes)
-        // plutôt que 2 requêtes × registre (O3).
-        $rids    = [];
-        $elecIds = [];
+        // Ids par clé + liste à plat de tous les registres à interpoler. Chaque
+        // borne est résolue par un batch de 2 requêtes indexées, quel que soit le
+        // nombre de compteurs : les primitives filtrent déjà par `register_id IN
+        // (…)`, le coût ne dépend donc pas de la taille du parc.
+        $idsByKey = [];
+        $elecIds  = [];
         foreach (array_keys($outKeys) as $registerKey) {
-            $rid              = $this->registerId($registerKey);
-            $rids[$registerKey] = $rid;
-            if ($rid !== null) {
-                $elecIds[] = $rid;
-            }
+            $ids                    = $this->registerIds($registerKey);
+            $idsByKey[$registerKey] = $ids;
+            $elecIds                = [...$elecIds, ...$ids];
         }
-        $solarId = $this->registerId('production');
+        $solarIds = $this->registerIds('production');
 
-        $startIds    = $solarId === null ? $elecIds : [...$elecIds, $solarId];
-        $startValues = $this->interpolatedValuesAt($startIds, $from);
+        $startValues = $this->interpolatedValuesAt([...$elecIds, ...$solarIds], $from);
         $endValues   = $this->interpolatedValuesAt($elecIds, $to);
 
         $result = ['from' => $from, 'to' => $to];
 
         foreach ($outKeys as $registerKey => $outKey) {
-            $rid = $rids[$registerKey];
-            if ($rid === null) {
+            $ids = $idsByKey[$registerKey];
+            if ($ids === []) {
                 $result[$outKey] = 0.0;
                 continue;
             }
 
-            $start = $startValues[$rid];
-            $end   = $endValues[$rid];
-            if ($start === null || $end === null) {
+            $sum    = 0.0;
+            $starts = [];
+            $ends   = [];
+            foreach ($ids as $rid) {
+                $start = $startValues[$rid] ?? null;
+                $end   = $endValues[$rid] ?? null;
+                // Registre entièrement vide : ce compteur contribue 0. C'est
+                // `interpolateBetween()` qui rend le reste sûr — il CLAMPE sur le
+                // relevé le plus proche, si bien qu'un compteur mis en service en
+                // cours de période rend une constante avant son premier relevé,
+                // donc un delta nul : aucun saut d'index fictif.
+                if ($start === null || $end === null) {
+                    continue;
+                }
+
+                // Plafonné à 0 PAR COMPTEUR : un compteur remplacé, dont l'index
+                // repart de zéro, ne doit pas soustraire de la consommation de ses
+                // voisins. L'arrondi, lui, n'intervient qu'après la somme (cf.
+                // boundedDelta).
+                $sum     += max(0.0, $end['value'] - $start['value']);
+                $starts[] = $start['timestamp'];
+                $ends[]   = $end['timestamp'];
+            }
+
+            // Aucun compteur ne porte de donnée sur ce registre : le rapport n'est
+            // pas calculable — exactement l'abandon d'avant #55, qui à un compteur
+            // portait sur ce seul registre.
+            if ($ends === []) {
                 return [];
             }
 
-            $result[$outKey] = max(0.0, round($end['value'] - $start['value'], 3));
+            $result[$outKey] = round($sum, 3);
 
-            // Borne de fin réelle (période en cours → timestamp du dernier relevé).
             if ($registerKey === 'import_t1') {
-                $result['to'] = $end['timestamp'];
+                // Borne de fin réelle (période en cours → dernier relevé), prise la
+                // PLUS TARDIVE : `to` décrit jusqu'où le rapport porte.
+                $result['to'] = max($ends);
 
                 // Fenêtre réellement COUVERTE par des relevés, exposée à part de
                 // `from`/`to` pour ne rien changer aux appelants historiques (#241).
@@ -748,20 +800,43 @@ final class ElectricityReadingRepository implements LegacyDailyRepositoryInterfa
                 // demandée dit si les données la couvrent vraiment, ou si le calcul
                 // ne porte que sur une fraction — un flux de relevés arrêté ne doit
                 // pas produire un coût partiel présenté comme complet.
-                $result['data_from'] = $start['timestamp'];
-                $result['data_to']   = $end['timestamp'];
+                //
+                // D'où l'INTERSECTION et non l'union sur un parc multi-compteur :
+                // début le plus tardif, fin la plus précoce. Un compteur qui a
+                // cessé d'être relevé dégrade `coverage_complete` — c'est voulu,
+                // mieux vaut un coût annoncé partiel qu'un coût partiel annoncé
+                // complet. À un compteur, max et min portent sur un seul élément :
+                // valeurs identiques à avant.
+                $result['data_from'] = max($starts);
+                $result['data_to']   = min($ends);
             }
         }
 
         // Solaire : début déjà batché ; fin à la borne 'to' résolue (mois en cours →
-        // dernier relevé), donc un appel dédié à l'instant final.
+        // dernier relevé), donc un batch dédié à l'instant final.
         $result['solar']      = null;
         $result['solar_unit'] = null;
-        if ($solarId !== null) {
-            $sStart = $startValues[$solarId];
-            $sEnd   = $this->interpolatedValueAt($solarId, (string) $result['to']);
-            if ($sStart !== null && $sEnd !== null) {
-                $result['solar']      = round(max(0.0, $sEnd['value'] - $sStart['value']), 3);
+        if ($solarIds !== []) {
+            $solarEnds = $this->interpolatedValuesAt($solarIds, (string) $result['to']);
+
+            $sum   = 0.0;
+            $lit   = false;
+            foreach ($solarIds as $rid) {
+                $sStart = $startValues[$rid] ?? null;
+                $sEnd   = $solarEnds[$rid] ?? null;
+                if ($sStart === null || $sEnd === null) {
+                    continue;
+                }
+                $lit  = true;
+                $sum += max(0.0, $sEnd['value'] - $sStart['value']);
+            }
+
+            // `solar` ne reste null que si AUCUN registre de production ne porte de
+            // donnée : sinon la courbe PV retomberait à zéro dès qu'un compteur du
+            // parc n'a pas de panneaux, ce qui se lirait comme une production
+            // effondrée plutôt que comme une absence de mesure.
+            if ($lit) {
+                $result['solar']      = round($sum, 3);
                 $result['solar_unit'] = 'kwh';
             }
         }
@@ -783,23 +858,17 @@ final class ElectricityReadingRepository implements LegacyDailyRepositoryInterfa
     {
         $keys = ['import_t1', 'import_t2', 'export_t1', 'export_t2', 'production'];
 
-        // rid par clé + liste des rid présents : les premiers relevés journaliers des
-        // 5 registres sont résolus en UNE requête (au lieu de 5) — cf.
-        // dailyFirstValuesByRegisterSince.
-        $ridByKey = [];
+        // Ids par clé + liste à plat : les premiers relevés journaliers de TOUS les
+        // registres du parc sont résolus en UNE requête (cf.
+        // dailyFirstValuesByRegisterSince), quel que soit le nombre de compteurs.
+        $idsByKey = [];
+        $allIds   = [];
         foreach ($keys as $key) {
-            $rid = $this->registerId($key);
-            if ($rid !== null) {
-                $ridByKey[$key] = $rid;
-            }
+            $ids            = $this->registerIds($key);
+            $idsByKey[$key] = $ids;
+            $allIds         = [...$allIds, ...$ids];
         }
-        $firstByRid = $this->dailyFirstValuesByRegisterSince(array_values($ridByKey), $days + 1);
-
-        $series = [];
-        foreach ($keys as $key) {
-            $rid = $ridByKey[$key] ?? null;
-            $series[$key] = $rid === null ? [] : ($firstByRid[$rid] ?? []);
-        }
+        $firstByRid = $this->dailyFirstValuesByRegisterSince($allIds, $days + 1);
 
         // L'axe des jours est l'UNION des jours de toutes les séries : chaque registre
         // est relevé indépendamment et peut tomber des jours différents (#180). Bâtir
@@ -820,20 +889,32 @@ final class ElectricityReadingRepository implements LegacyDailyRepositoryInterfa
             }
         };
 
+        // Chaque compteur produit ses propres deltas journaliers, qui s'additionnent
+        // jour par jour (#55). Le delta est calculé entre relevés CONSÉCUTIFS d'un
+        // même registre, jamais entre compteurs : un compteur relevé un jour sur
+        // deux garde donc sa propre chronologie, et un compteur ajouté en cours de
+        // fenêtre n'apporte rien avant son premier relevé.
         foreach (['import_t1', 'import_t2', 'export_t1', 'export_t2'] as $key) {
-            $rows = $series[$key];
-            for ($i = 1, $iMax = count($rows); $i < $iMax; $i++) {
-                $day = $rows[$i]['day'];
-                $ensureDay($day);
-                $deltas[$day][$key] = self::consecutiveDelta($rows, $i);
+            foreach ($idsByKey[$key] as $rid) {
+                $rows = $firstByRid[$rid] ?? [];
+                for ($i = 1, $iMax = count($rows); $i < $iMax; $i++) {
+                    $day = $rows[$i]['day'];
+                    $ensureDay($day);
+                    $deltas[$day][$key] = round($deltas[$day][$key] + self::consecutiveDelta($rows, $i), 3);
+                }
             }
         }
 
-        $rows = $series['production'];
-        for ($i = 1, $iMax = count($rows); $i < $iMax; $i++) {
-            $day = $rows[$i]['day'];
-            $ensureDay($day);
-            $deltas[$day]['solar'] = self::consecutiveDelta($rows, $i);
+        foreach ($idsByKey['production'] as $rid) {
+            $rows = $firstByRid[$rid] ?? [];
+            for ($i = 1, $iMax = count($rows); $i < $iMax; $i++) {
+                $day = $rows[$i]['day'];
+                $ensureDay($day);
+                // `solar` ne reste null que si AUCUN compteur n'a mesuré ce jour-là :
+                // une courbe PV qui retombe à zéro se lit comme une production
+                // effondrée, pas comme une absence de mesure.
+                $deltas[$day]['solar'] = round(($deltas[$day]['solar'] ?? 0.0) + self::consecutiveDelta($rows, $i), 3);
+            }
         }
 
         ksort($deltas); // clés 'Y-m-d' : tri lexicographique == chronologique.
@@ -865,18 +946,18 @@ final class ElectricityReadingRepository implements LegacyDailyRepositoryInterfa
 
         $registerKeys = ['import_t1', 'import_t2', 'export_t1', 'export_t2'];
 
-        $rids    = [];
-        $elecIds = [];
+        // Tout le parc (#55) : la série mensuelle du graphe doit concorder avec les
+        // cards, qui somment déjà les compteurs.
+        $idsByKey = [];
+        $allIds   = [];
         foreach ($registerKeys as $registerKey) {
-            $rid                = $this->registerId($registerKey);
-            $rids[$registerKey] = $rid;
-            if ($rid !== null) {
-                $elecIds[] = $rid;
-            }
+            $ids                    = $this->registerIds($registerKey);
+            $idsByKey[$registerKey] = $ids;
+            $allIds                 = [...$allIds, ...$ids];
         }
-        $solarId = $this->registerId('production');
+        $solarIds = $this->registerIds('production');
+        $allIds   = [...$allIds, ...$solarIds];
 
-        $allIds = $solarId === null ? $elecIds : [...$elecIds, $solarId];
         if ($allIds === []) {
             return [];
         }
@@ -934,20 +1015,32 @@ final class ElectricityReadingRepository implements LegacyDailyRepositoryInterfa
             ];
 
             foreach ($registerKeys as $registerKey) {
-                $rid = $rids[$registerKey];
-                if ($rid === null) {
-                    continue;
+                // boundedDelta() rend 0 pour un registre vide : un compteur muet sur
+                // le mois contribue 0 au lieu d'annuler la barre.
+                $sum = 0.0;
+                foreach ($idsByKey[$registerKey] as $rid) {
+                    $sum += self::boundedDelta($valuesAt[$effStart][$rid] ?? null, $valuesAt[$effEnd][$rid] ?? null);
                 }
-                $row[$registerKey] = self::boundedDelta($valuesAt[$effStart][$rid] ?? null, $valuesAt[$effEnd][$rid] ?? null);
+                $row[$registerKey] = round($sum, 3);
             }
 
-            // Solaire : null (et non 0) quand le registre existe mais n'a aucun
-            // relevé sur la période — la courbe PV ne doit pas tomber à zéro,
-            // même sémantique que getDailyDeltasForChart.
-            $solarStart = $solarId === null ? null : ($valuesAt[$effStart][$solarId] ?? null);
-            $solarEnd   = $solarId === null ? null : ($valuesAt[$effEnd][$solarId] ?? null);
-            if ($solarStart !== null && $solarEnd !== null) {
-                $row['solar'] = self::boundedDelta($solarStart, $solarEnd);
+            // Solaire : null (et non 0) quand AUCUN registre de production n'a de
+            // relevé sur la période — la courbe PV ne doit pas tomber à zéro, même
+            // sémantique que getDailyDeltasForChart. Un seul compteur producteur
+            // dans le parc suffit à l'allumer.
+            $solarSum = 0.0;
+            $solarLit = false;
+            foreach ($solarIds as $rid) {
+                $solarStart = $valuesAt[$effStart][$rid] ?? null;
+                $solarEnd   = $valuesAt[$effEnd][$rid] ?? null;
+                if ($solarStart === null || $solarEnd === null) {
+                    continue;
+                }
+                $solarLit = true;
+                $solarSum += self::boundedDelta($solarStart, $solarEnd);
+            }
+            if ($solarLit) {
+                $row['solar'] = round($solarSum, 3);
             }
 
             $series[] = $row;
@@ -960,6 +1053,14 @@ final class ElectricityReadingRepository implements LegacyDailyRepositoryInterfa
      * Delta entre deux index interpolés (0.0 si l'un des deux manque : registre
      * vide sur la période, donc rien à imputer au mois).
      *
+     * NON arrondi, volontairement : l'appelant somme les compteurs du parc puis
+     * arrondit UNE fois. Arrondir chaque compteur d'abord ferait diverger le
+     * total du millième — deux compteurs arrondis chacun vers le haut ne donnent
+     * pas la même chose qu'un compteur unique portant leur somme, et c'est
+     * précisément l'égalité que la phase promet. Sur les index STOCKÉS la
+     * question ne se pose pas (DECIMAL(12,3), différences exactes) ; elle ne naît
+     * que des valeurs interpolées.
+     *
      * @param array{value: float, timestamp: string}|null $start
      * @param array{value: float, timestamp: string}|null $end
      */
@@ -969,7 +1070,7 @@ final class ElectricityReadingRepository implements LegacyDailyRepositoryInterfa
             return 0.0;
         }
 
-        return round(max(0.0, $end['value'] - $start['value']), 3);
+        return max(0.0, $end['value'] - $start['value']);
     }
 
     /**
@@ -1008,14 +1109,21 @@ final class ElectricityReadingRepository implements LegacyDailyRepositoryInterfa
      */
     public function getHourlyImportDeltas(DateTimeImmutable $from, DateTimeImmutable $to): array
     {
-        $rows = $this->importIndexTotals($from, $to);
-
         $buckets = [];
-        for ($i = 1, $iMax = count($rows); $i < $iMax; $i++) {
-            $delta          = $rows[$i]['total'] - $rows[$i - 1]['total'];
-            $hour           = substr($rows[$i - 1]['ts'], 0, 13) . ':00:00';
-            $buckets[$hour] = ($buckets[$hour] ?? 0.0) + max(0.0, $delta);
+        // Un compteur à la fois : les deltas se calculent entre relevés du MÊME
+        // compteur, puis s'additionnent dans les créneaux communs (#55).
+        foreach ($this->importIndexTotalsByMeter($from, $to) as $rows) {
+            for ($i = 1, $iMax = count($rows); $i < $iMax; $i++) {
+                $delta          = $rows[$i]['total'] - $rows[$i - 1]['total'];
+                $hour           = substr($rows[$i - 1]['ts'], 0, 13) . ':00:00';
+                $buckets[$hour] = ($buckets[$hour] ?? 0.0) + max(0.0, $delta);
+            }
         }
+
+        // Tri explicite : à un compteur les créneaux arrivaient déjà dans l'ordre,
+        // plusieurs séries les entrelacent. Clés 'Y-m-d H:00:00', tri
+        // lexicographique == chronologique.
+        ksort($buckets);
 
         $out = [];
         foreach ($buckets as $hour => $kwh) {
@@ -1050,8 +1158,8 @@ final class ElectricityReadingRepository implements LegacyDailyRepositoryInterfa
      */
     public function getQuarterImportDeltas(DateTimeImmutable $from, DateTimeImmutable $to): array
     {
-        $rows = $this->importIndexTotals($from, $to);
-        $utc  = Dates::utc();
+        $byMeter = $this->importIndexTotalsByMeter($from, $to);
+        $utc     = Dates::utc();
 
         /** @var array<string, array{kwh: float, native: bool}> $buckets */
         $buckets = [];
@@ -1065,20 +1173,26 @@ final class ElectricityReadingRepository implements LegacyDailyRepositoryInterfa
             ];
         };
 
-        for ($i = 1, $iMax = count($rows); $i < $iMax; $i++) {
-            $delta  = max(0.0, $rows[$i]['total'] - $rows[$i - 1]['total']);
-            $start  = Dates::fromDbString($rows[$i - 1]['ts']);
-            $end    = Dates::fromDbString($rows[$i]['ts']);
-            $span   = $end->getTimestamp() - $start->getTimestamp();
-            $native = $span <= self::QUARTER_SECONDS + self::QUARTER_JITTER_SECONDS;
+        // Un compteur à la fois : la cadence comme le delta sont des propriétés du
+        // compteur, pas du foyer. Un créneau alimenté par deux compteurs n'est donc
+        // natif que si LES DEUX sont au pas de 15 min — c'est `$add()` qui compose
+        // ce ET, et il compose correctement de lui-même (#55).
+        foreach ($byMeter as $rows) {
+            for ($i = 1, $iMax = count($rows); $i < $iMax; $i++) {
+                $delta  = max(0.0, $rows[$i]['total'] - $rows[$i - 1]['total']);
+                $start  = Dates::fromDbString($rows[$i - 1]['ts']);
+                $end    = Dates::fromDbString($rows[$i]['ts']);
+                $span   = $end->getTimestamp() - $start->getTimestamp();
+                $native = $span <= self::QUARTER_SECONDS + self::QUARTER_JITTER_SECONDS;
 
-            $cursor = $start;
-            while ($cursor < $end) {
-                [$slotStart, $slotEnd] = ReadingGranularity::QuarterHour->bucket($cursor, $utc);
-                $sliceEnd = $slotEnd < $end ? $slotEnd : $end;
-                $share    = (float) ($sliceEnd->getTimestamp() - $cursor->getTimestamp()) / (float) $span;
-                $add(Dates::toDbString($slotStart), $delta * $share, $native);
-                $cursor = $sliceEnd;
+                $cursor = $start;
+                while ($cursor < $end) {
+                    [$slotStart, $slotEnd] = ReadingGranularity::QuarterHour->bucket($cursor, $utc);
+                    $sliceEnd = $slotEnd < $end ? $slotEnd : $end;
+                    $share    = (float) ($sliceEnd->getTimestamp() - $cursor->getTimestamp()) / (float) $span;
+                    $add(Dates::toDbString($slotStart), $delta * $share, $native);
+                    $cursor = $sliceEnd;
+                }
             }
         }
 
@@ -1097,52 +1211,84 @@ final class ElectricityReadingRepository implements LegacyDailyRepositoryInterfa
     }
 
     /**
-     * Index IMPORT (T1+T2) cumulés par horodatage sur [$from, $to], triés.
+     * Index IMPORT (T1+T2) cumulés par horodatage, UNE SÉRIE PAR COMPTEUR (#55).
      *
-     * Fusion par horodatage : les registres T1/T2 sont relevés au même instant
-     * (même trame du compteur) ; on ne somme que les instants présents des deux côtés.
+     * La fusion T1+T2 se fait par horodatage EXACT — les deux registres d'un même
+     * compteur sont relevés dans la même trame, on ne somme donc que les instants
+     * présents des deux côtés. C'est précisément ce qui interdit de mélanger les
+     * compteurs : deux compteurs n'ont aucune raison de partager leurs
+     * horodatages, et les fusionner à plat apparierait le T1 de l'un au T2 de
+     * l'autre. Le résultat ne serait pas une erreur mais un CHIFFRE FAUX, silencieux,
+     * qui part directement dans la facturation au tarif dynamique.
      *
-     * @return list<array{ts: string, total: float}>
+     * Les séries restent séparées ; ce sont les DELTAS qui s'additionnent, chez
+     * l'appelant, dans les mêmes créneaux. Avec un seul compteur, la liste a un
+     * élément et le résultat est celui d'avant, à l'identique.
+     *
+     * @return list<list<array{ts: string, total: float}>> une série triée par compteur
      */
-    private function importIndexTotals(DateTimeImmutable $from, DateTimeImmutable $to): array
+    private function importIndexTotalsByMeter(DateTimeImmutable $from, DateTimeImmutable $to): array
     {
-        $byTs = [];
+        $idsByKey = [];
+        $allIds   = [];
         foreach (self::IMPORT_KEYS as $key) {
-            $rid = $this->registerId($key);
-            if ($rid === null) {
+            $ids = $this->registerIds($key);
+            if ($ids === []) {
+                // Aucun compteur ne porte ce registre : le total import n'a pas de
+                // sens, comme avant #55.
                 return [];
             }
-            $stmt = $this->pdo->prepare(
-                'SELECT reading_at, index_value FROM meter_readings
-                 WHERE register_id = :rid AND reading_at >= :from AND reading_at <= :to
-                 ORDER BY reading_at ASC'
-            );
-            $stmt->execute([
-                'rid'  => $rid,
-                'from' => Dates::toDbString($from),
-                'to'   => Dates::toDbString($to),
-            ]);
-            foreach ($stmt->fetchAll() as $row) {
-                $ts = (string) $row['reading_at'];
-                $byTs[$ts][$key] = (float) $row['index_value'];
+            $idsByKey[$key] = $ids;
+            $allIds         = [...$allIds, ...$ids];
+        }
+
+        $placeholders = implode(', ', array_fill(0, count($allIds), '?'));
+        $stmt = $this->pdo->prepare(
+            "SELECT reg.meter_id, reg.register_key, rd.reading_at, rd.index_value
+               FROM meter_readings rd
+               JOIN meter_registers reg ON reg.id = rd.register_id
+              WHERE rd.register_id IN ($placeholders)
+                AND rd.reading_at >= ? AND rd.reading_at <= ?
+              ORDER BY rd.reading_at ASC"
+        );
+        $stmt->execute([...$allIds, Dates::toDbString($from), Dates::toDbString($to)]);
+
+        /** @var array<int, array<string, array<string, float>>> $byMeter */
+        $byMeter = [];
+        foreach ($stmt->fetchAll() as $row) {
+            $byMeter[(int) $row['meter_id']][(string) $row['reading_at']][(string) $row['register_key']]
+                = (float) $row['index_value'];
+        }
+
+        $series = [];
+        foreach ($byMeter as $byTs) {
+            ksort($byTs);
+            $rows = [];
+            foreach ($byTs as $ts => $vals) {
+                if (count($vals) === count(self::IMPORT_KEYS)) {
+                    $rows[] = ['ts' => $ts, 'total' => array_sum($vals)];
+                }
+            }
+            if ($rows !== []) {
+                $series[] = $rows;
             }
         }
 
-        $rows = [];
-        ksort($byTs);
-        foreach ($byTs as $ts => $vals) {
-            if (count($vals) === count(self::IMPORT_KEYS)) {
-                $rows[] = ['ts' => $ts, 'total' => array_sum($vals)];
-            }
-        }
-
-        return $rows;
+        return $series;
     }
 
     // -------------------------------------------------------------------------
     // Privé
     // -------------------------------------------------------------------------
 
+    /**
+     * Registre de ce type sur le compteur PAR DÉFAUT — le plus ancien.
+     *
+     * Réservé aux chemins qui désignent un compteur unique : saisie, historique,
+     * index du jour, bornes de validation. Sommer des odomètres n'y aurait aucun
+     * sens, et entrelacer les index de deux compteurs dans un historique le
+     * rendrait illisible. Les RAPPORTS passent par {@see registerIds()}.
+     */
     private function registerId(string $key): ?int
     {
         if ($this->registerMap === null) {
@@ -1150,6 +1296,47 @@ final class ElectricityReadingRepository implements LegacyDailyRepositoryInterfa
         }
 
         return $this->registerMap[$key] ?? null;
+    }
+
+    /**
+     * Registres de ce type sur TOUS les compteurs électriques de l'utilisateur,
+     * le plus ancien en tête (#55).
+     *
+     * Liste vide = aucun compteur ne porte ce registre. Avec un seul compteur la
+     * liste a un élément et toutes les sommes de flotte redonnent exactement la
+     * valeur d'avant : un seul chemin de code, pas deux.
+     *
+     * @return list<int>
+     */
+    private function registerIds(string $key): array
+    {
+        $this->fleetRegisterMap ??= (new MeterTopology($this->pdo))->registerIdsForUser($this->userId);
+
+        return $this->fleetRegisterMap[$key] ?? [];
+    }
+
+    /**
+     * Au moins un de ces registres a-t-il un relevé dans l'intervalle ?
+     *
+     * Une seule requête pour toute la flotte. Le `LIMIT 1` s'arrête au premier
+     * relevé trouvé : c'est un prédicat d'existence, pas un décompte.
+     *
+     * @param list<int> $registerIds
+     */
+    private function hasReadingInAnyRange(array $registerIds, string $from, string $to): bool
+    {
+        if ($registerIds === []) {
+            return false;
+        }
+
+        $placeholders = implode(', ', array_fill(0, count($registerIds), '?'));
+        $stmt = $this->pdo->prepare(
+            "SELECT 1 FROM meter_readings
+              WHERE register_id IN ($placeholders) AND reading_at >= ? AND reading_at < ? LIMIT 1"
+        );
+        $stmt->execute([...$registerIds, $from, $to]);
+
+        return $stmt->fetchColumn() !== false;
     }
 
     /** @return array{reading_at: string, index_value: float}|null */
@@ -1189,27 +1376,6 @@ final class ElectricityReadingRepository implements LegacyDailyRepositoryInterfa
         }
 
         return null;
-    }
-
-    private function hasReadingInRange(int $registerId, string $from, string $to): bool
-    {
-        $stmt = $this->pdo->prepare(
-            'SELECT 1 FROM meter_readings WHERE register_id = :rid AND reading_at >= :from AND reading_at < :to LIMIT 1'
-        );
-        $stmt->execute(['rid' => $registerId, 'from' => $from, 'to' => $to]);
-
-        return $stmt->fetchColumn() !== false;
-    }
-
-    /**
-     * Index interpolé linéairement à un instant (clamp sur le relevé le plus
-     * proche si l'instant est hors plage). null si le registre est vide.
-     *
-     * @return array{value: float, timestamp: string}|null
-     */
-    private function interpolatedValueAt(int $registerId, string $instant): ?array
-    {
-        return $this->interpolatedValuesAt([$registerId], $instant)[$registerId];
     }
 
     /**

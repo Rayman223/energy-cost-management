@@ -966,7 +966,7 @@ return [
     'nav.meters'                                   => 'Compteurs',
     'meters.title'                                 => 'Mes compteurs',
     'meters.subtitle'                              => 'Le parc que vous relevez',
-    'meters.intro'                                 => 'Déclarez ici chaque compteur de votre installation. Vous pouvez en avoir plusieurs par énergie — une maison et un atelier, ou un compteur remplacé en cours d\'année.',
+    'meters.intro'                                 => 'Déclarez ici chaque compteur de votre installation. Vous pouvez en avoir plusieurs par énergie — une maison et un atelier, ou un compteur remplacé en cours d\'année. Les rapports additionnent tous les compteurs d\'une même énergie.',
     'meters.next_step'                             => 'Une fois vos compteurs déclarés, saisissez leurs index depuis la page « Saisir mes index ».',
     'meters.fleet_title'                           => 'Compteurs déclarés',
     'meters.add_title'                             => 'Ajouter un compteur',

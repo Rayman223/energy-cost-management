@@ -56,7 +56,7 @@ final class AccountDataExporter
         echo ',"utility_readings":';
         $this->streamRows(
             'SELECT meter_id, energy_type, reading_at, counter_m3 FROM utility_readings
-             WHERE user_id = :uid ORDER BY energy_type, reading_at',
+             WHERE user_id = :uid ORDER BY energy_type, meter_id, reading_at',
             $userId
         );
 

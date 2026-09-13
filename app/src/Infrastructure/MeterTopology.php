@@ -135,7 +135,12 @@ final class MeterTopology
     }
 
     /**
-     * Carte des registres de l'utilisateur SANS création (lecture seule).
+     * Carte des registres du compteur PAR DÉFAUT de l'utilisateur, sans création
+     * (lecture seule).
+     *
+     * Ne voit qu'un compteur : réservée aux chemins qui en désignent un seul —
+     * saisie, historique, index du jour. Les lectures de RAPPORT passent par
+     * {@see registerIdsForUser()}, qui couvre tout le parc.
      *
      * @return array<string, int> register_key => id (vide si aucun compteur)
      */
@@ -144,5 +149,42 @@ final class MeterTopology
         $meterId = $this->findElectricityMeter($userId);
 
         return $meterId === null ? [] : $this->registerMap($meterId);
+    }
+
+    /**
+     * Registres de TOUS les compteurs électriques de l'utilisateur, groupés par
+     * clé de registre (#55).
+     *
+     * C'est la vue « flotte » : un foyer peut relever une maison et un atelier,
+     * et un rapport doit additionner les deux. Une clé absente du retour signifie
+     * qu'aucun compteur ne porte ce registre — distinct d'une liste vide, qui ne
+     * peut pas se produire ici.
+     *
+     * Une seule requête pour tout le parc : la jointure `meters → meter_registers`
+     * est indexée par `idx_meters_user_energy` puis par la clé unique
+     * `uq_meter_registers`. L'ordre par identifiant de compteur est stable et
+     * significatif — le plus ancien d'abord, c'est-à-dire le compteur par défaut.
+     *
+     * @return array<string, list<int>> register_key => ids, compteur le plus ancien en tête
+     */
+    public function registerIdsForUser(int $userId): array
+    {
+        $stmt = $this->pdo->prepare(
+            "SELECT reg.id, reg.register_key
+               FROM meter_registers reg
+               JOIN meters m ON m.id = reg.meter_id
+              WHERE m.user_id = :uid AND m.energy_type = 'electricity'
+              ORDER BY reg.meter_id, reg.id"
+        );
+        $stmt->execute(['uid' => $userId]);
+
+        $map = [];
+        foreach ($stmt->fetchAll() as $row) {
+            if (is_array($row)) {
+                $map[(string) $row['register_key']][] = (int) $row['id'];
+            }
+        }
+
+        return $map;
     }
 }
