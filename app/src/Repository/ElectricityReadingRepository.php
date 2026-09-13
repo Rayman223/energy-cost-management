@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Repository;
 
+use App\Domain\FleetCoverageWindow;
 use App\Domain\Meter;
 use App\Domain\ReadingGranularity;
 use App\Infrastructure\MeterTopology;
@@ -80,6 +81,18 @@ final class ElectricityReadingRepository implements LegacyDailyRepositoryInterfa
      * @var array<string, list<int>>|null
      */
     private ?array $fleetRegisterMap = null;
+
+    /**
+     * Cache register_id => `closed_on` ('Y-m-d') des compteurs électriques FERMÉS
+     * (#76). Mémoïsé comme $fleetRegisterMap, et pour la même raison : la carte
+     * est résolue en une requête, quel que soit le nombre de rapports calculés.
+     *
+     * @var array<int, string>|null
+     */
+    private ?array $fleetClosures = null;
+
+    /** @var array<string, string> Cache 'Y-m-d' => instant de fermeture, au format de la base. */
+    private array $closureInstants = [];
 
     /**
      * Topologie (compteur + registres) créée/résolue une seule fois par requête.
@@ -815,9 +828,10 @@ final class ElectricityReadingRepository implements LegacyDailyRepositoryInterfa
                 continue;
             }
 
-            $sum    = 0.0;
-            $starts = [];
-            $ends   = [];
+            $sum      = 0.0;
+            $starts   = [];
+            $ends     = [];
+            $segments = [];
             foreach ($ids as $rid) {
                 $start = $startValues[$rid] ?? null;
                 $end   = $endValues[$rid] ?? null;
@@ -834,9 +848,10 @@ final class ElectricityReadingRepository implements LegacyDailyRepositoryInterfa
                 // repart de zéro, ne doit pas soustraire de la consommation de ses
                 // voisins. L'arrondi, lui, n'intervient qu'après la somme (cf.
                 // boundedDelta).
-                $sum     += max(0.0, $end['value'] - $start['value']);
-                $starts[] = $start['timestamp'];
-                $ends[]   = $end['timestamp'];
+                $sum       += max(0.0, $end['value'] - $start['value']);
+                $starts[]   = $start['timestamp'];
+                $ends[]     = $end['timestamp'];
+                $segments[] = ['end' => $end['timestamp'], 'closed_at' => $this->closureInstantOf($rid)];
             }
 
             // Aucun compteur ne porte de donnée sur ce registre : le rapport n'est
@@ -867,8 +882,16 @@ final class ElectricityReadingRepository implements LegacyDailyRepositoryInterfa
                 // mieux vaut un coût annoncé partiel qu'un coût partiel annoncé
                 // complet. À un compteur, max et min portent sur un seul élément :
                 // valeurs identiques à avant.
+                //
+                // La fin passe par {@see FleetCoverageWindow} (#76), qui n'oppose
+                // la date d'un compteur que tant qu'il est VIVANT : un compteur
+                // fermé n'est pas un compteur qu'on a cessé de relever, et rien
+                // n'est plus attendu de lui. Sans quoi remplacer son compteur
+                // figeait la couverture de tous les rapports suivants. Le repli
+                // sur `min($ends)` est inatteignable — $ends non vide implique
+                // $segments non vide — mais il garde le type de sortie strict.
                 $result['data_from'] = max($starts);
-                $result['data_to']   = min($ends);
+                $result['data_to']   = FleetCoverageWindow::coveredUntil($segments, $from) ?? min($ends);
             }
         }
 
@@ -1406,6 +1429,36 @@ final class ElectricityReadingRepository implements LegacyDailyRepositoryInterfa
         $this->fleetRegisterMap ??= (new MeterTopology($this->pdo))->registerIdsForUser($this->userId);
 
         return $this->fleetRegisterMap[$key] ?? [];
+    }
+
+    /**
+     * Instant de fermeture du compteur portant ce registre (#76), au format de la
+     * base ; `null` s'il est ouvert.
+     *
+     * La date de fermeture est une DATE, lue dans le fuseau de l'utilisateur —
+     * c'est {@see Meter::closureInstantFor()} qui la situe, comme pour la garde
+     * d'écriture. La conversion est mémoïsée par date et non par registre : les
+     * quatre registres d'un même compteur partagent la sienne.
+     */
+    private function closureInstantOf(int $registerId): ?string
+    {
+        $this->fleetClosures ??= (new MeterTopology($this->pdo))->registerClosuresForUser($this->userId);
+
+        $closedOn = $this->fleetClosures[$registerId] ?? null;
+        if ($closedOn === null || $closedOn === '') {
+            return null;
+        }
+
+        if (!isset($this->closureInstants[$closedOn])) {
+            $closureAt = Meter::closureInstantFor($closedOn, $this->timezone);
+            if ($closureAt === null) {
+                return null;
+            }
+
+            $this->closureInstants[$closedOn] = Dates::toDbString($closureAt);
+        }
+
+        return $this->closureInstants[$closedOn];
     }
 
     /**

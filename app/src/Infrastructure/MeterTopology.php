@@ -263,4 +263,40 @@ final class MeterTopology
 
         return $map;
     }
+
+    /**
+     * Date de fermeture du compteur porteur, PAR REGISTRE, pour les seuls
+     * compteurs électriques fermés de l'utilisateur (#76).
+     *
+     * Pendant de {@see registerIdsForUser()} pour la vue « flotte » : les rapports
+     * raisonnent en registres, et doivent savoir lesquels appartiennent à un
+     * compteur retiré — sans quoi la dernière date d'un compteur remplacé fige la
+     * couverture pour toujours. Le vis-à-vis par compteur, {@see closedOn()},
+     * reste au service des chemins d'ÉCRITURE, qui ne visent qu'un compteur.
+     *
+     * Une seule requête, même jointure indexée que la carte des registres. Les
+     * compteurs ouverts sont absents du retour plutôt que rendus à `null` : une
+     * clé manquante dit « rien à opposer », il n'y a pas deux façons de l'écrire.
+     *
+     * @return array<int, string> register_id => `closed_on` ('Y-m-d')
+     */
+    public function registerClosuresForUser(int $userId): array
+    {
+        $stmt = $this->pdo->prepare(
+            "SELECT reg.id, m.closed_on
+               FROM meter_registers reg
+               JOIN meters m ON m.id = reg.meter_id
+              WHERE m.user_id = :uid AND m.energy_type = 'electricity' AND m.closed_on IS NOT NULL"
+        );
+        $stmt->execute(['uid' => $userId]);
+
+        $closures = [];
+        foreach ($stmt->fetchAll() as $row) {
+            if (is_array($row)) {
+                $closures[(int) $row['id']] = (string) $row['closed_on'];
+            }
+        }
+
+        return $closures;
+    }
 }
