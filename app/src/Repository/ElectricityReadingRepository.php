@@ -218,16 +218,25 @@ final class ElectricityReadingRepository implements LegacyDailyRepositoryInterfa
     }
 
     /**
-     * Supprime le compteur électricité de l'utilisateur ; les registres et tous
-     * les relevés partent en cascade (ON DELETE CASCADE). insertIndexes recrée le
-     * compteur paresseusement au prochain import/saisie.
+     * Supprime LE compteur électricité par défaut de l'utilisateur — le plus
+     * ancien, celui que résout MeterTopology et donc le seul que ce repository
+     * lise ou alimente ; ses registres et tous ses relevés partent en cascade
+     * (ON DELETE CASCADE). insertIndexes le recrée paresseusement au prochain
+     * import/saisie.
+     *
+     * `ORDER BY id LIMIT 1` n'est pas décoratif : depuis #55 l'utilisateur
+     * déclare lui-même son parc sur /meters et peut posséder PLUSIEURS compteurs
+     * électriques nommés. Sans cette borne, cet appel — exposé en un seul POST
+     * `delete_electricity_meter` — emporterait tout le parc électrique et son
+     * historique, là où la page /meters ne supprime qu'une ligne à la fois, après
+     * une confirmation qui annonce le nombre de relevés perdus.
      *
      * @return int Nombre de compteurs supprimés (0 ou 1).
      */
     public function deleteMeter(): int
     {
         $stmt = $this->pdo->prepare(
-            'DELETE FROM meters WHERE user_id = :uid AND energy_type = :etype'
+            'DELETE FROM meters WHERE user_id = :uid AND energy_type = :etype ORDER BY id LIMIT 1'
         );
         $stmt->execute(['uid' => $this->userId, 'etype' => 'electricity']);
 

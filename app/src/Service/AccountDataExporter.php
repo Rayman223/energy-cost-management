@@ -30,25 +30,32 @@ final class AccountDataExporter
             '"exported_at":' . self::enc((new \DateTimeImmutable('now'))->format('c')),
             '"user":' . self::enc($this->one('SELECT id, oidc_iss, oidc_sub, provider, display_name, role, status, terms_accepted_at, created_at, last_login_at FROM users WHERE id = :uid', $userId)),
             '"profile":' . self::enc($this->one('SELECT country, timezone, currency, bidding_zone, supplier_markup_per_kwh, locale, stats_opt_out FROM user_profiles WHERE user_id = :uid', $userId)),
-            '"meters":' . self::enc($this->all('SELECT id, energy_type, label, country, timezone, created_at FROM meters WHERE user_id = :uid ORDER BY id', $userId)),
+            // `closed_on` exportée depuis #55 : c'est une donnée saisie par
+            // l'utilisateur sur son parc, pas un détail interne — l'omettre
+            // rendrait l'export non reconstituable.
+            '"meters":' . self::enc($this->all('SELECT id, energy_type, label, country, timezone, closed_on, created_at FROM meters WHERE user_id = :uid ORDER BY id', $userId)),
         ];
         echo '{' . implode(',', $head);
 
         // Tables volumineuses : paginées (mémoire bornée).
+        // `meter_id` sur les deux flux de relevés depuis #55 : un utilisateur peut
+        // déclarer plusieurs compteurs par énergie, et sans cette colonne les
+        // séries de deux compteurs se confondent en une seule liste, que l'export
+        // ne permet plus de démêler ni de recharger ailleurs.
         echo ',"meter_readings":';
         $this->streamRows(
-            'SELECT reg.register_key, mr.reading_at, mr.index_value
+            'SELECT reg.meter_id, reg.register_key, mr.reading_at, mr.index_value
              FROM meter_readings mr
              INNER JOIN meter_registers reg ON reg.id = mr.register_id
              INNER JOIN meters m ON m.id = reg.meter_id
              WHERE m.user_id = :uid
-             ORDER BY mr.reading_at, reg.register_key',
+             ORDER BY reg.meter_id, mr.reading_at, reg.register_key',
             $userId
         );
 
         echo ',"utility_readings":';
         $this->streamRows(
-            'SELECT energy_type, reading_at, counter_m3 FROM utility_readings
+            'SELECT meter_id, energy_type, reading_at, counter_m3 FROM utility_readings
              WHERE user_id = :uid ORDER BY energy_type, reading_at',
             $userId
         );

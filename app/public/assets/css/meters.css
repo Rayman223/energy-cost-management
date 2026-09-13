@@ -1,0 +1,48 @@
+/* ──────────────────────────────────────────────────────────────────────────
+   Parc de compteurs (#55) — page /meters.
+
+   Reprend la grammaire de tariffs.css (.form-card, .section-header, .btn) et
+   n'ajoute que ce qui lui est propre : le bandeau de quotas et le tableau du
+   parc. Même trame que batteries.css, préfixe `mtr-` pour que les deux pages
+   restent modifiables l'une sans l'autre.
+   ────────────────────────────────────────────────────────────────────────── */
+
+.mtr-intro { color: var(--muted); font-size: .88rem; line-height: 1.6; margin: 20px 0 0; max-width: 76ch; }
+
+/* Quotas : le chiffre qui explique un refus de création AVANT qu'il n'arrive. */
+.mtr-quotas { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 20px; }
+.mtr-quota { display: flex; flex-direction: column; gap: 4px; min-width: 120px;
+             background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+             padding: 12px 18px; }
+.mtr-quota-label { font-size: .72rem; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+.mtr-quota-value { font-family: var(--mono); font-size: 1.2rem; font-weight: 700; color: var(--text-strong); }
+/* Énergie saturée : le liseré est doublé de la valeur chiffrée, la couleur
+   seule n'est pas une information. */
+.mtr-quota--full { box-shadow: inset 3px 0 0 var(--amber); }
+.mtr-quota--full .mtr-quota-value { color: var(--amber); }
+
+.mtr-table-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+                  overflow-x: auto; }
+.mtr-table { width: 100%; border-collapse: collapse; font-size: .84rem; min-width: 560px; }
+.mtr-table th { text-align: left; padding: 12px 16px; color: var(--muted); font-weight: 600;
+                font-size: .74rem; letter-spacing: .08em; text-transform: uppercase; }
+.mtr-table td { padding: 12px 16px; border-top: 1px solid var(--border); vertical-align: middle; }
+.mtr-table th.num, .mtr-table td.num { text-align: right; font-family: var(--mono); }
+.mtr-table tbody tr:hover { background: var(--surface2); }
+.mtr-table td.actions { text-align: right; white-space: nowrap; }
+.mtr-table td.actions form { display: inline-block; margin-left: 6px; }
+
+.mtr-note { display: block; color: var(--muted); font-size: .76rem; margin-top: 3px; }
+.mtr-empty-hint { color: var(--muted); font-size: .86rem; margin: 16px 0 0; }
+
+.mtr-table tr.is-editing { background: var(--amber-dim, rgba(210,160,60,.15)); }
+.mtr-table tr.is-editing:hover { background: var(--amber-dim, rgba(210,160,60,.15)); }
+.mtr-table tr.is-closed { opacity: .6; }
+
+.mtr-badge { display: inline-block; margin-left: 8px; padding: 2px 8px; border-radius: 4px;
+             font-size: .72rem; font-weight: 700; background: var(--border); color: var(--muted); }
+.mtr-badge--closed { background: var(--amber-dim, rgba(210,160,60,.15)); color: var(--amber); }
+
+@media (max-width: 720px) {
+  .mtr-quota { flex: 1 1 auto; }
+}

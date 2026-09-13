@@ -140,6 +140,19 @@ final class ConfigSchema
                     ],
                 ],
 
+                'limits' => [
+                    // Plafonds anti-abus (#55), lus par App\Support\Limits. Absents
+                    // ⇒ défauts du code ; une valeur hors bornes est ramenée dans
+                    // [1, 50] au point de lecture. Pas de `valueCheck` numérique :
+                    // le seul existant traite un cas silencieux à l'exécution, ce
+                    // qui n'est pas le cas ici — la valeur retenue est visible à
+                    // l'écran, sur la page /meters.
+                    'absentHint' => 'plafonds par défaut',
+                    'children'   => [
+                        'meters_per_energy' => [],
+                    ],
+                ],
+
                 'discord' => [
                     'children' => [
                         'invite_url' => [],

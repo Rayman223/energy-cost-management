@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Unit\I18n;
 
 use App\Domain\ComponentKind;
+use App\Domain\Meter;
 use App\Domain\SpotFormulaFit;
 use App\Domain\TariffCategory;
 use App\Domain\TariffTemplateCatalog;
@@ -227,6 +228,15 @@ final class TemplateCatalogTest extends TestCase
         }
         foreach (BillReconciliationService::SKIP_REASONS as $reason) {
             $keys[] = 'reconciliation.skipped.' . $reason;
+        }
+
+        // meters.php — nom de l'énergie (sélecteur, colonne, quotas) et libellé
+        // par défaut d'un compteur non nommé (#55). Le second n'apparaît nulle
+        // part comme littéral : il est fabriqué par Meter::defaultLabelKey(),
+        // seule la constante permet de le reconstruire.
+        foreach (Meter::ENERGIES as $energy) {
+            $keys[] = 'meters.energy.' . $energy;
+            $keys[] = 'meters.default_label.' . $energy;
         }
 
         return array_values(array_unique($keys));

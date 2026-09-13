@@ -6,6 +6,8 @@ namespace App\Repository;
 
 use App\Domain\Battery;
 use App\Repository\Contract\BatteryRepositoryInterface;
+use App\Repository\Exception\LimitReachedException;
+use App\Support\Limits;
 use PDO;
 
 /**
@@ -21,9 +23,19 @@ final class BatteryRepository implements BatteryRepositoryInterface
                              commissioned_on, decommissioned_on, warranty_until, rated_cycles,
                              pv_charge_share, discharge_profile, discharge_t1_share, note';
 
+    /**
+     * @param int $maxPerUser Plafond anti-abus du parc, cf. {@see Limits::metersPerEnergy()} —
+     *                        une batterie pose le même problème d'exploitation qu'un
+     *                        compteur, elle partage donc son plafond plutôt qu'un
+     *                        second réglage à oublier de renseigner. Défaut égal au
+     *                        défaut de configuration : un appelant qui oublierait de
+     *                        le passer obtient la garde standard, jamais l'absence
+     *                        de garde.
+     */
     public function __construct(
         private readonly PDO $pdo,
         private readonly int $userId,
+        private readonly int $maxPerUser = Limits::DEFAULT_METERS_PER_ENERGY,
     ) {
     }
 
@@ -52,6 +64,15 @@ final class BatteryRepository implements BatteryRepositoryInterface
         return $rows[0] ?? null;
     }
 
+    /** Taille du parc, pour la garde de plafond et pour l'afficher à l'écran. */
+    public function count(): int
+    {
+        $stmt = $this->pdo->prepare('SELECT COUNT(*) FROM batteries WHERE user_id = :uid');
+        $stmt->execute(['uid' => $this->userId]);
+
+        return (int) $stmt->fetchColumn();
+    }
+
     public function owns(int $id): bool
     {
         $stmt = $this->pdo->prepare('SELECT 1 FROM batteries WHERE id = :id AND user_id = :uid LIMIT 1');
@@ -60,8 +81,20 @@ final class BatteryRepository implements BatteryRepositoryInterface
         return $stmt->fetchColumn() !== false;
     }
 
+    /**
+     * @throws LimitReachedException si le parc a atteint son plafond
+     */
     public function insert(Battery $battery): int
     {
+        // Garde ici et pas seulement dans la route : le repository est le seul
+        // point commun à tous les chemins de création, présents et à venir.
+        // Course possible entre deux requêtes simultanées, comme pour
+        // {@see ApiTokenRepository::create()} : le dépassement serait alors d'une
+        // unité, sans conséquence.
+        if ($this->count() >= $this->maxPerUser) {
+            throw LimitReachedException::batteries($this->maxPerUser);
+        }
+
         $stmt = $this->pdo->prepare(
             'INSERT INTO batteries
                 (user_id, brand, model, capacity_kwh, usable_capacity_kwh, purchase_price,
