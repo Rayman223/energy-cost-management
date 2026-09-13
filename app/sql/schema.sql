@@ -154,12 +154,14 @@ CREATE TABLE IF NOT EXISTS user_profiles (
 CREATE TABLE IF NOT EXISTS meters (
     id          BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     user_id     BIGINT UNSIGNED NOT NULL,
-    energy_type ENUM('electricity') NOT NULL DEFAULT 'electricity',
-    label       VARCHAR(120) NOT NULL DEFAULT '',
+    energy_type ENUM('electricity', 'gas', 'water') NOT NULL DEFAULT 'electricity',
+    label       VARCHAR(120) NOT NULL DEFAULT '' COMMENT 'Vide = libelle derive a l''affichage, dans la langue du lecteur',
     country     VARCHAR(2)  NULL,
     timezone    VARCHAR(64) NULL,
+    closed_on   DATE NULL COMMENT 'Fermeture du compteur, borne EXCLUE (#1) : aucune ecriture a partir de cette date',
     created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     INDEX idx_meters_user (user_id),
+    INDEX idx_meters_user_energy (user_id, energy_type),
     CONSTRAINT fk_meters_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
@@ -184,12 +186,15 @@ CREATE TABLE IF NOT EXISTS meter_readings (
 CREATE TABLE IF NOT EXISTS utility_readings (
     id          BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     user_id     BIGINT UNSIGNED NOT NULL,
+    meter_id    BIGINT UNSIGNED NOT NULL COMMENT 'Compteur porteur du releve (#55) ; user_id/energy_type sont denormalises',
     energy_type ENUM('gas', 'water') NOT NULL,
     reading_at  DATETIME NOT NULL,
     counter_m3  DECIMAL(12,3) NOT NULL,
     created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE KEY uq_utility_readings (user_id, energy_type, reading_at),
-    CONSTRAINT fk_utility_readings_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+    UNIQUE KEY uq_utility_readings_meter (meter_id, reading_at),
+    INDEX idx_utility_readings_user (user_id, energy_type, reading_at),
+    CONSTRAINT fk_utility_readings_user FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE,
+    CONSTRAINT fk_utility_readings_meter FOREIGN KEY (meter_id) REFERENCES meters (id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- ── Jetons API (authentification machine des agents) ─────────────────────

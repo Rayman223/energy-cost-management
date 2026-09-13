@@ -36,7 +36,7 @@ final class AccountRgpdDbTest extends DatabaseTestCase
     protected function clean(): void
     {
         foreach ([
-            'meter_readings', 'meter_registers', 'meters', 'utility_readings',
+            'meter_readings', 'meter_registers', 'utility_readings', 'meters',
             'battery_readings', 'batteries',
             'tariff_grid_lines', 'tariff_grids', 'api_tokens',
             'energy_advances',
@@ -113,7 +113,14 @@ final class AccountRgpdDbTest extends DatabaseTestCase
         self::assertArrayNotHasKey('pricing_mode', $data['profile']);
         self::assertArrayHasKey('supplier_markup_per_kwh', $data['profile']);
         self::assertArrayHasKey('pricing_mode', $data['tariff_grids'][0]);
-        self::assertCount(1, $data['meters']);
+        // Deux compteurs, pas un : depuis #55 le relevé gaz est lui aussi porté
+        // par un compteur, créé à la volée par le repository. L'export doit les
+        // rendre tous — c'est la contrepartie du modèle unifié.
+        self::assertCount(2, $data['meters']);
+        self::assertSame(
+            ['electricity', 'gas'],
+            array_map(static fn (array $meter): string => (string) $meter['energy_type'], $data['meters']),
+        );
         self::assertCount(1, $data['meter_readings']);
         self::assertSame('import_t1', $data['meter_readings'][0]['register_key']);
         self::assertCount(1, $data['utility_readings']);

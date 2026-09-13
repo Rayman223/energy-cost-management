@@ -4,48 +4,92 @@ declare(strict_types=1);
 
 namespace App\Infrastructure;
 
+use InvalidArgumentException;
 use PDO;
 
 /**
- * Topologie des compteurs du modèle à registres : résolution (et création à la
- * volée) du compteur électricité d'un utilisateur et de ses registres.
+ * Topologie des compteurs : résolution (et création à la volée) du compteur
+ * d'un utilisateur pour une énergie donnée, et de ses registres.
  * Source de vérité unique partagée par la lecture (dashboard), l'ingestion
  * (cron) et la migration (backfill).
+ *
+ * Depuis #55, `meters` porte les TROIS énergies et un utilisateur peut en
+ * posséder plusieurs par énergie. Les méthodes de cette classe résolvent le
+ * compteur PAR DÉFAUT — le plus ancien — et ne servent que de repli quand
+ * l'appelant n'a pas désigné de compteur précis.
  */
 final class MeterTopology
 {
     /** Registres électricité connus (jusqu'à 5 index par compteur). */
     public const ELECTRICITY_REGISTERS = ['import_t1', 'import_t2', 'export_t1', 'export_t2', 'production'];
 
+    /** Énergies portées par la table `meters` (miroir de l'ENUM energy_type). */
+    public const ENERGIES = ['electricity', 'gas', 'water'];
+
     public function __construct(private readonly PDO $pdo)
     {
     }
 
-    /** Compteur électricité de l'utilisateur, créé s'il n'existe pas. */
-    public function ensureElectricityMeter(int $userId): int
+    /**
+     * Compteur de l'utilisateur pour cette énergie, créé s'il n'existe pas.
+     *
+     * Le libellé est laissé VIDE : il est dérivé à l'affichage, dans la langue
+     * du lecteur. Écrire ici un libellé français le servirait tel quel à un
+     * utilisateur néerlandophone, et le figerait en base.
+     */
+    public function ensureMeter(int $userId, string $energyType = 'electricity'): int
     {
-        $existing = $this->findElectricityMeter($userId);
+        $existing = $this->findDefaultMeter($userId, $energyType);
         if ($existing !== null) {
             return $existing;
         }
 
         $this->pdo->prepare(
-            "INSERT INTO meters (user_id, energy_type, label) VALUES (:uid, 'electricity', 'Compteur électrique')"
-        )->execute(['uid' => $userId]);
+            "INSERT INTO meters (user_id, energy_type, label) VALUES (:uid, :etype, '')"
+        )->execute(['uid' => $userId, 'etype' => $this->assertEnergy($energyType)]);
 
         return (int) $this->pdo->lastInsertId();
+    }
+
+    /**
+     * Compteur PAR DÉFAUT de l'utilisateur pour cette énergie — le plus ancien —,
+     * null s'il n'en possède aucun.
+     */
+    public function findDefaultMeter(int $userId, string $energyType = 'electricity'): ?int
+    {
+        $stmt = $this->pdo->prepare(
+            'SELECT id FROM meters WHERE user_id = :uid AND energy_type = :etype ORDER BY id LIMIT 1'
+        );
+        $stmt->execute(['uid' => $userId, 'etype' => $this->assertEnergy($energyType)]);
+        $id = $stmt->fetchColumn();
+
+        return $id === false ? null : (int) $id;
+    }
+
+    /** Compteur électricité de l'utilisateur, créé s'il n'existe pas. */
+    public function ensureElectricityMeter(int $userId): int
+    {
+        return $this->ensureMeter($userId, 'electricity');
     }
 
     /** Compteur électricité de l'utilisateur, null s'il n'existe pas. */
     public function findElectricityMeter(int $userId): ?int
     {
-        $stmt = $this->pdo->prepare(
-            "SELECT id FROM meters WHERE user_id = :uid AND energy_type = 'electricity' ORDER BY id LIMIT 1"
-        );
-        $stmt->execute(['uid' => $userId]);
-        $id = $stmt->fetchColumn();
+        return $this->findDefaultMeter($userId, 'electricity');
+    }
 
-        return $id === false ? null : (int) $id;
+    /**
+     * Garde-fou : une énergie inconnue viendrait d'un appelant fautif, pas d'une
+     * saisie utilisateur. Échouer ici évite d'insérer une ligne que l'ENUM
+     * tronquerait silencieusement en mode non strict.
+     */
+    private function assertEnergy(string $energyType): string
+    {
+        if (!in_array($energyType, self::ENERGIES, true)) {
+            throw new InvalidArgumentException('Unknown energy type: ' . $energyType);
+        }
+
+        return $energyType;
     }
 
     /**

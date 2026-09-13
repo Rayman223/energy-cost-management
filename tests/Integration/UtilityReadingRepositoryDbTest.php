@@ -24,7 +24,7 @@ final class UtilityReadingRepositoryDbTest extends DatabaseTestCase
 
     protected function clean(): void
     {
-        foreach (['utility_readings', 'user_profiles', 'users'] as $table) {
+        foreach (['utility_readings', 'meters', 'user_profiles', 'users'] as $table) {
             $this->pdo()->exec('DELETE FROM ' . $table);
         }
     }
