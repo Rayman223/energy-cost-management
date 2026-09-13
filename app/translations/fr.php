@@ -531,6 +531,9 @@ return [
     'legal.notice.host'           => 'Hébergeur',
     'legal.notice.jurisdiction'   => 'Droit applicable',
     'legal.notice.contact_body'   => 'Toute demande relative au site, à son contenu ou à vos données personnelles peut être adressée à l\'éditeur aux coordonnées ci-dessus.',
+    'legal.notice.source_title'   => 'Code source et licence',
+    'legal.notice.source_body'    => 'Ce service est un logiciel libre, distribué sous licence GNU Affero General Public License v3 ou ultérieure (AGPL-3.0-or-later). Son code source complet est publié sur',
+    'legal.notice.source_link'    => 'le dépôt GitHub du projet',
 
     // Conditions générales d'utilisation
     'legal.terms.intro'           => 'L\'utilisation du service implique l\'acceptation des conditions ci-dessous.',

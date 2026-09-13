@@ -2,7 +2,7 @@
     "name": "rayman223/energy-cost-management",
     "description": "Tracking and estimation of energy costs (electricity, gas and water).",
     "type": "project",
-    "license": "MIT",
+    "license": "AGPL-3.0-or-later",
     "require": {
         "php": ">=8.4",
         "ext-mbstring": "*",
