@@ -956,6 +956,18 @@ return [
     'import.meter_hint'                            => 'Pick the meter this file feeds: one import targets one meter, and two meters mixed in a single file would be undetectable. Leave “default meter” if you only have one.',
     'import.meter_target'                          => 'Target meter',
     'import.meter_default'                         => 'Default meter',
+    // Meter closure (#55).
+    'meters.closed_field'                          => 'Closing date',
+    'meters.closed_hint'                           => 'From this date on, the meter accepts no further reading. Its existing readings still count in every report: the spending did happen. Leave empty for a meter in service.',
+    'meters.invalid_closed_on'                     => 'Invalid closing date.',
+    'meters.none_yet'                              => 'No meter declared for this energy: your first reading will create one, which you can name afterwards.',
+    'meters.entry_blocked'                         => '⚠ This meter closed on {date}: pick an earlier date to record a reading.',
+    'meters.entry_closed'                          => 'This meter is closed: only readings dated before its closing date are accepted.',
+    // Ingestion target meter (#55).
+    'meters.api_id'                                => 'meter_id: {id}',
+    'apiguide.meter_title'                         => 'Choosing the meter',
+    'apiguide.meter_desc'                          => 'One push feeds ONE meter. The target is given by “meter_id”: it is a NUMBER, the meter\'s identifier, not its name. You will find it on the “Meters” page, under each row\'s label. With a single meter for that energy it is optional; with several it becomes required — the API refuses to guess, because writing into the wrong meter would raise no error at all, only an index jump read as consumption.',
+    'apiguide.meter_note'                          => 'In batch mode, “meter_id” goes at the ROOT of the body, next to “readings”, never inside each reading: two meters mixed in one push would be undetectable. With no target and several meters, the answer is a 422 listing the available identifiers. Reports always add up all your meters of an energy: “meter_id” only concerns writing.',
 
     // ── Meter fleet (#55) ───────────────────────────────────────────────────
     // `meters.*`, not `meter.*`: the latter already belongs to the index ENTRY
@@ -967,7 +979,7 @@ return [
     'meters.next_step'                             => 'Once your meters are declared, enter their indexes from the “Enter my indexes” page.',
     'meters.fleet_title'                           => 'Declared meters',
     'meters.add_title'                             => 'Add a meter',
-    'meters.edit_title'                            => 'Rename a meter',
+    'meters.edit_title'                            => 'Edit a meter',
     // Label shown for a meter the user has not named. Derived at display time,
     // hence rendered in the reader's language rather than frozen in the database.
     'meters.default_label.electricity'             => 'Electricity meter',
@@ -988,7 +1000,7 @@ return [
     'meters.label_hint'                            => 'Leave empty for a generic name, translated into your language.',
     'meters.save_new'                              => 'Add',
     'meters.save_edit'                             => 'Save',
-    'meters.edit'                                  => 'Rename',
+    'meters.edit'                                  => 'Edit',
     'meters.delete'                                => 'Delete',
     'meters.delete_confirm'                        => 'Delete this meter? Its {count} readings will be deleted with it, permanently.',
     'meters.saved'                                 => '✓ Meter saved.',

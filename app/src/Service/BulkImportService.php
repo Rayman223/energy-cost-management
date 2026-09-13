@@ -7,6 +7,7 @@ namespace App\Service;
 use App\Repository\Contract\BatteryIngestionInterface;
 use App\Repository\Contract\ElectricityIngestionInterface;
 use App\Repository\Contract\UtilityIngestionInterface;
+use App\Repository\Exception\ClosedMeterException;
 use App\Service\Import\ImportMapping;
 use App\Service\Import\ImportReport;
 use App\Service\Import\ReadingParser;
@@ -95,6 +96,18 @@ final class BulkImportService
 
             try {
                 $inserted = $sink->insertIndexes($ts, $indexes, $replace);
+            } catch (ClosedMeterException $e) {
+                // Compteur fermé (#55) : ce n'est pas une ligne fautive parmi
+                // d'autres, c'est la CIBLE qui n'accepte rien à cette date. La
+                // laisser tomber dans la capture ci-dessous produirait une erreur
+                // muette par ligne — 200 000 pour un gros fichier — au lieu d'un
+                // message. Elle remonte donc, et ImportRunner annule tout.
+                //
+                // Remonter à la première ligne fautive, plutôt que refuser le
+                // fichier d'avance, laisse passer l'import dont TOUTES les lignes
+                // précèdent la fermeture : c'est le carnet recopié après coup, le
+                // cas d'usage le plus fréquent d'un compteur qu'on vient de fermer.
+                throw $e;
             } catch (\Throwable) {
                 // Erreur au niveau base (valeur hors bornes, verrou…) : on la
                 // compte comme échec réel et on poursuit — une ligne fautive ne
@@ -145,6 +158,18 @@ final class BulkImportService
 
             try {
                 $isNew = $sink->saveIgnore($ts, $value, $replace);
+            } catch (ClosedMeterException $e) {
+                // Compteur fermé (#55) : ce n'est pas une ligne fautive parmi
+                // d'autres, c'est la CIBLE qui n'accepte rien à cette date. La
+                // laisser tomber dans la capture ci-dessous produirait une erreur
+                // muette par ligne — 200 000 pour un gros fichier — au lieu d'un
+                // message. Elle remonte donc, et ImportRunner annule tout.
+                //
+                // Remonter à la première ligne fautive, plutôt que refuser le
+                // fichier d'avance, laisse passer l'import dont TOUTES les lignes
+                // précèdent la fermeture : c'est le carnet recopié après coup, le
+                // cas d'usage le plus fréquent d'un compteur qu'on vient de fermer.
+                throw $e;
             } catch (\Throwable) {
                 $report->addWriteError(sprintf('Ligne %d : erreur d\'écriture en base.', $lineNo));
                 continue;
@@ -224,6 +249,18 @@ final class BulkImportService
 
             try {
                 $written = $sink->insertIndexes($ts, $indexes, $replace);
+            } catch (ClosedMeterException $e) {
+                // Compteur fermé (#55) : ce n'est pas une ligne fautive parmi
+                // d'autres, c'est la CIBLE qui n'accepte rien à cette date. La
+                // laisser tomber dans la capture ci-dessous produirait une erreur
+                // muette par ligne — 200 000 pour un gros fichier — au lieu d'un
+                // message. Elle remonte donc, et ImportRunner annule tout.
+                //
+                // Remonter à la première ligne fautive, plutôt que refuser le
+                // fichier d'avance, laisse passer l'import dont TOUTES les lignes
+                // précèdent la fermeture : c'est le carnet recopié après coup, le
+                // cas d'usage le plus fréquent d'un compteur qu'on vient de fermer.
+                throw $e;
             } catch (\Throwable) {
                 // Erreur au niveau base (valeur hors bornes, verrou…) : comptée comme
                 // échec réel, sans annuler tout l'import. Aucun détail interne exposé.

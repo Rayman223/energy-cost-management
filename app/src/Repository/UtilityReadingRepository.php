@@ -4,10 +4,12 @@ declare(strict_types=1);
 
 namespace App\Repository;
 
+use App\Domain\Meter;
 use App\Infrastructure\MeterTopology;
 use App\Repository\Contract\GasReadingRepositoryInterface;
 use App\Repository\Contract\MeterReadingRepositoryInterface;
 use App\Repository\Contract\UtilityIngestionInterface;
+use App\Repository\Exception\ClosedMeterException;
 use App\Support\Dates;
 use DateTimeImmutable;
 use InvalidArgumentException;
@@ -27,24 +29,41 @@ use RuntimeException;
  */
 final class UtilityReadingRepository implements GasReadingRepositoryInterface, MeterReadingRepositoryInterface, UtilityIngestionInterface
 {
-    /** Compteur d'écriture par défaut, résolu paresseusement (créé au premier relevé). */
-    private ?int $defaultMeterId = null;
+    /**
+     * Compteur d'écriture, résolu paresseusement puis mémoïsé — désigné comme par
+     * défaut. La résolution coûte une requête : la refaire à chaque ligne
+     * doublerait le nombre d'allers-retours d'un import.
+     */
+    private ?int $writeMeterId = null;
 
     /** Compteur des lectures d'HISTORIQUE, résolu une fois (null = aucun). */
     private ?int $historyMeterId = null;
 
     private bool $historyMeterResolved = false;
 
+    /** Date de fermeture du compteur d'écriture ('Y-m-d'), null s'il est ouvert. */
+    private ?string $closedOn = null;
+
+    /** Premier instant refusé à l'écriture, en UTC ; null si le compteur est ouvert. */
+    private ?DateTimeImmutable $closureAt = null;
+
+    private bool $closureResolved = false;
+
     /**
      * @param int|null $meterId Compteur DÉSIGNÉ (#55). null = compteur par défaut
      *        de l'utilisateur pour ce fluide, comportement d'avant le
      *        multi-compteur.
+     * @param string $timezone Fuseau de l'utilisateur, où se lit la date de
+     *        FERMETURE d'un compteur : elle est une date, pas un instant. Défaut
+     *        UTC — seuls les chemins d'ÉCRITURE ont besoin du vrai fuseau, les
+     *        lectures n'opposent jamais la fermeture.
      */
     public function __construct(
         private readonly PDO $pdo,
         private readonly int $userId,
         private readonly string $energyType,
         private readonly ?int $meterId = null,
+        private readonly string $timezone = 'UTC',
     ) {
         if (!in_array($energyType, ['gas', 'water'], true)) {
             throw new InvalidArgumentException('energy_type invalide : ' . $energyType);
@@ -68,7 +87,7 @@ final class UtilityReadingRepository implements GasReadingRepositoryInterface, M
             return $this;
         }
 
-        return new self($this->pdo, $this->userId, $this->energyType, $meterId);
+        return new self($this->pdo, $this->userId, $this->energyType, $meterId, $this->timezone);
     }
 
     /**
@@ -106,7 +125,7 @@ final class UtilityReadingRepository implements GasReadingRepositoryInterface, M
         );
         $stmt->execute([
             'uid'        => $this->userId,
-            'mid'        => $this->writeMeterId(),
+            'mid'        => $this->assertWritable($readingAt),
             'etype'      => $this->energyType,
             'reading_at' => Dates::toDbString($readingAt),
             'counter_m3' => $counterM3,
@@ -136,7 +155,7 @@ final class UtilityReadingRepository implements GasReadingRepositoryInterface, M
         $stmt = $this->pdo->prepare($sql);
         $stmt->execute([
             'uid'        => $this->userId,
-            'mid'        => $this->writeMeterId(),
+            'mid'        => $this->assertWritable($readingAt),
             'etype'      => $this->energyType,
             'reading_at' => Dates::toDbString($readingAt),
             'counter_m3' => $counterM3,
@@ -156,6 +175,14 @@ final class UtilityReadingRepository implements GasReadingRepositoryInterface, M
      */
     private function writeMeterId(): int
     {
+        // Mémoïsé pour les DEUX branches : un import de 200 000 lignes ne doit pas
+        // ajouter 200 000 contrôles d'appartenance, pas plus que 200 000 lectures
+        // de fermeture. Le compteur d'écriture ne change pas au cours d'une
+        // instance — il est fixé par le constructeur, ou créé une fois.
+        if ($this->writeMeterId !== null) {
+            return $this->writeMeterId;
+        }
+
         if ($this->meterId !== null) {
             // Compteur DÉSIGNÉ : vérifié en appartenance, jamais créé à la volée —
             // un identifiant inconnu est une erreur de l'appelant, pas une
@@ -164,11 +191,43 @@ final class UtilityReadingRepository implements GasReadingRepositoryInterface, M
                 throw new RuntimeException('Unknown ' . $this->energyType . ' meter: ' . $this->meterId);
             }
 
-            return $this->meterId;
+            return $this->writeMeterId = $this->meterId;
         }
 
-        return $this->defaultMeterId ??= (new MeterTopology($this->pdo))
+        return $this->writeMeterId = (new MeterTopology($this->pdo))
             ->ensureMeter($this->userId, $this->energyType);
+    }
+
+    /**
+     * Résout le compteur d'écriture et refuse le relevé s'il est fermé à cette
+     * date (#55). Rend l'identifiant du compteur, pour que l'appelant n'ait pas à
+     * le résoudre deux fois.
+     *
+     * La règle porte sur `reading_at`, PAS sur l'horloge : un relevé daté d'avant
+     * la fermeture reste acceptable longtemps après elle — carnet recopié, import
+     * de l'historique du fournisseur. Seule la date du relevé décide.
+     *
+     * La fermeture est résolue une fois par instance : un import de 200 000
+     * lignes ne doit pas ajouter 200 000 requêtes.
+     *
+     * @throws ClosedMeterException si le relevé tombe le jour de fermeture ou après
+     */
+    private function assertWritable(DateTimeImmutable $readingAt): int
+    {
+        $meterId = $this->writeMeterId();
+
+        if (!$this->closureResolved) {
+            $this->closedOn        = (new MeterTopology($this->pdo))
+                ->closedOn($this->userId, $meterId, $this->energyType);
+            $this->closureAt       = Meter::closureInstantFor($this->closedOn, $this->timezone);
+            $this->closureResolved = true;
+        }
+
+        if ($this->closureAt !== null && $this->closedOn !== null && $readingAt >= $this->closureAt) {
+            throw ClosedMeterException::meter($this->closedOn);
+        }
+
+        return $meterId;
     }
 
     /**

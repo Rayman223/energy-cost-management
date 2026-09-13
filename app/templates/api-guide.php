@@ -45,13 +45,25 @@ $url   = $this->e($apiUrl);
 <pre><code>Authorization: Bearer mec_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx</code></pre>
   <p class="muted"><?= $this->te('apiguide.auth_note') ?></p>
 
+  <!-- ── Compteur visé (#55) ──────────────────────────────────────────────── -->
+  <h2><?= $this->te('apiguide.meter_title') ?></h2>
+  <p><?= $this->te('apiguide.meter_desc') ?></p>
+<pre><code>curl -X POST "<?= $url ?>?action=ingest_electricity" \
+  -H "Authorization: Bearer mec_votre_jeton" \
+  -H "Content-Type: application/json" \
+  -d '{"meter_id":3,"readings":[
+        {"timestamp":"2026-07-16T10:00:00+02:00","import_t1":1234.5},
+        {"timestamp":"2026-07-16T11:00:00+02:00","import_t1":1240.1}
+      ]}'</code></pre>
+  <p class="muted"><?= $this->te('apiguide.meter_note') ?></p>
+
   <!-- ── Électricité ──────────────────────────────────────────────────────── -->
   <h2><?= $this->te('apiguide.elec_title') ?></h2>
   <p><?= $this->te('apiguide.elec_desc') ?></p>
 <pre><code>curl -X POST "<?= $url ?>?action=ingest_electricity" \
   -H "Authorization: Bearer mec_votre_jeton" \
   -H "Content-Type: application/json" \
-  -d '{"readings":[{"timestamp":"2026-07-16T10:00:00+02:00","import_t1":1234.5,"import_t2":678.9,"export_t1":12.3,"export_t2":4.5,"production":89.0}]}'</code></pre>
+  -d '{"meter_id":3,"readings":[{"timestamp":"2026-07-16T10:00:00+02:00","import_t1":1234.5,"import_t2":678.9,"export_t1":12.3,"export_t2":4.5,"production":89.0}]}'</code></pre>
   <p class="muted"><?= $this->te('apiguide.elec_registers') ?></p>
 
   <!-- ── Gaz ──────────────────────────────────────────────────────────────── -->
@@ -60,7 +72,7 @@ $url   = $this->e($apiUrl);
 <pre><code>curl -X POST "<?= $url ?>?action=ingest_gas" \
   -H "Authorization: Bearer mec_votre_jeton" \
   -H "Content-Type: application/json" \
-  -d '{"readings":[{"reading_at":"2026-07-16T10:00:00+02:00","counter_m3":45.678}]}'</code></pre>
+  -d '{"meter_id":7,"readings":[{"reading_at":"2026-07-16T10:00:00+02:00","counter_m3":45.678}]}'</code></pre>
 
   <!-- ── Eau ──────────────────────────────────────────────────────────────── -->
   <h2><?= $this->te('apiguide.water_title') ?></h2>
@@ -68,7 +80,7 @@ $url   = $this->e($apiUrl);
 <pre><code>curl -X POST "<?= $url ?>?action=ingest_water" \
   -H "Authorization: Bearer mec_votre_jeton" \
   -H "Content-Type: application/json" \
-  -d '{"readings":[{"reading_at":"2026-07-16T10:00:00+02:00","counter_m3":123.456}]}'</code></pre>
+  -d '{"meter_id":9,"readings":[{"reading_at":"2026-07-16T10:00:00+02:00","counter_m3":123.456}]}'</code></pre>
 
   <!-- ── Batterie (#26) ───────────────────────────────────────────────────── -->
   <h2><?= $this->te('apiguide.battery_title') ?></h2>
@@ -76,7 +88,7 @@ $url   = $this->e($apiUrl);
 <pre><code>curl -X POST "<?= $url ?>?action=ingest_battery" \
   -H "Authorization: Bearer mec_votre_jeton" \
   -H "Content-Type: application/json" \
-  -d '{"readings":[{"timestamp":"2026-07-16T10:00:00+02:00","charge":1234.5,"discharge":1050.2}]}'</code></pre>
+  -d '{"battery_id":2,"readings":[{"timestamp":"2026-07-16T10:00:00+02:00","charge":1234.5,"discharge":1050.2}]}'</code></pre>
   <p class="muted"><?= $this->te('apiguide.battery_note') ?></p>
 
   <!-- ── Réponse & envoi en lot ───────────────────────────────────────────── -->

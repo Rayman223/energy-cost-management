@@ -964,6 +964,18 @@ return [
     'import.meter_hint'                            => 'Choisissez le compteur que ce fichier alimente : un import ne peut en viser qu\'un, deux compteurs mêlés dans un même fichier seraient indétectables. Laissez « compteur par défaut » si vous n\'en avez qu\'un.',
     'import.meter_target'                          => 'Compteur visé',
     'import.meter_default'                         => 'Compteur par défaut',
+    // Fermeture d'un compteur (#55).
+    'meters.closed_field'                          => 'Date de fermeture',
+    'meters.closed_hint'                           => 'À partir de cette date, le compteur n\'accepte plus aucun relevé. Ses relevés existants restent comptés dans tous les rapports : la dépense a bien eu lieu. Laissez vide pour un compteur en service.',
+    'meters.invalid_closed_on'                     => 'Date de fermeture invalide.',
+    'meters.none_yet'                              => 'Aucun compteur déclaré pour cette énergie : votre premier relevé en créera un, que vous pourrez ensuite nommer.',
+    'meters.entry_blocked'                         => '⚠ Ce compteur est fermé depuis le {date} : choisissez une date antérieure pour saisir un relevé.',
+    'meters.entry_closed'                          => 'Ce compteur est fermé : seuls les relevés datés d\'avant sa date de fermeture sont acceptés.',
+    // Compteur visé par l'ingestion (#55).
+    'meters.api_id'                                => 'meter_id : {id}',
+    'apiguide.meter_title'                         => 'Choisir le compteur',
+    'apiguide.meter_desc'                          => 'Un envoi alimente UN compteur. La cible se donne par « meter_id » : c\'est un NOMBRE, l\'identifiant du compteur, pas son nom. Vous le lisez sur la page « Compteurs », sous le libellé de chaque ligne. Avec un seul compteur pour cette énergie, il est facultatif ; avec plusieurs, il devient obligatoire — l\'API refuse de deviner, car écrire dans le mauvais compteur ne produirait aucune erreur, seulement un saut d\'index pris pour de la consommation.',
+    'apiguide.meter_note'                          => 'En envoi groupé, « meter_id » se place à la RACINE du corps, à côté de « readings », jamais dans chaque relevé : deux compteurs mêlés dans un même envoi seraient indétectables. Sans cible et avec plusieurs compteurs, la réponse est un 422 qui liste les identifiants disponibles. Les rapports, eux, additionnent toujours tous vos compteurs d\'une énergie : « meter_id » ne concerne que l\'écriture.',
 
     // ── Parc de compteurs (#55) ─────────────────────────────────────────────
     // `meters.*` et non `meter.*` : ce dernier appartient déjà à la page de
@@ -975,7 +987,7 @@ return [
     'meters.next_step'                             => 'Une fois vos compteurs déclarés, saisissez leurs index depuis la page « Saisir mes index ».',
     'meters.fleet_title'                           => 'Compteurs déclarés',
     'meters.add_title'                             => 'Ajouter un compteur',
-    'meters.edit_title'                            => 'Renommer un compteur',
+    'meters.edit_title'                            => 'Modifier un compteur',
     // Libellé affiché pour un compteur que l'utilisateur n'a pas nommé. Dérivé à
     // l'affichage, donc rendu dans la langue du lecteur plutôt que figé en base.
     'meters.default_label.electricity'             => 'Compteur électrique',
@@ -996,7 +1008,7 @@ return [
     'meters.label_hint'                            => 'Laissez vide pour un nom générique, traduit dans votre langue.',
     'meters.save_new'                              => 'Ajouter',
     'meters.save_edit'                             => 'Enregistrer',
-    'meters.edit'                                  => 'Renommer',
+    'meters.edit'                                  => 'Modifier',
     'meters.delete'                                => 'Supprimer',
     'meters.delete_confirm'                        => 'Supprimer ce compteur ? Ses {count} relevés seront supprimés avec lui, définitivement.',
     'meters.saved'                                 => '✓ Compteur enregistré.',

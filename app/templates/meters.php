@@ -115,6 +115,10 @@ $openEnergies = array_values(array_filter(
           <?php if (!$meter->isNamed()): ?>
           <span class="mtr-note"><?= $this->te('meters.unnamed_hint') ?></span>
           <?php endif; ?>
+          <?php // L'identifiant que l'API attend. Il n'apparaissait jusqu'ici que
+                // dans l'URL du bouton « Modifier » : impossible à trouver pour qui
+                // écrit un agent, alors que le guide d'API le réclame. ?>
+          <span class="mtr-note"><?= $this->te('meters.api_id', ['id' => $meter->id]) ?></span>
           <?php if ($closed && $meter->closedOn !== null): ?>
           <span class="mtr-badge mtr-badge--closed"><?= $this->te('meters.closed_on', ['date' => $meter->closedOn->format('Y-m-d')]) ?></span>
           <?php endif; ?>
@@ -184,6 +188,12 @@ $openEnergies = array_values(array_filter(
                placeholder="<?= $this->e($this->t('meters.label_placeholder')) ?>"
                value="<?= $this->e($editing->label ?? '') ?>">
         <p class="dates-hint"><?= $this->te('meters.label_hint') ?></p>
+      </div>
+      <div class="form-row">
+        <label class="form-label" for="mtr-closed"><?= $this->te('meters.closed_field') ?> <span class="unit"><?= $this->te('common.end_exclusive') ?></span></label>
+        <input type="date" id="mtr-closed" name="closed_on" class="form-input"
+               value="<?= $this->e($editing?->closedOn?->format('Y-m-d') ?? '') ?>">
+        <p class="dates-hint"><?= $this->te('meters.closed_hint') ?></p>
       </div>
     </div>
 

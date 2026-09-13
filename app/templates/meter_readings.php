@@ -13,6 +13,13 @@
 $today = date('Y-m-d');
 $now = date('H:i');
 
+// Jour courant DANS LE FUSEAU DU FOYER, pour décider ce qui est déjà fermé (#55).
+// La date de fermeture est une date, pas un instant : à 20 h le 14 à Montréal il
+// est déjà le 15 à Greenwich, et grimer le compteur en « fermé » une soirée avant
+// que le serveur ne refuse quoi que ce soit décalerait la fermeture d'un jour.
+// Même construction que la page /meters, qui affiche le même état.
+$closureToday = \App\Support\Dates::todayIn($timezone ?? 'UTC');
+
 /**
  * Sélecteur du compteur visé par une saisie (#55).
  *
@@ -22,19 +29,63 @@ $now = date('H:i');
  * Aucun compteur ⇒ aucune option ⇒ valeur vide, et le premier relevé crée le
  * compteur comme il l'a toujours fait.
  *
+ * Un compteur FERMÉ reste listé et reste SÉLECTIONNABLE, suffixé « fermé le … »
+ * pour que son état se voie. Le désactiver interdirait depuis le web ce que la
+ * borne EXCLUE autorise justement : saisir le dernier relevé pris la veille de la
+ * fermeture, ou rattraper un carnet plus ancien — le cas d'usage le plus fréquent
+ * d'un compteur qu'on vient de fermer. C'est le serveur qui tranche, et il
+ * tranche sur `reading_at`, pas sur l'état du compteur.
+ *
  * Le libellé vide est dérivé à l'affichage, dans la langue du lecteur.
  */
-$meterSelect = function (string $prefix, string $energyType) use ($metersByEnergy): string {
+$meterSelect = function (string $prefix, string $energyType) use ($metersByEnergy, $closureToday): string {
     $meters = $metersByEnergy[$energyType] ?? [];
+
     $hidden = count($meters) > 1 ? '' : ' bat-row-hidden';
+
+    // Parc VIDE : le premier relevé créera le compteur à la volée — comportement
+    // d'avant #55, conservé pour ne pas imposer un détour par /meters à un compte
+    // neuf. Mais le DIRE : sans ce mot, l'utilisateur crée un compteur sans le
+    // savoir, et ignore qu'il pourra le nommer. Le message vit HORS de la ligne du
+    // sélecteur, qui est masquée tant qu'il y a moins de deux compteurs.
+    // `card-sub` et `tool-link` viennent de dashboard.css, chargée par cette page —
+    // `dates-hint` vit dans tariffs.css, qu'elle ne charge pas : le message serait
+    // resté sans style. `card-sub` est déjà la classe du conseil batteries, plus
+    // bas, et l'icône reprend celle de la barre de navigation : c'est là qu'il faut
+    // aller, autant la montrer.
+    $hint = '';
+    if ($meters === []) {
+        $hint = '<p class="card-sub" id="' . $this->e($prefix) . '-meter-hint">' . $this->te('meters.none_yet')
+            . ' <a class="tool-link" href="' . $this->e($this->url('meters')) . '">📟 '
+            . $this->te('nav.meters') . '</a></p>';
+    }
 
     $options = '';
     foreach ($meters as $meter) {
-        $label = $meter->isNamed() ? $this->e($meter->label) : $this->te($meter->defaultLabelKey());
-        $options .= '<option value="' . $this->e((string) $meter->id) . '">' . $label . '</option>';
+        $closed = $meter->isClosedOn($closureToday);
+        $label  = $meter->isNamed() ? $this->e($meter->label) : $this->te($meter->defaultLabelKey());
+        if ($closed && $meter->closedOn !== null) {
+            $label .= ' — ' . $this->te('meters.closed_on', ['date' => $meter->closedOn->format('Y-m-d')]);
+        }
+
+        // La DATE de fermeture, et pas un simple drapeau : c'est elle que le JS
+        // compare à la date saisie. La borne étant exclue, un relevé antérieur
+        // reste légitime — seul celui daté du jour de fermeture ou après est
+        // bloqué à l'écran, comme il le serait par le serveur.
+        //
+        // Portée DÈS QU'ELLE EXISTE, même si le jour n'est pas encore venu : une
+        // fermeture PROGRAMMÉE refuse déjà les relevés datés d'après elle, et ne
+        // pas la porter ici laisserait partir la saisie pour la voir revenir en
+        // 422 — précisément ce que ce verrou évite. `data-closed-now` dit à part
+        // si la fermeture a déjà pris effet, ce qui n'est pas la même question.
+        $options .= '<option value="' . $this->e((string) $meter->id) . '"'
+            . ($meter->closedOn !== null ? ' data-closed="' . $this->e($meter->closedOn->format('Y-m-d')) . '"' : '')
+            . ($closed && $meter->closedOn !== null ? ' data-closed-now="1"' : '')
+            . '>' . $label . '</option>';
     }
 
-    return '<div class="form-row' . $hidden . '">'
+    return $hint
+        . '<div class="form-row' . $hidden . '">'
         . '<label class="form-label" for="' . $this->e($prefix) . '-meter">' . $this->te('meters.col_meter') . '</label>'
         . '<select id="' . $this->e($prefix) . '-meter" class="form-input">' . $options . '</select>'
         . '</div>';
@@ -123,7 +174,10 @@ $meterSelect = function (string $prefix, string $energyType) use ($metersByEnerg
   <div class="gas-grid">
     <div class="gas-form">
       <?= $meterSelect('gas', 'gas') ?>
-      <?php if ($gasLatest): ?><div class="card-sub"><?= $this->te('meter.latest') ?> : <strong><?= $this->num((float) $gasLatest['counter_m3'], 3) ?> m³</strong></div><?php endif; ?>
+      <?php // Toujours dans le DOM, masqué quand le compteur visé n'a aucun relevé :
+            // c'est meter-readings.js qui le réécrit à chaque rechargement d'historique,
+            // et un encart absent ne pourrait pas être rempli en changeant de compteur (#55). ?>
+      <div class="card-sub" id="gas-latest"<?= $gasLatest ? '' : ' hidden' ?>><?= $this->te('meter.latest') ?> : <strong id="gas-latest-value"><?= $gasLatest ? $this->e($this->num((float) $gasLatest['counter_m3'], 3)) : '' ?> m³</strong></div>
       <div class="cards cards-2"><div class="form-row"><label class="form-label" for="gas-date"><?= $this->te('meter.reading_date') ?></label><input id="gas-date" type="date" class="form-input" value="<?= $this->e($today) ?>"></div><div class="form-row"><label class="form-label" for="gas-time"><?= $this->te('meter.reading_time') ?></label><input id="gas-time" type="time" class="form-input" value="<?= $this->e($now) ?>"></div></div>
       <div class="form-row"><label class="form-label" for="gas-value"><?= $this->te('meter.counter_m3') ?></label><input id="gas-value" type="number" step="0.001" min="0" class="form-input" placeholder="8523.456"></div>
       <button class="btn btn-amber" id="gas-btn"><?= $this->te('common.save') ?></button><div class="form-feedback" id="gas-feedback"></div>
@@ -138,7 +192,7 @@ $meterSelect = function (string $prefix, string $energyType) use ($metersByEnerg
   <div class="gas-grid">
     <div class="gas-form">
       <?= $meterSelect('water', 'water') ?>
-      <?php if ($waterLatest): ?><div class="card-sub"><?= $this->te('meter.latest') ?> : <strong><?= $this->num((float) $waterLatest['counter_m3'], 3) ?> m³</strong></div><?php endif; ?>
+      <div class="card-sub" id="water-latest"<?= $waterLatest ? '' : ' hidden' ?>><?= $this->te('meter.latest') ?> : <strong id="water-latest-value"><?= $waterLatest ? $this->e($this->num((float) $waterLatest['counter_m3'], 3)) : '' ?> m³</strong></div>
       <div class="cards cards-2"><div class="form-row"><label class="form-label" for="water-date"><?= $this->te('meter.reading_date') ?></label><input id="water-date" type="date" class="form-input" value="<?= $this->e($today) ?>"></div><div class="form-row"><label class="form-label" for="water-time"><?= $this->te('meter.reading_time') ?></label><input id="water-time" type="time" class="form-input" value="<?= $this->e($now) ?>"></div></div>
       <div class="form-row"><label class="form-label" for="water-value"><?= $this->te('meter.counter_m3') ?></label><input id="water-value" type="number" step="0.001" min="0" class="form-input" placeholder="1234.567"></div>
       <button class="btn btn-amber" id="water-btn"><?= $this->te('common.save') ?></button><div class="form-feedback" id="water-feedback"></div>
@@ -214,6 +268,12 @@ $meterSelect = function (string $prefix, string $energyType) use ($metersByEnerg
             // substitués côté client, comme Translator::t() côté PHP.
             'pageStatus' => $this->t('meter.page_status'),
             'savedElsewhere' => $this->t('meter.saved_elsewhere'),
+            // Aucun compteur ouvert pour ce fluide (#55) : la saisie est bloquée
+            // côté client plutôt que refusée en 422 après coup.
+            'meterClosed' => $this->t('meters.entry_closed'),
+            // Relevé daté du jour de fermeture ou après : la saisie est verrouillée
+            // à l'écran, comme elle le serait par le serveur.
+            'meterClosedOn' => $this->t('meters.entry_blocked'),
         ],
     ];
 ?>

@@ -4,8 +4,11 @@ declare(strict_types=1);
 
 namespace App\Service\Import;
 
+use App\Domain\Meter;
 use App\Repository\BatteryReadingRepository;
+use App\Repository\Exception\ClosedMeterException;
 use App\Repository\ElectricityReadingRepository;
+use App\Repository\MeterRepository;
 use App\Repository\UtilityReadingRepository;
 use App\Service\BulkImportService;
 use App\Service\ReadingGranularityPolicy;
@@ -56,11 +59,21 @@ final class ImportRunner
         $batteryId = $batteryId === false ? null : $batteryId;
 
         // Compteur visé (#55), à côté de battery_id et de la même façon : un
-        // import alimente UN compteur. Absent ⇒ compteur par défaut, comme avant
-        // le multi-compteur. Un identifiant étranger est refusé par le repository
-        // lui-même, qui vérifie l'appartenance avant d'écrire.
+        // import alimente UN compteur. Un identifiant étranger est refusé par le
+        // repository lui-même, qui vérifie l'appartenance avant d'écrire.
         $meterId = filter_var($post['meter_id'] ?? null, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
         $meterId = $meterId === false ? null : $meterId;
+
+        // Cible absente ET plusieurs compteurs : refus, même règle que l'API
+        // (App\Http\MeterResolver). Il n'existe alors PAS de « compteur par
+        // défaut » — se replier sur le plus ancien écrirait des milliers de lignes
+        // dans le mauvais compteur, et le rapport d'import n'en dirait rien.
+        // Absent avec un seul compteur, ou aucun, reste accepté : c'est le cas de
+        // tout le parc existant, et celui d'un compte neuf.
+        if ($meterId === null && Meter::isEnergy($energyType)
+            && count((new MeterRepository($pdo, $targetUserId))->listByEnergy($energyType)) > 1) {
+            throw new \InvalidArgumentException('Sélectionnez le compteur à alimenter avant d\'importer.');
+        }
 
         $file = is_array($files['import_file'] ?? null) ? $files['import_file'] : [];
 
@@ -178,6 +191,16 @@ final class ImportRunner
         } catch (\InvalidArgumentException $e) {
             // Erreurs « métier » (format/fichier) : message sûr à afficher.
             throw new RuntimeException($e->getMessage(), 0, $e);
+        } catch (ClosedMeterException $e) {
+            // Cible fermée (#55) : l'import s'est arrêté à la première ligne datée
+            // du jour de fermeture ou après, et tout a été annulé. Le dire, plutôt
+            // que de le noyer dans le message générique ci-dessous — l'utilisateur
+            // n'a rien à corriger dans son fichier, sinon sa cible.
+            throw new RuntimeException(sprintf(
+                'Cible fermée depuis le %s : les relevés datés de ce jour ou après ne peuvent pas être importés. '
+                . "Aucune ligne n'a été enregistrée.",
+                $e->closedOn,
+            ), 0, $e);
         } catch (\Throwable $e) {
             // Toute autre erreur (base, driver…) : détail journalisé, message
             // générique côté utilisateur.
@@ -228,14 +251,14 @@ final class ImportRunner
 
             if ($mapping->isBattery()) {
                 /** @var int $batteryId garanti non nul par le contrôle ci-dessus */
-                $this->service->importBattery($capped, $mapping, new BatteryReadingRepository($pdo, $targetUserId, $batteryId), $report, $replace, $timezone);
+                $this->service->importBattery($capped, $mapping, new BatteryReadingRepository($pdo, $targetUserId, $batteryId, $timezone), $report, $replace, $timezone);
             } elseif ($mapping->isElectricity()) {
                 // Compteur visé passé au constructeur : les bornes de créneau comme
                 // l'écriture doivent porter sur LE compteur choisi. null garde le
                 // compteur par défaut, et le crée si le compte n'en a aucun.
                 $this->service->importElectricity($capped, $mapping, new ElectricityReadingRepository($pdo, $targetUserId, $timezone, $meterId), $report, $replace, $throttle);
             } else {
-                $this->service->importUtility($capped, $mapping, new UtilityReadingRepository($pdo, $targetUserId, $energyType, $meterId), $report, $replace);
+                $this->service->importUtility($capped, $mapping, new UtilityReadingRepository($pdo, $targetUserId, $energyType, $meterId, $timezone), $report, $replace);
             }
 
             if ($dryRun) {

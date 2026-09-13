@@ -4,9 +4,11 @@ declare(strict_types=1);
 
 namespace App\Repository;
 
+use App\Domain\Meter;
 use App\Domain\ReadingGranularity;
 use App\Infrastructure\MeterTopology;
 use App\Repository\Contract\ElectricityIngestionInterface;
+use App\Repository\Exception\ClosedMeterException;
 use App\Repository\Contract\LegacyDailyRepositoryInterface;
 use App\Support\Dates;
 use DateTimeImmutable;
@@ -61,6 +63,14 @@ final class ElectricityReadingRepository implements LegacyDailyRepositoryInterfa
 
     /** @var array<string, int>|null Cache register_key => register_id (compteur par défaut). */
     private ?array $registerMap = null;
+
+    /** Date de fermeture du compteur d'écriture ('Y-m-d'), null s'il est ouvert. */
+    private ?string $closedOn = null;
+
+    /** Premier instant refusé à l'écriture, en UTC ; null si le compteur est ouvert. */
+    private ?DateTimeImmutable $closureAt = null;
+
+    private bool $closureResolved = false;
 
     /**
      * Cache register_key => ids de TOUS les compteurs électriques (#55).
@@ -156,6 +166,8 @@ final class ElectricityReadingRepository implements LegacyDailyRepositoryInterfa
      */
     public function insertIndexes(DateTimeImmutable $timestamp, array $indexByRegister, bool $replace = false): int
     {
+        $this->assertWritable($timestamp);
+
         // Topologie résolue/créée au premier appel seulement : la carte des
         // registres ne change pas au cours d'une requête HTTP. En import en masse,
         // évite ~7 requêtes (ensureElectricityMeter + ensureRegisters) par ligne.
@@ -312,6 +324,7 @@ final class ElectricityReadingRepository implements LegacyDailyRepositoryInterfa
         $this->topologyEnsured  = false;
         $this->registerMap      = null;
         $this->fleetRegisterMap = null;
+        $this->closureResolved  = false;
         $this->invalidateMonthlyDeltaCaches();
 
         return $stmt->rowCount();
@@ -1329,6 +1342,33 @@ final class ElectricityReadingRepository implements LegacyDailyRepositoryInterfa
     // -------------------------------------------------------------------------
 
     /**
+     * Refuse l'écriture si le compteur visé est fermé à cette date (#55).
+     *
+     * La règle porte sur `reading_at`, PAS sur l'horloge : un index daté d'avant
+     * la fermeture reste acceptable longtemps après elle — carnet recopié, ou
+     * import de l'historique du fournisseur. Seule la date du relevé décide.
+     *
+     * Résolu une fois par instance : un import de 200 000 lignes ne doit pas
+     * ajouter 200 000 requêtes. `false` mémoïsé signifie « compteur ouvert », et
+     * se distingue de « pas encore résolu ».
+     */
+    private function assertWritable(DateTimeImmutable $timestamp): void
+    {
+        if (!$this->closureResolved) {
+            $topology = new MeterTopology($this->pdo);
+            $meterId  = $this->meterId ?? $topology->findElectricityMeter($this->userId);
+
+            $this->closedOn         = $meterId === null ? null : $topology->closedOn($this->userId, $meterId);
+            $this->closureAt        = Meter::closureInstantFor($this->closedOn, $this->timezone);
+            $this->closureResolved  = true;
+        }
+
+        if ($this->closureAt !== null && $this->closedOn !== null && $timestamp >= $this->closureAt) {
+            throw ClosedMeterException::meter($this->closedOn);
+        }
+    }
+
+    /**
      * Registre de ce type sur le compteur PAR DÉFAUT — le plus ancien.
      *
      * Réservé aux chemins qui désignent un compteur unique : saisie, historique,
@@ -1433,7 +1473,9 @@ final class ElectricityReadingRepository implements LegacyDailyRepositoryInterfa
 
     /**
      * Index interpolé à un instant pour PLUSIEURS registres en 2 requêtes (au
-     * lieu de 2 par registre). Même sémantique que {@see interpolatedValueAt}.
+     * lieu de 2 par registre) : interpolation linéaire entre les deux relevés
+     * encadrants, CLAMPÉE sur le plus proche quand l'instant sort de la plage du
+     * registre, et `null` quand le registre n'a aucun relevé.
      *
      * @param list<int> $registerIds
      * @return array<int, array{value: float, timestamp: string}|null> register_id => valeur interpolée (ou null si registre vide)

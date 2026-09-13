@@ -178,6 +178,37 @@ Mêmes règles que `battery_id`, pour la même raison :
 - **identifiant inconnu, d'autrui, ou d'une autre énergie** : 422
   `Unknown meter_id`, sans distinguer les trois cas.
 
+#### Compteur fermé
+
+Un compteur peut porter une **date de fermeture** (`closed_on`, saisie sur
+`/meters`). À partir de ce jour, toute écriture le visant est refusée en 422
+(`Meter closed on 2026-06-15 — no reading accepted from that date on`), sur les
+quatre chemins d'écriture : saisie manuelle, ingestion d'agent, import de fichier
+et scripts CLI. Un import s'arrête à la **première ligne** datée du jour de
+fermeture ou après, annule tout et rend un message — jamais N « erreurs
+d'écriture » muettes. Un import dont toutes les lignes précèdent la fermeture
+passe donc normalement.
+
+Trois précisions qui décident du comportement observable :
+
+- la règle porte sur **`reading_at`, pas sur l'horloge**. Un relevé daté d'avant
+  la fermeture reste accepté longtemps après elle — carnet recopié, historique
+  du fournisseur importé plus tard ;
+- la date se lit **dans le fuseau de l'utilisateur** (`user_profiles.timezone`),
+  pas en UTC : un foyer en UTC−5 doit pouvoir saisir un relevé du 14 à 20 h
+  locales alors qu'il est déjà le 15 à Greenwich ;
+- **les lectures ne sont jamais filtrées**. Tous les relevés d'un compteur fermé
+  continuent de compter dans tous les rapports : la dépense a eu lieu, la
+  fermeture ne la rétracte pas.
+
+Borne de fin **exclue** (#1), comme partout ailleurs : `closed_on = 2026-06-15`
+refuse dès le 15, le 14 reste ouvert. Rouvrir un compteur se fait en vidant le
+champ. Il n'existe pas de date d'ouverture : le premier relevé fait foi.
+
+`batteries.decommissioned_on` suit désormais exactement la même règle
+(`ingest_battery`, `battery_entry`, et l'import de fichier — refusé lui aussi
+avant sa première ligne).
+
 En mode batch, `meter_id` se pose **à la racine du corps**, à côté de `readings`,
 jamais par lecture : un import vise un compteur, et deux compteurs mêlés dans un
 même envoi seraient indétectables ligne à ligne.

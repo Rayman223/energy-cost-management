@@ -60,6 +60,81 @@ function meterTarget(prefix) {
   return document.getElementById(`${prefix}-meter`)?.value || '';
 }
 
+// Le compteur sélectionné est-il fermé ? L'option reste sélectionnable — la borne
+// de fermeture est EXCLUE, un relevé antérieur y a toute sa place — mais l'état
+// mérite d'être dit : sans cela, un relevé du jour partirait pour revenir en 422.
+function selectedMeterClosedOn(prefix) {
+  const select = document.getElementById(`${prefix}-meter`);
+  const option = select?.selectedOptions?.[0];
+
+  return option?.getAttribute('data-closed') || null;
+}
+
+// La fermeture a-t-elle DÉJÀ pris effet ? Distinct de la question précédente :
+// une fermeture programmée refuse les relevés datés d'après elle sans que le
+// compteur soit fermé aujourd'hui. Seul l'état déjà acquis se dit au présent.
+function selectedMeterAlreadyClosed(prefix) {
+  const select = document.getElementById(`${prefix}-meter`);
+
+  return select?.selectedOptions?.[0]?.hasAttribute('data-closed-now') === true;
+}
+
+// Champs de VALEUR d'un fluide — ceux qu'on verrouille quand le relevé serait
+// refusé. La date et l'heure restent actives : c'est en les corrigeant que
+// l'utilisateur débloque la saisie, les verrouiller l'enfermerait.
+function valueFieldsOf(prefix) {
+  const ids = prefix === 'electricity'
+    ? ELEC_KEYS.map((key) => `electricity-${key}`)
+    : [`${prefix}-value`];
+
+  return ids.map((id) => document.getElementById(id)).filter(Boolean);
+}
+
+// Signale la fermeture sans rien bloquer. Le bouton reste actif : c'est le
+// serveur qui tranche, et il tranche sur la DATE du relevé, pas sur l'état du
+// compteur. Les historiques restent consultables — fermer n'efface rien.
+// Verrouille la saisie quand elle SERAIT REFUSÉE, et seulement alors.
+//
+// Le critère est la DATE saisie, pas l'état du compteur : la fermeture est une
+// borne EXCLUE, un relevé antérieur reste valable — c'est même le geste le plus
+// courant juste après une fermeture, saisir le dernier index relevé la veille.
+// Griser dès qu'un compteur fermé est sélectionné interdirait depuis le web ce
+// que le serveur accepte.
+function syncClosedState(prefix) {
+  const closedOn = selectedMeterClosedOn(prefix);
+  const date = document.getElementById(`${prefix}-date`)?.value || '';
+  // Comparaison lexicographique sur 'YYYY-MM-DD' : équivalente à l'ordre
+  // chronologique, et sans fuseau — la borne est une date, pas un instant.
+  const blocked = closedOn !== null && date !== '' && date >= closedOn;
+
+  const btn = document.getElementById(`${prefix}-btn`);
+  if (btn) {
+    btn.disabled = blocked;
+  }
+  valueFieldsOf(prefix).forEach((field) => {
+    field.disabled = blocked;
+  });
+
+  if (blocked) {
+    setFeedback(`${prefix}-feedback`, tr('meterClosedOn', 'This meter closed on {date}: pick an earlier date.', { date: closedOn }), 'err');
+  } else if (closedOn !== null && selectedMeterAlreadyClosed(prefix)) {
+    setFeedback(`${prefix}-feedback`, tr('meterClosed', 'This meter is closed: only readings dated before its closing date are accepted.'), '');
+  } else {
+    setFeedback(`${prefix}-feedback`, '');
+  }
+}
+
+// Le message « aucun compteur déclaré » est rendu au CHARGEMENT de la page, mais
+// la saisie passe par AJAX : la page n'est jamais re-rendue. Dès qu'un relevé
+// aboutit, le compteur existe et le message cesse d'être vrai — il faut donc le
+// retirer soi-même, sinon il contredit l'action que l'utilisateur vient de faire.
+function markMeterDeclared(prefix) {
+  const hint = document.getElementById(`${prefix}-meter-hint`);
+  if (hint) {
+    hint.hidden = true;
+  }
+}
+
 function readingAt(prefix) {
   const date = document.getElementById(`${prefix}-date`)?.value || '';
   const time = document.getElementById(`${prefix}-time`)?.value || '00:00';
@@ -281,6 +356,7 @@ async function submitUtility(prefix, action) {
     const data = await res.json();
     if (data.ok) {
       setFeedback(feedbackId, tr('saved', '✓ Saved.'), 'ok');
+      markMeterDeclared(prefix);
       document.getElementById(`${prefix}-value`).value = '';
       // Retour en page 1 : le cas courant est un relevé du jour, donc en tête.
       const reloaded = await RELOADERS[prefix](1);
@@ -338,6 +414,7 @@ async function submitElectricity() {
     const data = await res.json();
     if (data.ok) {
       setFeedback('electricity-feedback', tr('saved', '✓ Saved.'), 'ok');
+      markMeterDeclared('electricity');
       ELEC_KEYS.forEach((key) => {
         document.getElementById(`electricity-${key}`).value = '';
       });
@@ -492,14 +569,38 @@ async function deleteAndReload(action, payload, feedbackId, reloadFn) {
   }
 }
 
-const reloadGas = (page) => loadHistory(
-  'gas', 'gas_history', tr('emptyGas', 'No gas reading recorded.'), renderReadings, page,
-  `&meter_id=${meterTarget('gas')}`
-);
-const reloadWater = (page) => loadHistory(
-  'water', 'water_history', tr('emptyWater', 'No water reading recorded.'), renderReadings, page,
-  `&meter_id=${meterTarget('water')}`
-);
+// L'encart « dernier relevé » est rendu par le serveur pour le compteur PAR
+// DÉFAUT. Changer de compteur recharge son historique mais ne re-rend pas la
+// page : sans cette mise à jour, l'index d'un AUTRE compteur resterait affiché
+// comme étant le sien (#55). Une saisie ou une suppression le rafraîchit de la
+// même façon, au lieu de laisser l'ancien index en place.
+//
+// Seule la page 1 porte le relevé le plus récent (liste décroissante) : sur une
+// page plus ancienne, l'encart garde ce qu'il affiche déjà, qui reste vrai.
+function updateLatest(prefix, data) {
+  const box   = document.getElementById(`${prefix}-latest`);
+  const value = document.getElementById(`${prefix}-latest-value`);
+  if (!box || !value || Number(data?.page) !== 1) return;
+
+  const latest = (Array.isArray(data?.items) ? data.items : [])[0];
+  box.hidden = latest === undefined;
+  if (latest !== undefined) {
+    value.textContent = `${fmtIndex(latest.counter_m3)} m³`;
+  }
+}
+
+const reloadUtility = async (prefix, action, emptyLabel, page) => {
+  const data = await loadHistory(
+    prefix, action, emptyLabel, renderReadings, page, `&meter_id=${meterTarget(prefix)}`
+  );
+  // `null` = chargement obsolète (cf. loadHistory) : ne rien réécrire.
+  if (data) updateLatest(prefix, data);
+
+  return data;
+};
+
+const reloadGas = (page) => reloadUtility('gas', 'gas_history', tr('emptyGas', 'No gas reading recorded.'), page);
+const reloadWater = (page) => reloadUtility('water', 'water_history', tr('emptyWater', 'No water reading recorded.'), page);
 const reloadBattery = (page) => loadHistory(
   'battery', 'battery_history', tr('emptyBattery', 'No battery reading recorded.'),
   renderBatteryReadings, page, `&battery_id=${batteryTarget()}`
@@ -566,7 +667,16 @@ document.getElementById('battery-delete-all')?.addEventListener('click', () => {
 // Changer de compteur recharge son historique : la liste affichée doit toujours
 // être celle de la cible que la saisie et la suppression viseront.
 ['electricity', 'gas', 'water'].forEach((prefix) => {
-  document.getElementById(`${prefix}-meter`)?.addEventListener('change', () => RELOADERS[prefix](1));
+  document.getElementById(`${prefix}-meter`)?.addEventListener('change', () => {
+    syncClosedState(prefix);
+    RELOADERS[prefix](1);
+  });
+  // La date décide du verrouillage : la changer doit le réévaluer aussitôt,
+  // sinon corriger la date laisserait le formulaire grisé.
+  ['change', 'input'].forEach((event) => {
+    document.getElementById(`${prefix}-date`)?.addEventListener(event, () => syncClosedState(prefix));
+  });
+  syncClosedState(prefix);
 });
 
 wirePager('electricity');

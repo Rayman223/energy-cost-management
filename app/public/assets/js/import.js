@@ -89,20 +89,44 @@
       meterBox.hidden = isBattery;
     }
     if (meterSelect && !isBattery) {
+      // Combien de compteurs porte l'énergie choisie ? Au-delà d'un, il n'existe
+      // pas de « compteur par défaut » : le serveur refuse l'ambiguïté au lieu de
+      // se replier sur le plus ancien, donc l'option n'a plus de sens et doit
+      // disparaître — la proposer mènerait à un refus systématique.
+      var ownCount = 0;
+      Array.prototype.forEach.call(meterSelect.options, function (opt) {
+        if (opt.getAttribute('data-energy') === typeSelect.value) {
+          ownCount += 1;
+        }
+      });
+      var defaultUsable = ownCount <= 1;
+
       var matches = false;
+      var firstOwn = null;
       Array.prototype.forEach.call(meterSelect.options, function (opt) {
         var energy = opt.getAttribute('data-energy') || '';
-        var usable = energy === '' || energy === typeSelect.value;
+        var isDefault = opt.hasAttribute('data-default');
+        var usable = isDefault ? defaultUsable : energy === typeSelect.value;
         opt.hidden = !usable;
         opt.disabled = !usable;
+        if (usable && !isDefault && firstOwn === null) {
+          firstOwn = opt;
+        }
         if (usable && opt.selected) {
           matches = true;
         }
       });
-      // La sélection courante appartenait à une autre énergie : retour au
-      // compteur par défaut plutôt qu'à une cible invalide restée à l'écran.
+
+      // La sélection courante n'est plus proposable — autre énergie, ou « par
+      // défaut » devenu caduc. On retombe sur le premier compteur de l'énergie,
+      // à défaut sur l'option par défaut, plutôt que de laisser à l'écran une
+      // cible que le serveur refusera.
       if (!matches) {
-        meterSelect.value = '';
+        if (firstOwn !== null && !defaultUsable) {
+          firstOwn.selected = true;
+        } else {
+          meterSelect.value = '';
+        }
       }
     }
   }
