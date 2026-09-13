@@ -80,6 +80,18 @@ final class Request
     }
 
     /**
+     * Valeur venue du corps OU de l'URL, le corps d'abord.
+     *
+     * Pour les paramètres qui traversent les deux familles de routes : `meter_id`
+     * (#55) accompagne un POST de saisie comme un GET d'historique, et le faire
+     * lire à deux endroits différents selon la route serait une source d'oubli.
+     */
+    public function param(string $key, mixed $default = null): mixed
+    {
+        return $this->body[$key] ?? $this->query[$key] ?? $default;
+    }
+
+    /**
      * Parse une valeur en date, ou lève une ValidationException (-> 422).
      * Message identique à l'ancien parseDateTimeOr422.
      *

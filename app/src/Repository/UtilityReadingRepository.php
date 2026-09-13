@@ -12,6 +12,7 @@ use App\Support\Dates;
 use DateTimeImmutable;
 use InvalidArgumentException;
 use PDO;
+use RuntimeException;
 
 /**
  * Relevés gaz/eau unifiés (table utility_readings), scopés par utilisateur.
@@ -26,17 +27,75 @@ use PDO;
  */
 final class UtilityReadingRepository implements GasReadingRepositoryInterface, MeterReadingRepositoryInterface, UtilityIngestionInterface
 {
-    /** Compteur d'écriture, résolu paresseusement (créé au premier relevé). */
-    private ?int $meterId = null;
+    /** Compteur d'écriture par défaut, résolu paresseusement (créé au premier relevé). */
+    private ?int $defaultMeterId = null;
 
+    /** Compteur des lectures d'HISTORIQUE, résolu une fois (null = aucun). */
+    private ?int $historyMeterId = null;
+
+    private bool $historyMeterResolved = false;
+
+    /**
+     * @param int|null $meterId Compteur DÉSIGNÉ (#55). null = compteur par défaut
+     *        de l'utilisateur pour ce fluide, comportement d'avant le
+     *        multi-compteur.
+     */
     public function __construct(
         private readonly PDO $pdo,
         private readonly int $userId,
         private readonly string $energyType,
+        private readonly ?int $meterId = null,
     ) {
         if (!in_array($energyType, ['gas', 'water'], true)) {
             throw new InvalidArgumentException('energy_type invalide : ' . $energyType);
         }
+    }
+
+    /**
+     * Même repository, scopé sur un compteur DÉSIGNÉ (#55).
+     *
+     * Ne change que les chemins MONO-COMPTEUR — écriture, historique paginé,
+     * dernier index, bornes d'antidatage, suppression. Les séries de RAPPORT
+     * ({@see getReadingsForRange()}, {@see getFleetSeries()}) continuent de
+     * couvrir tout le parc.
+     *
+     * `null` rend l'instance courante : l'appelant n'a pas à distinguer le cas
+     * « aucun compteur désigné ».
+     */
+    public function forMeter(?int $meterId): self
+    {
+        if ($meterId === null || $meterId === $this->meterId) {
+            return $this;
+        }
+
+        return new self($this->pdo, $this->userId, $this->energyType, $meterId);
+    }
+
+    /**
+     * Compteur des lectures d'historique : le compteur désigné s'il est bien
+     * celui de l'utilisateur, sinon son compteur par défaut pour ce fluide.
+     *
+     * `null` signifie « aucune ligne à lire » — soit l'utilisateur n'a pas encore
+     * de compteur, soit l'identifiant fourni est étranger. Les deux se traitent
+     * pareil : un historique vide, jamais celui de quelqu'un d'autre.
+     */
+    private function historyMeterId(): ?int
+    {
+        // Seule une résolution POSITIVE est mémoïsée. Un `null` veut dire « pas
+        // encore de compteur » : il peut cesser d'être vrai dans la même requête,
+        // dès qu'une écriture en crée un. Le figer rendrait vide l'historique
+        // relu juste après une première saisie.
+        if ($this->historyMeterResolved && $this->historyMeterId !== null) {
+            return $this->historyMeterId;
+        }
+
+        $topology = new MeterTopology($this->pdo);
+        $this->historyMeterId = $this->meterId !== null
+            ? ($topology->ownsMeter($this->userId, $this->meterId, $this->energyType) ? $this->meterId : null)
+            : $topology->findDefaultMeter($this->userId, $this->energyType);
+        $this->historyMeterResolved = true;
+
+        return $this->historyMeterId;
     }
 
     public function save(DateTimeImmutable $readingAt, float $counterM3): void
@@ -97,7 +156,19 @@ final class UtilityReadingRepository implements GasReadingRepositoryInterface, M
      */
     private function writeMeterId(): int
     {
-        return $this->meterId ??= (new MeterTopology($this->pdo))->ensureMeter($this->userId, $this->energyType);
+        if ($this->meterId !== null) {
+            // Compteur DÉSIGNÉ : vérifié en appartenance, jamais créé à la volée —
+            // un identifiant inconnu est une erreur de l'appelant, pas une
+            // invitation à fabriquer un compteur.
+            if (!(new MeterTopology($this->pdo))->ownsMeter($this->userId, $this->meterId, $this->energyType)) {
+                throw new RuntimeException('Unknown ' . $this->energyType . ' meter: ' . $this->meterId);
+            }
+
+            return $this->meterId;
+        }
+
+        return $this->defaultMeterId ??= (new MeterTopology($this->pdo))
+            ->ensureMeter($this->userId, $this->energyType);
     }
 
     /**
@@ -109,11 +180,16 @@ final class UtilityReadingRepository implements GasReadingRepositoryInterface, M
      */
     public function deleteReading(int $id): bool
     {
+        $meterId = $this->historyMeterId();
+        if ($meterId === null) {
+            return false;
+        }
+
         $stmt = $this->pdo->prepare(
             'DELETE FROM utility_readings
-             WHERE id = :id AND user_id = :uid AND energy_type = :etype'
+             WHERE id = :id AND user_id = :uid AND energy_type = :etype AND meter_id = :mid'
         );
-        $stmt->execute(['id' => $id, 'uid' => $this->userId, 'etype' => $this->energyType]);
+        $stmt->execute(['id' => $id, 'uid' => $this->userId, 'etype' => $this->energyType, 'mid' => $meterId]);
 
         return $stmt->rowCount() > 0;
     }
@@ -126,10 +202,15 @@ final class UtilityReadingRepository implements GasReadingRepositoryInterface, M
      */
     public function deleteAll(): int
     {
+        $meterId = $this->historyMeterId();
+        if ($meterId === null) {
+            return 0;
+        }
+
         $stmt = $this->pdo->prepare(
-            'DELETE FROM utility_readings WHERE user_id = :uid AND energy_type = :etype'
+            'DELETE FROM utility_readings WHERE user_id = :uid AND energy_type = :etype AND meter_id = :mid'
         );
-        $stmt->execute(['uid' => $this->userId, 'etype' => $this->energyType]);
+        $stmt->execute(['uid' => $this->userId, 'etype' => $this->energyType, 'mid' => $meterId]);
 
         return $stmt->rowCount();
     }
@@ -142,12 +223,17 @@ final class UtilityReadingRepository implements GasReadingRepositoryInterface, M
      */
     public function getAllReadings(): array
     {
+        $meterId = $this->historyMeterId();
+        if ($meterId === null) {
+            return [];
+        }
+
         $stmt = $this->pdo->prepare(
             'SELECT id, reading_at, counter_m3 FROM utility_readings
-             WHERE user_id = :uid AND energy_type = :etype
+             WHERE user_id = :uid AND energy_type = :etype AND meter_id = :mid
              ORDER BY reading_at ASC'
         );
-        $stmt->execute(['uid' => $this->userId, 'etype' => $this->energyType]);
+        $stmt->execute(['uid' => $this->userId, 'etype' => $this->energyType, 'mid' => $meterId]);
 
         return array_reverse($this->withDeltas($stmt->fetchAll()));
     }
@@ -155,10 +241,16 @@ final class UtilityReadingRepository implements GasReadingRepositoryInterface, M
     /** Nombre total de relevés du fluide (dénominateur de la pagination, #257). */
     public function countReadings(): int
     {
+        $meterId = $this->historyMeterId();
+        if ($meterId === null) {
+            return 0;
+        }
+
         $stmt = $this->pdo->prepare(
-            'SELECT COUNT(*) FROM utility_readings WHERE user_id = :uid AND energy_type = :etype'
+            'SELECT COUNT(*) FROM utility_readings
+             WHERE user_id = :uid AND energy_type = :etype AND meter_id = :mid'
         );
-        $stmt->execute(['uid' => $this->userId, 'etype' => $this->energyType]);
+        $stmt->execute(['uid' => $this->userId, 'etype' => $this->energyType, 'mid' => $meterId]);
 
         return (int) $stmt->fetchColumn();
     }
@@ -183,13 +275,18 @@ final class UtilityReadingRepository implements GasReadingRepositoryInterface, M
         // désactivée passerait LIMIT/OFFSET en chaînes, que MySQL rejette.
         $limit = $perPage + 1;
 
+        $meterId = $this->historyMeterId();
+        if ($meterId === null) {
+            return [];
+        }
+
         $stmt = $this->pdo->prepare(
             "SELECT id, reading_at, counter_m3 FROM utility_readings
-             WHERE user_id = :uid AND energy_type = :etype
+             WHERE user_id = :uid AND energy_type = :etype AND meter_id = :mid
              ORDER BY reading_at DESC, id DESC
              LIMIT $limit OFFSET $offset"
         );
-        $stmt->execute(['uid' => $this->userId, 'etype' => $this->energyType]);
+        $stmt->execute(['uid' => $this->userId, 'etype' => $this->energyType, 'mid' => $meterId]);
         $rowsDesc = $stmt->fetchAll();
 
         // withDeltas() attend un ordre croissant : on lui donne la page renversée
@@ -232,12 +329,17 @@ final class UtilityReadingRepository implements GasReadingRepositoryInterface, M
     /** @return array<string, mixed>|null */
     public function getLatest(): ?array
     {
+        $meterId = $this->historyMeterId();
+        if ($meterId === null) {
+            return null;
+        }
+
         $stmt = $this->pdo->prepare(
             'SELECT id, reading_at, counter_m3 FROM utility_readings
-             WHERE user_id = :uid AND energy_type = :etype
+             WHERE user_id = :uid AND energy_type = :etype AND meter_id = :mid
              ORDER BY reading_at DESC LIMIT 1'
         );
-        $stmt->execute(['uid' => $this->userId, 'etype' => $this->energyType]);
+        $stmt->execute(['uid' => $this->userId, 'etype' => $this->energyType, 'mid' => $meterId]);
         $row = $stmt->fetch();
 
         return $row ?: null;
@@ -246,12 +348,20 @@ final class UtilityReadingRepository implements GasReadingRepositoryInterface, M
     /** @return array<string, mixed>|null */
     public function getReadingBefore(DateTimeImmutable $ts): ?array
     {
+        $meterId = $this->historyMeterId();
+        if ($meterId === null) {
+            return null;
+        }
+
         $stmt = $this->pdo->prepare(
             'SELECT id, reading_at, counter_m3 FROM utility_readings
-             WHERE user_id = :uid AND energy_type = :etype AND reading_at <= :ts
+             WHERE user_id = :uid AND energy_type = :etype AND meter_id = :mid AND reading_at <= :ts
              ORDER BY reading_at DESC LIMIT 1'
         );
-        $stmt->execute(['uid' => $this->userId, 'etype' => $this->energyType, 'ts' => Dates::toDbString($ts)]);
+        $stmt->execute([
+            'uid' => $this->userId, 'etype' => $this->energyType,
+            'mid' => $meterId, 'ts' => Dates::toDbString($ts),
+        ]);
         $row = $stmt->fetch();
 
         return $row ?: null;
@@ -260,12 +370,20 @@ final class UtilityReadingRepository implements GasReadingRepositoryInterface, M
     /** @return array<string, mixed>|null */
     public function getReadingAfter(DateTimeImmutable $ts): ?array
     {
+        $meterId = $this->historyMeterId();
+        if ($meterId === null) {
+            return null;
+        }
+
         $stmt = $this->pdo->prepare(
             'SELECT id, reading_at, counter_m3 FROM utility_readings
-             WHERE user_id = :uid AND energy_type = :etype AND reading_at >= :ts
+             WHERE user_id = :uid AND energy_type = :etype AND meter_id = :mid AND reading_at >= :ts
              ORDER BY reading_at ASC LIMIT 1'
         );
-        $stmt->execute(['uid' => $this->userId, 'etype' => $this->energyType, 'ts' => Dates::toDbString($ts)]);
+        $stmt->execute([
+            'uid' => $this->userId, 'etype' => $this->energyType,
+            'mid' => $meterId, 'ts' => Dates::toDbString($ts),
+        ]);
         $row = $stmt->fetch();
 
         return $row ?: null;
@@ -349,6 +467,40 @@ final class UtilityReadingRepository implements GasReadingRepositoryInterface, M
     public function getReadingsForRange(string $from, string $to): array
     {
         return self::aggregate($this->windowRows($from, $to));
+    }
+
+    /**
+     * Série cumulée de TOUT le parc, du plus ancien au plus récent (#55).
+     *
+     * Sert le graphe de volumes mensuels, qui doit afficher les mêmes m³ que les
+     * cards de coût — lesquelles somment déjà les compteurs. Prendre ici
+     * l'historique brut, comme le faisait {@see getAllReadings()}, entrelacerait
+     * les odomètres de deux compteurs : la série cesserait d'être croissante et
+     * le graphe deviendrait illisible.
+     *
+     * Distincte de {@see getReadingsForRange()} par la seule fenêtre : celle-ci
+     * n'en a pas. Les relevés gaz/eau se comptent en dizaines de lignes (saisie
+     * manuelle), tout charger reste moins coûteux qu'une requête par mois.
+     *
+     * @return list<array{reading_at: string, counter_m3: float}>
+     */
+    public function getFleetSeries(): array
+    {
+        $stmt = $this->pdo->prepare(
+            'SELECT meter_id, reading_at, counter_m3 FROM utility_readings
+             WHERE user_id = :uid AND energy_type = :etype
+             ORDER BY reading_at ASC'
+        );
+        $stmt->execute(['uid' => $this->userId, 'etype' => $this->energyType]);
+
+        return self::aggregate(array_map(
+            static fn (array $row): array => [
+                'meter_id'   => (int) $row['meter_id'],
+                'reading_at' => (string) $row['reading_at'],
+                'counter_m3' => (float) $row['counter_m3'],
+            ],
+            $stmt->fetchAll(),
+        ));
     }
 
     /**

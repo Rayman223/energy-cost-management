@@ -24,6 +24,15 @@ final class FakeElectricityIngestion implements ElectricityIngestionInterface
     {
     }
 
+    /**
+     * Le faux ne modélise qu'un compteur : il se rend lui-même. Les tests qui
+     * portent sur le CHOIX du compteur passent par la base (#55).
+     */
+    public function forMeter(?int $meterId): self
+    {
+        return $this;
+    }
+
     public function insertIndexes(DateTimeImmutable $timestamp, array $indexByRegister, bool $replace = false): int
     {
         $this->calls[] = ['timestamp' => $timestamp->format('Y-m-d H:i:s'), 'indexes' => $indexByRegister];

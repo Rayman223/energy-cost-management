@@ -12,6 +12,15 @@ final class FakeUtilityIngestion implements UtilityIngestionInterface
     /** @var array<string, float> reading_at => counter_m3 */
     public array $saved = [];
 
+    /**
+     * Le faux ne modélise qu'un compteur : il se rend lui-même. Les tests qui
+     * portent sur le CHOIX du compteur passent par la base (#55).
+     */
+    public function forMeter(?int $meterId): self
+    {
+        return $this;
+    }
+
     public function saveIgnore(DateTimeImmutable $readingAt, float $counterM3, bool $replace = false): bool
     {
         $key = $readingAt->format('Y-m-d H:i:s');

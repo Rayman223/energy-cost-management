@@ -55,13 +55,13 @@
 
 | `action` | Paramètres | Réponse (forme) |
 |----------|-----------|-----------------|
-| `today` | — | Index du jour (`LegacyDailyRepository::getTodayIndexValues`). |
-| `monthly_delta` | — | Deltas du mois courant (`getMonthlyDeltas`). |
-| `chart_data` | `days` (défaut 30) | Séries journalières pour le graphique (`getDailyDeltasForChart`). |
+| `today` | `meter_id?` | Index du jour d'UN compteur (`getTodayIndexValues`). Ce sont des odomètres : ils ne se somment pas. `meter_id` facultatif si le compte n'a qu'un compteur électrique (cf. § Compteurs). |
+| `monthly_delta` | — | Deltas du mois courant (`getMonthlyDeltas`), **tous compteurs sommés**. N'accepte pas de `meter_id`. |
+| `chart_data` | `days` (défaut 30) | Séries journalières pour le graphique (`getDailyDeltasForChart`), **tous compteurs sommés**. |
 | `month_cost` | `year` (défaut année courante), `month` (défaut mois courant) | `estimateMonthElectricity(year, month)`. `422` si `year ∉ [2000,2100]` ou `month ∉ [1,12]`. |
-| `gas_history` | `page`, `per_page` | Page de relevés gaz (`UtilityReadingRepository::getReadingsPage`) : `{ items:[{ id, reading_at, counter_m3, delta_m3:number\|null }], total, page, per_page }`, du plus récent au plus ancien. `delta_m3` de la dernière ligne tient compte du relevé précédent, hors page. |
-| `water_history` | `page`, `per_page` | Page de relevés eau, même forme que `gas_history`. |
-| `electricity_history` | `page`, `per_page` | Page d'index élec (`ElectricityReadingRepository::getHistoryPage`) : `{ items:[{ reading_at, import_t1, import_t2, export_t1, export_t2, production }], previous, total, page, per_page }`. Une page = `per_page` horodatages distincts ; `previous` est le relevé immédiatement plus ancien (ou `null`), fourni pour le calcul des deltas côté client. |
+| `gas_history` | `meter_id?`, `page`, `per_page` | Page de relevés gaz (`UtilityReadingRepository::getReadingsPage`) : `{ items:[{ id, reading_at, counter_m3, delta_m3:number\|null }], total, page, per_page }`, du plus récent au plus ancien. `delta_m3` de la dernière ligne tient compte du relevé précédent, hors page. |
+| `water_history` | `meter_id?`, `page`, `per_page` | Page de relevés eau, même forme que `gas_history`. |
+| `electricity_history` | `meter_id?`, `page`, `per_page` | Page d'index élec (`ElectricityReadingRepository::getHistoryPage`) : `{ items:[{ reading_at, import_t1, import_t2, export_t1, export_t2, production }], previous, total, page, per_page }`. Une page = `per_page` horodatages distincts ; `previous` est le relevé immédiatement plus ancien (ou `null`), fourni pour le calcul des deltas côté client. |
 | `electricity_monthly_series` | `months` (défaut 12, borné 1–60) | Consommation mensuelle pour le graphique (`getMonthlyDeltaSeries`) : `[{ month:"YYYY-MM", import_t1, import_t2, export_t1, export_t2, solar:number\|null, partial:bool }]`. |
 | `gas_monthly_series` | `months` (défaut 12, borné 1–60) | Volume gaz mensuel (`UtilityConsumptionSeriesService`) : `[{ month:"YYYY-MM", delta_m3, partial:bool }]`. |
 | `water_monthly_series` | `months` (défaut 12, borné 1–60) | Volume eau mensuel, même forme que `gas_monthly_series`. |
@@ -119,8 +119,8 @@ comme `{}`.
 
 | `action` | Corps attendu | Réponse succès | Validations (→ 422) |
 |----------|---------------|----------------|---------------------|
-| `gas_entry` | `{ counter_m3: float>=0, reading_at?: date }` | `{ ok:true, saved_at (ISO), counter_m3 }` | `counter_m3` invalide/<0 ; date invalide ; relevé déjà existant à cette date ; `counter_m3` < relevé précédent ou > relevé suivant. |
-| `water_entry` | `{ counter_m3: float>=0, reading_at?: date }` | `{ ok:true, saved_at (ISO), counter_m3 }` | idem `gas_entry`. |
+| `gas_entry` | `{ counter_m3: float>=0, reading_at?: date, meter_id?: int }` | `{ ok:true, saved_at (ISO), counter_m3 }` | `counter_m3` invalide/<0 ; date invalide ; compteur inconnu ou ambigu ; relevé déjà existant à cette date **sur ce compteur** ; `counter_m3` < relevé précédent ou > relevé suivant **du même compteur**. |
+| `water_entry` | `{ counter_m3: float>=0, reading_at?: date, meter_id?: int }` | `{ ok:true, saved_at (ISO), counter_m3 }` | idem `gas_entry`. |
 | `save_tariff` | `{ energy_type: "electricity"\|"gas"\|"water", name, valid_from: date, valid_to?: date (**exclue**), lines: object, pricing_mode?: string }` | `{ ok:true, id }` | champ requis manquant (`energy_type`, `name`, `valid_from`, `lines`) ; `energy_type` hors énum ; `valid_from`/`valid_to` invalides ; `valid_to` ≤ `valid_from` (plage vide, la borne de fin étant exclue) ; clé de ligne hors format ; montant de ligne illisible ; aucune ligne exploitable. |
 | `battery_entry` | `{ battery_id?: int, charge?: float>=0, discharge?: float>=0, reading_at?: date }` | `{ ok:true, battery_id, saved_at (ISO), received, inserted }` | batterie inconnue ou ambiguë ; aucun des deux compteurs fourni ; valeur invalide/<0 ; ce **compteur** existe déjà à cet horodatage ; valeur < relevé précédent ou > relevé suivant **du même compteur** ; un autre relevé existe déjà dans le jour civil. |
 | `ingest_battery` | `{ battery_id?: int, readings: [{ timestamp: date, charge?, discharge? }] }` ou une lecture unique à la racine | `{ ok:true, battery_id, received, inserted }` | batterie inconnue ou ambiguë ; `readings` non tableau ; batch > 1000 ; horodatage invalide ; aucun compteur sur une lecture ; valeur invalide/<0. Un jour déjà servi est **ignoré en silence**, pas refusé. |
@@ -153,6 +153,39 @@ l'utilisateur (`user_profiles.timezone`). La valorisation étant mensuelle, une
 granularité plus fine n'ajouterait aucune précision au bilan. `battery_entry` le
 refuse explicitement (422) ; `ingest_battery` ignore la lecture en silence, pour
 qu'un agent poussant toutes les heures soit dédupliqué plutôt que mis en échec.
+
+### Compteurs (#55)
+
+Un foyer peut déclarer **plusieurs compteurs par énergie** (maison + atelier, ou
+un compteur remplacé en cours d'année) sur la page `/meters`. Toutes les routes
+d'ÉCRITURE et d'HISTORIQUE acceptent donc un `meter_id` optionnel :
+`gas_entry`, `water_entry`, `electricity_entry`, `ingest_electricity`,
+`ingest_gas`, `ingest_water`, les suppressions, et les GET `today`,
+`gas_history`, `water_history`, `electricity_history`.
+
+Mêmes règles que `battery_id`, pour la même raison :
+
+- **facultatif quand le compte n'a qu'un compteur** de cette énergie — le cas de
+  tout le parc existant, et l'exiger obligerait chaque agent à connaître un
+  identifiant de base de données ;
+- **absent sans aucun compteur** : le compteur est créé au premier relevé, comme
+  avant le multi-compteur. Un compte neuf n'a donc rien à faire sur `/meters`
+  avant de commencer ;
+- **absent avec plusieurs compteurs** : refus en 422 avec la liste des
+  identifiants (`meter_id is required (several gas meters: 4, 9)`). Deviner
+  écrirait dans le mauvais compteur, et la validation de bornes lirait ce saut
+  d'index comme une consommation légitime ;
+- **identifiant inconnu, d'autrui, ou d'une autre énergie** : 422
+  `Unknown meter_id`, sans distinguer les trois cas.
+
+En mode batch, `meter_id` se pose **à la racine du corps**, à côté de `readings`,
+jamais par lecture : un import vise un compteur, et deux compteurs mêlés dans un
+même envoi seraient indétectables ligne à ligne.
+
+Les **RAPPORTS**, eux, n'acceptent aucun `meter_id` : `monthly_delta`,
+`chart_data`, `*_monthly_series`, `*_cost`, `month_cost` somment tous les
+compteurs de l'énergie. C'est la contrepartie du modèle : on relève un compteur,
+on facture un foyer.
 
 Un champ `date` (`reading_at`, `valid_from`, `valid_to`) doit porter une **date
 calendaire réelle** : `2026-07-31`, `2026-07-31 12:00:00`, ISO 8601 avec offset ou

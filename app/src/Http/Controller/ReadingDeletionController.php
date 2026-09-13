@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Controller;
 
 use App\Http\JsonResponse;
+use App\Http\MeterResolver;
 use App\Http\Request;
 use App\Http\ValidationException;
 use App\Repository\ElectricityReadingRepository;
@@ -26,40 +27,58 @@ final class ReadingDeletionController
         private readonly UtilityReadingRepository $gasRepo,
         private readonly UtilityReadingRepository $waterRepo,
         private readonly ElectricityReadingRepository $electricityRepo,
+        // Compteur visé par la suppression (#55). null = compteur par défaut.
+        private readonly ?MeterResolver $meters = null,
     ) {
+    }
+
+    /** Compteur visé, résolu à la demande ; null si aucun résolveur câblé. */
+    private function meterFor(Request $request, string $energyType): ?int
+    {
+        return $this->meters?->resolve($request->param('meter_id'), $energyType);
     }
 
     public function gasReading(Request $request): JsonResponse
     {
-        return $this->deleteUtilityReading($request, $this->gasRepo);
+        return $this->deleteUtilityReading($request, $this->gasRepo->forMeter($this->meterFor($request, 'gas')));
     }
 
     public function waterReading(Request $request): JsonResponse
     {
-        return $this->deleteUtilityReading($request, $this->waterRepo);
+        return $this->deleteUtilityReading($request, $this->waterRepo->forMeter($this->meterFor($request, 'water')));
     }
 
     public function electricityReading(Request $request): JsonResponse
     {
-        $ts = Request::parseDate($request->input('reading_at'), 'reading_at');
-        $deleted = $this->electricityRepo->deleteReadingAt($ts);
+        $ts   = Request::parseDate($request->input('reading_at'), 'reading_at');
+        $repo = $this->electricityRepo->forMeter($this->meterFor($request, 'electricity'));
 
-        return JsonResponse::ok(['ok' => true, 'deleted' => $deleted]);
+        return JsonResponse::ok(['ok' => true, 'deleted' => $repo->deleteReadingAt($ts)]);
     }
 
     public function gasAll(Request $request): JsonResponse
     {
-        return JsonResponse::ok(['ok' => true, 'deleted' => $this->gasRepo->deleteAll()]);
+        $repo = $this->gasRepo->forMeter($this->meterFor($request, 'gas'));
+
+        return JsonResponse::ok(['ok' => true, 'deleted' => $repo->deleteAll()]);
     }
 
     public function waterAll(Request $request): JsonResponse
     {
-        return JsonResponse::ok(['ok' => true, 'deleted' => $this->waterRepo->deleteAll()]);
+        $repo = $this->waterRepo->forMeter($this->meterFor($request, 'water'));
+
+        return JsonResponse::ok(['ok' => true, 'deleted' => $repo->deleteAll()]);
     }
 
+    /**
+     * Supprime UN compteur électrique et tout son historique — celui qui est visé,
+     * à défaut le compteur par défaut. Jamais le parc entier (#55).
+     */
     public function electricityMeter(Request $request): JsonResponse
     {
-        return JsonResponse::ok(['ok' => true, 'deleted' => $this->electricityRepo->deleteMeter()]);
+        $repo = $this->electricityRepo->forMeter($this->meterFor($request, 'electricity'));
+
+        return JsonResponse::ok(['ok' => true, 'deleted' => $repo->deleteMeter()]);
     }
 
     private function deleteUtilityReading(Request $request, UtilityReadingRepository $repo): JsonResponse

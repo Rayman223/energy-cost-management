@@ -950,6 +950,11 @@ return [
     'import.battery_target'                        => 'Zielbatterie',
     'import.reg_charge'                            => 'Eingangszählerstand (Laden)',
     'import.reg_discharge'                         => 'Ausgangszählerstand (Entladen)',
+    // Zielzähler beim Import mit mehreren Zählern (#55).
+    'import.meter_title'                           => 'Zu speisender Zähler',
+    'import.meter_hint'                            => 'Wählen Sie den Zähler, den diese Datei speist: ein Import zielt auf genau einen Zähler, zwei vermischte Zähler in derselben Datei blieben unentdeckt. Lassen Sie « Standardzähler » stehen, wenn Sie nur einen haben.',
+    'import.meter_target'                          => 'Zielzähler',
+    'import.meter_default'                         => 'Standardzähler',
 
     // ── Zählerpark (#55) ────────────────────────────────────────────────────
     // `meters.*` und nicht `meter.*`: Letzteres gehört bereits zur Seite für die

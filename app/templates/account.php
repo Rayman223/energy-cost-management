@@ -340,6 +340,34 @@ $csrf = \App\Security\Csrf::field();
       </fieldset>
       <?php endif; ?>
 
+      <!-- Compteur visé par l'import (#55). Même raison que pour la batterie :
+           un import alimente UN compteur, et deux compteurs mêlés dans un même
+           fichier seraient indétectables ligne à ligne. Toutes les énergies sont
+           listées dans un seul <select>, groupées ; import.js n'affiche que les
+           options de l'énergie choisie. Laisser « par défaut » reste possible et
+           reproduit le comportement d'avant le multi-compteur. -->
+      <?php if (($metersByEnergy ?? []) !== []): ?>
+      <fieldset id="import-meter" class="import-registers">
+        <legend><?= $this->te('import.meter_title') ?></legend>
+        <p class="hint"><?= $this->te('import.meter_hint') ?></p>
+        <div class="row">
+          <div>
+            <label for="meter_id"><?= $this->te('import.meter_target') ?></label>
+            <select id="meter_id" name="meter_id">
+              <option value="" data-energy=""><?= $this->te('import.meter_default') ?></option>
+              <?php foreach ($metersByEnergy as $energy => $meters): ?>
+                <?php foreach ($meters as $meter): ?>
+                <option value="<?= $this->e((string) $meter->id) ?>" data-energy="<?= $this->e($energy) ?>">
+                  <?= $meter->isNamed() ? $this->e($meter->label) : $this->te($meter->defaultLabelKey()) ?>
+                </option>
+                <?php endforeach; ?>
+              <?php endforeach; ?>
+            </select>
+          </div>
+        </div>
+      </fieldset>
+      <?php endif; ?>
+
       <!-- Colonnes du fichier choisi, injectées par import.js (autocomplétion). -->
       <datalist id="import-columns"></datalist>
 

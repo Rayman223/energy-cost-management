@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Controller;
 
 use App\Http\JsonResponse;
+use App\Http\MeterResolver;
 use App\Http\Request;
 use App\Http\ValidationException;
 use App\Repository\Contract\ElectricityIngestionInterface;
@@ -36,7 +37,17 @@ final class IngestController
         // null = aucun plafond. Les registres déjà relevés dans le créneau sont
         // ignorés en silence (comme un doublon), sans casser le batch.
         private readonly ?ReadingGranularityPolicy $electricityThrottle = null,
+        // Compteur visé par l'ingestion (#55), lu à la RACINE du corps — un import
+        // vise un compteur, comme il vise une batterie ; le mettre par lecture
+        // rendrait un batch mixte indétectable. null = compteur par défaut.
+        private readonly ?MeterResolver $meters = null,
     ) {
+    }
+
+    /** Compteur visé, résolu une fois pour tout le batch. */
+    private function meterFor(Request $request, string $energyType): ?int
+    {
+        return $this->meters?->resolve($request->param('meter_id'), $energyType);
     }
 
     /**
@@ -46,6 +57,7 @@ final class IngestController
      */
     public function electricity(Request $request): JsonResponse
     {
+        $repo     = $this->electricity->forMeter($this->meterFor($request, 'electricity'));
         $readings = $this->normalizeBatch($request, 'timestamp');
 
         $received = 0;
@@ -73,7 +85,7 @@ final class IngestController
             // relevés dans le créneau (skip silencieux = doublon), insérer les
             // registres libres de la même lecture.
             if ($this->electricityThrottle !== null) {
-                $inBucket = $this->electricity->readingsPresentInBucket(
+                $inBucket = $repo->readingsPresentInBucket(
                     $ts,
                     $this->electricityThrottle->timezone(),
                     $this->electricityThrottle->forMoment($ts),
@@ -83,7 +95,7 @@ final class IngestController
             }
 
             if ($indexes !== []) {
-                $inserted += $this->electricity->insertIndexes($ts, $indexes);
+                $inserted += $repo->insertIndexes($ts, $indexes);
             }
         }
 
@@ -93,13 +105,13 @@ final class IngestController
     /** POST ingest_gas — {"readings": [{"reading_at": "...", "counter_m3": 123.456}, ...]} ou unitaire. */
     public function gas(Request $request): JsonResponse
     {
-        return $this->ingestUtility($request, $this->gas);
+        return $this->ingestUtility($request, $this->gas->forMeter($this->meterFor($request, 'gas')));
     }
 
     /** POST ingest_water — même contrat que ingest_gas. */
     public function water(Request $request): JsonResponse
     {
-        return $this->ingestUtility($request, $this->water);
+        return $this->ingestUtility($request, $this->water->forMeter($this->meterFor($request, 'water')));
     }
 
     private function ingestUtility(Request $request, UtilityIngestionInterface $repo): JsonResponse

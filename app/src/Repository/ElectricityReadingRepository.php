@@ -12,6 +12,7 @@ use App\Support\Dates;
 use DateTimeImmutable;
 use DateTimeZone;
 use PDO;
+use RuntimeException;
 
 /**
  * Relevés électricité/solaire sur le modèle à registres (meters →
@@ -112,7 +113,32 @@ final class ElectricityReadingRepository implements LegacyDailyRepositoryInterfa
         private readonly PDO $pdo,
         private readonly int $userId,
         private readonly string $timezone = 'UTC',
+        private readonly ?int $meterId = null,
     ) {
+    }
+
+    /**
+     * Même repository, scopé sur un compteur DÉSIGNÉ (#55).
+     *
+     * Ne change que les chemins MONO-COMPTEUR — saisie, historique, index du
+     * jour, bornes de validation, suppression. Les lectures de rapport continuent
+     * de couvrir toute la flotte : additionner les compteurs d'une énergie ne
+     * dépend pas de celui qu'on est en train de saisir.
+     *
+     * Une nouvelle instance plutôt qu'un clone : les caches de deltas et de
+     * registres du parent portent sur un autre périmètre, les emporter servirait
+     * des chiffres du mauvais compteur.
+     *
+     * `null` rend l'instance courante — l'appelant n'a pas à distinguer le cas
+     * « aucun compteur désigné ».
+     */
+    public function forMeter(?int $meterId): self
+    {
+        if ($meterId === null || $meterId === $this->meterId) {
+            return $this;
+        }
+
+        return new self($this->pdo, $this->userId, $this->timezone, $meterId);
     }
 
     // -------------------------------------------------------------------------
@@ -135,8 +161,22 @@ final class ElectricityReadingRepository implements LegacyDailyRepositoryInterfa
         // évite ~7 requêtes (ensureElectricityMeter + ensureRegisters) par ligne.
         if (!$this->topologyEnsured) {
             $topology = new MeterTopology($this->pdo);
-            $meterId = $topology->ensureElectricityMeter($this->userId);
-            $this->registerMap = $topology->ensureRegisters($meterId);
+
+            if ($this->meterId !== null) {
+                // Compteur DÉSIGNÉ : vérifié en appartenance avant tout, puis
+                // équipé de ses registres s'il n'en a pas encore — un compteur
+                // créé sur /meters n'en a aucun tant qu'il n'a rien reçu. Jamais
+                // créé à la volée : un identifiant inconnu est une erreur de
+                // l'appelant, pas une invitation à fabriquer un compteur.
+                if (!$topology->ownsMeter($this->userId, $this->meterId)) {
+                    throw new RuntimeException('Unknown electricity meter: ' . $this->meterId);
+                }
+                $this->registerMap = $topology->ensureRegisters($this->meterId);
+            } else {
+                $meterId = $topology->ensureElectricityMeter($this->userId);
+                $this->registerMap = $topology->ensureRegisters($meterId);
+            }
+
             $this->topologyEnsured = true;
             // ensureRegisters a pu CRÉER le compteur et ses registres : une vue
             // « flotte » mémoïsée avant cet appel serait vide à tort.
@@ -255,10 +295,17 @@ final class ElectricityReadingRepository implements LegacyDailyRepositoryInterfa
      */
     public function deleteMeter(): int
     {
-        $stmt = $this->pdo->prepare(
-            'DELETE FROM meters WHERE user_id = :uid AND energy_type = :etype ORDER BY id LIMIT 1'
-        );
-        $stmt->execute(['uid' => $this->userId, 'etype' => 'electricity']);
+        if ($this->meterId !== null) {
+            $stmt = $this->pdo->prepare(
+                'DELETE FROM meters WHERE id = :mid AND user_id = :uid AND energy_type = :etype'
+            );
+            $stmt->execute(['mid' => $this->meterId, 'uid' => $this->userId, 'etype' => 'electricity']);
+        } else {
+            $stmt = $this->pdo->prepare(
+                'DELETE FROM meters WHERE user_id = :uid AND energy_type = :etype ORDER BY id LIMIT 1'
+            );
+            $stmt->execute(['uid' => $this->userId, 'etype' => 'electricity']);
+        }
 
         // La topologie mémoïsée pointe sur un compteur qui n'existe plus : la
         // réinitialiser pour qu'un insertIndexes ultérieur le recrée proprement.
@@ -1292,7 +1339,13 @@ final class ElectricityReadingRepository implements LegacyDailyRepositoryInterfa
     private function registerId(string $key): ?int
     {
         if ($this->registerMap === null) {
-            $this->registerMap = (new MeterTopology($this->pdo))->registerMapForUser($this->userId);
+            $topology = new MeterTopology($this->pdo);
+            // Compteur désigné : carte vérifiée en appartenance, vide si
+            // l'identifiant est étranger — donc aucune donnée servie, jamais
+            // celles d'autrui.
+            $this->registerMap = $this->meterId !== null
+                ? $topology->ownedRegisterMap($this->userId, $this->meterId)
+                : $topology->registerMapForUser($this->userId);
         }
 
         return $this->registerMap[$key] ?? null;

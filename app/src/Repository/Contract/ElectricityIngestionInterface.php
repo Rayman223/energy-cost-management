@@ -23,6 +23,15 @@ interface ElectricityIngestionInterface
     public const REGISTERS = ['import_t1', 'import_t2', 'export_t1', 'export_t2', 'production'];
 
     /**
+     * Même repository, scopé sur un compteur DÉSIGNÉ (#55) ; `null` rend
+     * l'instance courante.
+     *
+     * L'écriture et les bornes de validation suivent alors ce compteur. Les
+     * lectures de rapport, elles, restent celles du parc.
+     */
+    public function forMeter(?int $meterId): self;
+
+    /**
      * Insère un jeu d'index au même horodatage (INSERT IGNORE : idempotent).
      *
      * @param array<string, float> $indexByRegister register_key => index cumulé

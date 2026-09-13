@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Controller;
 
 use App\Http\JsonResponse;
+use App\Http\MeterResolver;
 use App\Http\Request;
 use App\Http\ValidationException;
 use App\Repository\Contract\ElectricityIngestionInterface;
@@ -30,21 +31,38 @@ final class MeterEntryController
         // grille active à SA date (issue #10), et dans quel fuseau il se délimite.
         // null = aucun plafond. Défaut rétro-compatible : seule api.php la renseigne.
         private readonly ?ReadingGranularityPolicy $electricityThrottle = null,
+        // Compteur visé par la saisie (#55). null = pas de résolution : tout va au
+        // compteur par défaut, comportement d'avant le multi-compteur. Défaut
+        // rétro-compatible, comme le plafonnement ci-dessus : seule api.php le
+        // renseigne, les tests unitaires câblent des faux mono-compteur.
+        private readonly ?MeterResolver $meters = null,
     ) {
     }
 
     public function gas(Request $request): JsonResponse
     {
-        return $this->saveReading($request, $this->gasRepo);
+        return $this->saveReading($request, $this->gasRepo->forMeter($this->meterFor($request, 'gas')));
     }
 
     public function water(Request $request): JsonResponse
     {
-        return $this->saveReading($request, $this->waterRepo);
+        return $this->saveReading($request, $this->waterRepo->forMeter($this->meterFor($request, 'water')));
+    }
+
+    /** Compteur visé, résolu une fois par requête ; null si aucun résolveur câblé. */
+    private function meterFor(Request $request, string $energyType): ?int
+    {
+        return $this->meters?->resolve($request->param('meter_id'), $energyType);
     }
 
     public function electricity(Request $request): JsonResponse
     {
+        // Résolu AVANT toute lecture : les bornes de validation et le plafond de
+        // créneau doivent porter sur le compteur où l'on va écrire, sans quoi un
+        // index parfaitement valable pour l'atelier serait comparé à ceux de la
+        // maison.
+        $repo = $this->electricityRepo->forMeter($this->meterFor($request, 'electricity'));
+
         $readingAt = $request->input('reading_at');
         $ts = $readingAt
             ? Request::parseDate($readingAt, 'reading_at')
@@ -69,7 +87,7 @@ final class MeterEntryController
             throw new ValidationException('At least one electricity index is required');
         }
 
-        $bounds = $this->electricityRepo->readingBounds($ts, array_keys($indexes));
+        $bounds = $repo->readingBounds($ts, array_keys($indexes));
         foreach ($indexes as $key => $value) {
             $bound = $bounds[$key] ?? ['min' => null, 'max' => null, 'exists' => false];
             if ($bound['exists']) {
@@ -84,7 +102,7 @@ final class MeterEntryController
             $timezone    = $this->electricityThrottle->timezone();
             $granularity = $this->electricityThrottle->forMoment($ts);
 
-            $inBucket = $this->electricityRepo->readingsPresentInBucket($ts, $timezone, $granularity, array_keys($indexes));
+            $inBucket = $repo->readingsPresentInBucket($ts, $timezone, $granularity, array_keys($indexes));
             foreach (array_keys($indexes) as $key) {
                 if ($inBucket[$key] ?? false) {
                     $bucket = $granularity->formatBucketFr($ts, new \DateTimeZone($timezone));
@@ -97,7 +115,7 @@ final class MeterEntryController
 
         // INSERT IGNORE : `inserted` compte les lignes réellement écrites (0 sur
         // doublon déjà présent), valeur remontée telle quelle à l'appelant.
-        $inserted = $this->electricityRepo->insertIndexes($ts, $indexes);
+        $inserted = $repo->insertIndexes($ts, $indexes);
 
         return JsonResponse::ok([
             'ok'       => true,

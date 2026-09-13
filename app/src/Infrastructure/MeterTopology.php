@@ -152,6 +152,54 @@ final class MeterTopology
     }
 
     /**
+     * Ce compteur existe-t-il, appartient-il à l'utilisateur et porte-t-il cette
+     * énergie ? Garde d'écriture : distingue « compteur étranger » (à refuser) de
+     * « compteur à moi, pas encore de registres » (à équiper), que
+     * {@see ownedRegisterMap()} rendrait tous deux comme une carte vide.
+     */
+    public function ownsMeter(int $userId, int $meterId, string $energyType = 'electricity'): bool
+    {
+        $stmt = $this->pdo->prepare(
+            'SELECT 1 FROM meters WHERE id = :mid AND user_id = :uid AND energy_type = :etype LIMIT 1'
+        );
+        $stmt->execute(['mid' => $meterId, 'uid' => $userId, 'etype' => $this->assertEnergy($energyType)]);
+
+        return $stmt->fetchColumn() !== false;
+    }
+
+    /**
+     * Carte des registres d'un compteur DÉSIGNÉ, à condition qu'il appartienne à
+     * l'utilisateur et porte la bonne énergie (#55).
+     *
+     * La vérification d'appartenance est faite ICI, dans la requête, et non
+     * laissée à l'appelant : cette carte est ce qui décide dans quelles lignes on
+     * écrit. Un identifiant forgé rend une carte VIDE — donc aucune écriture
+     * possible — plutôt qu'une carte pointant sur le compteur d'autrui.
+     *
+     * @return array<string, int> register_key => id (vide si le compteur est
+     *         inconnu, étranger, ou d'une autre énergie)
+     */
+    public function ownedRegisterMap(int $userId, int $meterId, string $energyType = 'electricity'): array
+    {
+        $stmt = $this->pdo->prepare(
+            'SELECT reg.id, reg.register_key
+               FROM meter_registers reg
+               JOIN meters m ON m.id = reg.meter_id
+              WHERE reg.meter_id = :mid AND m.user_id = :uid AND m.energy_type = :etype'
+        );
+        $stmt->execute(['mid' => $meterId, 'uid' => $userId, 'etype' => $this->assertEnergy($energyType)]);
+
+        $map = [];
+        foreach ($stmt->fetchAll() as $row) {
+            if (is_array($row)) {
+                $map[(string) $row['register_key']] = (int) $row['id'];
+            }
+        }
+
+        return $map;
+    }
+
+    /**
      * Registres de TOUS les compteurs électriques de l'utilisateur, groupés par
      * clé de registre (#55).
      *

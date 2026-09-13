@@ -951,6 +951,11 @@ return [
     'import.battery_target'                        => 'Target battery',
     'import.reg_charge'                            => 'Charge index (in)',
     'import.reg_discharge'                         => 'Discharge index (out)',
+    // Multi-meter import target (#55).
+    'import.meter_title'                           => 'Meter to feed',
+    'import.meter_hint'                            => 'Pick the meter this file feeds: one import targets one meter, and two meters mixed in a single file would be undetectable. Leave “default meter” if you only have one.',
+    'import.meter_target'                          => 'Target meter',
+    'import.meter_default'                         => 'Default meter',
 
     // ── Meter fleet (#55) ───────────────────────────────────────────────────
     // `meters.*`, not `meter.*`: the latter already belongs to the index ENTRY

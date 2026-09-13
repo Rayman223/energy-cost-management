@@ -19,7 +19,7 @@ use App\Support\Dates;
  * coût mensuel — graphe et cards affichent ainsi les mêmes m³.
  *
  * Les relevés gaz/eau se comptent en dizaines de lignes (saisie manuelle) : on
- * charge toute la série via `getAllReadings()` plutôt que d'ajouter une requête
+ * charge toute la série via `getFleetSeries()` plutôt que d'ajouter une requête
  * par mois.
  */
 final class UtilityConsumptionSeriesService
@@ -42,18 +42,22 @@ final class UtilityConsumptionSeriesService
     {
         $months = max(self::MIN_MONTHS, min(self::MAX_MONTHS, $months));
 
+        // Série du PARC et non historique d'un compteur (#55) : le graphe doit
+        // afficher les mêmes m³ que les cards de coût, qui somment déjà les
+        // compteurs. L'historique brut entrelacerait deux odomètres et la série
+        // cesserait d'être croissante.
         return $this->interpolator->monthlySeries(
-            $this->toSeries($repo->getAllReadings()),
+            $this->toSeries($repo->getFleetSeries()),
             $months,
             $nowTs ?? time(),
         );
     }
 
     /**
-     * Convertit les relevés du repository (DESC, avec delta brut) en série
-     * {ts, value} croissante attendue par l'interpolateur.
+     * Convertit les relevés du repository en série {ts, value} croissante
+     * attendue par l'interpolateur.
      *
-     * @param array<int,array{id:int,reading_at:string,counter_m3:float,delta_m3:float|null}> $readings
+     * @param array<int,array{reading_at:string,counter_m3:float}> $readings
      * @return list<array{ts:int,value:float}>
      */
     private function toSeries(array $readings): array

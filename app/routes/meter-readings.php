@@ -6,6 +6,7 @@ use App\Http\SecurityHeaders;
 use App\I18n\Locale;
 use App\Infrastructure\Database;
 use App\Repository\BatteryRepository;
+use App\Repository\MeterRepository;
 use App\Repository\UserRepository;
 use App\Repository\UtilityReadingRepository;
 use App\Security\AuthGuard;
@@ -13,6 +14,7 @@ use App\Security\UserContext;
 use App\Support\Adsense;
 use App\Support\DiscordLink;
 use App\Support\DonateLink;
+use App\Support\Limits;
 use App\Support\LocaleContext;
 use App\View\ViewFactory;
 
@@ -22,6 +24,8 @@ $dbError = null;
 $gasLatest = null;
 $waterLatest = null;
 $batteries = [];
+/** @var array<string, list<\App\Domain\Meter>> Parc par énergie (#55). */
+$metersByEnergy = ['electricity' => [], 'gas' => [], 'water' => []];
 $timezone = 'UTC';
 $isAdmin = false;
 
@@ -63,6 +67,15 @@ try {
     // Parc de batteries (#26) : la section de saisie n'apparaît que s'il y en a
     // une — sans matériel déclaré, aucun index n'aurait où se rattacher.
     $batteries = (new BatteryRepository($pdo, $userId))->listAll();
+
+    // Parc de compteurs par énergie (#55) : alimente les sélecteurs de cible.
+    // Le sélecteur reste dans le DOM même à un seul compteur — c'est lui que le
+    // JS lit pour poser `meter_id` — mais il est masqué : choisir entre une
+    // seule option n'apprend rien.
+    $meterRepo = new MeterRepository($pdo, $userId, Limits::metersPerEnergy($config));
+    foreach ($meterRepo->listAll() as $meter) {
+        $metersByEnergy[$meter->energyType][] = $meter;
+    }
 } catch (\Throwable $e) {
     $dbError = $e->getMessage();
 }
@@ -79,6 +92,7 @@ echo $view->render('meter_readings', [
     'gasLatest' => $gasLatest,
     'waterLatest' => $waterLatest,
     'batteries' => $batteries,
+    'metersByEnergy' => $metersByEnergy,
     'available' => Locale::available($config),
     'timezone' => $timezone,
     // Fuseau BRUT du profil pour l'horloge (null ⇒ repli navigateur) ; $timezone
