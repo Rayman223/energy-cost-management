@@ -56,11 +56,16 @@ final class FleetAggregationDbTest extends DatabaseTestCase
 
     // ── Montage ──────────────────────────────────────────────────────────────
 
-    private function newMeter(int $userId, string $energyType = 'electricity'): int
+    private function newMeter(int $userId, string $energyType = 'electricity', ?string $closedOn = null): int
     {
         $this->pdo()
-            ->prepare('INSERT INTO meters (user_id, energy_type, label) VALUES (:uid, :etype, :label)')
-            ->execute(['uid' => $userId, 'etype' => $energyType, 'label' => 'M' . $userId]);
+            ->prepare('INSERT INTO meters (user_id, energy_type, label, closed_on) VALUES (:uid, :etype, :label, :closed)')
+            ->execute([
+                'uid'    => $userId,
+                'etype'  => $energyType,
+                'label'  => 'M' . $userId,
+                'closed' => $closedOn,
+            ]);
 
         return (int) $this->pdo()->lastInsertId();
     }
@@ -373,6 +378,70 @@ final class FleetAggregationDbTest extends DatabaseTestCase
         self::assertSame('2026-06-20 00:00:00', $deltas['data_to'], 'Fin la plus PRÉCOCE du parc.');
         // `to` décrit au contraire jusqu'où le rapport porte : la fin la plus tardive.
         self::assertSame('2026-06-30 00:00:00', $deltas['to']);
+    }
+
+    /**
+     * Un compteur FERMÉ avant la période n'a plus rien à y couvrir : sa dernière
+     * date ne doit plus borner `data_to` (#76).
+     *
+     * C'est le bug de l'issue, bout en bout : remplacer son compteur — fermer
+     * l'ancien, déclarer le neuf — figeait la fenêtre couverte à la date du
+     * dernier relevé du compteur retiré, et donc `coverage_complete` à `false`
+     * pour tous les mois suivants, indéfiniment.
+     */
+    public function testAMeterClosedBeforeThePeriodNoLongerFreezesCoverage(): void
+    {
+        $retired = $this->newMeter($this->fleetUserId, 'electricity', '2026-06-15');
+        $this->write($retired, '2026-06-01 00:00:00', self::indexes(100.0));
+        $this->write($retired, '2026-06-14 00:00:00', self::indexes(120.0));
+
+        $successor = $this->newMeter($this->fleetUserId);
+        $this->write($successor, '2026-06-15 00:00:00', self::indexes(0.0));
+        $this->write($successor, '2026-07-31 00:00:00', self::indexes(60.0));
+
+        $deltas = $this->elec($this->fleetUserId)->getDeltasBetween('2026-07-01 00:00:00', '2026-08-01 00:00:00');
+
+        self::assertSame(
+            '2026-07-31 00:00:00',
+            $deltas['data_to'],
+            'La fin du compteur RETIRÉ borne encore la couverture de juillet.',
+        );
+    }
+
+    /**
+     * Mois du remplacement : le compteur retiré est relevé jusqu'à la veille de sa
+     * fermeture (borne EXCLUE, il ne peut pas l'être le jour même) et le
+     * successeur prend le relais. Le parc n'a pas eu de trou.
+     */
+    public function testAClosedMeterHandedOverMidMonthKeepsTheCoverageComplete(): void
+    {
+        $retired = $this->newMeter($this->fleetUserId, 'electricity', '2026-06-15');
+        $this->write($retired, '2026-06-01 00:00:00', self::indexes(100.0));
+        $this->write($retired, '2026-06-14 00:00:00', self::indexes(120.0));
+
+        $successor = $this->newMeter($this->fleetUserId);
+        $this->write($successor, '2026-06-15 00:00:00', self::indexes(0.0));
+        $this->write($successor, '2026-06-30 00:00:00', self::indexes(30.0));
+
+        $deltas = $this->elec($this->fleetUserId)->getMonthlyDeltasForMonth(2026, 6);
+
+        self::assertSame('2026-06-30 00:00:00', $deltas['data_to'], 'Le relais du successeur n’a pas été vu.');
+    }
+
+    /**
+     * Fermeture SANS successeur : plus rien n'est attendu, mais plus rien n'arrive
+     * non plus. La couverture doit rester dégradée — un foyer qui ferme son
+     * dernier compteur ne doit pas voir un coût partiel annoncé complet.
+     */
+    public function testAClosureWithoutSuccessorStillDegradesCoverage(): void
+    {
+        $retired = $this->newMeter($this->fleetUserId, 'electricity', '2026-06-15');
+        $this->write($retired, '2026-06-01 00:00:00', self::indexes(100.0));
+        $this->write($retired, '2026-06-14 00:00:00', self::indexes(120.0));
+
+        $deltas = $this->elec($this->fleetUserId)->getMonthlyDeltasForMonth(2026, 6);
+
+        self::assertSame('2026-06-14 00:00:00', $deltas['data_to'], 'Une fermeture sans relais a blanchi la couverture.');
     }
 
     /**
