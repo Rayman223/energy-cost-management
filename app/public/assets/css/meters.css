@@ -38,10 +38,13 @@
 .mtr-table tr.is-editing { background: var(--amber-dim, rgba(210,160,60,.15)); }
 .mtr-table tr.is-editing:hover { background: var(--amber-dim, rgba(210,160,60,.15)); }
 .mtr-table tr.is-closed { opacity: .6; }
+/* Pas encore posé : en attente, pas retiré — même mise en retrait que fermé. */
+.mtr-table tr.is-pending { opacity: .6; }
 
 .mtr-badge { display: inline-block; margin-left: 8px; padding: 2px 8px; border-radius: 4px;
              font-size: .72rem; font-weight: 700; background: var(--border); color: var(--muted); }
 .mtr-badge--closed { background: var(--amber-dim, rgba(210,160,60,.15)); color: var(--amber); }
+.mtr-badge--pending { background: var(--border); color: var(--muted); }
 
 @media (max-width: 720px) {
   .mtr-quota { flex: 1 1 auto; }

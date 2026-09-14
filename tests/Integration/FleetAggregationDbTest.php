@@ -56,15 +56,20 @@ final class FleetAggregationDbTest extends DatabaseTestCase
 
     // ── Montage ──────────────────────────────────────────────────────────────
 
-    private function newMeter(int $userId, string $energyType = 'electricity', ?string $closedOn = null): int
-    {
+    private function newMeter(
+        int $userId,
+        string $energyType = 'electricity',
+        ?string $closedOn = null,
+        ?string $openedOn = null,
+    ): int {
         $this->pdo()
-            ->prepare('INSERT INTO meters (user_id, energy_type, label, closed_on) VALUES (:uid, :etype, :label, :closed)')
+            ->prepare('INSERT INTO meters (user_id, energy_type, label, closed_on, opened_on) VALUES (:uid, :etype, :label, :closed, :opened)')
             ->execute([
                 'uid'    => $userId,
                 'etype'  => $energyType,
                 'label'  => 'M' . $userId,
                 'closed' => $closedOn,
+                'opened' => $openedOn,
             ]);
 
         return (int) $this->pdo()->lastInsertId();
@@ -442,6 +447,98 @@ final class FleetAggregationDbTest extends DatabaseTestCase
         $deltas = $this->elec($this->fleetUserId)->getMonthlyDeltasForMonth(2026, 6);
 
         self::assertSame('2026-06-14 00:00:00', $deltas['data_to'], 'Une fermeture sans relais a blanchi la couverture.');
+    }
+
+    /**
+     * Un compteur POSÉ après la période n'a rien à y couvrir : sa date de premier
+     * relevé ne doit plus borner `data_from` (#81).
+     *
+     * C'est le miroir du bug de #76, et il est plus large : aucune fermeture n'est
+     * en jeu, il suffit d'AJOUTER un compteur au parc — un atelier, un garage —
+     * pour que tous les rapports des mois et années déjà écoulés s'annoncent
+     * partiels, faute de savoir que le compteur n'existait pas encore.
+     */
+    public function testAMeterCommissionedAfterThePeriodNoLongerFreezesItsStart(): void
+    {
+        $historic = $this->newMeter($this->fleetUserId);
+        $this->write($historic, '2026-03-01 00:00:00', self::indexes(100.0));
+        $this->write($historic, '2026-04-01 00:00:00', self::indexes(140.0));
+
+        // Atelier posé le 15 juin, donc aucun relevé en mars — et c'est normal.
+        $workshop = $this->newMeter($this->fleetUserId, 'electricity', null, '2026-06-15');
+        $this->write($workshop, '2026-06-15 00:00:00', self::indexes(0.0));
+        $this->write($workshop, '2026-06-30 00:00:00', self::indexes(30.0));
+
+        $march = $this->elec($this->fleetUserId)->getDeltasBetween('2026-03-01 00:00:00', '2026-04-01 00:00:00');
+
+        self::assertSame(
+            '2026-03-01 00:00:00',
+            $march['data_from'],
+            'Le premier relevé du compteur AJOUTÉ borne encore le début de mars.',
+        );
+        self::assertSame('2026-04-01 00:00:00', $march['data_to']);
+        self::assertSame(40.0, $march['prelev_jour'], "L'atelier ne contribue rien à mars, il n'existait pas.");
+    }
+
+    /**
+     * Sans date de pose saisie, rien ne change : un premier relevé tardif borne
+     * toujours le début. « Pas encore posé » et « pas encore relevé » ne sont pas
+     * distinguables sans la colonne, et la seconde lecture rend bien le rapport
+     * incomplet — c'est précisément ce que la date sert à trancher.
+     */
+    public function testWithoutACommissioningDateALateFirstReadingStillDegradesCoverage(): void
+    {
+        $historic = $this->newMeter($this->fleetUserId);
+        $this->write($historic, '2026-03-01 00:00:00', self::indexes(100.0));
+        $this->write($historic, '2026-04-01 00:00:00', self::indexes(140.0));
+
+        $undated = $this->newMeter($this->fleetUserId);
+        $this->write($undated, '2026-06-15 00:00:00', self::indexes(0.0));
+        $this->write($undated, '2026-06-30 00:00:00', self::indexes(30.0));
+
+        $march = $this->elec($this->fleetUserId)->getDeltasBetween('2026-03-01 00:00:00', '2026-04-01 00:00:00');
+
+        self::assertSame('2026-06-15 00:00:00', $march['data_from'], 'Le comportement conservateur a été perdu.');
+    }
+
+    /**
+     * `to` ne sort JAMAIS de la période demandée (#81).
+     *
+     * Les bornes sont clampées sur le relevé le plus proche : un compteur sans
+     * aucun relevé dans la fenêtre y apportait la date de son premier index, des
+     * mois après la période. Ce n'est pas cosmétique — les services tirent de `to`
+     * le nombre de jours facturés, et un rapport de mars proratisait ses coûts
+     * fixes sur 106 jours.
+     */
+    public function testTheReportedEndNeverLeavesTheRequestedPeriod(): void
+    {
+        $historic = $this->newMeter($this->fleetUserId);
+        $this->write($historic, '2026-03-01 00:00:00', self::indexes(100.0));
+        $this->write($historic, '2026-04-01 00:00:00', self::indexes(140.0));
+
+        $later = $this->newMeter($this->fleetUserId);
+        $this->write($later, '2026-06-15 00:00:00', self::indexes(0.0));
+        $this->write($later, '2026-06-30 00:00:00', self::indexes(30.0));
+
+        $march = $this->elec($this->fleetUserId)->getDeltasBetween('2026-03-01 00:00:00', '2026-04-01 00:00:00');
+
+        self::assertSame('2026-04-01 00:00:00', $march['to'], '`to` a débordé sur juin : les jours facturés aussi.');
+    }
+
+    /**
+     * Le mois en cours garde sa borne réelle : `to` est plafonné à la fin
+     * demandée, pas forcé dessus. Un flux arrêté le 20 rend toujours le 20, sans
+     * quoi le rapport facturerait des jours qu'il n'a pas mesurés.
+     */
+    public function testAPeriodStillInProgressKeepsItsLastReadingAsEnd(): void
+    {
+        $meter = $this->newMeter($this->fleetUserId);
+        $this->write($meter, '2026-06-01 00:00:00', self::indexes(100.0));
+        $this->write($meter, '2026-06-20 00:00:00', self::indexes(120.0));
+
+        $june = $this->elec($this->fleetUserId)->getDeltasBetween('2026-06-01 00:00:00', '2026-07-01 00:00:00');
+
+        self::assertSame('2026-06-20 00:00:00', $june['to']);
     }
 
     /**

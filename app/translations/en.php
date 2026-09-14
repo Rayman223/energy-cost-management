@@ -957,6 +957,10 @@ return [
     'import.meter_target'                          => 'Target meter',
     'import.meter_default'                         => 'Default meter',
     // Meter closure (#55).
+    'meters.opened_field'                          => 'Commissioning date',
+    'meters.opened_hint'                           => 'First day this meter was in service, that day included. It blocks no entry: a backdated reading is still accepted. It keeps reports from calling periods before the install partial, for want of knowing the meter did not exist yet. Leave empty if the meter has always been there.',
+    'meters.invalid_opened_on'                     => 'Invalid commissioning date.',
+    'meters.empty_service_range'                   => 'The closing date must come after the commissioning date: this meter would never have been in service for a single day.',
     'meters.closed_field'                          => 'Closing date',
     'meters.closed_hint'                           => 'From this date on, the meter accepts no further reading. Its existing readings still count in every report: the spending did happen. Leave empty for a meter in service.',
     'meters.invalid_closed_on'                     => 'Invalid closing date.',
@@ -993,6 +997,7 @@ return [
     'meters.col_readings'                          => 'Readings',
     'meters.unnamed_hint'                          => 'Unnamed — give it one to tell it apart from the others.',
     'meters.closed_on'                             => 'closed on {date}',
+    'meters.opened_on'                             => 'in service from {date}',
     'meters.energy_field'                          => 'Energy',
     'meters.energy_frozen'                         => 'The energy can no longer change: it decides where the meter\'s readings come from.',
     'meters.label_field'                           => 'Meter name',

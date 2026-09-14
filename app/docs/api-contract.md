@@ -203,7 +203,28 @@ Trois précisions qui décident du comportement observable :
 
 Borne de fin **exclue** (#1), comme partout ailleurs : `closed_on = 2026-06-15`
 refuse dès le 15, le 14 reste ouvert. Rouvrir un compteur se fait en vidant le
-champ. Il n'existe pas de date d'ouverture : le premier relevé fait foi.
+champ.
+
+#### Compteur pas encore posé
+
+Un compteur porte aussi une **date de mise en service** (`opened_on`, saisie sur
+`/meters`, facultative elle aussi). Elle se lit à l'inverse de la fermeture :
+borne **incluse**, premier jour EN service — la convention #1 ne porte que sur
+les dates de fin.
+
+Elle **ne garde aucune écriture** : un relevé antidaté d'avant la pose reste
+accepté, exactement comme un relevé antidaté d'avant la fermeture l'est après
+elle. C'est une différence de nature avec `closed_on`, et elle est voulue : rien
+n'interdit de saisir l'historique du compteur précédent sur le nouveau, ou de
+rattraper un carnet.
+
+Elle sert aux **rapports**. Sans elle, un compteur déclaré en juin repoussait la
+fenêtre couverte jusqu'à son premier relevé pour toutes les périodes antérieures,
+et un rapport de mars s'annonçait partiel (`coverage_complete`) parce qu'un
+compteur posé en juin n'y avait « pas de relevé ». Renseignée, elle dit que le
+compteur n'avait rien à couvrir avant. Laissée vide, le comportement d'avant est
+conservé — « pas encore posé » et « pas encore relevé » redeviennent
+indiscernables, et c'est la lecture prudente qui l'emporte.
 
 `batteries.decommissioned_on` suit désormais exactement la même règle
 (`ingest_battery`, `battery_entry`, et l'import de fichier — refusé lui aussi

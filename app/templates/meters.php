@@ -101,11 +101,13 @@ $openEnergies = array_values(array_filter(
     <tbody>
     <?php foreach ($meters as $meter): ?>
       <?php
-        $closed = $meter->isClosedOn($today);
-        $count  = $readingCounts[$meter->id] ?? 0;
+        $closed  = $meter->isClosedOn($today);
+        $pending = $meter->isNotInServiceYetOn($today);
+        $count   = $readingCounts[$meter->id] ?? 0;
         $rowClass = array_filter([
             $editing !== null && $editing->id === $meter->id ? 'is-editing' : '',
             $closed ? 'is-closed' : '',
+            $pending ? 'is-pending' : '',
         ]);
       ?>
       <tr class="<?= $this->e(implode(' ', $rowClass)) ?>">
@@ -121,6 +123,12 @@ $openEnergies = array_values(array_filter(
           <span class="mtr-note"><?= $this->te('meters.api_id', ['id' => $meter->id]) ?></span>
           <?php if ($closed && $meter->closedOn !== null): ?>
           <span class="mtr-badge mtr-badge--closed"><?= $this->te('meters.closed_on', ['date' => $meter->closedOn->format('Y-m-d')]) ?></span>
+          <?php endif; ?>
+          <?php // Pas encore posé ≠ fermé : un compteur déclaré à l'avance est en
+                // attente, pas retiré. Les deux badges ne peuvent pas coexister,
+                // la plage vide étant refusée à la saisie. ?>
+          <?php if ($pending && $meter->openedOn !== null): ?>
+          <span class="mtr-badge mtr-badge--pending"><?= $this->te('meters.opened_on', ['date' => $meter->openedOn->format('Y-m-d')]) ?></span>
           <?php endif; ?>
         </td>
         <td><?= $this->te($meter->energyLabelKey()) ?></td>
@@ -188,6 +196,12 @@ $openEnergies = array_values(array_filter(
                placeholder="<?= $this->e($this->t('meters.label_placeholder')) ?>"
                value="<?= $this->e($editing->label ?? '') ?>">
         <p class="dates-hint"><?= $this->te('meters.label_hint') ?></p>
+      </div>
+      <div class="form-row">
+        <label class="form-label" for="mtr-opened"><?= $this->te('meters.opened_field') ?> <span class="unit"><?= $this->te('common.optional') ?></span></label>
+        <input type="date" id="mtr-opened" name="opened_on" class="form-input"
+               value="<?= $this->e($editing?->openedOn?->format('Y-m-d') ?? '') ?>">
+        <p class="dates-hint"><?= $this->te('meters.opened_hint') ?></p>
       </div>
       <div class="form-row">
         <label class="form-label" for="mtr-closed"><?= $this->te('meters.closed_field') ?> <span class="unit"><?= $this->te('common.end_exclusive') ?></span></label>
