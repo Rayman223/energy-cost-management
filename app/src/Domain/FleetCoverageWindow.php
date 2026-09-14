@@ -77,10 +77,11 @@ final class FleetCoverageWindow
      *        Par compteur contributeur : les bornes de ses relevés sur la période,
      *        et celles de son cycle de vie (`null` = depuis toujours / pour toujours).
      * @param string $periodStart Début de la période DEMANDÉE, pas celui des données.
+     * @param string $periodEnd   Fin de la période DEMANDÉE, pas celle des données.
      */
-    public static function coveredUntil(array $segments, string $periodStart): ?string
+    public static function coveredUntil(array $segments, string $periodStart, string $periodEnd): ?string
     {
-        return self::sweep(self::project($segments, true), $periodStart, 1);
+        return self::sweep(self::project($segments, true, $periodStart, $periodEnd), 1);
     }
 
     /**
@@ -88,28 +89,46 @@ final class FleetCoverageWindow
      * ne porte de donnée.
      *
      * @param list<array{start: string, end: string, opened_at: string|null, closed_at: string|null}> $segments
-     * @param string $periodEnd Fin de la période DEMANDÉE, pas celle des données.
+     * @param string $periodStart Début de la période DEMANDÉE, pas celui des données.
+     * @param string $periodEnd   Fin de la période DEMANDÉE, pas celle des données.
      */
-    public static function coveredFrom(array $segments, string $periodEnd): ?string
+    public static function coveredFrom(array $segments, string $periodStart, string $periodEnd): ?string
     {
-        return self::sweep(self::project($segments, false), $periodEnd, -1);
+        return self::sweep(self::project($segments, false, $periodStart, $periodEnd), -1);
     }
 
     /**
      * Réduit chaque compteur au couple qui intéresse le côté balayé : sa borne de
-     * relevés, et la porte du cycle de vie qui la relativise.
+     * relevés, et la porte du cycle de vie qui la relativise — plus le verdict
+     * « hors service sur TOUTE la période ».
+     *
+     * Ce verdict oppose les DEUX bornes du cycle de vie, quel que soit le côté
+     * balayé : un compteur déclaré à l'avance peut porter des relevés antidatés
+     * (l'historique du compteur précédent recopié dessus, cf. api-contract.md), et
+     * sa borne de FIN ne doit pas plus borner une période d'avant sa pose que sa
+     * borne de début. Ne regarder que la porte du côté balayé laissait ce cas
+     * dégrader `data_to` de tous les rapports antérieurs à la pose.
      *
      * @param  list<array{start: string, end: string, opened_at: string|null, closed_at: string|null}> $segments
-     * @return list<array{bound: string, gate: string|null}>
+     * @return list<array{bound: string, gate: string|null, out: bool}>
      */
-    private static function project(array $segments, bool $towardsEnd): array
+    private static function project(array $segments, bool $towardsEnd, string $periodStart, string $periodEnd): array
     {
+        $startAt = self::timestamp($periodStart);
+        $endAt   = self::timestamp($periodEnd);
+
         $projected = [];
 
         foreach ($segments as $segment) {
+            // Fermeture EXCLUE : fermé au premier instant de la période, il n'en a
+            // pas couvert un instant. Mise en service INCLUSE, et fin de période
+            // exclue : posé pile à la fin, il n'y était pas non plus.
+            $out = ($segment['closed_at'] !== null && self::timestamp($segment['closed_at']) <= $startAt)
+                || ($segment['opened_at'] !== null && self::timestamp($segment['opened_at']) >= $endAt);
+
             $projected[] = $towardsEnd
-                ? ['bound' => $segment['end'],   'gate' => $segment['closed_at']]
-                : ['bound' => $segment['start'], 'gate' => $segment['opened_at']];
+                ? ['bound' => $segment['end'],   'gate' => $segment['closed_at'], 'out' => $out]
+                : ['bound' => $segment['start'], 'gate' => $segment['opened_at'], 'out' => $out];
         }
 
         return $projected;
@@ -125,10 +144,9 @@ final class FleetCoverageWindow
      * classe, et la seule raison pour laquelle ce code n'existe qu'en un
      * exemplaire.
      *
-     * @param list<array{bound: string, gate: string|null}> $segments
-     * @param string $periodBound Borne de la période demandée du côté OPPOSÉ au balayage.
+     * @param list<array{bound: string, gate: string|null, out: bool}> $segments
      */
-    private static function sweep(array $segments, string $periodBound, int $direction): ?string
+    private static function sweep(array $segments, int $direction): ?string
     {
         if ($segments === []) {
             return null;
@@ -136,7 +154,10 @@ final class FleetCoverageWindow
 
         // Compteurs hors service sur toute la période : ils ne pouvaient rien en
         // couvrir, leurs dates n'apprennent donc rien sur elle.
-        $alive = self::stillIn($segments, self::timestamp($periodBound) * $direction, $direction);
+        $alive = array_values(array_filter(
+            $segments,
+            static fn (array $segment): bool => $segment['out'] === false,
+        ));
 
         // Parc entièrement hors service : on retombe sur l'intersection nue. Le
         // rapport ne porte alors que sur des relevés hors cycle de vie, et doit
@@ -170,8 +191,8 @@ final class FleetCoverageWindow
      * Compteurs encore dans le parc AU-DELÀ de cet instant orienté — la porte
      * elle-même est exclue, un compteur fermé le 15 ne couvre pas le 15.
      *
-     * @param  list<array{bound: string, gate: string|null}> $segments
-     * @return list<array{bound: string, gate: string|null}>
+     * @param  list<array{bound: string, gate: string|null, out: bool}> $segments
+     * @return list<array{bound: string, gate: string|null, out: bool}>
      */
     private static function stillIn(array $segments, int $instant, int $direction): array
     {
@@ -186,7 +207,7 @@ final class FleetCoverageWindow
      * Borne la plus CONTRAIGNANTE du lot — la fin la plus précoce, ou le début le
      * plus tardif. C'est l'intersection.
      *
-     * @param non-empty-list<array{bound: string, gate: string|null}> $segments
+     * @param non-empty-list<array{bound: string, gate: string|null, out: bool}> $segments
      */
     private static function mostBinding(array $segments, int $direction): string
     {
@@ -208,7 +229,7 @@ final class FleetCoverageWindow
      * Prochaine porte du lot dans le sens du balayage (instant ORIENTÉ), ou `null`
      * si aucun de ses compteurs n'en a.
      *
-     * @param list<array{bound: string, gate: string|null}> $segments
+     * @param list<array{bound: string, gate: string|null, out: bool}> $segments
      */
     private static function nextGate(array $segments, int $direction): ?int
     {

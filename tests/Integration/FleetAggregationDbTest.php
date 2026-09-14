@@ -481,6 +481,36 @@ final class FleetAggregationDbTest extends DatabaseTestCase
     }
 
     /**
+     * Compteur déclaré à L'AVANCE portant des relevés ANTIDATÉS — l'historique du
+     * compteur précédent recopié dessus, que rien n'interdit (cf. api-contract.md).
+     *
+     * Sa fenêtre de relevés s'arrête AVANT la période demandée, et ne doit pas plus
+     * en borner la FIN que le début : il n'était pas en service, dans un sens de
+     * balayage comme dans l'autre. Sans cette symétrie, un carnet recopié sur un
+     * compteur pas encore posé annonçait partiels tous les rapports antérieurs.
+     */
+    public function testAMeterCommissionedLaterWithBackdatedReadingsDoesNotFreezeTheEnd(): void
+    {
+        $historic = $this->newMeter($this->fleetUserId);
+        $this->write($historic, '2026-03-01 00:00:00', self::indexes(100.0));
+        $this->write($historic, '2026-04-01 00:00:00', self::indexes(140.0));
+
+        // Pose prévue le 15 juin, carnet du compteur précédent recopié en janvier :
+        // aucun relevé entre les deux, donc des bornes clampées sur janvier.
+        $planned = $this->newMeter($this->fleetUserId, 'electricity', null, '2026-06-15');
+        $this->write($planned, '2026-01-10 00:00:00', self::indexes(0.0));
+
+        $march = $this->elec($this->fleetUserId)->getDeltasBetween('2026-03-01 00:00:00', '2026-04-01 00:00:00');
+
+        self::assertSame(
+            '2026-04-01 00:00:00',
+            $march['data_to'],
+            'Un relevé antidaté sur un compteur pas encore posé borne encore la fin de mars.',
+        );
+        self::assertSame('2026-03-01 00:00:00', $march['data_from']);
+    }
+
+    /**
      * Sans date de pose saisie, rien ne change : un premier relevé tardif borne
      * toujours le début. « Pas encore posé » et « pas encore relevé » ne sont pas
      * distinguables sans la colonne, et la seconde lecture rend bien le rapport

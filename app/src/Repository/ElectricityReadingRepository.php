@@ -911,8 +911,8 @@ final class ElectricityReadingRepository implements LegacyDailyRepositoryInterfa
                 // Les replis sur max/min sont inatteignables — $ends non vide
                 // implique $segments non vide — mais ils gardent le type de sortie
                 // strict, et redonnent l'intersection nue si la règle s'abstient.
-                $result['data_from'] = FleetCoverageWindow::coveredFrom($segments, $to) ?? max($starts);
-                $result['data_to']   = FleetCoverageWindow::coveredUntil($segments, $from) ?? min($ends);
+                $result['data_from'] = FleetCoverageWindow::coveredFrom($segments, $from, $to) ?? max($starts);
+                $result['data_to']   = FleetCoverageWindow::coveredUntil($segments, $from, $to) ?? min($ends);
             }
         }
 

@@ -32,6 +32,7 @@ final class FleetCoverageWindowTest extends TestCase
     private const JUNE_START  = '2026-06-01 00:00:00';
     private const JUNE_END    = '2026-07-01 00:00:00';
     private const JULY_START  = '2026-07-01 00:00:00';
+    private const JULY_END    = '2026-08-01 00:00:00';
 
     /**
      * @return array{start: string, end: string, opened_at: string|null, closed_at: string|null}
@@ -59,8 +60,8 @@ final class FleetCoverageWindowTest extends TestCase
             self::meter('2026-06-10 00:00:00', '2026-06-20 00:00:00'),
         ];
 
-        self::assertSame('2026-06-20 00:00:00', FleetCoverageWindow::coveredUntil($fleet, self::JUNE_START));
-        self::assertSame('2026-06-10 00:00:00', FleetCoverageWindow::coveredFrom($fleet, self::JUNE_END));
+        self::assertSame('2026-06-20 00:00:00', FleetCoverageWindow::coveredUntil($fleet, self::JUNE_START, self::JUNE_END));
+        self::assertSame('2026-06-10 00:00:00', FleetCoverageWindow::coveredFrom($fleet, self::JUNE_START, self::JUNE_END));
     }
 
     /** À un seul compteur sans borne, la couverture est sa propre fenêtre. */
@@ -68,15 +69,15 @@ final class FleetCoverageWindowTest extends TestCase
     {
         $fleet = [self::meter('2026-06-02 00:00:00', '2026-06-30 00:00:00')];
 
-        self::assertSame('2026-06-30 00:00:00', FleetCoverageWindow::coveredUntil($fleet, self::JUNE_START));
-        self::assertSame('2026-06-02 00:00:00', FleetCoverageWindow::coveredFrom($fleet, self::JUNE_END));
+        self::assertSame('2026-06-30 00:00:00', FleetCoverageWindow::coveredUntil($fleet, self::JUNE_START, self::JUNE_END));
+        self::assertSame('2026-06-02 00:00:00', FleetCoverageWindow::coveredFrom($fleet, self::JUNE_START, self::JUNE_END));
     }
 
     /** Aucun compteur ne porte de donnée : il n'y a pas de fenêtre à décrire. */
     public function testAnEmptyFleetHasNoCoverage(): void
     {
-        self::assertNull(FleetCoverageWindow::coveredUntil([], self::JUNE_START));
-        self::assertNull(FleetCoverageWindow::coveredFrom([], self::JUNE_END));
+        self::assertNull(FleetCoverageWindow::coveredUntil([], self::JUNE_START, self::JUNE_END));
+        self::assertNull(FleetCoverageWindow::coveredFrom([], self::JUNE_START, self::JUNE_END));
     }
 
     // ── Côté fin : la fermeture ne doit plus rien figer (#76) ────────────────
@@ -93,7 +94,7 @@ final class FleetCoverageWindowTest extends TestCase
             self::meter('2026-07-01 00:00:00', '2026-07-31 00:00:00', '2026-06-15 00:00:00'),
         ];
 
-        self::assertSame('2026-07-31 00:00:00', FleetCoverageWindow::coveredUntil($fleet, self::JULY_START));
+        self::assertSame('2026-07-31 00:00:00', FleetCoverageWindow::coveredUntil($fleet, self::JULY_START, self::JULY_END));
     }
 
     /**
@@ -109,7 +110,7 @@ final class FleetCoverageWindowTest extends TestCase
             self::meter('2026-06-15 00:00:00', '2026-06-30 00:00:00', '2026-06-15 00:00:00'),
         ];
 
-        self::assertSame('2026-06-30 00:00:00', FleetCoverageWindow::coveredUntil($fleet, self::JUNE_START));
+        self::assertSame('2026-06-30 00:00:00', FleetCoverageWindow::coveredUntil($fleet, self::JUNE_START, self::JUNE_END));
     }
 
     /**
@@ -124,7 +125,7 @@ final class FleetCoverageWindowTest extends TestCase
             self::meter('2026-06-15 00:00:00', '2026-06-30 00:00:00', '2026-06-15 00:00:00'),
         ];
 
-        self::assertSame('2026-06-01 00:00:00', FleetCoverageWindow::coveredUntil($fleet, self::JUNE_START));
+        self::assertSame('2026-06-01 00:00:00', FleetCoverageWindow::coveredUntil($fleet, self::JUNE_START, self::JUNE_END));
     }
 
     /**
@@ -136,7 +137,7 @@ final class FleetCoverageWindowTest extends TestCase
     {
         $fleet = [self::meter('2026-06-01 00:00:00', '2026-06-14 00:00:00', null, '2026-06-15 00:00:00')];
 
-        self::assertSame('2026-06-14 00:00:00', FleetCoverageWindow::coveredUntil($fleet, self::JUNE_START));
+        self::assertSame('2026-06-14 00:00:00', FleetCoverageWindow::coveredUntil($fleet, self::JUNE_START, self::JUNE_END));
     }
 
     /** Deux remplacements dans le même mois : le balayage traverse les époques. */
@@ -148,7 +149,7 @@ final class FleetCoverageWindowTest extends TestCase
             self::meter('2026-06-20 00:00:00', '2026-06-30 00:00:00', '2026-06-20 00:00:00'),
         ];
 
-        self::assertSame('2026-06-30 00:00:00', FleetCoverageWindow::coveredUntil($fleet, self::JUNE_START));
+        self::assertSame('2026-06-30 00:00:00', FleetCoverageWindow::coveredUntil($fleet, self::JUNE_START, self::JUNE_END));
     }
 
     /**
@@ -164,7 +165,7 @@ final class FleetCoverageWindowTest extends TestCase
             self::meter('2026-06-20 00:00:00', '2026-06-22 00:00:00', '2026-06-20 00:00:00'),
         ];
 
-        self::assertSame('2026-06-22 00:00:00', FleetCoverageWindow::coveredUntil($fleet, self::JUNE_START));
+        self::assertSame('2026-06-22 00:00:00', FleetCoverageWindow::coveredUntil($fleet, self::JUNE_START, self::JUNE_END));
     }
 
     // ── Côté début : la pose ne doit plus rien figer non plus (#81) ──────────
@@ -183,7 +184,7 @@ final class FleetCoverageWindowTest extends TestCase
             self::meter('2026-06-15 00:00:00', '2026-06-15 00:00:00', '2026-06-15 00:00:00'),
         ];
 
-        self::assertSame('2026-03-01 00:00:00', FleetCoverageWindow::coveredFrom($fleet, self::MARCH_END));
+        self::assertSame('2026-03-01 00:00:00', FleetCoverageWindow::coveredFrom($fleet, self::MARCH_START, self::MARCH_END));
     }
 
     /**
@@ -198,7 +199,7 @@ final class FleetCoverageWindowTest extends TestCase
             self::meter('2026-06-15 00:00:00', '2026-06-30 00:00:00', '2026-06-15 00:00:00'),
         ];
 
-        self::assertSame('2026-06-01 00:00:00', FleetCoverageWindow::coveredFrom($fleet, self::JUNE_END));
+        self::assertSame('2026-06-01 00:00:00', FleetCoverageWindow::coveredFrom($fleet, self::JUNE_START, self::JUNE_END));
     }
 
     /**
@@ -213,7 +214,7 @@ final class FleetCoverageWindowTest extends TestCase
             self::meter('2026-06-25 00:00:00', '2026-06-30 00:00:00', '2026-06-15 00:00:00'),
         ];
 
-        self::assertSame('2026-06-25 00:00:00', FleetCoverageWindow::coveredFrom($fleet, self::JUNE_END));
+        self::assertSame('2026-06-25 00:00:00', FleetCoverageWindow::coveredFrom($fleet, self::JUNE_START, self::JUNE_END));
     }
 
     /**
@@ -229,7 +230,7 @@ final class FleetCoverageWindowTest extends TestCase
             self::meter('2026-06-15 00:00:00', '2026-06-15 00:00:00'),
         ];
 
-        self::assertSame('2026-06-15 00:00:00', FleetCoverageWindow::coveredFrom($fleet, self::MARCH_END));
+        self::assertSame('2026-06-15 00:00:00', FleetCoverageWindow::coveredFrom($fleet, self::MARCH_START, self::MARCH_END));
     }
 
     /**
@@ -244,7 +245,7 @@ final class FleetCoverageWindowTest extends TestCase
             self::meter('2026-06-25 00:00:00', '2026-06-30 00:00:00', '2026-06-25 00:00:00'),
         ];
 
-        self::assertSame('2026-06-25 00:00:00', FleetCoverageWindow::coveredFrom($fleet, self::MARCH_END));
+        self::assertSame('2026-06-25 00:00:00', FleetCoverageWindow::coveredFrom($fleet, self::MARCH_START, self::MARCH_END));
     }
 
     /** Parc entièrement fermé avant la période : le jumeau, côté fin. */
@@ -255,7 +256,7 @@ final class FleetCoverageWindowTest extends TestCase
             self::meter('2026-05-01 00:00:00', '2026-05-30 00:00:00', null, '2026-05-31 00:00:00'),
         ];
 
-        self::assertSame('2026-05-20 00:00:00', FleetCoverageWindow::coveredUntil($fleet, self::JUNE_START));
+        self::assertSame('2026-05-20 00:00:00', FleetCoverageWindow::coveredUntil($fleet, self::JUNE_START, self::JUNE_END));
     }
 
     /**
@@ -269,7 +270,7 @@ final class FleetCoverageWindowTest extends TestCase
             self::meter('2026-04-01 00:00:00', '2026-04-30 00:00:00', self::MARCH_END),
         ];
 
-        self::assertSame('2026-03-01 00:00:00', FleetCoverageWindow::coveredFrom($fleet, self::MARCH_END));
+        self::assertSame('2026-03-01 00:00:00', FleetCoverageWindow::coveredFrom($fleet, self::MARCH_START, self::MARCH_END));
     }
 
     /**
@@ -284,7 +285,7 @@ final class FleetCoverageWindowTest extends TestCase
             self::meter('2026-06-01 00:00:00', '2026-06-30 00:00:00'),
         ];
 
-        self::assertSame('2026-06-30 00:00:00', FleetCoverageWindow::coveredUntil($fleet, self::JUNE_START));
+        self::assertSame('2026-06-30 00:00:00', FleetCoverageWindow::coveredUntil($fleet, self::JUNE_START, self::JUNE_END));
     }
 
     /**
@@ -299,7 +300,43 @@ final class FleetCoverageWindowTest extends TestCase
             self::meter('2026-06-15 00:00:00', '2026-06-15 00:00:00', '2026-06-15 00:00:00'),
         ];
 
-        self::assertSame(self::MARCH_START, FleetCoverageWindow::coveredFrom($fleet, self::MARCH_END));
-        self::assertSame(self::MARCH_END, FleetCoverageWindow::coveredUntil($fleet, self::MARCH_START));
+        self::assertSame(self::MARCH_START, FleetCoverageWindow::coveredFrom($fleet, self::MARCH_START, self::MARCH_END));
+        self::assertSame(self::MARCH_END, FleetCoverageWindow::coveredUntil($fleet, self::MARCH_START, self::MARCH_END));
+    }
+
+    /**
+     * Même extension du parc, mais le compteur déclaré à l'avance porte des relevés
+     * ANTIDATÉS — l'historique du compteur précédent recopié dessus, que rien
+     * n'interdit (cf. api-contract.md). Sa fenêtre de relevés s'arrête alors AVANT
+     * la période, et ne doit pas plus en borner la fin que le début : il n'était pas
+     * en service, dans un sens de balayage comme dans l'autre.
+     */
+    public function testAMeterCommissionedAfterThePeriodDoesNotLimitItsEndEither(): void
+    {
+        $fleet = [
+            self::meter(self::MARCH_START, self::MARCH_END),
+            // Carnet recopié en janvier, pose prévue le 15 juin : aucun relevé entre
+            // les deux, donc des bornes clampées sur le relevé de janvier.
+            self::meter('2026-01-10 00:00:00', '2026-01-10 00:00:00', '2026-06-15 00:00:00'),
+        ];
+
+        self::assertSame(self::MARCH_END, FleetCoverageWindow::coveredUntil($fleet, self::MARCH_START, self::MARCH_END));
+        self::assertSame(self::MARCH_START, FleetCoverageWindow::coveredFrom($fleet, self::MARCH_START, self::MARCH_END));
+    }
+
+    /**
+     * Le jumeau, côté fermeture : un compteur fermé avant la période ne borne pas
+     * son DÉBUT non plus. Cas plus théorique — la fermeture interdit les écritures
+     * postérieures — mais le miroir doit rester intact des deux côtés.
+     */
+    public function testAMeterClosedBeforeThePeriodDoesNotLimitItsStartEither(): void
+    {
+        $fleet = [
+            self::meter(self::MARCH_START, self::MARCH_END),
+            self::meter('2026-03-20 00:00:00', '2026-03-25 00:00:00', null, '2026-03-01 00:00:00'),
+        ];
+
+        self::assertSame(self::MARCH_START, FleetCoverageWindow::coveredFrom($fleet, self::MARCH_START, self::MARCH_END));
+        self::assertSame(self::MARCH_END, FleetCoverageWindow::coveredUntil($fleet, self::MARCH_START, self::MARCH_END));
     }
 }

@@ -169,20 +169,7 @@ final class Meter
      */
     public static function closureInstantFor(?string $closedOn, string $timezone): ?DateTimeImmutable
     {
-        if ($closedOn === null || $closedOn === '') {
-            return null;
-        }
-
-        // Fuseau illisible (profil corrompu, identifiant IANA retiré) : on retombe
-        // sur UTC plutôt que de laisser une exception casser une écriture. Le
-        // décalage est d'au plus quelques heures, une écriture perdue serait pire.
-        try {
-            $zone = new DateTimeZone($timezone);
-        } catch (Exception) {
-            $zone = Dates::utc();
-        }
-
-        return (new DateTimeImmutable($closedOn . ' 00:00:00', $zone))->setTimezone(Dates::utc());
+        return self::localMidnightFor($closedOn, $timezone);
     }
 
     /**
@@ -198,19 +185,34 @@ final class Meter
      */
     public static function serviceInstantFor(?string $openedOn, string $timezone): ?DateTimeImmutable
     {
-        if ($openedOn === null || $openedOn === '') {
+        return self::localMidnightFor($openedOn, $timezone);
+    }
+
+    /**
+     * Minuit local d'une DATE de cycle de vie, rendu en UTC ; `null` si la date est
+     * absente.
+     *
+     * Les deux bornes se situent de la même façon — seul leur SENS diffère, et il
+     * appartient à l'appelant, pas au calcul. Une seule implémentation donc : deux
+     * copies littérales auraient divergé à la première correction de fuseau.
+     */
+    private static function localMidnightFor(?string $day, string $timezone): ?DateTimeImmutable
+    {
+        if ($day === null || $day === '') {
             return null;
         }
 
-        // Même repli qu'en fermeture : un fuseau illisible ne doit pas faire
-        // échouer un rapport, l'écart se compte en heures.
+        // Fuseau illisible (profil corrompu, identifiant IANA retiré) : on retombe
+        // sur UTC plutôt que de laisser une exception casser une écriture ou un
+        // rapport. Le décalage est d'au plus quelques heures, une écriture perdue
+        // serait pire.
         try {
             $zone = new DateTimeZone($timezone);
         } catch (Exception) {
             $zone = Dates::utc();
         }
 
-        return (new DateTimeImmutable($openedOn . ' 00:00:00', $zone))->setTimezone(Dates::utc());
+        return (new DateTimeImmutable($day . ' 00:00:00', $zone))->setTimezone(Dates::utc());
     }
 
     /**
