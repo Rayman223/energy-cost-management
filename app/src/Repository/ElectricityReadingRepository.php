@@ -854,10 +854,22 @@ final class ElectricityReadingRepository implements LegacyDailyRepositoryInterfa
                 $segments[] = ['end' => $end['timestamp'], 'closed_at' => $this->closureInstantOf($rid)];
             }
 
-            // Aucun compteur ne porte de donnée sur ce registre : le rapport n'est
-            // pas calculable — exactement l'abandon d'avant #55, qui à un compteur
-            // portait sur ce seul registre.
-            if ($ends === []) {
+            // Un registre vide vaut une contribution NULLE, pas un motif d'abandon
+            // (#66) : ensureRegisters() crée les CINQ registres dès le premier
+            // relevé, alors que la saisie n'écrit que les champs remplis. Un foyer
+            // sans injection porte donc export_t1/export_t2 créés mais vides, et
+            // perdait tout rapport chiffré — cards, coût, conso annuelle, acomptes.
+            // Même asymétrie corrigée qu'un registre non déclaré ($ids === []),
+            // qui rendait déjà 0.0 quelques lignes plus haut.
+            //
+            // Seul import_t1, registre de RÉFÉRENCE, garde le pouvoir d'abandon :
+            // c'est lui qui renseigne 'to', 'data_from' et 'data_to' ci-dessous, et
+            // dont le solaire tire sa borne de fin. Un résultat non vide ne doit
+            // jamais manquer ces clés. Garde défensive plus qu'active : le cas
+            // « aucun relevé d'import_t1 dans la fenêtre » est déjà écarté en amont
+            // par hasReadingInAnyRange(), et interpolatedValuesAt() clampe sur le
+            // relevé le plus proche.
+            if ($ends === [] && $registerKey === 'import_t1') {
                 return [];
             }
 
