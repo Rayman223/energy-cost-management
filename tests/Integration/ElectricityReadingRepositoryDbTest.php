@@ -100,6 +100,73 @@ final class ElectricityReadingRepositoryDbTest extends DatabaseTestCase
     }
 
     /**
+     * Régression #66 : un foyer qui ne relève que ses index d'import — ni injection,
+     * ni panneaux — doit obtenir un rapport, avec des contributions NULLES sur les
+     * registres qu'il n'alimente pas.
+     *
+     * La condition du bug est que les registres d'export soient CRÉÉS mais vides :
+     * ensureRegisters() les crée tous les cinq au premier relevé, alors que la saisie
+     * n'écrit que les champs remplis. Un registre absent, lui, passait déjà par une
+     * autre branche ($ids === []) et rendait 0.0 — d'où la pré-condition explicite
+     * plus bas, sans laquelle ce test ne prouverait rien.
+     */
+    public function testImportOnlyHouseholdStillGetsAReport(): void
+    {
+        // Utilisateur isolé : le seed de la classe alimente les quatre registres.
+        $otherId = (new UserRepository($this->pdo()))->create('https://iss.test', 'import-only', 'test', 'Import Only')->id;
+        $utc     = new \DateTimeZone('UTC');
+
+        $repo = new ElectricityReadingRepository($this->pdo(), $otherId);
+        $repo->insertIndexes(new \DateTimeImmutable('2026-06-01 00:00:00', $utc), ['import_t1' => 100.0, 'import_t2' => 50.0]);
+        $repo->insertIndexes(new \DateTimeImmutable('2026-07-01 00:00:00', $utc), ['import_t1' => 140.0, 'import_t2' => 60.0]);
+
+        // Pré-condition : les quatre registres existent, seuls les deux d'import
+        // portent des relevés.
+        $registers = (new MeterTopology($this->pdo()))->ensureRegisters(
+            (new MeterTopology($this->pdo()))->ensureElectricityMeter($otherId)
+        );
+        foreach (['import_t1', 'import_t2', 'export_t1', 'export_t2'] as $key) {
+            self::assertArrayHasKey($key, $registers, "registre {$key} non créé — le test ne couvrirait pas le bug");
+        }
+        $count = $this->pdo()->prepare('SELECT COUNT(*) FROM meter_readings WHERE register_id IN (?, ?)');
+        $count->execute([$registers['export_t1'], $registers['export_t2']]);
+        self::assertSame(0, (int) $count->fetchColumn(), 'pré-condition : registres d\'export créés mais vides');
+
+        $r = $repo->getMonthlyDeltasForMonth(2026, 6);
+
+        self::assertNotSame([], $r, 'un foyer sans injection doit obtenir un rapport (#66)');
+        self::assertEqualsWithDelta(40.0, $r['prelev_jour'], 0.001);  // 140 - 100
+        self::assertEqualsWithDelta(10.0, $r['prelev_nuit'], 0.001);  //  60 -  50
+
+        // Registres vides : contribution nulle, et non abandon du rapport.
+        self::assertSame(0.0, $r['injec_jour']);
+        self::assertSame(0.0, $r['injec_nuit']);
+        self::assertNull($r['solar'], 'aucun registre de production alimenté → pas de mesure, pas un zéro');
+
+        // Les clés portées par le registre de référence restent renseignées : les
+        // appelants (cards, couverture) les lisent sans garde supplémentaire.
+        self::assertSame('2026-06-01 00:00:00', $r['from']);
+        self::assertSame('2026-07-01 00:00:00', $r['to']);
+        self::assertSame('2026-06-01 00:00:00', $r['data_from']);
+        self::assertSame('2026-07-01 00:00:00', $r['data_to']);
+    }
+
+    /**
+     * Contrepartie du test précédent (#66) : tolérer un registre vide ne doit pas
+     * faire perdre de vue les valeurs d'export quand elles EXISTENT — elles entrent
+     * dans le coût. Le seed de la classe alimente les quatre registres.
+     */
+    public function testFullHouseholdStillCountsInjection(): void
+    {
+        $r = $this->repo()->getMonthlyDeltasForMonth(2026, 5);
+
+        self::assertEqualsWithDelta(100.0, $r['prelev_jour'], 0.001);  // 201 - 101
+        self::assertEqualsWithDelta(100.0, $r['prelev_nuit'], 0.001);
+        self::assertEqualsWithDelta(100.0, $r['injec_jour'], 0.001);
+        self::assertEqualsWithDelta(100.0, $r['injec_nuit'], 0.001);
+    }
+
+    /**
      * Découpe aux bornes de sous-périodes tarifaires (#2) : chaque intervalle porte
      * ce qui y a réellement été consommé, et leur somme reste celle de la fenêtre
      * entière — c'est cette égalité qui autorise le service à s'en servir comme

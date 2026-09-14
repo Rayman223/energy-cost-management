@@ -98,10 +98,11 @@ final class FleetAggregationDbTest extends DatabaseTestCase
     /**
      * Les QUATRE registres import/export d'une trame, alimentés.
      *
-     * Les quatre, et pas seulement l'import : un rapport est abandonné dès qu'un
-     * des quatre registres n'a aucune donnée. C'est le comportement d'avant #55,
-     * délibérément préservé — il a été vérifié identique avant et après cette
-     * phase, sur un foyer ne relevant que ses index d'import.
+     * Les quatre, pour que le parc de référence porte de l'injection comme un
+     * foyer équipé — pas par nécessité technique : depuis #66, un registre sans
+     * aucune valeur contribue 0 au lieu d'annuler le rapport. Les cas de foyer
+     * partiellement relevé passent donc un tableau littéral plutôt que ce helper
+     * (cf. testRegisterEmptyAcrossTheWholeFleetContributesZero).
      *
      * @return array<string, float>
      */
@@ -353,6 +354,40 @@ final class FleetAggregationDbTest extends DatabaseTestCase
         self::assertNotSame([], $deltas, 'Un compteur muet a annulé tout le rapport.');
         self::assertSame(40.0, $deltas['prelev_jour']);
         self::assertSame(5.0, $deltas['prelev_nuit']);
+    }
+
+    /**
+     * Régression #66, cran au-dessus du test précédent : là, un compteur du parc
+     * était muet ; ici, c'est un REGISTRE qui l'est sur le parc ENTIER — le cas du
+     * foyer sans injection, dont aucun compteur ne relève export_t1/export_t2.
+     *
+     * Les registres sont bien créés (ensureRegisters les crée tous les cinq), donc
+     * le calcul ne peut pas se rabattre sur la branche « registre non déclaré » :
+     * c'est bien la tolérance au registre VIDE qui est éprouvée.
+     */
+    public function testRegisterEmptyAcrossTheWholeFleetContributesZero(): void
+    {
+        // Deux compteurs, aucun ne relève d'injection ni de production.
+        $first = $this->newMeter($this->fleetUserId);
+        $this->write($first, '2026-06-01 00:00:00', ['import_t1' => 100.0, 'import_t2' => 20.0]);
+        $this->write($first, '2026-07-01 00:00:00', ['import_t1' => 140.0, 'import_t2' => 25.0]);
+
+        $second = $this->newMeter($this->fleetUserId);
+        $this->write($second, '2026-06-01 00:00:00', ['import_t1' => 50.0, 'import_t2' => 10.0]);
+        $this->write($second, '2026-07-01 00:00:00', ['import_t1' => 70.0, 'import_t2' => 12.0]);
+
+        $deltas = $this->elec($this->fleetUserId)->getMonthlyDeltasForMonth(2026, 6);
+
+        self::assertNotSame([], $deltas, 'Un registre vide sur tout le parc a annulé le rapport (#66).');
+        self::assertSame(60.0, $deltas['prelev_jour']);   // (140-100) + (70-50)
+        self::assertSame(7.0, $deltas['prelev_nuit']);    // (25-20) + (12-10)
+        self::assertSame(0.0, $deltas['injec_jour']);
+        self::assertSame(0.0, $deltas['injec_nuit']);
+        self::assertNull($deltas['solar']);
+
+        // La couverture reste celle du registre de référence, intacte.
+        self::assertSame('2026-06-01 00:00:00', $deltas['data_from']);
+        self::assertSame('2026-07-01 00:00:00', $deltas['data_to']);
     }
 
     /**
