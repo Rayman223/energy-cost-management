@@ -23,7 +23,7 @@ use PDO;
  */
 final class MeterRepository
 {
-    private const COLUMNS = 'id, energy_type, label, closed_on';
+    private const COLUMNS = 'id, energy_type, label, opened_on, closed_on';
 
     /**
      * @param int $maxPerEnergy Plafond anti-abus, cf. {@see Limits::metersPerEnergy()}.
@@ -178,13 +178,14 @@ final class MeterRepository
         }
 
         $stmt = $this->pdo->prepare(
-            'INSERT INTO meters (user_id, energy_type, label, closed_on)
-             VALUES (:uid, :etype, :label, :closed)'
+            'INSERT INTO meters (user_id, energy_type, label, opened_on, closed_on)
+             VALUES (:uid, :etype, :label, :opened, :closed)'
         );
         $stmt->execute([
             'uid'    => $this->userId,
             'etype'  => $meter->energyType,
             'label'  => $meter->label,
+            'opened' => $meter->openedOn?->format('Y-m-d'),
             'closed' => $meter->closedOn?->format('Y-m-d'),
         ]);
 
@@ -202,13 +203,14 @@ final class MeterRepository
     public function update(int $id, Meter $meter): void
     {
         $stmt = $this->pdo->prepare(
-            'UPDATE meters SET label = :label, closed_on = :closed
+            'UPDATE meters SET label = :label, opened_on = :opened, closed_on = :closed
               WHERE id = :id AND user_id = :uid'
         );
         $stmt->execute([
             'id'     => $id,
             'uid'    => $this->userId,
             'label'  => $meter->label,
+            'opened' => $meter->openedOn?->format('Y-m-d'),
             'closed' => $meter->closedOn?->format('Y-m-d'),
         ]);
     }
@@ -242,6 +244,7 @@ final class MeterRepository
                 'energy_type' => (string) $row['energy_type'],
                 'label'       => (string) $row['label'],
                 'closed_on'   => $row['closed_on'] !== null ? (string) $row['closed_on'] : null,
+                'opened_on'   => $row['opened_on'] !== null ? (string) $row['opened_on'] : null,
             ]);
         }
 

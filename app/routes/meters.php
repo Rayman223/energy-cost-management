@@ -80,6 +80,29 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $closedOn = $parsed;
             }
 
+            // Mise en service (#81) : facultative elle aussi, et de même
+            // réversible. Elle ne garde aucune écriture — un index antidaté
+            // d'avant la pose reste accepté — mais elle dit aux RAPPORTS que le
+            // compteur n'avait rien à couvrir avant, ce qu'ils ne pouvaient
+            // jusqu'ici que deviner à partir du premier relevé.
+            $openedRaw = trim((string) ($_POST['opened_on'] ?? ''));
+            $openedOn  = null;
+            if ($openedRaw !== '') {
+                $parsed = DateTimeImmutable::createFromFormat('!Y-m-d', $openedRaw, Dates::utc());
+                if ($parsed === false || $parsed->format('Y-m-d') !== $openedRaw) {
+                    throw new \InvalidArgumentException($view->t('meters.invalid_opened_on'));
+                }
+                $openedOn = $parsed;
+            }
+
+            // Plage vide refusée à la saisie (#1) : la fermeture étant EXCLUE et la
+            // mise en service INCLUSE, `closed_on <= opened_on` décrit un compteur
+            // qui n'a jamais été en service un seul jour. Le refuser ici plutôt
+            // qu'en base laisse un message traduit à l'écran.
+            if ($openedOn !== null && $closedOn !== null && $closedOn <= $openedOn) {
+                throw new \InvalidArgumentException($view->t('meters.empty_service_range'));
+            }
+
             $editId = filter_var($_POST['meter_id'] ?? null, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
             $editId = $editId === false ? null : $editId;
 
@@ -100,6 +123,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     energyType: $existing->energyType,
                     label:      $label,
                     closedOn:   $closedOn,
+                    openedOn:   $openedOn,
                 ));
             } else {
                 $energyType = (string) ($_POST['energy_type'] ?? '');
@@ -107,7 +131,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     throw new \InvalidArgumentException($view->t('meters.invalid_energy'));
                 }
 
-                $meterRepo->insert(new Meter(id: 0, energyType: $energyType, label: $label, closedOn: $closedOn));
+                $meterRepo->insert(new Meter(
+                    id:         0,
+                    energyType: $energyType,
+                    label:      $label,
+                    closedOn:   $closedOn,
+                    openedOn:   $openedOn,
+                ));
             }
 
             $success = $view->t('meters.saved');

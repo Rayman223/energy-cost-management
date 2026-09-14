@@ -956,6 +956,10 @@ return [
     'import.meter_target'                          => 'Zielzähler',
     'import.meter_default'                         => 'Standardzähler',
     // Schließung eines Zählers (#55).
+    'meters.opened_field'                          => 'Inbetriebnahmedatum',
+    'meters.opened_hint'                           => 'Erster Tag, an dem dieser Zähler in Betrieb war, dieser Tag eingeschlossen. Es blockiert keine Eingabe: ein rückdatierter Stand wird weiterhin angenommen. Es verhindert, dass Auswertungen Zeiträume vor dem Einbau als unvollständig melden, weil sie nicht wissen konnten, dass es den Zähler noch nicht gab. Leer lassen, wenn der Zähler schon immer da war.',
+    'meters.invalid_opened_on'                     => 'Ungültiges Inbetriebnahmedatum.',
+    'meters.empty_service_range'                   => 'Das Schließungsdatum muss nach der Inbetriebnahme liegen: dieser Zähler wäre keinen einzigen Tag in Betrieb gewesen.',
     'meters.closed_field'                          => 'Schließungsdatum',
     'meters.closed_hint'                           => 'Ab diesem Datum nimmt der Zähler keinen Stand mehr an. Seine bisherigen Stände zählen weiterhin in allen Auswertungen: die Ausgabe hat ja stattgefunden. Für einen Zähler in Betrieb leer lassen.',
     'meters.invalid_closed_on'                     => 'Ungültiges Schließungsdatum.',
@@ -993,6 +997,7 @@ return [
     'meters.col_readings'                          => 'Zählerstände',
     'meters.unnamed_hint'                          => 'Ohne Namen — vergeben Sie einen, um ihn von den anderen zu unterscheiden.',
     'meters.closed_on'                             => 'geschlossen am {date}',
+    'meters.opened_on'                             => 'in Betrieb ab {date}',
     'meters.energy_field'                          => 'Energie',
     'meters.energy_frozen'                         => 'Die Energieart lässt sich nicht mehr ändern: Sie bestimmt, woher die Stände des Zählers kommen.',
     'meters.label_field'                           => 'Name des Zählers',

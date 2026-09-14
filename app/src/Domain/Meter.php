@@ -37,6 +37,18 @@ use InvalidArgumentException;
  * lieu, la fermeture ne la rétracte pas. Les lectures ne sont donc jamais
  * filtrées sur cette date.
  *
+ * `openedOn` est son pendant côté début (#81), et se lit à l'inverse : borne
+ * INCLUSE, premier jour EN service, comme `tariff_grids.valid_from` — la
+ * convention #1 ne porte que sur les dates de FIN. Elle ne garde AUCUNE écriture :
+ * un index antidaté d'avant la pose reste accepté (carnet recopié, historique du
+ * fournisseur). Elle sert aux RAPPORTS, qui sans elle ne pouvaient pas distinguer
+ * « compteur pas encore posé » de « compteur pas encore relevé » — la seconde
+ * lecture rend le rapport incomplet, la première non.
+ *
+ * `null` des deux côtés signifie « depuis toujours » et « pour toujours » : c'est
+ * l'état de tout compteur déclaré avant que ces dates n'existent, et il conserve
+ * le comportement d'origine.
+ *
  * Les colonnes `country` et `timezone` de la table ne sont pas reprises : plus
  * aucun code ne les lit depuis le passage au modèle à registres. Les faire
  * remonter ici laisserait croire qu'elles pilotent quelque chose.
@@ -62,6 +74,7 @@ final class Meter
         public readonly string $energyType,
         public readonly string $label = '',
         public readonly ?DateTimeImmutable $closedOn = null,
+        public readonly ?DateTimeImmutable $openedOn = null,
     ) {
         // Garde-fou de dernier recours : une énergie inconnue ne vient jamais
         // d'une saisie (la route valide avant, avec un message traduit) mais d'un
@@ -112,6 +125,32 @@ final class Meter
     }
 
     /**
+     * Compteur pas ENCORE en service à cette date ? Borne INCLUSE : le jour de
+     * mise en service est le premier jour couvert (#81), à l'inverse de
+     * {@see isClosedOn()}.
+     *
+     * Sert à l'affichage — un compteur déclaré à l'avance n'est pas un compteur
+     * fermé, et les deux états ne se lisent pas pareil. Aucune écriture n'est
+     * gardée par cette date : un index antidaté d'avant la pose reste accepté.
+     */
+    public function isNotInServiceYetOn(DateTimeImmutable $date): bool
+    {
+        return $this->openedOn !== null
+            && $this->openedOn->setTime(0, 0, 0) > $date->setTime(0, 0, 0);
+    }
+
+    /**
+     * Compteur en service à cette date — ni fermé, ni pas encore posé.
+     *
+     * Un compteur dont les deux bornes sont `null` l'est toujours : c'est l'état
+     * de tout le parc déclaré avant que ces dates n'existent.
+     */
+    public function isInServiceOn(DateTimeImmutable $date): bool
+    {
+        return !$this->isClosedOn($date) && !$this->isNotInServiceYetOn($date);
+    }
+
+    /**
      * Premier instant où le compteur n'accepte plus d'écriture, en UTC ; `null`
      * s'il est ouvert.
      *
@@ -130,40 +169,72 @@ final class Meter
      */
     public static function closureInstantFor(?string $closedOn, string $timezone): ?DateTimeImmutable
     {
-        if ($closedOn === null || $closedOn === '') {
+        return self::localMidnightFor($closedOn, $timezone);
+    }
+
+    /**
+     * Premier instant COUVERT par le compteur, en UTC ; `null` s'il est en
+     * service depuis toujours.
+     *
+     * Pendant de {@see closureInstantFor()}, et même raisonnement de fuseau : la
+     * mise en service est une DATE, elle se lit dans le fuseau de l'utilisateur.
+     * Borne INCLUSE (#81) : l'instant rendu est le premier couvert, pas le
+     * dernier exclu.
+     *
+     * @param string|null $openedOn Date 'Y-m-d' de `meters.opened_on`.
+     */
+    public static function serviceInstantFor(?string $openedOn, string $timezone): ?DateTimeImmutable
+    {
+        return self::localMidnightFor($openedOn, $timezone);
+    }
+
+    /**
+     * Minuit local d'une DATE de cycle de vie, rendu en UTC ; `null` si la date est
+     * absente.
+     *
+     * Les deux bornes se situent de la même façon — seul leur SENS diffère, et il
+     * appartient à l'appelant, pas au calcul. Une seule implémentation donc : deux
+     * copies littérales auraient divergé à la première correction de fuseau.
+     */
+    private static function localMidnightFor(?string $day, string $timezone): ?DateTimeImmutable
+    {
+        if ($day === null || $day === '') {
             return null;
         }
 
         // Fuseau illisible (profil corrompu, identifiant IANA retiré) : on retombe
-        // sur UTC plutôt que de laisser une exception casser une écriture. Le
-        // décalage est d'au plus quelques heures, une écriture perdue serait pire.
+        // sur UTC plutôt que de laisser une exception casser une écriture ou un
+        // rapport. Le décalage est d'au plus quelques heures, une écriture perdue
+        // serait pire.
         try {
             $zone = new DateTimeZone($timezone);
         } catch (Exception) {
             $zone = Dates::utc();
         }
 
-        return (new DateTimeImmutable($closedOn . ' 00:00:00', $zone))->setTimezone(Dates::utc());
+        return (new DateTimeImmutable($day . ' 00:00:00', $zone))->setTimezone(Dates::utc());
     }
 
     /**
      * Reconstruit un compteur depuis une ligne de `meters`.
      *
-     * La DATE revient en 'Y-m-d' : parsée en UTC, fuseau de stockage du projet,
-     * pour que la comparaison avec les bornes de période porte sur le même
-     * référentiel (même choix que {@see Battery::fromRow()}).
+     * Les DATES reviennent en 'Y-m-d' : parsées en UTC, fuseau de stockage du
+     * projet, pour que la comparaison avec les bornes de période porte sur le
+     * même référentiel (même choix que {@see Battery::fromRow()}).
      *
-     * @param array{id: int|string, energy_type: string, label: string, closed_on: ?string} $row
+     * @param array{id: int|string, energy_type: string, label: string, closed_on: ?string, opened_on?: ?string} $row
      */
     public static function fromRow(array $row): self
     {
         $closedOn = $row['closed_on'];
+        $openedOn = $row['opened_on'] ?? null;
 
         return new self(
             id:         (int) $row['id'],
             energyType: $row['energy_type'],
             label:      $row['label'],
             closedOn:   $closedOn !== null ? new DateTimeImmutable($closedOn . ' 00:00:00', Dates::utc()) : null,
+            openedOn:   $openedOn !== null ? new DateTimeImmutable($openedOn . ' 00:00:00', Dates::utc()) : null,
         );
     }
 }

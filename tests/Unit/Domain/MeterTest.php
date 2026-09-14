@@ -124,6 +124,119 @@ final class MeterTest extends TestCase
         ]);
 
         self::assertNull($meter->closedOn);
+        self::assertNull($meter->openedOn);
         self::assertFalse($meter->isNamed());
+    }
+
+    // ── Mise en service (#81) ────────────────────────────────────────────────
+
+    /**
+     * La borne de début est INCLUSE, à l'inverse de la fermeture : le jour de mise
+     * en service est le premier jour COUVERT. La convention #1 ne porte que sur
+     * les dates de fin — `opened_on` se lit comme `tariff_grids.valid_from`.
+     */
+    public function testCommissioningBoundIsInclusive(): void
+    {
+        $meter = new Meter(id: 1, energyType: 'electricity', openedOn: $this->at('2026-06-15'));
+
+        self::assertTrue($meter->isNotInServiceYetOn($this->at('2026-06-14')));
+        self::assertFalse($meter->isNotInServiceYetOn($this->at('2026-06-15')));
+        self::assertFalse($meter->isNotInServiceYetOn($this->at('2026-06-16')));
+    }
+
+    /** Sans date de pose, le compteur est réputé là depuis toujours. */
+    public function testAMeterWithoutACommissioningDateIsAlwaysInService(): void
+    {
+        $meter = new Meter(id: 1, energyType: 'water');
+
+        self::assertFalse($meter->isNotInServiceYetOn($this->at('1999-01-01')));
+        self::assertTrue($meter->isInServiceOn($this->at('1999-01-01')));
+    }
+
+    /**
+     * Les deux bornes se combinent : en service entre la pose et la fermeture,
+     * hors service avant l'une comme à partir de l'autre. Ce sont trois états, pas
+     * deux — « pas encore posé » ne se lit pas comme « fermé ».
+     */
+    public function testServiceWindowCombinesBothBounds(): void
+    {
+        $meter = new Meter(
+            id:         1,
+            energyType: 'electricity',
+            closedOn:   $this->at('2026-07-01'),
+            openedOn:   $this->at('2026-06-15'),
+        );
+
+        self::assertFalse($meter->isInServiceOn($this->at('2026-06-14')));
+        self::assertTrue($meter->isInServiceOn($this->at('2026-06-15')));
+        self::assertTrue($meter->isInServiceOn($this->at('2026-06-30')));
+        self::assertFalse($meter->isInServiceOn($this->at('2026-07-01')));
+
+        // Et les deux états restent distincts, ce que l'affichage exploite.
+        self::assertTrue($meter->isNotInServiceYetOn($this->at('2026-06-14')));
+        self::assertFalse($meter->isClosedOn($this->at('2026-06-14')));
+    }
+
+    /**
+     * `serviceInstantFor()` situe la date dans le fuseau du foyer, comme son
+     * pendant de fermeture : un compteur posé le 15 en UTC−5 l'est à partir du 15
+     * à 05 h UTC, pas du 15 à minuit UTC.
+     */
+    public function testServiceInstantIsReadInTheUserTimezone(): void
+    {
+        $instant = Meter::serviceInstantFor('2026-06-15', 'America/New_York');
+
+        self::assertNotNull($instant);
+        self::assertSame('2026-06-15 04:00:00', $instant->format('Y-m-d H:i:s'));
+        self::assertSame('UTC', $instant->getTimezone()->getName());
+    }
+
+    /** Fuseau illisible : repli sur UTC plutôt qu'une exception (comme en fermeture). */
+    public function testServiceInstantFallsBackOnUtcForAnUnknownTimezone(): void
+    {
+        $instant = Meter::serviceInstantFor('2026-06-15', 'Mars/Olympus_Mons');
+
+        self::assertNotNull($instant);
+        self::assertSame('2026-06-15 00:00:00', $instant->format('Y-m-d H:i:s'));
+    }
+
+    public function testServiceInstantIsNullWithoutADate(): void
+    {
+        self::assertNull(Meter::serviceInstantFor(null, 'UTC'));
+        self::assertNull(Meter::serviceInstantFor('', 'UTC'));
+    }
+
+    /**
+     * `opened_on` absente de la ligne — une lecture qui ne sélectionne pas la
+     * colonne — ne casse pas l'hydratation : le compteur est alors « depuis
+     * toujours », ce qui est l'état de tout le parc antérieur à la migration.
+     */
+    public function testFromRowAcceptsARowWithoutTheCommissioningColumn(): void
+    {
+        $meter = Meter::fromRow([
+            'id'          => 3,
+            'energy_type' => 'electricity',
+            'label'       => 'Maison',
+            'closed_on'   => null,
+        ]);
+
+        self::assertNull($meter->openedOn);
+    }
+
+    public function testFromRowParsesBothLifecycleDatesInUtc(): void
+    {
+        $meter = Meter::fromRow([
+            'id'          => 9,
+            'energy_type' => 'electricity',
+            'label'       => 'Atelier',
+            'closed_on'   => '2026-07-01',
+            'opened_on'   => '2026-06-15',
+        ]);
+
+        self::assertNotNull($meter->openedOn);
+        self::assertSame('2026-06-15 00:00:00', $meter->openedOn->format('Y-m-d H:i:s'));
+        self::assertSame('UTC', $meter->openedOn->getTimezone()->getName());
+        self::assertNotNull($meter->closedOn);
+        self::assertSame('2026-07-01 00:00:00', $meter->closedOn->format('Y-m-d H:i:s'));
     }
 }

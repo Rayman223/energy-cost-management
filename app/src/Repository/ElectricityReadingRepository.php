@@ -83,16 +83,17 @@ final class ElectricityReadingRepository implements LegacyDailyRepositoryInterfa
     private ?array $fleetRegisterMap = null;
 
     /**
-     * Cache register_id => `closed_on` ('Y-m-d') des compteurs électriques FERMÉS
-     * (#76). Mémoïsé comme $fleetRegisterMap, et pour la même raison : la carte
-     * est résolue en une requête, quel que soit le nombre de rapports calculés.
+     * Cache register_id => bornes du cycle de vie du compteur porteur (#76, #81),
+     * pour les seuls compteurs qui en ont. Mémoïsé comme $fleetRegisterMap, et
+     * pour la même raison : la carte est résolue en une requête, quel que soit le
+     * nombre de rapports calculés.
      *
-     * @var array<int, string>|null
+     * @var array<int, array{opened_on: string|null, closed_on: string|null}>|null
      */
-    private ?array $fleetClosures = null;
+    private ?array $fleetLifetimes = null;
 
-    /** @var array<string, string> Cache 'Y-m-d' => instant de fermeture, au format de la base. */
-    private array $closureInstants = [];
+    /** @var array<string, string> Cache 'o:'|'c:' . 'Y-m-d' => instant, au format de la base. */
+    private array $lifecycleInstants = [];
 
     /**
      * Topologie (compteur + registres) créée/résolue une seule fois par requête.
@@ -851,7 +852,13 @@ final class ElectricityReadingRepository implements LegacyDailyRepositoryInterfa
                 $sum       += max(0.0, $end['value'] - $start['value']);
                 $starts[]   = $start['timestamp'];
                 $ends[]     = $end['timestamp'];
-                $segments[] = ['end' => $end['timestamp'], 'closed_at' => $this->closureInstantOf($rid)];
+                $lifetime   = $this->lifetimeOf($rid);
+                $segments[] = [
+                    'start'     => $start['timestamp'],
+                    'end'       => $end['timestamp'],
+                    'opened_at' => $lifetime['opened_at'],
+                    'closed_at' => $lifetime['closed_at'],
+                ];
             }
 
             // Aucun compteur ne porte de donnée sur ce registre : le rapport n'est
@@ -866,7 +873,17 @@ final class ElectricityReadingRepository implements LegacyDailyRepositoryInterfa
             if ($registerKey === 'import_t1') {
                 // Borne de fin réelle (période en cours → dernier relevé), prise la
                 // PLUS TARDIVE : `to` décrit jusqu'où le rapport porte.
-                $result['to'] = max($ends);
+                //
+                // PLAFONNÉE à la fin demandée (#81) : les bornes sont clampées sur
+                // le relevé le plus proche, si bien qu'un compteur sans aucun
+                // relevé dans la fenêtre y apporte la date de son premier index —
+                // parfois des mois APRÈS la période. `to` sortait alors de
+                // l'intervalle demandé, et comme les services en tirent le nombre
+                // de jours facturés, un rapport de mars proratisait ses coûts fixes
+                // sur 106 jours. À un compteur le cas ne pouvait pas se produire :
+                // `hasReadingInAnyRange()` abandonne le rapport quand rien n'est
+                // relevé dans la fenêtre ; en parc, un voisin fait passer ce test.
+                $result['to'] = min(max($ends), $to);
 
                 // Fenêtre réellement COUVERTE par des relevés, exposée à part de
                 // `from`/`to` pour ne rien changer aux appelants historiques (#241).
@@ -883,15 +900,19 @@ final class ElectricityReadingRepository implements LegacyDailyRepositoryInterfa
                 // complet. À un compteur, max et min portent sur un seul élément :
                 // valeurs identiques à avant.
                 //
-                // La fin passe par {@see FleetCoverageWindow} (#76), qui n'oppose
-                // la date d'un compteur que tant qu'il est VIVANT : un compteur
-                // fermé n'est pas un compteur qu'on a cessé de relever, et rien
-                // n'est plus attendu de lui. Sans quoi remplacer son compteur
-                // figeait la couverture de tous les rapports suivants. Le repli
-                // sur `min($ends)` est inatteignable — $ends non vide implique
-                // $segments non vide — mais il garde le type de sortie strict.
-                $result['data_from'] = max($starts);
-                $result['data_to']   = FleetCoverageWindow::coveredUntil($segments, $from) ?? min($ends);
+                // Les DEUX bornes passent par {@see FleetCoverageWindow} (#76,
+                // #81), qui n'oppose les dates d'un compteur que tant qu'il est
+                // VIVANT : un compteur fermé n'est pas un compteur qu'on a cessé
+                // de relever, et un compteur pas encore posé n'est pas un compteur
+                // qu'on a oublié de relever. Sans quoi remplacer son compteur
+                // figeait la couverture de tous les rapports SUIVANTS, et en
+                // ajouter un la figeait pour tous les rapports ANTÉRIEURS.
+                //
+                // Les replis sur max/min sont inatteignables — $ends non vide
+                // implique $segments non vide — mais ils gardent le type de sortie
+                // strict, et redonnent l'intersection nue si la règle s'abstient.
+                $result['data_from'] = FleetCoverageWindow::coveredFrom($segments, $from, $to) ?? max($starts);
+                $result['data_to']   = FleetCoverageWindow::coveredUntil($segments, $from, $to) ?? min($ends);
             }
         }
 
@@ -1432,33 +1453,57 @@ final class ElectricityReadingRepository implements LegacyDailyRepositoryInterfa
     }
 
     /**
-     * Instant de fermeture du compteur portant ce registre (#76), au format de la
-     * base ; `null` s'il est ouvert.
+     * Bornes du cycle de vie du compteur portant ce registre (#76, #81), au format
+     * de la base ; `null` de part et d'autre pour un compteur sans borne — c'est
+     * le cas de la quasi-totalité du parc.
      *
-     * La date de fermeture est une DATE, lue dans le fuseau de l'utilisateur —
-     * c'est {@see Meter::closureInstantFor()} qui la situe, comme pour la garde
-     * d'écriture. La conversion est mémoïsée par date et non par registre : les
-     * quatre registres d'un même compteur partagent la sienne.
+     * Ce sont des DATES, lues dans le fuseau de l'utilisateur : {@see Meter} les
+     * situe, comme pour la garde d'écriture, plutôt que chaque appelant à sa
+     * façon. La conversion est mémoïsée par date et non par registre — les quatre
+     * registres d'un même compteur partagent les siennes.
+     *
+     * @return array{opened_at: string|null, closed_at: string|null}
      */
-    private function closureInstantOf(int $registerId): ?string
+    private function lifetimeOf(int $registerId): array
     {
-        $this->fleetClosures ??= (new MeterTopology($this->pdo))->registerClosuresForUser($this->userId);
+        $this->fleetLifetimes ??= (new MeterTopology($this->pdo))->registerLifetimesForUser($this->userId);
 
-        $closedOn = $this->fleetClosures[$registerId] ?? null;
-        if ($closedOn === null || $closedOn === '') {
+        $lifetime = $this->fleetLifetimes[$registerId] ?? null;
+        if ($lifetime === null) {
+            return ['opened_at' => null, 'closed_at' => null];
+        }
+
+        return [
+            'opened_at' => $this->lifecycleInstant($lifetime['opened_on'], true),
+            'closed_at' => $this->lifecycleInstant($lifetime['closed_on'], false),
+        ];
+    }
+
+    /** Une date de cycle de vie ('Y-m-d') située dans le fuseau du lecteur, mémoïsée. */
+    private function lifecycleInstant(?string $day, bool $isOpening): ?string
+    {
+        if ($day === null || $day === '') {
             return null;
         }
 
-        if (!isset($this->closureInstants[$closedOn])) {
-            $closureAt = Meter::closureInstantFor($closedOn, $this->timezone);
-            if ($closureAt === null) {
+        // Les deux bornes n'ont pas la même sémantique — début INCLUS, fin EXCLUE
+        // (#1) — donc pas le même cache : la même date peut être la pose d'un
+        // compteur et la fermeture d'un autre.
+        $key = ($isOpening ? 'o:' : 'c:') . $day;
+
+        if (!isset($this->lifecycleInstants[$key])) {
+            $instant = $isOpening
+                ? Meter::serviceInstantFor($day, $this->timezone)
+                : Meter::closureInstantFor($day, $this->timezone);
+
+            if ($instant === null) {
                 return null;
             }
 
-            $this->closureInstants[$closedOn] = Dates::toDbString($closureAt);
+            $this->lifecycleInstants[$key] = Dates::toDbString($instant);
         }
 
-        return $this->closureInstants[$closedOn];
+        return $this->lifecycleInstants[$key];
     }
 
     /**

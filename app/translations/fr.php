@@ -965,6 +965,10 @@ return [
     'import.meter_target'                          => 'Compteur visé',
     'import.meter_default'                         => 'Compteur par défaut',
     // Fermeture d'un compteur (#55).
+    'meters.opened_field'                          => 'Date de mise en service',
+    'meters.opened_hint'                           => 'Premier jour où ce compteur était en service, ce jour inclus. Elle ne bloque aucune saisie : un relevé antidaté reste accepté. Elle évite aux rapports d\'annoncer partielles les périodes d\'avant la pose, faute de savoir que le compteur n\'existait pas encore. Laissez vide si le compteur a toujours été là.',
+    'meters.invalid_opened_on'                     => 'Date de mise en service invalide.',
+    'meters.empty_service_range'                   => 'La fermeture doit être postérieure à la mise en service : ce compteur n\'aurait été en service aucun jour.',
     'meters.closed_field'                          => 'Date de fermeture',
     'meters.closed_hint'                           => 'À partir de cette date, le compteur n\'accepte plus aucun relevé. Ses relevés existants restent comptés dans tous les rapports : la dépense a bien eu lieu. Laissez vide pour un compteur en service.',
     'meters.invalid_closed_on'                     => 'Date de fermeture invalide.',
@@ -1001,6 +1005,7 @@ return [
     'meters.col_readings'                          => 'Relevés',
     'meters.unnamed_hint'                          => 'Sans nom — donnez-lui-en un pour le distinguer des autres.',
     'meters.closed_on'                             => 'fermé le {date}',
+    'meters.opened_on'                             => 'en service à partir du {date}',
     'meters.energy_field'                          => 'Énergie',
     'meters.energy_frozen'                         => 'L\'énergie ne peut plus changer : elle décide d\'où viennent les relevés du compteur.',
     'meters.label_field'                           => 'Nom du compteur',

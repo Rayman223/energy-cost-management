@@ -7,39 +7,48 @@ namespace App\Domain;
 use App\Support\Dates;
 
 /**
- * Jusqu'où un parc de compteurs COUVRE une période, quand certains compteurs ont
- * été fermés (#76).
+ * Quelle part d'une période un parc de compteurs COUVRE réellement, quand les
+ * compteurs entrent et sortent du parc (#76, #81).
  *
- * La borne de fin couverte a toujours été l'INTERSECTION des fenêtres de relevés
- * du parc — la fin la plus précoce. Le raisonnement reste juste : un compteur
- * qu'on a cessé de relever doit dégrader la couverture, mieux vaut un coût
- * annoncé partiel qu'un coût partiel annoncé complet.
+ * Les deux bornes ont toujours été l'INTERSECTION des fenêtres de relevés du parc
+ * — début le plus tardif, fin la plus précoce. Le raisonnement reste juste : un
+ * compteur qu'on a cessé de relever, ou qu'on n'a pas encore relevé, doit dégrader
+ * la couverture, mieux vaut un coût annoncé partiel qu'un coût partiel annoncé
+ * complet.
  *
- * Mais un compteur **fermé** n'est pas un compteur qu'on a cessé de relever.
- * Depuis {@see Meter} (#55), l'application sait qu'aucun relevé n'est plus
- * attendu d'un compteur retiré ; continuer à lui opposer sa dernière date fige la
- * couverture de tous les rapports suivants, indéfiniment — chez tout foyer qui a
- * simplement REMPLACÉ son compteur.
+ * Mais un compteur **fermé** n'est pas un compteur qu'on a cessé de relever, et un
+ * compteur **pas encore posé** n'est pas un compteur qu'on a oublié de relever.
+ * Depuis {@see Meter}, l'application connaît les deux bornes du cycle de vie
+ * (`closed_on` #55, `opened_on` #81) ; sans elles, remplacer son compteur figeait
+ * la couverture de tous les rapports suivants, et en ajouter un la figeait pour
+ * tous les rapports antérieurs — indéfiniment des deux côtés.
  *
  * D'où la règle, qui généralise l'intersection sans la renier : **un compteur ne
  * limite la couverture que tant qu'il est vivant**. La période est balayée par
- * époques, délimitées par les fermetures :
+ * époques, délimitées par les entrées et sorties du parc :
  *
- *   - un compteur fermé avant le début de la période n'avait rien à y couvrir,
- *     il sort d'emblée ;
- *   - sur chaque époque, la fin la plus précoce du parc encore vivant s'oppose,
- *     comme avant — mais seulement si elle tombe AVANT la prochaine fermeture :
- *     c'est alors un vrai trou, un compteur a cessé d'être relevé de son vivant ;
- *   - sinon le parc a tenu jusqu'à cette fermeture : le compteur fermé sort à son
- *     tour et l'époque suivante est jugée sur les survivants — un successeur qui
+ *   - un compteur hors service sur toute la période (fermé avant son début, posé
+ *     après sa fin) n'avait rien à y couvrir : il sort d'emblée ;
+ *   - sur chaque époque, la borne la plus contraignante du parc vivant s'oppose,
+ *     comme avant — mais seulement si elle tombe du mauvais côté de la prochaine
+ *     porte : c'est alors un vrai trou, un compteur n'a pas été relevé DE SON
+ *     VIVANT ;
+ *   - sinon le parc a tenu jusqu'à cette porte : le compteur qui la franchit sort
+ *     à son tour et l'époque suivante est jugée sur les autres — un successeur qui
  *     prend le relais rend donc bien la période complète.
  *
- * Quand plus personne ne survit, la dernière fin connue fait borne : un parc
- * entièrement éteint ne couvre rien au-delà, et la couverture doit le dire.
+ * Quand plus personne ne reste, la dernière borne connue fait foi : un parc éteint
+ * (ou pas encore né) ne couvre rien au-delà, et la couverture doit le dire.
  *
- * Sans aucune fermeture — le parc de presque tout le monde, et le mono-compteur —
- * le premier tour rend `min(ends)` : exactement l'intersection d'avant, un seul
- * chemin de code et pas deux.
+ * Sans aucune date de cycle de vie — le parc de presque tout le monde, et le
+ * mono-compteur — le premier tour rend `min(ends)` et `max(starts)` : exactement
+ * l'intersection d'avant, un seul chemin de code et pas deux.
+ *
+ * **Les deux côtés sont le même balayage dans un miroir temporel.** Le début n'est
+ * que la fin vue à l'envers : « la fin la plus précoce » devient « le début le plus
+ * tardif », « la prochaine fermeture » devient « la dernière mise en service ».
+ * D'où un seul {@see sweep()}, orienté par un signe — deux implémentations
+ * symétriques auraient divergé à la première correction.
  *
  * Les instants circulent au format DATETIME de la base ('Y-m-d H:i:s', UTC, cf.
  * {@see Dates}) : ils viennent de `meter_readings.reading_at` et repartent tels
@@ -48,8 +57,9 @@ use App\Support\Dates;
 final class FleetCoverageWindow
 {
     /**
-     * Écart admis entre le dernier relevé d'un compteur et sa fermeture, avant de
-     * considérer qu'il a cessé d'être relevé de son vivant.
+     * Écart admis entre le dernier (ou premier) relevé d'un compteur et la borne
+     * de son cycle de vie, avant de considérer qu'il n'a pas été relevé de son
+     * vivant.
      *
      * La marge n'est pas cosmétique : la date de fermeture est une borne EXCLUE
      * (cf. {@see Meter::closureInstantFor()}), un compteur fermé ne PEUT donc pas
@@ -57,105 +67,180 @@ final class FleetCoverageWindow
      * est toujours antérieur. Sans elle, le remplacement le plus propre se lirait
      * comme un trou. Un jour, comme la tolérance de couverture côté service.
      */
-    public const CLOSURE_TOLERANCE_SECONDS = 86400;
+    public const LIFECYCLE_TOLERANCE_SECONDS = 86400;
 
     /**
      * Borne de fin réellement couverte par le parc, ou `null` si aucun compteur ne
      * porte de donnée.
      *
-     * @param list<array{end: string, closed_at: string|null}> $segments Par compteur
-     *        contributeur : sa fin de relevés sur la période, et l'instant de sa
-     *        fermeture (`null` s'il est ouvert).
+     * @param list<array{start: string, end: string, opened_at: string|null, closed_at: string|null}> $segments
+     *        Par compteur contributeur : les bornes de ses relevés sur la période,
+     *        et celles de son cycle de vie (`null` = depuis toujours / pour toujours).
      * @param string $periodStart Début de la période DEMANDÉE, pas celui des données.
+     * @param string $periodEnd   Fin de la période DEMANDÉE, pas celle des données.
      */
-    public static function coveredUntil(array $segments, string $periodStart): ?string
+    public static function coveredUntil(array $segments, string $periodStart, string $periodEnd): ?string
+    {
+        return self::sweep(self::project($segments, true, $periodStart, $periodEnd), 1);
+    }
+
+    /**
+     * Borne de début réellement couverte par le parc, ou `null` si aucun compteur
+     * ne porte de donnée.
+     *
+     * @param list<array{start: string, end: string, opened_at: string|null, closed_at: string|null}> $segments
+     * @param string $periodStart Début de la période DEMANDÉE, pas celui des données.
+     * @param string $periodEnd   Fin de la période DEMANDÉE, pas celle des données.
+     */
+    public static function coveredFrom(array $segments, string $periodStart, string $periodEnd): ?string
+    {
+        return self::sweep(self::project($segments, false, $periodStart, $periodEnd), -1);
+    }
+
+    /**
+     * Réduit chaque compteur au couple qui intéresse le côté balayé : sa borne de
+     * relevés, et la porte du cycle de vie qui la relativise — plus le verdict
+     * « hors service sur TOUTE la période ».
+     *
+     * Ce verdict oppose les DEUX bornes du cycle de vie, quel que soit le côté
+     * balayé : un compteur déclaré à l'avance peut porter des relevés antidatés
+     * (l'historique du compteur précédent recopié dessus, cf. api-contract.md), et
+     * sa borne de FIN ne doit pas plus borner une période d'avant sa pose que sa
+     * borne de début. Ne regarder que la porte du côté balayé laissait ce cas
+     * dégrader `data_to` de tous les rapports antérieurs à la pose.
+     *
+     * @param  list<array{start: string, end: string, opened_at: string|null, closed_at: string|null}> $segments
+     * @return list<array{bound: string, gate: string|null, out: bool}>
+     */
+    private static function project(array $segments, bool $towardsEnd, string $periodStart, string $periodEnd): array
+    {
+        $startAt = self::timestamp($periodStart);
+        $endAt   = self::timestamp($periodEnd);
+
+        $projected = [];
+
+        foreach ($segments as $segment) {
+            // Fermeture EXCLUE : fermé au premier instant de la période, il n'en a
+            // pas couvert un instant. Mise en service INCLUSE, et fin de période
+            // exclue : posé pile à la fin, il n'y était pas non plus.
+            $out = ($segment['closed_at'] !== null && self::timestamp($segment['closed_at']) <= $startAt)
+                || ($segment['opened_at'] !== null && self::timestamp($segment['opened_at']) >= $endAt);
+
+            $projected[] = $towardsEnd
+                ? ['bound' => $segment['end'],   'gate' => $segment['closed_at'], 'out' => $out]
+                : ['bound' => $segment['start'], 'gate' => $segment['opened_at'], 'out' => $out];
+        }
+
+        return $projected;
+    }
+
+    /**
+     * Le balayage par époques, orienté.
+     *
+     * `$direction` vaut 1 vers la fin et -1 vers le début. Multiplier chaque
+     * instant par ce signe rend les deux sens IDENTIQUES : « la plus précoce »
+     * devient toujours « la plus petite », « après la porte » devient toujours
+     * « plus grand que la porte ». C'est le miroir temporel décrit en tête de
+     * classe, et la seule raison pour laquelle ce code n'existe qu'en un
+     * exemplaire.
+     *
+     * @param list<array{bound: string, gate: string|null, out: bool}> $segments
+     */
+    private static function sweep(array $segments, int $direction): ?string
     {
         if ($segments === []) {
             return null;
         }
 
-        // Fermés avant le début de la période : ils ne pouvaient rien en couvrir,
-        // leur dernière date n'apprend donc rien sur elle.
-        $alive = self::survivors($segments, self::timestamp($periodStart));
+        // Compteurs hors service sur toute la période : ils ne pouvaient rien en
+        // couvrir, leurs dates n'apprennent donc rien sur elle.
+        $alive = array_values(array_filter(
+            $segments,
+            static fn (array $segment): bool => $segment['out'] === false,
+        ));
 
-        // Parc entièrement retiré avant la période : on retombe sur l'intersection
-        // nue. Le rapport ne porte alors que sur des relevés antérieurs aux
-        // fermetures, et doit rester annoncé partiel.
+        // Parc entièrement hors service : on retombe sur l'intersection nue. Le
+        // rapport ne porte alors que sur des relevés hors cycle de vie, et doit
+        // rester annoncé partiel.
         if ($alive === []) {
-            return self::earliestEnd($segments);
+            return self::mostBinding($segments, $direction);
         }
 
         while (true) {
-            $end     = self::earliestEnd($alive);
-            $closure = self::nextClosure($alive);
+            $bound = self::mostBinding($alive, $direction);
+            $gate  = self::nextGate($alive, $direction);
 
-            // Plus aucune fermeture devant, ou un compteur vivant qui s'arrête
-            // avant la prochaine : la fin la plus précoce fait foi, comme avant.
-            if ($closure === null || self::timestamp($end) < $closure - self::CLOSURE_TOLERANCE_SECONDS) {
-                return $end;
+            // Plus aucune porte devant, ou un compteur vivant dont les relevés
+            // s'arrêtent (ou commencent) du mauvais côté d'elle : sa borne fait
+            // foi, comme avant.
+            if ($gate === null || self::timestamp($bound) * $direction < $gate - self::LIFECYCLE_TOLERANCE_SECONDS) {
+                return $bound;
             }
 
-            $alive = self::survivors($alive, $closure);
+            $alive = self::stillIn($alive, $gate, $direction);
 
-            // Le parc s'éteint à cette fermeture : personne ne prend le relais, la
-            // couverture s'arrête au dernier relevé connu.
+            // Le parc se vide à cette porte : personne ne prend le relais, la
+            // couverture s'arrête à la dernière borne connue.
             if ($alive === []) {
-                return $end;
+                return $bound;
             }
         }
     }
 
     /**
-     * Compteurs encore vivants APRÈS cet instant — borne de fermeture exclue.
+     * Compteurs encore dans le parc AU-DELÀ de cet instant orienté — la porte
+     * elle-même est exclue, un compteur fermé le 15 ne couvre pas le 15.
      *
-     * @param  list<array{end: string, closed_at: string|null}> $segments
-     * @return list<array{end: string, closed_at: string|null}>
+     * @param  list<array{bound: string, gate: string|null, out: bool}> $segments
+     * @return list<array{bound: string, gate: string|null, out: bool}>
      */
-    private static function survivors(array $segments, int $instant): array
+    private static function stillIn(array $segments, int $instant, int $direction): array
     {
         return array_values(array_filter(
             $segments,
-            static fn (array $segment): bool => $segment['closed_at'] === null
-                || self::timestamp($segment['closed_at']) > $instant,
+            static fn (array $segment): bool => $segment['gate'] === null
+                || self::timestamp($segment['gate']) * $direction > $instant,
         ));
     }
 
     /**
-     * Fin de relevés la plus PRÉCOCE du lot — l'intersection.
+     * Borne la plus CONTRAIGNANTE du lot — la fin la plus précoce, ou le début le
+     * plus tardif. C'est l'intersection.
      *
-     * @param non-empty-list<array{end: string, closed_at: string|null}> $segments
+     * @param non-empty-list<array{bound: string, gate: string|null, out: bool}> $segments
      */
-    private static function earliestEnd(array $segments): string
+    private static function mostBinding(array $segments, int $direction): string
     {
-        $earliest   = $segments[0]['end'];
-        $earliestAt = self::timestamp($earliest);
+        $binding   = $segments[0]['bound'];
+        $bindingAt = self::timestamp($binding) * $direction;
 
         foreach ($segments as $segment) {
-            $at = self::timestamp($segment['end']);
-            if ($at < $earliestAt) {
-                $earliest   = $segment['end'];
-                $earliestAt = $at;
+            $at = self::timestamp($segment['bound']) * $direction;
+            if ($at < $bindingAt) {
+                $binding   = $segment['bound'];
+                $bindingAt = $at;
             }
         }
 
-        return $earliest;
+        return $binding;
     }
 
     /**
-     * Prochaine fermeture du lot, ou `null` si tous ses compteurs sont ouverts.
+     * Prochaine porte du lot dans le sens du balayage (instant ORIENTÉ), ou `null`
+     * si aucun de ses compteurs n'en a.
      *
-     * @param list<array{end: string, closed_at: string|null}> $segments
+     * @param list<array{bound: string, gate: string|null, out: bool}> $segments
      */
-    private static function nextClosure(array $segments): ?int
+    private static function nextGate(array $segments, int $direction): ?int
     {
         $next = null;
 
         foreach ($segments as $segment) {
-            if ($segment['closed_at'] === null) {
+            if ($segment['gate'] === null) {
                 continue;
             }
 
-            $at = self::timestamp($segment['closed_at']);
+            $at = self::timestamp($segment['gate']) * $direction;
             if ($next === null || $at < $next) {
                 $next = $at;
             }

@@ -265,38 +265,44 @@ final class MeterTopology
     }
 
     /**
-     * Date de fermeture du compteur porteur, PAR REGISTRE, pour les seuls
-     * compteurs électriques fermés de l'utilisateur (#76).
+     * Cycle de vie du compteur porteur, PAR REGISTRE, pour les seuls compteurs
+     * électriques BORNÉS de l'utilisateur (#76, #81).
      *
      * Pendant de {@see registerIdsForUser()} pour la vue « flotte » : les rapports
      * raisonnent en registres, et doivent savoir lesquels appartiennent à un
-     * compteur retiré — sans quoi la dernière date d'un compteur remplacé fige la
-     * couverture pour toujours. Le vis-à-vis par compteur, {@see closedOn()},
-     * reste au service des chemins d'ÉCRITURE, qui ne visent qu'un compteur.
+     * compteur retiré — ou pas encore posé — sans quoi les dates d'un compteur
+     * remplacé, ou celles d'un compteur ajouté au parc, figent la couverture. Le
+     * vis-à-vis par compteur, {@see closedOn()}, reste au service des chemins
+     * d'ÉCRITURE, qui ne visent qu'un compteur et n'opposent que la fermeture.
      *
      * Une seule requête, même jointure indexée que la carte des registres. Les
-     * compteurs ouverts sont absents du retour plutôt que rendus à `null` : une
-     * clé manquante dit « rien à opposer », il n'y a pas deux façons de l'écrire.
+     * compteurs sans aucune borne sont absents du retour plutôt que rendus à deux
+     * `null` : une clé manquante dit « rien à opposer », il n'y a pas deux façons
+     * de l'écrire — et c'est le cas de la quasi-totalité du parc.
      *
-     * @return array<int, string> register_id => `closed_on` ('Y-m-d')
+     * @return array<int, array{opened_on: string|null, closed_on: string|null}> register_id => bornes ('Y-m-d')
      */
-    public function registerClosuresForUser(int $userId): array
+    public function registerLifetimesForUser(int $userId): array
     {
         $stmt = $this->pdo->prepare(
-            "SELECT reg.id, m.closed_on
+            "SELECT reg.id, m.opened_on, m.closed_on
                FROM meter_registers reg
                JOIN meters m ON m.id = reg.meter_id
-              WHERE m.user_id = :uid AND m.energy_type = 'electricity' AND m.closed_on IS NOT NULL"
+              WHERE m.user_id = :uid AND m.energy_type = 'electricity'
+                AND (m.opened_on IS NOT NULL OR m.closed_on IS NOT NULL)"
         );
         $stmt->execute(['uid' => $userId]);
 
-        $closures = [];
+        $lifetimes = [];
         foreach ($stmt->fetchAll() as $row) {
             if (is_array($row)) {
-                $closures[(int) $row['id']] = (string) $row['closed_on'];
+                $lifetimes[(int) $row['id']] = [
+                    'opened_on' => $row['opened_on'] !== null ? (string) $row['opened_on'] : null,
+                    'closed_on' => $row['closed_on'] !== null ? (string) $row['closed_on'] : null,
+                ];
             }
         }
 
-        return $closures;
+        return $lifetimes;
     }
 }

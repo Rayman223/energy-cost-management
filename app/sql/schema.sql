@@ -158,6 +158,7 @@ CREATE TABLE IF NOT EXISTS meters (
     label       VARCHAR(120) NOT NULL DEFAULT '' COMMENT 'Vide = libelle derive a l''affichage, dans la langue du lecteur',
     country     VARCHAR(2)  NULL,
     timezone    VARCHAR(64) NULL,
+    opened_on   DATE NULL COMMENT 'Mise en service du compteur, borne INCLUSE : premier jour en service',
     closed_on   DATE NULL COMMENT 'Fermeture du compteur, borne EXCLUE (#1) : aucune ecriture a partir de cette date',
     created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     INDEX idx_meters_user (user_id),

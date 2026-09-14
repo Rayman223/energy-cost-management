@@ -956,6 +956,10 @@ return [
     'import.meter_target'                          => 'Doelmeter',
     'import.meter_default'                         => 'Standaardmeter',
     // Afsluiting van een meter (#55).
+    'meters.opened_field'                          => 'Datum ingebruikname',
+    'meters.opened_hint'                           => 'Eerste dag dat deze meter in dienst was, die dag inbegrepen. Ze blokkeert geen enkele invoer: een stand met terugwerkende datum blijft aanvaard. Ze voorkomt dat rapporten periodes van vóór de plaatsing als onvolledig aankondigen, bij gebrek aan weten dat de meter er nog niet was. Laat leeg als de meter er altijd al was.',
+    'meters.invalid_opened_on'                     => 'Ongeldige datum van ingebruikname.',
+    'meters.empty_service_range'                   => 'De afsluitdatum moet na de ingebruikname liggen: deze meter zou geen enkele dag in dienst zijn geweest.',
     'meters.closed_field'                          => 'Afsluitdatum',
     'meters.closed_hint'                           => 'Vanaf deze datum aanvaardt de meter geen enkele stand meer. Zijn bestaande standen blijven in alle rapporten meetellen: de uitgave heeft wel degelijk plaatsgevonden. Laat leeg voor een meter in dienst.',
     'meters.invalid_closed_on'                     => 'Ongeldige afsluitdatum.',
@@ -992,6 +996,7 @@ return [
     'meters.col_readings'                          => 'Standen',
     'meters.unnamed_hint'                          => 'Naamloos — geef hem een naam om hem van de andere te onderscheiden.',
     'meters.closed_on'                             => 'afgesloten op {date}',
+    'meters.opened_on'                             => 'in dienst vanaf {date}',
     'meters.energy_field'                          => 'Energie',
     'meters.energy_frozen'                         => 'De energiesoort kan niet meer wijzigen: ze bepaalt waar de standen van de meter vandaan komen.',
     'meters.label_field'                           => 'Naam van de meter',
