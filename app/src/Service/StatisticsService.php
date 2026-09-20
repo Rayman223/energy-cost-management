@@ -126,6 +126,25 @@ final class StatisticsService
     }
 
     /**
+     * Portée du corpus : foyers contributeurs et pays couverts (#85).
+     *
+     * Une seule requête, là où {@see publicOverview()} en lance sept. La page
+     * d'accueil publique n'affiche que ces deux chiffres et c'est la page la
+     * plus visitée du site — y déclencher tous les agrégats par pays
+     * (tarifs, trois consommations sur douze mois, mix, prix spot) coûterait
+     * sur chaque visite anonyme et chaque passage de robot.
+     *
+     * Déjà mémoïsé si l'aperçu complet a été calculé : on ne relit pas la base
+     * pour une valeur qu'on a en main.
+     *
+     * @return array{households: int, countries: int}
+     */
+    public function coverage(): array
+    {
+        return $this->overview['coverage'] ?? $this->stats->coverage();
+    }
+
+    /**
      * Récapitulatif **tous pays confondus** (#85).
      *
      * Dérivé de {@see publicOverview()} — aucune requête supplémentaire, et
@@ -173,7 +192,10 @@ final class StatisticsService
             'gas'         => $gas,
             'water'       => $water,
             'mix'         => $mix,
-            'has_data'    => $prices !== [] || $elec !== null || $gas !== null || $water !== null,
+            // `mix` compris : le bloc porte aussi la carte « contrats à prix
+            // dynamique », et la masquer alors qu'elle a un chiffre à montrer
+            // perdrait la seule donnée publiée d'un corpus encore jeune.
+            'has_data'    => $prices !== [] || $elec !== null || $gas !== null || $water !== null || $mix !== null,
         ];
     }
 
@@ -305,7 +327,13 @@ final class StatisticsService
         $water = $this->findCountry($overview['water'], $country);
         $mix   = $this->findCountry($overview['mix'], $country);
 
-        if ($price === null && $elec === null && $gas === null && $water === null) {
+        // Même critère que publishedCountries() — `mix` compris. Un pays dont
+        // seule la part de contrats dynamiques franchit le seuil (grilles toutes
+        // dynamiques, donc aucun tarif unitaire, et pas encore 90 jours de
+        // relevés) est proposé par la liste déroulante et publié dans le
+        // tableau : l'exclure ici afficherait « pas assez de foyers » sur un
+        // pays dont la page montre pourtant déjà un chiffre.
+        if ($price === null && $elec === null && $gas === null && $water === null && $mix === null) {
             return null;
         }
 
@@ -325,10 +353,19 @@ final class StatisticsService
         foreach ([$price, $elec, $gas, $water] as $row) {
             $households = max($households, (int) ($row['households'] ?? 0));
         }
+        if ($mix !== null) {
+            // Les lignes de mix ne portent pas de compte de foyers, mais leur
+            // somme en est un : sans ça un pays publié par le seul mix
+            // afficherait « 0 foyers » sous son titre.
+            $households = max($households, (int) $mix['fixed'] + (int) $mix['dynamic']);
+        }
 
         return [
             'country'         => $country,
-            'is_other'        => (bool) ($price['is_other'] ?? $elec['is_other'] ?? false),
+            // Dérivé du code lui-même : se fier à la première ligne trouvée
+            // renverrait false pour un bucket résiduel qui n'a ni tarif ni
+            // électricité (seulement de l'eau, par exemple).
+            'is_other'        => $country === StatisticsRepositoryInterface::OTHER_BUCKET,
             'households'      => $households,
             'currency'        => $currency,
             'ttc_per_kwh'     => $price['ttc_per_kwh'] ?? null,

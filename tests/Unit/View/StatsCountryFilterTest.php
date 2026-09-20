@@ -151,6 +151,23 @@ final class StatsCountryFilterTest extends TestCase
         self::assertNotNull($stats->countryDetail(StatisticsRepositoryInterface::OTHER_BUCKET));
     }
 
+    public function testResidualBucketIsNotOfferedToSearchEngines(): void
+    {
+        // Le bucket « autres pays » a une fiche consultable, mais il n'est pas
+        // un pays : le sitemap l'exclut, le canonical ne doit pas le proposer.
+        // (La règle vit dans app/routes/stats.php ; on vérifie ici le critère
+        // dont elle dépend.)
+        $repo = new FakeStatisticsRepository();
+        $repo->electricity = [
+            ['bucket' => StatisticsRepositoryInterface::OTHER_BUCKET, 'households' => 8, 'value' => 5000.0],
+        ];
+
+        $detail = (new StatisticsService($repo))->countryDetail(StatisticsRepositoryInterface::OTHER_BUCKET);
+
+        self::assertNotNull($detail);
+        self::assertTrue($detail['is_other']);
+    }
+
     public function testEmptyCorpusShowsNoSelectorAtAll(): void
     {
         $stats = new StatisticsService(new FakeStatisticsRepository());

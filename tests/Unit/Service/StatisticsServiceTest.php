@@ -457,6 +457,81 @@ final class StatisticsServiceTest extends TestCase
         self::assertSame(1, $repo->calls['unitRateByCountry'] ?? 0);
     }
 
+
+    public function testCountryPublishedOnlyByItsPricingMixStillHasADetail(): void
+    {
+        // `pricingModeByCountry()` a une porte plus lâche que les autres
+        // agrégats : une grille active suffit, sans tarif unitaire ni 90 jours
+        // de relevés. Un pays dont tous les foyers sont en contrat dynamique
+        // n'apparaît donc que dans `mix` — mais il est proposé par la liste
+        // déroulante et publié dans le tableau, sa fiche doit exister.
+        $repo = new FakeStatisticsRepository();
+        $repo->mix = [['bucket' => 'NL', 'fixed' => 0, 'dynamic' => 7]];
+
+        $service = $this->service($repo);
+
+        self::assertContains('NL', $service->publishedCountries());
+
+        $detail = $service->countryDetail('NL');
+        self::assertNotNull($detail);
+        // Les lignes de mix ne portent pas de compte de foyers, mais leur somme
+        // en est un : sans quoi la fiche afficherait « 0 foyers ».
+        self::assertSame(7, $detail['households']);
+        self::assertEqualsWithDelta(100.0, $detail['dynamic_pct'], 1e-9);
+    }
+
+    public function testOverallSummaryIsShownWhenOnlyThePricingMixIsPublished(): void
+    {
+        $repo = new FakeStatisticsRepository();
+        $repo->mix = [['bucket' => 'NL', 'fixed' => 2, 'dynamic' => 6]];
+
+        // Masquer tout le bloc perdrait la seule donnée publiée du corpus.
+        self::assertTrue($this->service($repo)->overallSummary()['has_data']);
+    }
+
+    public function testResidualBucketIsLabelledAsSuchWhateverRowCarriesIt(): void
+    {
+        // Le bucket ZZ peut n'avoir ni tarif ni électricité : se fier à la
+        // première ligne trouvée le ferait passer pour un vrai pays.
+        $repo = new FakeStatisticsRepository();
+        $repo->utility = [
+            'water' => [['bucket' => self::OTHER, 'households' => 6, 'value' => 90.0]],
+        ];
+
+        $detail = $this->service($repo)->countryDetail(self::OTHER);
+
+        self::assertNotNull($detail);
+        self::assertTrue($detail['is_other']);
+    }
+
+    public function testCoverageAlonePerformsASingleQuery(): void
+    {
+        // La landing n'affiche que ces deux chiffres, et c'est la page la plus
+        // crawlée : elle ne doit pas déclencher les sept agrégats par pays.
+        $repo = new FakeStatisticsRepository();
+        $repo->coverage = ['households' => 25, 'countries' => 3];
+
+        $coverage = $this->service($repo)->coverage();
+
+        self::assertSame(['households' => 25, 'countries' => 3], $coverage);
+        self::assertSame(0, $repo->calls['unitRateByCountry'] ?? 0);
+        self::assertSame(0, $repo->calls['electricityUsageByCountry'] ?? 0);
+        self::assertSame(1, $repo->calls['coverage'] ?? 0);
+    }
+
+    public function testCoverageReusesTheOverviewWhenItIsAlreadyComputed(): void
+    {
+        $repo = new FakeStatisticsRepository();
+        $repo->coverage = ['households' => 25, 'countries' => 3];
+
+        $service = $this->service($repo);
+        $service->publicOverview();
+        $service->coverage();
+
+        // Une seule lecture : la valeur est déjà en main.
+        self::assertSame(1, $repo->calls['coverage'] ?? 0);
+    }
+
     private function service(FakeStatisticsRepository $repo): StatisticsService
     {
         return new StatisticsService($repo);

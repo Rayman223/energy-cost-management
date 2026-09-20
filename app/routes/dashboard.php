@@ -95,7 +95,7 @@ if ($dbError === null && AuthGuard::isOidcEnabled($config)) {
         try {
             $coverage = (new StatisticsService(
                 new StatisticsRepository((new Database($config['database']))->pdo()),
-            ))->publicOverview()['coverage'];
+            ))->coverage();
         } catch (\Throwable $e) {
             $coverage = null;
         }

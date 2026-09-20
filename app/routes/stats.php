@@ -198,8 +198,13 @@ $view ??= ViewFactory::create(
 // Une variante `?country=` sans fiche est en revanche `noindex` : l'URL reste
 // accessible et retombe sur la vue « tous pays », mais offrir aux moteurs autant
 // d'URLs que de pays sous le seuil ne ferait que multiplier les doublons.
+//
+// Le bucket résiduel « autres pays » est `noindex` lui aussi, pour la même
+// raison que le sitemap l'exclut (cf. app/routes/sitemap.php) : ce n'est pas un
+// pays, et son contenu se recompose à chaque fois qu'un pays franchit le seuil.
 $description = $view->t('seo.description.stats');
-if ($dbError !== null || ($countryDetail === null && $requestedCountry !== '')) {
+$isResidual  = $countryDetail !== null && $countryDetail['is_other'];
+if ($dbError !== null || $isResidual || ($countryDetail === null && $requestedCountry !== '')) {
     $meta = PageMeta::hidden($config, $description);
 } else {
     $meta = PageMeta::indexable(

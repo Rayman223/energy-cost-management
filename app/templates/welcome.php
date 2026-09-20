@@ -74,10 +74,10 @@
     <?php // Chiffres réels plutôt qu'une promesse : c'est ce qui distingue cette
           // page d'une plaquette, et ce qui donne au visiteur une raison d'aller
           // plus loin (#85). Masqué tant que le corpus est sous le seuil. ?>
-    <?php if (($coverage['households'] ?? 0) > 0): ?>
     <section class="landing-stats">
       <h2><?= $this->te('landing.stats_title') ?></h2>
       <p><?= $this->te('landing.stats_intro') ?></p>
+      <?php if (($coverage['households'] ?? 0) > 0): ?>
       <div class="landing-figures">
         <div class="landing-figure">
           <span class="landing-figure-value"><?= $this->e($this->num((float) $coverage['households'], 0)) ?></span>
@@ -88,15 +88,9 @@
           <span class="landing-figure-label"><?= $this->te('landing.stats_countries') ?></span>
         </div>
       </div>
+      <?php endif; ?>
       <a class="landing-link" href="<?= $this->e($this->url('stats')) ?>"><?= $this->te('landing.stats_link') ?></a>
     </section>
-    <?php else: ?>
-    <section class="landing-stats">
-      <h2><?= $this->te('landing.stats_title') ?></h2>
-      <p><?= $this->te('landing.stats_intro') ?></p>
-      <a class="landing-link" href="<?= $this->e($this->url('stats')) ?>"><?= $this->te('landing.stats_link') ?></a>
-    </section>
-    <?php endif; ?>
 
     <section class="landing-guides">
       <h2><?= $this->te('landing.guides_title') ?></h2>
