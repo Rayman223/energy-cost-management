@@ -10,6 +10,9 @@
  * @var ?string      $donateUrl URL de soutien au projet (#3), ou null si non configurée.
  * @var ?string      $adsenseClient Identifiant éditeur AdSense (#185), null si publicité désactivée.
  * @var ?\App\Seo\PageMeta $meta Métadonnées de référencement (#84).
+ * @var array<string,mixed>|null $coverage Foyers et pays contributeurs (#85), ou null
+ *                              si la base est injoignable : la landing doit se rendre
+ *                              quoi qu'il arrive, c'est la porte d'entrée du site.
  */
 ?>
 <!doctype html>
@@ -68,9 +71,55 @@
         <?php endforeach; ?>
       </div>
     </section>
+    <?php // Chiffres réels plutôt qu'une promesse : c'est ce qui distingue cette
+          // page d'une plaquette, et ce qui donne au visiteur une raison d'aller
+          // plus loin (#85). Masqué tant que le corpus est sous le seuil. ?>
+    <?php if (($coverage['households'] ?? 0) > 0): ?>
+    <section class="landing-stats">
+      <h2><?= $this->te('landing.stats_title') ?></h2>
+      <p><?= $this->te('landing.stats_intro') ?></p>
+      <div class="landing-figures">
+        <div class="landing-figure">
+          <span class="landing-figure-value"><?= $this->e($this->num((float) $coverage['households'], 0)) ?></span>
+          <span class="landing-figure-label"><?= $this->te('landing.stats_households') ?></span>
+        </div>
+        <div class="landing-figure">
+          <span class="landing-figure-value"><?= $this->e($this->num((float) $coverage['countries'], 0)) ?></span>
+          <span class="landing-figure-label"><?= $this->te('landing.stats_countries') ?></span>
+        </div>
+      </div>
+      <a class="landing-link" href="<?= $this->e($this->url('stats')) ?>"><?= $this->te('landing.stats_link') ?></a>
+    </section>
+    <?php else: ?>
+    <section class="landing-stats">
+      <h2><?= $this->te('landing.stats_title') ?></h2>
+      <p><?= $this->te('landing.stats_intro') ?></p>
+      <a class="landing-link" href="<?= $this->e($this->url('stats')) ?>"><?= $this->te('landing.stats_link') ?></a>
+    </section>
+    <?php endif; ?>
+
+    <section class="landing-guides">
+      <h2><?= $this->te('landing.guides_title') ?></h2>
+      <p><?= $this->te('landing.guides_intro') ?></p>
+      <ul class="landing-guide-list">
+        <?php foreach (\App\View\GuideContent::all($this->locale()) as $guide): ?>
+        <li><a href="<?= $this->e($this->url('guides/' . $guide['slug'])) ?>"><?= $this->e($guide['title']) ?></a></li>
+        <?php endforeach; ?>
+      </ul>
+      <a class="landing-link" href="<?= $this->e($this->url('guides')) ?>"><?= $this->te('landing.guides_link') ?></a>
+    </section>
+
+    <section class="landing-privacy">
+      <h2><?= $this->te('landing.privacy_title') ?></h2>
+      <p><?= $this->te('landing.privacy_body') ?></p>
+    </section>
   </main>
 
   <footer class="landing-footer">
+    <a href="<?= $this->e($this->url('stats')) ?>"><?= $this->te('nav.stats') ?></a>
+    &middot;
+    <a href="<?= $this->e($this->url('guides')) ?>"><?= $this->te('guides.title') ?></a>
+    &middot;
     <a href="<?= $this->e($this->url('terms')) ?>"><?= $this->te('legal.terms') ?></a>
     &middot;
     <a href="<?= $this->e($this->url('privacy')) ?>"><?= $this->te('legal.privacy') ?></a>

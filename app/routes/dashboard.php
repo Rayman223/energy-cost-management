@@ -9,6 +9,7 @@ use App\Repository\BatteryReadingRepository;
 use App\Repository\BatteryRepository;
 use App\Repository\DynamicPriceRepository;
 use App\Repository\ElectricityReadingRepository;
+use App\Repository\StatisticsRepository;
 use App\Repository\TariffRepository;
 use App\Repository\UserRepository;
 use App\Repository\UtilityReadingRepository;
@@ -17,6 +18,7 @@ use App\Seo\PageMeta;
 use App\Service\BatterySavingsService;
 use App\Service\CostCalculationService;
 use App\Service\DashboardCardsService;
+use App\Service\StatisticsService;
 use App\Service\TariffCalculatorService;
 use App\Http\SecurityHeaders;
 use App\I18n\Locale;
@@ -84,11 +86,26 @@ if ($dbError === null && AuthGuard::isOidcEnabled($config)) {
     if (AuthSession::userId() === null) {
         $locale  = Locale::resolve($config, null);
         $landing = ViewFactory::create(__DIR__ . '/../templates', $locale, (string) ($config['i18n']['default_locale'] ?? 'fr'));
+
+        // Chiffres de couverture pour la landing (#85) : déjà publiés par
+        // /stats, donc rien de neuf n'est exposé ici. Lecture défensive — la
+        // page d'accueil doit se rendre même base tombée, elle n'affiche alors
+        // simplement pas de chiffres.
+        $coverage = null;
+        try {
+            $coverage = (new StatisticsService(
+                new StatisticsRepository((new Database($config['database']))->pdo()),
+            ))->publicOverview()['coverage'];
+        } catch (\Throwable $e) {
+            $coverage = null;
+        }
+
         echo $landing->render('welcome', [
             'available'     => Locale::available($config),
             'discordUrl'    => DiscordLink::inviteUrl($config),
             'donateUrl'     => DonateLink::url($config),
             'adsenseClient' => Adsense::clientId($config),
+            'coverage'      => $coverage,
             // Seule variante indexable de « / » : le rendu connecté est privé (#84).
             'meta'          => PageMeta::indexable(
                 $config,

@@ -89,6 +89,53 @@ body {
 .feature h3 { font-size: 1.02rem; font-weight: 700; color: var(--text-strong); margin-bottom: 8px; }
 .feature p { font-size: .92rem; color: var(--muted); line-height: 1.55; }
 
+/* ── Sections éditoriales (#85) ──────────────────────────────────────────── */
+/* Une landing qui ne dit rien et ne mène qu'à /login n'a de valeur ni pour le
+   visiteur ni pour un moteur : ces trois sections lui donnent du contenu et
+   des chemins vers /stats et les guides. */
+.landing-stats,
+.landing-guides,
+.landing-privacy { padding: 40px 0 8px; }
+
+.landing-stats h2,
+.landing-guides h2,
+.landing-privacy h2 {
+  font-size: 1.35rem; font-weight: 700;
+  color: var(--text-strong); margin-bottom: 14px;
+}
+.landing-stats p,
+.landing-guides p,
+.landing-privacy p {
+  max-width: 68ch; color: var(--muted); line-height: 1.7; margin: 0;
+}
+
+.landing-figures {
+  display: flex; flex-wrap: wrap; gap: 32px;
+  margin: 24px 0 20px;
+}
+.landing-figure { display: flex; flex-direction: column; gap: 4px; }
+.landing-figure-value {
+  font-family: var(--mono); font-size: 2rem; font-weight: 700;
+  color: var(--text-strong); line-height: 1;
+}
+.landing-figure-label {
+  font-size: .78rem; letter-spacing: .06em;
+  text-transform: uppercase; color: var(--muted);
+}
+
+.landing-guide-list {
+  margin: 16px 0 20px; padding-left: 20px;
+  line-height: 2; color: var(--text);
+}
+.landing-guide-list a { color: var(--blue); }
+
+.landing-link {
+  display: inline-block; margin-top: 16px;
+  color: var(--amber); font-weight: 700; font-size: .92rem;
+  text-decoration: none;
+}
+.landing-link:hover { text-decoration: underline; }
+
 /* ── Pied de page ────────────────────────────────────────────────────────── */
 .landing-footer {
   margin-top: auto; padding-top: 40px; text-align: center;
