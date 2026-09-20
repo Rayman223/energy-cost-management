@@ -10,6 +10,16 @@ declare(strict_types=1);
 return [
     // Commun / navigation
     'app.title'            => 'Gestion des coûts énergétiques',
+
+    // Référencement (#84) : meta description des pages publiques. Viser
+    // 150-160 caractères — au-delà, Google tronque dans ses résultats.
+    'seo.description.home'         => 'Suivez vos consommations d\'électricité, de gaz et d\'eau, estimez vos coûts et comparez-vous aux moyennes de votre pays. Gratuit et open source.',
+    'seo.description.stats'        => 'Prix moyen du kWh, consommations annuelles et part des contrats dynamiques, pays par pays. Statistiques communautaires anonymisées et gratuites.',
+    'seo.description.privacy'      => 'Quelles données sont collectées, pour quelles finalités, combien de temps elles sont conservées, et comment exercer vos droits RGPD.',
+    'seo.description.terms'        => 'Conditions générales d\'utilisation du service : compte, usage attendu, disponibilité, responsabilités et résiliation.',
+    'seo.description.cookies'      => 'Quels cookies sont déposés par le site, à quelles fins, et comment gérer votre consentement.',
+    'seo.description.legal-notice' => 'Identité de l\'éditeur du site, coordonnées de contact, hébergeur et droit applicable.',
+    'error.not_found'             => 'Cette page n\'existe pas ou a été déplacée.',
     'nav.dashboard'        => 'Tableau de bord',
     'nav.tariffs'          => 'Tarifs',
     'nav.account'          => 'Mon compte',

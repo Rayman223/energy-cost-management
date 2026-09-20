@@ -9,6 +9,7 @@
  * @var ?string      $discordUrl URL d'invitation Discord, ou null si non configurée.
  * @var ?string      $donateUrl URL de soutien au projet (#3), ou null si non configurée.
  * @var ?string      $adsenseClient Identifiant éditeur AdSense (#185), null si publicité désactivée.
+ * @var ?\App\Seo\PageMeta $meta Métadonnées de référencement (#84).
  */
 ?>
 <!doctype html>
@@ -18,6 +19,7 @@
     'title' => $this->t('app.title'),
     'css'   => ['assets/css/welcome.css', 'assets/css/lang-switcher.css'],
     'adsenseClient' => $adsenseClient ?? null,
+    'meta'          => $meta ?? null,
 ]) ?>
 </head>
 <body>

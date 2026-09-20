@@ -181,6 +181,18 @@ final class ConfigSchema
                     ],
                 ],
 
+                'seo' => [
+                    // Référencement (#84) : URL canonique absolue publiée par
+                    // le canonical, les hreflang et le sitemap (App\Support\SiteUrl),
+                    // et jeton de validation Search Console. Absente ⇒ les URLs
+                    // absolues retombent sur l'hôte de la requête.
+                    'absentHint' => 'URLs canoniques dérivées de l\'hôte courant',
+                    'children'   => [
+                        'base_url'                 => [],
+                        'google_site_verification' => [],
+                    ],
+                ],
+
                 'legal' => [
                     // Identité de l'éditeur affichée par /legal-notice et /privacy
                     // (App\Support\LegalIdentity). Propre à chaque déploiement :

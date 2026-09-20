@@ -24,6 +24,7 @@
  * @var ?string                $discordUrl    Invitation Discord
  * @var ?string                $donateUrl     Soutien au projet
  * @var ?string                $adsenseClient Identifiant éditeur AdSense
+ * @var ?\App\Seo\PageMeta   $meta          Métadonnées de référencement (#84)
  */
 
 $overview = $overview ?? null;
@@ -63,6 +64,7 @@ $symbol = \App\Domain\Currency::symbol($currency ?? 'EUR');
     'css'           => ['assets/css/app-header.css', 'assets/css/lang-switcher.css', 'assets/css/stats.css'],
     'preconnects'   => ['https://cdn.jsdelivr.net'],
     'adsenseClient' => $adsenseClient ?? null,
+    'meta'          => $meta ?? null,
 ]) ?>
 <!-- defer : ne bloque pas le parsing et s'exécute avant stats.js (ordre du document préservé). -->
 <script defer src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>

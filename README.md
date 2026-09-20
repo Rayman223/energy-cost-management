@@ -314,8 +314,10 @@ electricity) applies from its date onwards instead of rewriting the past.
 | `/login`, `/auth/login`, `/auth/logout` | Authentication (Basic / OIDC) |
 | `/privacy`, `/terms`, `/cookies`, `/legal-notice` | Legal pages (localized): GDPR notice, terms, cookie policy, publisher identity |
 | `/api` | JSON API — ingestion (`ingest_*`) and read/cost endpoints. See [`app/docs/api-contract.md`](app/docs/api-contract.md) |
+| `/robots.txt`, `/sitemap.xml` | Generated for search engines. **Public deployments only**: with OIDC disabled the instance is private, so robots answers `Disallow: /` and the sitemap returns 404. See [`app/docs/installation.md`](app/docs/installation.md) § 8 |
 
-Legacy `/xxx.php` URLs redirect (308) to their clean equivalent.
+Legacy `/xxx.php` URLs redirect (308) to their clean equivalent. Unknown URLs
+return a 404 HTML page.
 
 ---
 

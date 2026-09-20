@@ -397,6 +397,74 @@ country, repeat with its country code and the relevant line keys.
 
 ---
 
+## 8. Search engines & AdSense (public deployments only)
+
+Skip this whole section for a self-hosted, single-tenant instance: with OIDC
+disabled the site is behind an IP allowlist and Basic Auth, `/robots.txt`
+answers `Disallow: /` and `/sitemap.xml` returns 404 — by design.
+
+### 8.1 Declare the canonical URL
+
+```php
+'seo' => [
+    'base_url'                 => 'https://example.tld', // no trailing slash
+    'google_site_verification' => '',                    // Search Console meta tag token
+],
+```
+
+Without `base_url`, canonical URLs, `hreflang` links and the sitemap fall back
+to the `Host` of the incoming request — so a crawler arriving on
+`www.example.tld` would see **www** declared as canonical, which is exactly the
+indexing problem to avoid (#84).
+
+### 8.2 Redirect `www` to the apex (or the other way round)
+
+The application cannot do this: the request must be redirected **before** it
+reaches PHP — but check what already happens first: a CDN in front of the site
+(Cloudflare and friends) often does it for you. If the `www` host already
+answers a 301 to the apex, there is nothing to add. Otherwise, see the
+commented server block at the end of
+[`nginx-swag-site.conf.example`](nginx-swag-site.conf.example).
+
+Whatever host wins, it must be the one in `seo.base_url`: the redirect, the
+config key and the emitted canonical must all name the same host, or the
+signals contradict each other.
+
+Check it:
+
+```bash
+curl -I https://www.example.tld/     # expect: 301 → https://example.tld/
+curl -s https://example.tld/robots.txt
+curl -s https://example.tld/sitemap.xml | head
+```
+
+### 8.3 Google Search Console
+
+1. Add a **domain property** (not a URL prefix): it covers the apex, `www` and
+   both schemes at once, so a redirect between them is no longer reported as a
+   problem.
+2. Verify it by DNS, or paste the meta tag token into
+   `seo.google_site_verification` — the tag is then emitted on every page.
+3. Submit `https://example.tld/sitemap.xml`.
+
+`/robots.txt` and `/sitemap.xml` are generated, not static files: they follow
+the configured canonical URL, the locales in `i18n.available`, and — for the
+`/stats?country=…` entries — the countries whose aggregates actually clear the
+anonymity threshold.
+
+### 8.4 `ads.txt` (AdSense only)
+
+```bash
+cp app/public/ads.txt.example app/public/ads.txt
+# replace pub-XXXXXXXXXXXXXXXX with the publisher id of `adsense.client_id`
+```
+
+The file stays out of the repository (git-ignored): the id belongs to the
+deployment, not to the code. Without it AdSense reports “Missing ads.txt” and
+ad value drops; it is pointless while `adsense.enabled` is `false`.
+
+---
+
 ## Verification
 
 - `SELECT role FROM users WHERE id = 1;` → `admin`.

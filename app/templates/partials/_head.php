@@ -12,6 +12,9 @@
  * @var list<string>|null $css           Feuilles de page (ex. 'assets/css/dashboard.css'), après tokens.css
  * @var bool|null         $fonts         Polices Google Syne + Space Mono (défaut true ; false pour error)
  * @var list<string>|null $preconnects   Origines supplémentaires à préconnecter (ex. https://cdn.jsdelivr.net)
+ * @var ?\App\Seo\PageMeta $meta      Métadonnées de référencement (#84). Omis ⇒ la page
+ *                                        est rendue `noindex` : le défaut est fermé, une page
+ *                                        privée ne s'indexe pas par oubli.
  * @var ?string           $adsenseClient Identifiant éditeur AdSense (#185), fourni par
  *                                        {@see \App\Support\Adsense::clientId()} ; null ⇒ aucun
  *                                        script publicitaire. Volontairement non transmis par les
@@ -23,10 +26,46 @@ $css           = $css ?? [];
 $fonts         = $fonts ?? true;
 $preconnects   = $preconnects ?? [];
 $adsenseClient = $adsenseClient ?? null;
+$meta          = $meta ?? null;
 ?>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title><?= $this->e($title) ?></title>
+<?php if ($meta !== null): ?>
+<meta name="robots" content="<?= $this->e($meta->robots) ?>">
+<?php if ($meta->description !== ''): ?>
+<meta name="description" content="<?= $this->e($meta->description) ?>">
+<?php endif; ?>
+<?php if ($meta->canonical !== null): ?>
+<!-- Canonical auto-référent, `?lang=` compris (#84) : les 4 locales sont servies
+     sur le même chemin, il faut donc une URL stable par langue, reliée aux autres
+     par les hreflang ci-dessous. -->
+<link rel="canonical" href="<?= $this->e($meta->canonical) ?>">
+<?php endif; ?>
+<?php foreach ($meta->alternates as $alternate): ?>
+<link rel="alternate" hreflang="<?= $this->e($alternate['hreflang']) ?>" href="<?= $this->e($alternate['href']) ?>">
+<?php endforeach; ?>
+<?php if ($meta->canonical !== null): ?>
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="<?= $this->appName() ?>">
+<meta property="og:title" content="<?= $this->e($title) ?>">
+<?php if ($meta->description !== ''): ?>
+<meta property="og:description" content="<?= $this->e($meta->description) ?>">
+<?php endif; ?>
+<meta property="og:url" content="<?= $this->e($meta->canonical) ?>">
+<meta property="og:locale" content="<?= $this->e($meta->ogLocale) ?>">
+<?php if ($meta->imageUrl !== null): ?>
+<meta property="og:image" content="<?= $this->e($meta->imageUrl) ?>">
+<?php endif; ?>
+<meta name="twitter:card" content="summary">
+<?php endif; ?>
+<?php if ($meta->verification !== null): ?>
+<meta name="google-site-verification" content="<?= $this->e($meta->verification) ?>">
+<?php endif; ?>
+<?php else: ?>
+<!-- Aucune métadonnée fournie ⇒ page privée ou technique : hors index (#84). -->
+<meta name="robots" content="noindex, follow">
+<?php endif; ?>
 <!-- Favicon (#195) : .ico multi-résolution (16/32/48), apple-touch pour iOS, manifest PWA.
      Chemins relatifs (comme le reste du partial) pour rester corrects en déploiement sous-répertoire. -->
 <link rel="icon" href="<?= \App\Support\Assets::url('favicon.ico') ?>" sizes="16x16 32x32 48x48">
