@@ -5,6 +5,16 @@ declare(strict_types=1);
 /** Vertaalcatalogus — Nederlands. */
 return [
     'app.title'            => 'Beheer van energiekosten',
+
+    // SEO (#84): meta description van de publieke pagina's. Streef naar 150-160
+    // tekens — daarboven kort Google hem af in de zoekresultaten.
+    'seo.description.home'         => 'Volg uw elektriciteits-, gas- en waterverbruik, schat uw kosten en vergelijk uzelf met de gemiddelden van uw land. Gratis en opensource.',
+    'seo.description.stats'        => 'Gemiddelde kWh-prijs, jaarverbruik en aandeel dynamische contracten, land per land. Gratis en geanonimiseerde gemeenschapsstatistieken.',
+    'seo.description.privacy'      => 'Welke gegevens worden verzameld, waarvoor, hoe lang ze worden bewaard en hoe u uw AVG-rechten uitoefent.',
+    'seo.description.terms'        => 'Algemene gebruiksvoorwaarden: account, verwacht gebruik, beschikbaarheid, aansprakelijkheid en beëindiging.',
+    'seo.description.cookies'      => 'Welke cookies deze site plaatst, met welk doel, en hoe u uw toestemming beheert.',
+    'seo.description.legal-notice' => 'Identiteit van de uitgever, contactgegevens, hostingprovider en toepasselijk recht.',
+    'error.not_found'             => 'Deze pagina bestaat niet of is verplaatst.',
     'nav.dashboard'        => 'Dashboard',
     'nav.tariffs'          => 'Tarieven',
     'nav.account'          => 'Mijn account',

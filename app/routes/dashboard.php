@@ -13,6 +13,7 @@ use App\Repository\TariffRepository;
 use App\Repository\UserRepository;
 use App\Repository\UtilityReadingRepository;
 use App\Security\UserContext;
+use App\Seo\PageMeta;
 use App\Service\BatterySavingsService;
 use App\Service\CostCalculationService;
 use App\Service\DashboardCardsService;
@@ -88,6 +89,13 @@ if ($dbError === null && AuthGuard::isOidcEnabled($config)) {
             'discordUrl'    => DiscordLink::inviteUrl($config),
             'donateUrl'     => DonateLink::url($config),
             'adsenseClient' => Adsense::clientId($config),
+            // Seule variante indexable de « / » : le rendu connecté est privé (#84).
+            'meta'          => PageMeta::indexable(
+                $config,
+                '',
+                $locale,
+                $landing->t('seo.description.home'),
+            ),
         ]);
 
         return;

@@ -5,6 +5,16 @@ declare(strict_types=1);
 /** Übersetzungskatalog — Deutsch. */
 return [
     'app.title'            => 'Verwaltung der Energiekosten',
+
+    // SEO (#84): Meta-Description der öffentlichen Seiten. 150-160 Zeichen
+    // anstreben — darüber hinaus kürzt Google sie in den Suchergebnissen.
+    'seo.description.home'         => 'Verfolgen Sie Strom-, Gas- und Wasserverbrauch, schätzen Sie Ihre Kosten und vergleichen Sie sich mit den Durchschnittswerten Ihres Landes.',
+    'seo.description.stats'        => 'Durchschnittlicher kWh-Preis, Jahresverbrauch und Anteil dynamischer Verträge, Land für Land. Kostenlose, anonymisierte Gemeinschaftsstatistik.',
+    'seo.description.privacy'      => 'Welche Daten erhoben werden, zu welchen Zwecken, wie lange sie gespeichert bleiben und wie Sie Ihre DSGVO-Rechte ausüben.',
+    'seo.description.terms'        => 'Allgemeine Nutzungsbedingungen: Konto, erwartete Nutzung, Verfügbarkeit, Haftung und Kündigung.',
+    'seo.description.cookies'      => 'Welche Cookies diese Website setzt, zu welchem Zweck, und wie Sie Ihre Einwilligung verwalten.',
+    'seo.description.legal-notice' => 'Identität des Herausgebers, Kontaktdaten, Hosting-Anbieter und anwendbares Recht.',
+    'error.not_found'             => 'Diese Seite existiert nicht oder wurde verschoben.',
     'nav.dashboard'        => 'Übersicht',
     'nav.tariffs'          => 'Tarife',
     'nav.account'          => 'Mein Konto',

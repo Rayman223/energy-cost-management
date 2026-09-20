@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\View;
 
 use App\I18n\Locale;
+use App\Seo\PageMeta;
 use App\Support\Adsense;
 use App\Support\LegalIdentity;
 
@@ -30,10 +31,11 @@ final class LegalPage
     public static function render(array $config, string $page): string
     {
         $templateDir = \dirname(__DIR__, 2) . '/templates';
+        $locale      = Locale::resolve($config, null);
 
         $view = ViewFactory::create(
             $templateDir,
-            Locale::resolve($config, null),
+            $locale,
             (string) ($config['i18n']['default_locale'] ?? 'fr'),
         );
 
@@ -46,6 +48,14 @@ final class LegalPage
             // des traitements qui n'ont pas lieu.
             'adsEnabled'    => Adsense::isEnabled($config),
             'adsenseClient' => Adsense::clientId($config),
+            // Pages publiques et stables : indexables, une description par page
+            // (#84). La clé suit le nom de la page, garanti dans self::PAGES.
+            'meta'          => PageMeta::indexable(
+                $config,
+                $page,
+                $locale,
+                $view->t('seo.description.' . $page),
+            ),
         ]);
     }
 }

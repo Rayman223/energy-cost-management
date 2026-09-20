@@ -15,6 +15,7 @@ use App\Security\AuthGuard;
 use App\Security\AuthSession;
 use App\Security\UserContext;
 use App\Security\WebAccessGuard;
+use App\Seo\PageMeta;
 use App\Service\CostCalculationService;
 use App\Service\StatisticsService;
 use App\Service\TariffCalculatorService;
@@ -159,6 +160,16 @@ $view ??= ViewFactory::create(
     (string) ($config['i18n']['default_locale'] ?? 'fr'),
 );
 
+// Référencement (#84) : la page n'est offerte à l'indexation que si elle a
+// réellement quelque chose à montrer. Un corpus sous le seuil d'anonymat ou une
+// base tombée produisent une page honnête mais vide — la proposer à un moteur
+// ne ferait qu'ajouter du contenu sans valeur.
+// `$dbError === null` implique que tout le bloc try a abouti : $overview est
+// alors nécessairement rempli.
+$meta = ($dbError === null && $overview['has_data'])
+    ? PageMeta::indexable($config, 'stats', $view->locale(), $view->t('seo.description.stats'))
+    : PageMeta::hidden($config, $view->t('seo.description.stats'));
+
 echo $view->render('stats', [
     'dbError'       => $dbError,
     'overview'      => $overview,
@@ -171,4 +182,5 @@ echo $view->render('stats', [
     'discordUrl'    => DiscordLink::inviteUrl($config),
     'donateUrl'     => DonateLink::url($config),
     'adsenseClient' => Adsense::clientId($config),
+    'meta'          => $meta,
 ]);

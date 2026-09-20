@@ -5,6 +5,16 @@ declare(strict_types=1);
 /** Translation catalog — English. */
 return [
     'app.title'            => 'Energy cost management',
+
+    // SEO (#84): meta description of public pages. Aim for 150-160 characters —
+    // beyond that, Google truncates it in search results.
+    'seo.description.home'         => 'Track your electricity, gas and water usage, estimate your costs and compare yourself to your country averages. Free and open source.',
+    'seo.description.stats'        => 'Average kWh price, yearly consumption and share of dynamic contracts, country by country. Free, anonymised community statistics.',
+    'seo.description.privacy'      => 'What data is collected, for which purposes, how long it is kept, and how to exercise your GDPR rights.',
+    'seo.description.terms'        => 'Terms of service: account, expected use, availability, liability and termination.',
+    'seo.description.cookies'      => 'Which cookies this site sets, for what purposes, and how to manage your consent.',
+    'seo.description.legal-notice' => 'Publisher identity, contact details, hosting provider and applicable law.',
+    'error.not_found'             => 'This page does not exist, or has moved.',
     'nav.dashboard'        => 'Dashboard',
     'nav.tariffs'          => 'Tariffs',
     'nav.account'          => 'My account',

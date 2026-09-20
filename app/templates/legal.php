@@ -16,6 +16,7 @@
  * @var array<string,?string> $legal         Identité de l'éditeur ({@see \App\Support\LegalIdentity})
  * @var bool                  $adsEnabled    Vrai si la régie publicitaire est réellement active
  * @var ?string               $adsenseClient Identifiant éditeur AdSense (#185), null si publicité désactivée.
+ * @var ?\App\Seo\PageMeta  $meta          Métadonnées de référencement (#84)
  */
 
 $titleKeys = [
@@ -78,6 +79,7 @@ $outbound = fn (string $url, string $labelKey): string =>
     'title' => $title . ' — ' . $this->t('app.title'),
     'css'   => ['assets/css/page-standalone.css', 'assets/css/legal.css', 'assets/css/lang-switcher.css'],
     'adsenseClient' => $adsenseClient ?? null,
+    'meta'          => $meta ?? null,
 ]) ?>
 </head>
 <body>
