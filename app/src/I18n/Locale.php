@@ -28,13 +28,16 @@ final class Locale
      * page (onglet énergie, grille en cours d'édition/duplication, template
      * importé) qu'il serait pénible de perdre en changeant de langue.
      *
+     * `country` y figure depuis #85 : changer de langue en consultant un pays
+     * doit garder ce pays, pas renvoyer sur la vue « tous pays ».
+     *
      * Liste blanche volontaire : les paramètres à usage unique — bandeaux
      * `?linked` / `?already` / `?link_error` de « Mon compte », déclencheur de
      * téléchargement `?export` — ne doivent PAS être rejoués. Une future page
      * qui oublierait d'y déclarer son état retombe sur l'ancien comportement
      * (paramètre simplement perdu), jamais sur un effet de bord.
      */
-    private const CARRIED_PARAMS = ['edit', 'duplicate', 'energy', 'template', 'page'];
+    private const CARRIED_PARAMS = ['edit', 'duplicate', 'energy', 'template', 'page', 'country'];
 
     /**
      * @param array<string, mixed> $config

@@ -23,12 +23,23 @@
  * @var list<string>           $available     Locales du sélecteur
  * @var ?string                $discordUrl    Invitation Discord
  * @var ?string                $donateUrl     Soutien au projet
+ * @var array<string,mixed>|null $overall     Récapitulatif tous pays (#85), ou null
+ * @var list<string>           $countries     Pays publiés, pour la liste déroulante (#85)
+ * @var array<string,mixed>|null $countryDetail Fiche du pays sélectionné, ou null
+ * @var string                 $requestedCountry Code pays demandé, '' si aucun
  * @var ?string                $adsenseClient Identifiant éditeur AdSense
  * @var ?\App\Seo\PageMeta   $meta          Métadonnées de référencement (#84)
  */
 
 $overview = $overview ?? null;
 $private  = $private ?? null;
+$overall       = $overall ?? null;
+$countries     = $countries ?? [];
+$countryDetail = $countryDetail ?? null;
+$requestedCountry = $requestedCountry ?? '';
+// Le <select> reflète ce qui est réellement affiché : un pays demandé mais non
+// publié laisse la liste sur « tous les pays », comme la page elle-même.
+$selectedCountry = $countryDetail['country'] ?? '';
 $k        = (int) ($overview['k'] ?? 5);
 
 /** Nom localisé d'un pays ; le bucket résiduel a son propre libellé. */
@@ -159,6 +170,122 @@ $symbol = \App\Domain\Currency::symbol($currency ?? 'EUR');
   <div class="cta-box">
     <p><?= $this->te('stats.anonymous_hint') ?></p>
     <a class="cta" href="<?= $this->e($this->url('login')) ?>"><?= $this->te('stats.anonymous_cta') ?></a>
+  </div>
+  <?php endif; ?>
+
+  <?php // ── Récapitulatif tous pays confondus + sélecteur de pays (#85) ────── ?>
+  <p class="stats-intro"><?= $this->te('stats.intro', ['k' => $k]) ?></p>
+
+  <?php if ($overall !== null && $overall['has_data']): ?>
+  <div class="section-header">
+    <span class="section-title"><?= $this->te('stats.overall_title') ?></span>
+    <span class="section-line"></span>
+  </div>
+  <p class="hint"><?= $this->te('stats.overall_intro') ?></p>
+
+  <div class="stat-cards">
+    <?php foreach ($overall['prices'] as $price): ?>
+    <?php $psym = \App\Domain\Currency::symbol($price['currency']); ?>
+    <div class="stat-card">
+      <div class="stat-label"><?= $this->te('stats.overall_price') ?><?= \count($overall['prices']) > 1 ? ' (' . $this->e($price['currency']) . ')' : '' ?></div>
+      <div class="stat-value"><?= $or_dash($price['ttc_per_kwh'], 4, ' ' . $this->e($psym)) ?></div>
+      <div class="stat-sub"><?= $this->e($this->num((float) $price['households'], 0)) ?> <?= $this->te('stats.households') ?></div>
+    </div>
+    <?php endforeach; ?>
+    <?php if ($overall['electricity'] !== null): ?>
+    <div class="stat-card">
+      <div class="stat-label"><?= $this->te('stats.overall_electricity') ?></div>
+      <div class="stat-value"><?= $or_dash($overall['electricity']['value'], 0, ' kWh') ?></div>
+      <div class="stat-sub"><?= $this->te('stats.per_year') ?></div>
+    </div>
+    <?php endif; ?>
+    <?php if ($overall['gas'] !== null): ?>
+    <div class="stat-card">
+      <div class="stat-label"><?= $this->te('stats.overall_gas') ?></div>
+      <div class="stat-value"><?= $or_dash($overall['gas']['value'], 0, ' m³') ?></div>
+      <div class="stat-sub"><?= $this->te('stats.per_year') ?></div>
+    </div>
+    <?php endif; ?>
+    <?php if ($overall['water'] !== null): ?>
+    <div class="stat-card">
+      <div class="stat-label"><?= $this->te('stats.overall_water') ?></div>
+      <div class="stat-value"><?= $or_dash($overall['water']['value'], 0, ' m³') ?></div>
+      <div class="stat-sub"><?= $this->te('stats.per_year') ?></div>
+    </div>
+    <?php endif; ?>
+    <?php if ($overall['mix'] !== null): ?>
+    <div class="stat-card">
+      <div class="stat-label"><?= $this->te('stats.overall_dynamic') ?></div>
+      <div class="stat-value"><?= $or_dash($overall['mix']['dynamic_pct'], 1, ' %') ?></div>
+    </div>
+    <?php endif; ?>
+  </div>
+  <?php if (\count($overall['prices']) > 1): ?>
+  <p class="hint"><?= $this->te('stats.overall_currency_note') ?></p>
+  <?php endif; ?>
+  <?php endif; ?>
+
+  <?php if ($countries !== []): ?>
+  <?php // Formulaire GET : chaque pays a son URL, indexable et partageable, et
+        // la page reste utilisable sans JavaScript. ?>
+  <form class="country-filter" method="get" action="<?= $this->e($this->url('stats')) ?>">
+    <label for="country-select"><?= $this->te('stats.filter_label') ?></label>
+    <select id="country-select" name="country">
+      <option value=""><?= $this->te('stats.filter_all') ?></option>
+      <?php foreach ($countries as $iso): ?>
+      <option value="<?= $this->e($iso) ?>"<?= $selectedCountry === $iso ? ' selected' : '' ?>><?= $this->e($countryName($iso)) ?></option>
+      <?php endforeach; ?>
+    </select>
+    <button type="submit"><?= $this->te('stats.filter_submit') ?></button>
+  </form>
+  <?php endif; ?>
+
+  <?php if ($requestedCountry !== '' && $countryDetail === null): ?>
+  <div class="cta-box">
+    <p><?= $this->te('stats.filter_unavailable') ?></p>
+  </div>
+  <?php endif; ?>
+
+  <?php if ($countryDetail !== null): ?>
+  <?php $csym = $countryDetail['currency'] !== '' ? \App\Domain\Currency::symbol($countryDetail['currency']) : ''; ?>
+  <div class="section-header">
+    <span class="section-title"><?= $this->te('stats.country_detail_title', ['country' => $countryName($countryDetail['country'])]) ?></span>
+    <span class="section-line"></span>
+    <span class="deltas-range"><?= $this->e($this->num((float) $countryDetail['households'], 0)) ?> <?= $this->te('stats.households') ?></span>
+  </div>
+  <div class="stat-cards">
+    <div class="stat-card">
+      <div class="stat-label"><?= $this->te('stats.price_ttc') ?></div>
+      <div class="stat-value"><?= $or_dash($countryDetail['ttc_per_kwh'], 4, ' ' . $this->e($csym)) ?></div>
+      <div class="stat-sub"><?= $delta($countryDetail['rate_delta_pct']) ?> <?= $this->te('stats.country_vs_overall') ?></div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label"><?= $this->te('stats.price_htva') ?></div>
+      <div class="stat-value"><?= $or_dash($countryDetail['htva_per_kwh'], 4, ' ' . $this->e($csym)) ?></div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label"><?= $this->te('stats.price_fixed_year') ?></div>
+      <div class="stat-value"><?= $or_dash($countryDetail['fixed_year_ttc'], 0, ' ' . $this->e($csym)) ?></div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label"><?= $this->te('stats.usage_electricity') ?></div>
+      <div class="stat-value"><?= $or_dash($countryDetail['electricity'], 0, ' kWh') ?></div>
+      <div class="stat-sub"><?= $delta($countryDetail['usage_delta_pct']) ?> <?= $this->te('stats.country_vs_overall') ?></div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label"><?= $this->te('stats.usage_gas') ?></div>
+      <div class="stat-value"><?= $or_dash($countryDetail['gas'], 0, ' m³') ?></div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label"><?= $this->te('stats.usage_water') ?></div>
+      <div class="stat-value"><?= $or_dash($countryDetail['water'], 0, ' m³') ?></div>
+    </div>
+    <?php if ($countryDetail['dynamic_pct'] !== null): ?>
+    <div class="stat-card">
+      <div class="stat-label"><?= $this->te('stats.overall_dynamic') ?></div>
+      <div class="stat-value"><?= $or_dash($countryDetail['dynamic_pct'], 1, ' %') ?></div>
+    </div>
+    <?php endif; ?>
   </div>
   <?php endif; ?>
 

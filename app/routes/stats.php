@@ -5,6 +5,8 @@ declare(strict_types=1);
 use App\Http\SecurityHeaders;
 use App\I18n\Locale;
 use App\Infrastructure\Database;
+use App\Domain\EuropeanCountries;
+use App\Repository\Contract\StatisticsRepositoryInterface;
 use App\Repository\DynamicPriceRepository;
 use App\Repository\ElectricityReadingRepository;
 use App\Repository\StatisticsRepository;
@@ -32,6 +34,9 @@ $config        = [];
 $view          = null;
 $dbError       = null;
 $overview      = null;
+$overall       = null;
+$countries     = [];
+$countryDetail = null;
 $private       = null;
 $profile       = null;
 $userId        = null;
@@ -39,6 +44,18 @@ $isAdmin       = false;
 $currency      = 'EUR';
 
 require_once __DIR__ . '/../../vendor/autoload.php';
+
+// Pays demandé (#85) : lu hors du try, car il conditionne aussi les
+// métadonnées de référencement — y compris quand la base est tombée.
+// Validé contre le référentiel européen plus le bucket résiduel ; tout le
+// reste vaut « aucune sélection ».
+$requestedCountry = is_string($_GET['country'] ?? null) ? strtoupper(trim($_GET['country'])) : '';
+if ($requestedCountry !== ''
+    && !EuropeanCountries::isValid($requestedCountry)
+    && $requestedCountry !== StatisticsRepositoryInterface::OTHER_BUCKET
+) {
+    $requestedCountry = '';
+}
 
 try {
     $config = require __DIR__ . '/../bootstrap.php';
@@ -75,6 +92,18 @@ try {
 
     // Bloc public : calculé dans tous les cas, connecté ou non.
     $overview = $stats->publicOverview();
+
+    // Récapitulatif tous pays et liste déroulante (#85). Le global est dérivé des
+    // seules lignes publiées : il ne peut donc rien révéler de plus qu'elles.
+    $overall   = $stats->overallSummary();
+    $countries = $stats->publishedCountries();
+
+    // Un pays valide mais sous le seuil d'anonymat n'a pas de fiche : la page
+    // retombe alors sur la vue « tous pays », qui est la réponse honnête à
+    // « montre-moi ce pays » — jamais une 404.
+    if ($requestedCountry !== '') {
+        $countryDetail = $stats->countryDetail($requestedCountry);
+    }
 
     // Détection de session SANS l'exiger.
     //
@@ -160,19 +189,35 @@ $view ??= ViewFactory::create(
     (string) ($config['i18n']['default_locale'] ?? 'fr'),
 );
 
-// Référencement (#84) : la page n'est offerte à l'indexation que si elle a
-// réellement quelque chose à montrer. Un corpus sous le seuil d'anonymat ou une
-// base tombée produisent une page honnête mais vide — la proposer à un moteur
-// ne ferait qu'ajouter du contenu sans valeur.
-// `$dbError === null` implique que tout le bloc try a abouti : $overview est
-// alors nécessairement rempli.
-$meta = ($dbError === null && $overview['has_data'])
-    ? PageMeta::indexable($config, 'stats', $view->locale(), $view->t('seo.description.stats'))
-    : PageMeta::hidden($config, $view->t('seo.description.stats'));
+// Référencement (#84, revu en #85). La page porte désormais un contenu
+// permanent — ce que mesure chaque indicateur, la méthode, le seuil d'anonymat —
+// qui vaut d'être indexé même quand le corpus est encore trop mince pour publier
+// des chiffres. Seule une base tombée la met hors index : elle n'affiche alors
+// qu'un bandeau d'erreur.
+//
+// Une variante `?country=` sans fiche est en revanche `noindex` : l'URL reste
+// accessible et retombe sur la vue « tous pays », mais offrir aux moteurs autant
+// d'URLs que de pays sous le seuil ne ferait que multiplier les doublons.
+$description = $view->t('seo.description.stats');
+if ($dbError !== null || ($countryDetail === null && $requestedCountry !== '')) {
+    $meta = PageMeta::hidden($config, $description);
+} else {
+    $meta = PageMeta::indexable(
+        $config,
+        'stats',
+        $view->locale(),
+        $description,
+        $countryDetail !== null ? ['country' => $countryDetail['country']] : [],
+    );
+}
 
 echo $view->render('stats', [
     'dbError'       => $dbError,
     'overview'      => $overview,
+    'overall'       => $overall,
+    'countries'     => $countries,
+    'countryDetail' => $countryDetail,
+    'requestedCountry' => $requestedCountry,
     'private'       => $private,
     'authenticated' => $userId !== null,
     'isAdmin'       => $isAdmin,
