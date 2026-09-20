@@ -19,6 +19,15 @@ return [
     'seo.description.terms'        => 'Conditions générales d\'utilisation du service : compte, usage attendu, disponibilité, responsabilités et résiliation.',
     'seo.description.cookies'      => 'Quels cookies sont déposés par le site, à quelles fins, et comment gérer votre consentement.',
     'seo.description.legal-notice' => 'Identité de l\'éditeur du site, coordonnées de contact, hébergeur et droit applicable.',
+
+    // Guides éditoriaux (#85)
+    'guides.title'                 => 'Guides',
+    'guides.description'           => 'Comprendre le prix du kWh, lire son compteur et sa facture, choisir entre tarif fixe et prix dynamique. Des guides courts et sans jargon.',
+    'guides.intro'                 => 'Des explications courtes sur ce qui compose une facture d\'énergie et sur les choix qui la font varier. Pas de jargon, pas de vente : de quoi lire sa propre facture et savoir quoi en faire.',
+    'guides.back'                  => '← Tous les guides',
+    'guides.other_title'           => 'Autres guides',
+    'guides.cta_stats'             => 'Envie de situer votre foyer ? Les statistiques communautaires donnent le prix moyen du kWh et la consommation annuelle, pays par pays.',
+    'nav.guides'                   => 'Guides',
     'error.not_found'             => 'Cette page n\'existe pas ou a été déplacée.',
     'nav.dashboard'        => 'Tableau de bord',
     'nav.tariffs'          => 'Tarifs',
@@ -76,6 +85,16 @@ return [
     'landing.feature4_title' => 'Privé et multi-comptes',
     'landing.feature4_desc'  => 'Chaque utilisateur ne voit que ses données ; connexion via votre fournisseur.',
     'landing.cta'            => 'Se connecter',
+    'landing.stats_title'    => 'Ce que dit la communauté',
+    'landing.stats_intro'    => 'Les foyers qui utilisent l\'application et acceptent d\'y contribuer alimentent des statistiques publiques : prix moyen du kWh et consommation annuelle, pays par pays. Aucune donnée individuelle n\'est publiée.',
+    'landing.stats_households' => 'foyers contributeurs',
+    'landing.stats_countries'  => 'pays représentés',
+    'landing.stats_link'     => 'Voir les statistiques',
+    'landing.guides_title'   => 'Comprendre sa facture',
+    'landing.guides_intro'   => 'Des guides courts sur la composition du prix du kWh, la lecture d\'un compteur et le choix entre tarif fixe et prix dynamique.',
+    'landing.guides_link'    => 'Lire les guides',
+    'landing.privacy_title'  => 'Vos données restent les vôtres',
+    'landing.privacy_body'   => 'Chaque utilisateur ne voit que ses propres relevés. Les statistiques publiques sont agrégées et un pays n\'y apparaît qu\'à partir de cinq foyers contributeurs, pour qu\'aucune moyenne ne puisse désigner quelqu\'un. Contribuer se refuse en un clic, à tout moment.',
 
     // Page compte
     'account.title'        => 'Mon compte',

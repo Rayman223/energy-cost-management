@@ -6,6 +6,7 @@ namespace App\Seo;
 
 use App\I18n\Locale;
 use App\Support\SiteUrl;
+use App\View\GuideContent;
 
 /**
  * Génération de `/sitemap.xml` (#84).
@@ -30,7 +31,7 @@ final class Sitemap
      *
      * @var list<string>
      */
-    private const PATHS = ['', 'stats', 'privacy', 'terms', 'cookies', 'legal-notice'];
+    private const PATHS = ['', 'stats', 'guides', 'privacy', 'terms', 'cookies', 'legal-notice'];
 
     /**
      * @param array<string, mixed> $config
@@ -64,6 +65,11 @@ final class Sitemap
         $pages = [];
         foreach (self::PATHS as $path) {
             $pages[] = ['path' => $path, 'query' => []];
+        }
+        // Les guides (#85) sont du contenu statique : toujours listés, sans
+        // condition de données.
+        foreach (GuideContent::SLUGS as $slug) {
+            $pages[] = ['path' => 'guides/' . $slug, 'query' => []];
         }
         foreach ($countries as $country) {
             $pages[] = ['path' => 'stats', 'query' => ['country' => $country]];
