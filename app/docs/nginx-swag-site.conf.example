@@ -53,6 +53,11 @@ server {
 ## et avec le canonical émis par l'application — les trois doivent désigner le
 ## MÊME hôte, sinon les signaux se contredisent.
 ##
+## SANS OBJET si un CDN ou un proxy en amont (Cloudflare, Fastly…) redirige
+## déjà : vérifier d'abord avec `curl -I https://www.exemple.tld/`. Une 301 vers
+## l'apex suffit, peu importe qui l'émet — deux redirections en cascade ne
+## feraient qu'ajouter un saut.
+##
 ## Adapter `exemple.tld`, puis `nginx -t` et `nginx -s reload`.
 # server {
 #     listen 443 ssl;

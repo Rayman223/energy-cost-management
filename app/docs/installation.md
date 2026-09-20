@@ -420,9 +420,15 @@ indexing problem to avoid (#84).
 ### 8.2 Redirect `www` to the apex (or the other way round)
 
 The application cannot do this: the request must be redirected **before** it
-reaches PHP. See the commented server block at the end of
-[`nginx-swag-site.conf.example`](nginx-swag-site.conf.example). Whatever host
-you pick, it must be the same one as in `seo.base_url`.
+reaches PHP — but check what already happens first: a CDN in front of the site
+(Cloudflare and friends) often does it for you. If the `www` host already
+answers a 301 to the apex, there is nothing to add. Otherwise, see the
+commented server block at the end of
+[`nginx-swag-site.conf.example`](nginx-swag-site.conf.example).
+
+Whatever host wins, it must be the one in `seo.base_url`: the redirect, the
+config key and the emitted canonical must all name the same host, or the
+signals contradict each other.
 
 Check it:
 
