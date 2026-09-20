@@ -181,6 +181,21 @@ return [
         'client_id' => '', // ex. ca-pub-1234567890123456
     ],
 
+    // Référencement (#84). `base_url` est l'URL absolue canonique du site,
+    // sans barre finale : c'est elle que publient <link rel="canonical">, les
+    // balises hreflang, Open Graph et sitemap.xml. Sans elle, ces URLs sont
+    // dérivées de l'hôte de la requête — un moteur entré par www.exemple.tld
+    // consacrerait alors www comme canonique, ce qui est exactement le défaut
+    // d'indexation à éviter. À renseigner sur tout déploiement public.
+    //
+    // `google_site_verification` est le jeton de la balise meta de validation
+    // Search Console (la valeur du `content`, sans le reste de la balise) ;
+    // vide = aucune balise émise.
+    'seo' => [
+        'base_url'                 => '', // ex. https://exemple.tld
+        'google_site_verification' => '',
+    ],
+
     // Identité de l'éditeur : mentions légales (directive e-commerce) et
     // responsable du traitement RGPD. Affichée sur /legal-notice et /privacy ;
     // toute clé laissée vide est signalée comme manquante sur la page.

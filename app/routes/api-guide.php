@@ -7,12 +7,11 @@ use App\I18n\Locale;
 use App\Infrastructure\Database;
 use App\Repository\UserRepository;
 use App\Security\AuthGuard;
-use App\Security\Session;
 use App\Security\UserContext;
-use App\Security\WebAccessGuard;
 use App\Support\Adsense;
 use App\Support\DiscordLink;
 use App\Support\DonateLink;
+use App\Support\SiteUrl;
 use App\View\ViewFactory;
 
 /**
@@ -45,28 +44,11 @@ AuthGuard::protect($config);
 $locale = Locale::resolve($config, null);
 $view = ViewFactory::create(__DIR__ . '/../templates', $locale, (string) ($config['i18n']['default_locale'] ?? 'fr'));
 
-// URL absolue de l'API pour l'exemple curl : dériver le schéma et l'hôte courants
-// (X-Forwarded-Proto honoré via Session::isHttps() — SWAG termine le TLS) afin que
-// la commande soit copiable telle quelle. Même dérivation que le redirect_uri OIDC.
-$scheme = Session::isHttps() ? 'https' : 'http';
-
-// Anti-spoof du Host : la commande curl affichée est celle où l'utilisateur colle
-// son jeton. Un Host falsifié (proxy mal configuré, empoisonnement de cache) ne
-// doit pas pouvoir la faire pointer vers un domaine attaquant. Si une allowlist
-// `web_security.trusted_hosts` est configurée, un Host non listé retombe sur l'hôte
-// canonique ; sinon on n'accepte qu'un hôte au format sûr (défaut « localhost »).
-$security     = is_array($config['web_security'] ?? null) ? $config['web_security'] : [];
-$trustedHosts = array_values(array_filter(
-    is_array($security['trusted_hosts'] ?? null) ? $security['trusted_hosts'] : [],
-    'is_string',
-));
-$requestedHost = (string) ($_SERVER['HTTP_HOST'] ?? '');
-if ($trustedHosts !== []) {
-    $host = in_array($requestedHost, $trustedHosts, true) ? $requestedHost : $trustedHosts[0];
-} else {
-    $host = preg_match('/^[A-Za-z0-9.\-]+(:[0-9]+)?$/', $requestedHost) === 1 ? $requestedHost : 'localhost';
-}
-$apiUrl = $scheme . '://' . $host . WebAccessGuard::appRootPath() . '/api';
+// URL absolue de l'API pour l'exemple curl, afin que la commande soit copiable
+// telle quelle. La dérivation (schéma via X-Forwarded-Proto, anti-spoof du Host
+// sur `web_security.trusted_hosts`, préfixe de sous-répertoire) vit dans
+// {@see SiteUrl} depuis #84, où la génèrent aussi le canonical et le sitemap.
+$apiUrl = SiteUrl::absolute($config, 'api');
 
 // Statut admin pour l'en-tête commun (#193). Lecture DB défensive : cette page est
 // conçue pour rester lisible même sans base — un échec dégrade en `false` (icône
