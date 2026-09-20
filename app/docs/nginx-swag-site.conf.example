@@ -39,3 +39,27 @@ server {
 
 # La redirection HTTP (port 80) → HTTPS est déjà assurée globalement par le
 # default.conf de SWAG : inutile d'ajouter un bloc `listen 80` ici.
+
+## ── Canonicalisation du domaine (#84) ────────────────────────────────────────
+##
+## Un site joignable à la fois sur `exemple.tld` et `www.exemple.tld` est, pour
+## un moteur, deux sites au contenu identique. Search Console range alors la
+## variante non retenue en « Page avec redirection » ou « Double sans URL
+## canonique choisie par l'utilisateur », et la popularité se partage entre les
+## deux. On tranche donc côté serveur, en 301 (permanent : le moteur transfère
+## le classement, ce que ne fait pas une 302).
+##
+## Le domaine retenu ici est l'apex, cohérent avec `seo.base_url` de config.php
+## et avec le canonical émis par l'application — les trois doivent désigner le
+## MÊME hôte, sinon les signaux se contredisent.
+##
+## Adapter `exemple.tld`, puis `nginx -t` et `nginx -s reload`.
+# server {
+#     listen 443 ssl;
+#     listen [::]:443 ssl;
+#
+#     server_name www.exemple.tld;
+#     include /config/nginx/ssl.conf;
+#
+#     return 301 https://exemple.tld$request_uri;
+# }
