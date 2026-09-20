@@ -351,6 +351,23 @@ CI ([.github/workflows/ci.yml](.github/workflows/ci.yml)) runs on every push/PR:
 PHP lint (8.4), **PHPStan level 6**, **PHPUnit** (unit + integration
 against MariaDB), and a **JS syntax check** (`node --check`).
 
+### Exercising `/stats` locally
+
+Public aggregates are k-anonymised at 5 contributing households per country, so
+a development database publishes nothing: no country list, no overall summary,
+just the "not enough data yet" notice. To get something on screen:
+
+```bash
+php app/scripts/seed_dev_stats.php                    # dry-run, writes nothing
+php app/scripts/seed_dev_stats.php --execute          # 5 households in BE and FR
+php app/scripts/seed_dev_stats.php --purge --execute  # remove the test set
+```
+
+The accounts it creates are marked `oidc_iss = 'dev-seed'` and **count towards
+the public statistics**, so writing asks you to retype the database name unless
+its name already says it is disposable. Options: `--countries=BE:0.34,FR:0.24`,
+`--households=5`, `--force` (skip the prompt, for non-interactive use).
+
 ---
 
 ## Security
