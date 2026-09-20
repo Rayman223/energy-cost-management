@@ -71,6 +71,10 @@ $routes = [
     '/legal-notice'   => 'legal-notice.php',
     '/auth/login'     => 'auth/login.php',
     '/auth/logout'    => 'auth/logout.php',
+    // Référencement (#84) : générés, car leur contenu dépend de l'URL canonique
+    // configurée, du mode d'authentification et des pays réellement publiés.
+    '/robots.txt'     => 'robots.php',
+    '/sitemap.xml'    => 'sitemap.php',
 ];
 
 // En-têtes de sécurité « sûrs » pour les réponses gérées directement par le
@@ -102,8 +106,20 @@ $script = $routes[$path] ?? null;
 if ($script === null) {
     $sendSafeHeaders();
     http_response_code(404);
-    header('Content-Type: text/plain; charset=utf-8');
-    echo 'Not Found';
+
+    // Page HTML plutôt qu'un « Not Found » nu (#84) : le code HTTP suffit aux
+    // moteurs, pas au visiteur, qui se retrouvait sans le moindre lien de
+    // retour. L'indépendance au namespace App\ reste garantie par le try : si
+    // le bootstrap échoue (config absente), on retombe sur le texte brut plutôt
+    // que d'aggraver une erreur par une autre.
+    try {
+        $config = require __DIR__ . '/../bootstrap.php';
+        echo \App\View\ErrorPage::render($config, 404);
+    } catch (\Throwable $e) {
+        header('Content-Type: text/plain; charset=utf-8');
+        echo 'Not Found';
+    }
+
     exit;
 }
 
