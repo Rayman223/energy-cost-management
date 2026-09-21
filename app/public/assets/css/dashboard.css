@@ -85,8 +85,10 @@
   .card-delta--bad  { color: var(--red); }
   .card-delta--flat { color: var(--muted); }
   .card-delta-val   { white-space: nowrap; }
-  /* `anywhere` : les libellés de/nl sont plus longs qu'en fr et peuvent dépasser
-     la largeur de colonne d'un seul mot. */
+  /* Filet de sécurité : aucun libellé actuel (fr/en/de/nl) n'a de mot assez long
+     pour déborder des ~130px utiles — le plus long fait 8 caractères. `anywhere`
+     couvre une traduction future plus longue, en coupant dans le mot plutôt
+     qu'en sortant de la card. */
   .card-delta-ref   { color: var(--muted); overflow-wrap: anywhere; }
 
   .card.amber  { border-color: rgba(245,166,35,.2); background: linear-gradient(135deg, var(--surface) 60%, var(--amber-dim)); }
