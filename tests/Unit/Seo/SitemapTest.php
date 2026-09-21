@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Unit\Seo;
 
 use App\Seo\Sitemap;
+use App\View\GuideContent;
 use PHPUnit\Framework\TestCase;
 
 /**
@@ -57,7 +58,7 @@ final class SitemapTest extends TestCase
     {
         $urls = $this->locations();
 
-        foreach (['', 'stats', 'privacy', 'terms', 'cookies', 'legal-notice'] as $path) {
+        foreach (['', 'stats', 'guides', 'privacy', 'terms', 'cookies', 'legal-notice'] as $path) {
             foreach (['fr', 'en', 'nl', 'de'] as $locale) {
                 self::assertContains(
                     'https://energy-cost.eu/' . $path . '?lang=' . $locale,
@@ -75,6 +76,15 @@ final class SitemapTest extends TestCase
         }
     }
 
+    public function testEveryGuideIsListed(): void
+    {
+        $urls = $this->locations();
+
+        foreach (GuideContent::SLUGS as $slug) {
+            self::assertContains('https://energy-cost.eu/guides/' . $slug . '?lang=fr', $urls);
+        }
+    }
+
     public function testPublishedCountriesGetTheirOwnUrls(): void
     {
         $urls = $this->locations(['BE', 'FR']);
@@ -85,8 +95,9 @@ final class SitemapTest extends TestCase
 
     public function testWithoutCountriesOnlyPermanentPagesAreListed(): void
     {
-        // Corpus vide ou base injoignable : la carte se réduit, elle ne casse pas.
-        self::assertCount(6 * 4, $this->locations());
+        // Corpus vide ou base injoignable : la carte se réduit aux pages
+        // permanentes — 7 pages plus les 3 guides, dans 4 locales.
+        self::assertCount(10 * 4, $this->locations());
     }
 
     public function testLocaleListComesFromTheConfiguration(): void
@@ -96,6 +107,6 @@ final class SitemapTest extends TestCase
 
         $xml = simplexml_load_string(Sitemap::render($config));
         self::assertNotFalse($xml);
-        self::assertCount(6 * 2, $xml->url);
+        self::assertCount(10 * 2, $xml->url);
     }
 }

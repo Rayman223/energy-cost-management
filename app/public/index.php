@@ -69,6 +69,12 @@ $routes = [
     '/terms'          => 'terms.php',
     '/cookies'        => 'cookies.php',
     '/legal-notice'   => 'legal-notice.php',
+    // Guides éditoriaux (#85) : publics et indexables sans condition. Un script
+    // par guide, comme les pages légales — le routeur ne fait pas de motif.
+    '/guides'                   => 'guides.php',
+    '/guides/kwh-price'         => 'guides/kwh-price.php',
+    '/guides/meter-reading'     => 'guides/meter-reading.php',
+    '/guides/fixed-vs-dynamic'  => 'guides/fixed-vs-dynamic.php',
     '/auth/login'     => 'auth/login.php',
     '/auth/logout'    => 'auth/logout.php',
     // Référencement (#84) : générés, car leur contenu dépend de l'URL canonique

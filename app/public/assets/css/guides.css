@@ -1,0 +1,55 @@
+/* Guides (#85) — spécifique ; base commune dans page-standalone.css, mise en
+   forme du corps de texte partagée avec les pages légales (legal.css). */
+
+/* Chapô : plus grand que le corps, il doit se lire avant tout le reste. */
+.guide-intro {
+  font-size: 1.05rem;
+  color: var(--text);
+  line-height: 1.75;
+}
+
+/* ── Index des guides ─────────────────────────────────────────────────────── */
+.guide-list {
+  display: grid; gap: 14px;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  margin-top: 28px;
+}
+.guide-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 18px 20px;
+}
+.guide-card h2 { margin: 0 0 8px; font-size: 1.05rem; }
+.guide-card h2 a { text-decoration: none; }
+.guide-card h2 a:hover { text-decoration: underline; }
+.guide-card p { margin: 0; color: var(--muted); font-size: .9rem; line-height: 1.65; }
+
+/* ── Appel à l'action et maillage interne ─────────────────────────────────── */
+.guide-cta {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 14px;
+  justify-content: space-between;
+  margin-top: 36px; padding: 18px 20px;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 10px;
+}
+.guide-cta p { margin: 0; color: var(--text); line-height: 1.6; }
+.guide-cta-link {
+  flex-shrink: 0;
+  padding: 9px 18px;
+  background: var(--amber); color: var(--bg);
+  border-radius: 8px;
+  font-size: .85rem; font-weight: 700; text-decoration: none;
+}
+.guide-cta-link:hover { filter: brightness(1.08); }
+
+.guide-more { margin-top: 36px; }
+.guide-more h2 { margin-bottom: 10px; }
+.guide-more ul { margin: 0; padding-left: 20px; line-height: 2; }
+
+.legal-footer { margin-top: 36px; }
+
+@media (max-width: 600px) {
+  .guide-cta { flex-direction: column; align-items: stretch; }
+  .guide-cta-link { text-align: center; }
+}

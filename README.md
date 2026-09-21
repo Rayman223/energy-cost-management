@@ -307,7 +307,8 @@ electricity) applies from its date onwards instead of rewriting the past.
 | `/reconciliation` | Bill reconciliation: invoiced amounts vs. computed cost |
 | `/advances` | Advance payment schedules and their balance |
 | `/batteries` | Home battery fleet: hardware, investment and calculation assumptions |
-| `/stats` | Community statistics — average price and consumption per country, k-anonymised at 5 households. **Public**; adds a personal comparison when signed in |
+| `/stats` | Community statistics — average price and consumption per country, k-anonymised at 5 households, with an all-country summary and a per-country view (`?country=BE`). **Public**; adds a personal comparison when signed in |
+| `/guides`, `/guides/*` | Editorial guides (kWh price, meter & bill, fixed vs. dynamic), localized. **Public**, static content |
 | `/account` | Profile, API tokens, statistics opt-out, GDPR export/delete, self-service import |
 | `/admin` | Admin: members (role/status) + import on behalf of a user |
 | `/api-guide` | Ingestion API guide (tokens, examples) |
@@ -349,6 +350,23 @@ change is needed to run it. Creating it:
 CI ([.github/workflows/ci.yml](.github/workflows/ci.yml)) runs on every push/PR:
 PHP lint (8.4), **PHPStan level 6**, **PHPUnit** (unit + integration
 against MariaDB), and a **JS syntax check** (`node --check`).
+
+### Exercising `/stats` locally
+
+Public aggregates are k-anonymised at 5 contributing households per country, so
+a development database publishes nothing: no country list, no overall summary,
+just the "not enough data yet" notice. To get something on screen:
+
+```bash
+php app/scripts/seed_dev_stats.php                    # dry-run, writes nothing
+php app/scripts/seed_dev_stats.php --execute          # 5 households in BE and FR
+php app/scripts/seed_dev_stats.php --purge --execute  # remove the test set
+```
+
+The accounts it creates are marked `oidc_iss = 'dev-seed'` and **count towards
+the public statistics**, so writing asks you to retype the database name unless
+its name already says it is disposable. Options: `--countries=BE:0.34,FR:0.24`,
+`--households=5`, `--force` (skip the prompt, for non-interactive use).
 
 ---
 

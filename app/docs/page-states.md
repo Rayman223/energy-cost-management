@@ -59,6 +59,32 @@ contributeurs), et un membre peut se retirer depuis `/account`.
 | **Erreur BDD** | Exception au bootstrap ou au chargement → `$dbError` | La page se rend quand même : bandeau d'erreur, sections à `—`, aucune trace d'exception. |
 | **Instance en Basic Auth** | Mode OIDC **désactivé** | La page N'EST PAS publique : `AuthGuard::protect()` s'applique comme sur toute autre page. Sans cela, `/stats` percerait l'allowlist IP d'une installation auto-hébergée. |
 | **Compte bloqué** | Session vivante mais `users.status <> 'active'` | Rendu anonyme : `AuthGuard::protect()` n'ayant pas tourné, la route vérifie `isActive()` elle-même. |
+| **Pays sélectionné** | `?country=XX` publié | Fiche du pays (tarifs, consommations, part dynamique) et écarts à la moyenne tous pays, à devise égale. Canonical propre à l'URL. |
+| **Pays sélectionné non publié** | `?country=XX` valide mais sous le seuil | Retour à la vue « tous pays » avec une explication, la liste déroulante revient sur « Tous les pays ». Jamais de 404. La page passe en `noindex`. |
+| **Pays inconnu** | `?country=` inexploitable | Paramètre ignoré, vue « tous pays ». |
+
+> **Foyers affichés.** Les cartes de couverture comptent les foyers et pays
+> **réellement agrégés**, dérivés des lignes publiées — pas `coverage()`, qui
+> compte tous les contributeurs déclarés. Un compte au profil complet mais sans
+> grille ni relevé n'apparaît donc nulle part ici, alors qu'il compte parmi les
+> « foyers inscrits » de la page d'accueil. Les deux nombres peuvent différer :
+> la landing décrit la communauté, `/stats` décrit ses données.
+
+---
+
+## `/guides` et `/guides/<slug>` — Guides éditoriaux (#85)
+
+Contenu statique, lu depuis `app/content/guides/<slug>/<locale>.php`. Ces pages
+ne dépendent ni de la base ni d'une session : elles suivent le régime des pages
+légales, publiques sans garde applicative. En instance auto-hébergée, elles
+restent derrière l'allowlist IP et Basic Auth comme le reste du site, et
+`robots.txt` y répond `Disallow: /`.
+
+| État | Déclencheur | Rendu attendu |
+|------|-------------|---------------|
+| **Nominal** | Slug connu, contenu présent dans la locale | Guide complet, liens vers `/stats` et les autres guides. |
+| **Traduction manquante** | Fichier absent pour la locale négociée | Repli sur le français plutôt qu'une page d'erreur — un guide lisible vaut mieux qu'un 404. |
+| **Slug inconnu** | URL hors de la liste blanche | 404 HTML (`App\View\ErrorPage`). Le slug ne peut pas atteindre le disque : la liste blanche est vérifiée avant toute construction de chemin. |
 
 ---
 

@@ -302,6 +302,265 @@ final class StatisticsServiceTest extends TestCase
 
     // ── Fabriques ──────────────────────────────────────────────────────────
 
+
+    // ── Récapitulatif tous pays confondus (#85) ──────────────────────────────
+
+    public function testOverallPriceIsWeightedByHouseholds(): void
+    {
+        $repo = new FakeStatisticsRepository();
+        // 90 foyers à 0,300 € et 10 à 0,400 € : la moyenne pondérée vaut 0,310,
+        // là où une moyenne de moyennes donnerait 0,350 — un écart de 13 %.
+        $repo->rates = [
+            $this->rate('BE', 'EUR', 90, 0.30),
+            $this->rate('FR', 'EUR', 10, 0.40),
+        ];
+
+        $prices = $this->service($repo)->overallSummary()['prices'];
+
+        self::assertCount(1, $prices);
+        self::assertSame('EUR', $prices[0]['currency']);
+        self::assertEqualsWithDelta(0.310, $prices[0]['ttc_per_kwh'], 1e-9);
+        self::assertSame(100, $prices[0]['households']);
+    }
+
+    public function testOverallPricesNeverMixCurrencies(): void
+    {
+        $repo = new FakeStatisticsRepository();
+        $repo->rates = [
+            $this->rate('BE', 'EUR', 20, 0.30),
+            $this->rate('SE', 'SEK', 8, 1.50),
+        ];
+
+        $prices = $this->service($repo)->overallSummary()['prices'];
+
+        // Deux lignes, jamais une somme : additionner des couronnes à des euros
+        // produirait un nombre qui ne veut rien dire.
+        self::assertCount(2, $prices);
+        self::assertSame(['EUR', 'SEK'], array_column($prices, 'currency'));
+        self::assertEqualsWithDelta(0.30, $prices[0]['ttc_per_kwh'], 1e-9);
+        self::assertEqualsWithDelta(1.50, $prices[1]['ttc_per_kwh'], 1e-9);
+    }
+
+    public function testOverallPriceIgnoresTheResidualBucket(): void
+    {
+        $repo = new FakeStatisticsRepository();
+        $repo->rates = [
+            $this->rate('BE', 'EUR', 10, 0.30),
+            // Le bucket « Autres » ne porte aucun prix : il ne doit pondérer personne.
+            $this->rate(self::OTHER, 'EUR', 40, 0.90),
+        ];
+
+        $prices = $this->service($repo)->overallSummary()['prices'];
+
+        self::assertCount(1, $prices);
+        self::assertSame(10, $prices[0]['households']);
+        self::assertEqualsWithDelta(0.30, $prices[0]['ttc_per_kwh'], 1e-9);
+    }
+
+    public function testOverallUsageCountsTheResidualBucket(): void
+    {
+        $repo = new FakeStatisticsRepository();
+        // Des kWh s'additionnent quelle que soit la devise : le bucket résiduel
+        // est publié, donc il compte.
+        $repo->electricity = [
+            ['bucket' => 'BE', 'households' => 10, 'value' => 3000.0],
+            ['bucket' => self::OTHER, 'households' => 10, 'value' => 5000.0],
+        ];
+
+        $overall = $this->service($repo)->overallSummary();
+
+        self::assertNotNull($overall['electricity']);
+        self::assertSame(20, $overall['electricity']['households']);
+        self::assertEqualsWithDelta(4000.0, $overall['electricity']['value'], 1e-9);
+    }
+
+    public function testOverallSummaryIsDerivableFromThePublishedRowsAlone(): void
+    {
+        // Garde-fou de confidentialité : le récapitulatif ne doit rien apprendre
+        // qu'un lecteur ne puisse recalculer depuis le tableau affiché. On le
+        // vérifie en refaisant le calcul à la main sur les lignes publiées.
+        $repo = new FakeStatisticsRepository();
+        $repo->rates = [
+            $this->rate('BE', 'EUR', 7, 0.28),
+            $this->rate('FR', 'EUR', 13, 0.22),
+        ];
+
+        $service  = $this->service($repo);
+        $published = $service->publicOverview()['prices'];
+        $overall   = $service->overallSummary()['prices'];
+
+        $weighted = 0.0;
+        $total    = 0;
+        foreach ($published as $row) {
+            $weighted += (float) $row['ttc_per_kwh'] * $row['households'];
+            $total    += $row['households'];
+        }
+
+        self::assertEqualsWithDelta($weighted / $total, $overall[0]['ttc_per_kwh'], 1e-3);
+    }
+
+    public function testOverallMixSumsEveryPublishedCountry(): void
+    {
+        $repo = new FakeStatisticsRepository();
+        $repo->mix = [
+            ['bucket' => 'BE', 'fixed' => 30, 'dynamic' => 10],
+            ['bucket' => 'FR', 'fixed' => 50, 'dynamic' => 10],
+        ];
+
+        $mix = $this->service($repo)->overallSummary()['mix'];
+
+        self::assertNotNull($mix);
+        self::assertSame(80, $mix['fixed']);
+        self::assertSame(20, $mix['dynamic']);
+        self::assertEqualsWithDelta(20.0, $mix['dynamic_pct'], 1e-9);
+    }
+
+    public function testOverallCountsDistinctPublishedCountries(): void
+    {
+        $repo = new FakeStatisticsRepository();
+        $repo->rates       = [$this->rate('BE', 'EUR', 10, 0.30)];
+        $repo->electricity = [
+            ['bucket' => 'BE', 'households' => 10, 'value' => 3000.0],
+            ['bucket' => 'FR', 'households' => 6, 'value' => 4000.0],
+            ['bucket' => self::OTHER, 'households' => 9, 'value' => 3500.0],
+        ];
+        // coverage() compte tous les contributeurs déclarés, y compris ceux qui
+        // n'alimentent aucun agrégat : le récapitulatif ne doit PAS s'y fier.
+        $repo->coverage = ['households' => 99, 'countries' => 7];
+
+        $overall = $this->service($repo)->overallSummary();
+
+        // BE et FR ; le bucket résiduel n'est pas un pays.
+        self::assertSame(2, $overall['countries']);
+        // 10 + 6 + 9 foyers derrière les consommations publiées.
+        self::assertSame(25, $overall['households']);
+    }
+
+    public function testOverallHouseholdsIgnoresContributorsWhoFeedNothing(): void
+    {
+        // Un compte au profil complet — pays renseigné, contribution active —
+        // mais sans grille ni relevé entre dans coverage() sans peser dans le
+        // moindre chiffre. L'annoncer à côté des moyennes laisserait croire
+        // qu'il y a compté.
+        $repo = new FakeStatisticsRepository();
+        $repo->rates    = [$this->rate('BE', 'EUR', 5, 0.34)];
+        $repo->coverage = ['households' => 6, 'countries' => 1];
+
+        $overall = $this->service($repo)->overallSummary();
+
+        self::assertSame(5, $overall['households']);
+    }
+
+    public function testOverallHouseholdsTakesTheLargestPublishedSet(): void
+    {
+        // Les ensembles se recoupent sans qu'on puisse les recomposer : un même
+        // foyer peut porter un tarif ET une consommation. On retient le plus
+        // grand, borne basse exacte, plutôt qu'une somme qui compterait double.
+        $repo = new FakeStatisticsRepository();
+        $repo->rates       = [$this->rate('BE', 'EUR', 5, 0.34)];
+        $repo->electricity = [['bucket' => 'BE', 'households' => 8, 'value' => 3000.0]];
+
+        self::assertSame(8, $this->service($repo)->overallSummary()['households']);
+    }
+
+    public function testEmptyCorpusYieldsAnEmptySummaryRatherThanZeroes(): void
+    {
+        $overall = $this->service(new FakeStatisticsRepository())->overallSummary();
+
+        self::assertFalse($overall['has_data']);
+        self::assertSame([], $overall['prices']);
+        self::assertNull($overall['electricity']);
+        self::assertNull($overall['mix']);
+    }
+
+    public function testOverallSummaryReusesTheMemoisedOverview(): void
+    {
+        $repo = new FakeStatisticsRepository();
+        $repo->rates = [$this->rate('BE', 'EUR', 10, 0.30)];
+
+        $service = $this->service($repo);
+        $service->publicOverview();
+        $service->overallSummary();
+
+        // Le récapitulatif dérive de l'agrégat, il ne le recalcule pas.
+        self::assertSame(1, $repo->calls['unitRateByCountry'] ?? 0);
+    }
+
+
+    public function testCountryPublishedOnlyByItsPricingMixStillHasADetail(): void
+    {
+        // `pricingModeByCountry()` a une porte plus lâche que les autres
+        // agrégats : une grille active suffit, sans tarif unitaire ni 90 jours
+        // de relevés. Un pays dont tous les foyers sont en contrat dynamique
+        // n'apparaît donc que dans `mix` — mais il est proposé par la liste
+        // déroulante et publié dans le tableau, sa fiche doit exister.
+        $repo = new FakeStatisticsRepository();
+        $repo->mix = [['bucket' => 'NL', 'fixed' => 0, 'dynamic' => 7]];
+
+        $service = $this->service($repo);
+
+        self::assertContains('NL', $service->publishedCountries());
+
+        $detail = $service->countryDetail('NL');
+        self::assertNotNull($detail);
+        // Les lignes de mix ne portent pas de compte de foyers, mais leur somme
+        // en est un : sans quoi la fiche afficherait « 0 foyers ».
+        self::assertSame(7, $detail['households']);
+        self::assertEqualsWithDelta(100.0, $detail['dynamic_pct'], 1e-9);
+    }
+
+    public function testOverallSummaryIsShownWhenOnlyThePricingMixIsPublished(): void
+    {
+        $repo = new FakeStatisticsRepository();
+        $repo->mix = [['bucket' => 'NL', 'fixed' => 2, 'dynamic' => 6]];
+
+        // Masquer tout le bloc perdrait la seule donnée publiée du corpus.
+        self::assertTrue($this->service($repo)->overallSummary()['has_data']);
+    }
+
+    public function testResidualBucketIsLabelledAsSuchWhateverRowCarriesIt(): void
+    {
+        // Le bucket ZZ peut n'avoir ni tarif ni électricité : se fier à la
+        // première ligne trouvée le ferait passer pour un vrai pays.
+        $repo = new FakeStatisticsRepository();
+        $repo->utility = [
+            'water' => [['bucket' => self::OTHER, 'households' => 6, 'value' => 90.0]],
+        ];
+
+        $detail = $this->service($repo)->countryDetail(self::OTHER);
+
+        self::assertNotNull($detail);
+        self::assertTrue($detail['is_other']);
+    }
+
+    public function testCoverageAlonePerformsASingleQuery(): void
+    {
+        // La landing n'affiche que ces deux chiffres, et c'est la page la plus
+        // crawlée : elle ne doit pas déclencher les sept agrégats par pays.
+        $repo = new FakeStatisticsRepository();
+        $repo->coverage = ['households' => 25, 'countries' => 3];
+
+        $coverage = $this->service($repo)->coverage();
+
+        self::assertSame(['households' => 25, 'countries' => 3], $coverage);
+        self::assertSame(0, $repo->calls['unitRateByCountry'] ?? 0);
+        self::assertSame(0, $repo->calls['electricityUsageByCountry'] ?? 0);
+        self::assertSame(1, $repo->calls['coverage'] ?? 0);
+    }
+
+    public function testCoverageReusesTheOverviewWhenItIsAlreadyComputed(): void
+    {
+        $repo = new FakeStatisticsRepository();
+        $repo->coverage = ['households' => 25, 'countries' => 3];
+
+        $service = $this->service($repo);
+        $service->publicOverview();
+        $service->coverage();
+
+        // Une seule lecture : la valeur est déjà en main.
+        self::assertSame(1, $repo->calls['coverage'] ?? 0);
+    }
+
     private function service(FakeStatisticsRepository $repo): StatisticsService
     {
         return new StatisticsService($repo);

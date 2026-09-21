@@ -151,6 +151,45 @@
     line-height: 1.6; margin: 10px 0 0;
   }
 
+  /* ── Introduction éditoriale et sélecteur de pays (#85) ────────────────── */
+  .stats-intro {
+    max-width: 68ch;
+    margin: 18px 0 0;
+    color: var(--text); line-height: 1.7;
+  }
+
+  /* Complément d'une carte : nombre de foyers, unité de temps, écart. */
+  .stat-sub {
+    margin-top: 8px;
+    font-size: .74rem; color: var(--muted); line-height: 1.6;
+  }
+
+  .country-filter {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 10px;
+    margin-top: 20px; padding: 14px 18px;
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 10px;
+  }
+  .country-filter label {
+    font-size: .72rem; font-weight: 700; letter-spacing: .1em;
+    text-transform: uppercase; color: var(--muted);
+  }
+  .country-filter select {
+    flex: 1; min-width: 180px;
+    padding: 8px 10px;
+    background: var(--surface2); color: var(--text);
+    border: 1px solid var(--border); border-radius: 8px;
+    font-family: inherit; font-size: .9rem;
+  }
+  .country-filter button {
+    padding: 8px 18px;
+    background: var(--amber); color: var(--bg);
+    border: 0; border-radius: 8px;
+    font-family: inherit; font-size: .82rem; font-weight: 700;
+    cursor: pointer;
+  }
+  .country-filter button:hover { filter: brightness(1.08); }
+
   .error-banner {
     background: var(--red-dim); border: 1px solid rgba(245,101,101,.3);
     border-radius: 8px; padding: 14px 18px; margin-top: 24px;
@@ -162,4 +201,5 @@
   @media (max-width: 700px) {
     .chart-grid { grid-template-columns: 1fr; }
     .cta-box { flex-direction: column; align-items: flex-start; }
+    .country-filter { flex-direction: column; align-items: stretch; }
   }
