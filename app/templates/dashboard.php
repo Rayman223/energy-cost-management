@@ -40,7 +40,8 @@ $deltaBadge = function (?float $pct, bool $lowerIsBetter, bool $isNew = false): 
     // signale quand même le démarrage de la consommation.
     if ($pct === null && $isNew) {
         return '<div class="card-delta card-delta--' . ($lowerIsBetter ? 'bad' : 'good') . '">'
-            . '▲ <span class="card-delta-ref">' . $this->te('dash.card.new') . '</span></div>';
+            . '<span class="card-delta-val">▲</span> '
+            . '<span class="card-delta-ref">' . $this->te('dash.card.new') . '</span></div>';
     }
     if ($pct === null) {
         return '';
@@ -56,8 +57,11 @@ $deltaBadge = function (?float $pct, bool $lowerIsBetter, bool $isNew = false): 
         $tone  = 'flat';
     }
 
+    // Valeur et libellé dans deux spans distincts (#86) : dans une card étroite le
+    // libellé doit pouvoir passer à la ligne, la valeur chiffrée rester insécable.
     return '<div class="card-delta card-delta--' . $tone . '">'
-        . $arrow . ' ' . ($pct > 0.0 ? '+' : '') . $this->num($pct, 1) . ' % '
+        . '<span class="card-delta-val">' . $arrow . ' ' . ($pct > 0.0 ? '+' : '')
+        . $this->num($pct, 1) . ' %</span> '
         . '<span class="card-delta-ref">' . $this->te('dash.card.vs_prev_period') . '</span></div>';
 };
 ?>

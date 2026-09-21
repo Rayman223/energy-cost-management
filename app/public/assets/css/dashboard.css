@@ -73,15 +73,21 @@
     font-family: var(--mono); font-size: .95rem; color: var(--muted);
     margin-top: 8px;
   }
-  /* Variation vs mois précédent (#215) */
+  /* Variation vs mois précédent (#215). Le badge déborderait de la card sous
+     `white-space: nowrap` (#86) : une colonne `cards-auto` ne fait que 170px, soit
+     ~130px utiles, contre ~240px pour la ligne entière. Le retour à la ligne est
+     donc porté par le conteneur, et seule la valeur chiffrée reste insécable. */
   .card-delta {
     font-family: var(--mono); font-size: .72rem; color: var(--muted);
-    margin-top: 8px; white-space: nowrap;
+    margin-top: 8px; line-height: 1.35;
   }
   .card-delta--good { color: var(--green); }
   .card-delta--bad  { color: var(--red); }
   .card-delta--flat { color: var(--muted); }
-  .card-delta-ref   { color: var(--muted); }
+  .card-delta-val   { white-space: nowrap; }
+  /* `anywhere` : les libellés de/nl sont plus longs qu'en fr et peuvent dépasser
+     la largeur de colonne d'un seul mot. */
+  .card-delta-ref   { color: var(--muted); overflow-wrap: anywhere; }
 
   .card.amber  { border-color: rgba(245,166,35,.2); background: linear-gradient(135deg, var(--surface) 60%, var(--amber-dim)); }
   .card.green  { border-color: rgba(47,213,142,.2); background: linear-gradient(135deg, var(--surface) 60%, var(--green-dim)); }
