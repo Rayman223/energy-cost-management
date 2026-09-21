@@ -81,7 +81,7 @@ return [
     'landing.cta'            => 'Anmelden',
     'landing.stats_title'    => 'Was die Gemeinschaft zeigt',
     'landing.stats_intro'    => 'Haushalte, die die App nutzen und der Auswertung zustimmen, speisen eine öffentliche Statistik: durchschnittlicher kWh-Preis und Jahresverbrauch, Land für Land. Einzeldaten werden nie veröffentlicht.',
-    'landing.stats_households' => 'beitragende Haushalte',
+    'landing.stats_households' => 'registrierte Haushalte',
     'landing.stats_countries'  => 'vertretene Länder',
     'landing.stats_link'     => 'Zur Statistik',
     'landing.guides_title'   => 'Die eigene Rechnung verstehen',

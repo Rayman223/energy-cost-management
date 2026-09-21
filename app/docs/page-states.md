@@ -63,6 +63,13 @@ contributeurs), et un membre peut se retirer depuis `/account`.
 | **Pays sélectionné non publié** | `?country=XX` valide mais sous le seuil | Retour à la vue « tous pays » avec une explication, la liste déroulante revient sur « Tous les pays ». Jamais de 404. La page passe en `noindex`. |
 | **Pays inconnu** | `?country=` inexploitable | Paramètre ignoré, vue « tous pays ». |
 
+> **Foyers affichés.** Les cartes de couverture comptent les foyers et pays
+> **réellement agrégés**, dérivés des lignes publiées — pas `coverage()`, qui
+> compte tous les contributeurs déclarés. Un compte au profil complet mais sans
+> grille ni relevé n'apparaît donc nulle part ici, alors qu'il compte parmi les
+> « foyers inscrits » de la page d'accueil. Les deux nombres peuvent différer :
+> la landing décrit la communauté, `/stats` décrit ses données.
+
 ---
 
 ## `/guides` et `/guides/<slug>` — Guides éditoriaux (#85)

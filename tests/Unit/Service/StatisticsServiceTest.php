@@ -424,14 +424,43 @@ final class StatisticsServiceTest extends TestCase
             ['bucket' => 'FR', 'households' => 6, 'value' => 4000.0],
             ['bucket' => self::OTHER, 'households' => 9, 'value' => 3500.0],
         ];
-        $repo->coverage = ['households' => 25, 'countries' => 2];
+        // coverage() compte tous les contributeurs déclarés, y compris ceux qui
+        // n'alimentent aucun agrégat : le récapitulatif ne doit PAS s'y fier.
+        $repo->coverage = ['households' => 99, 'countries' => 7];
 
         $overall = $this->service($repo)->overallSummary();
 
         // BE et FR ; le bucket résiduel n'est pas un pays.
         self::assertSame(2, $overall['countries']);
-        // Le nombre de foyers est celui déjà publié par coverage(), pas un recompte.
+        // 10 + 6 + 9 foyers derrière les consommations publiées.
         self::assertSame(25, $overall['households']);
+    }
+
+    public function testOverallHouseholdsIgnoresContributorsWhoFeedNothing(): void
+    {
+        // Un compte au profil complet — pays renseigné, contribution active —
+        // mais sans grille ni relevé entre dans coverage() sans peser dans le
+        // moindre chiffre. L'annoncer à côté des moyennes laisserait croire
+        // qu'il y a compté.
+        $repo = new FakeStatisticsRepository();
+        $repo->rates    = [$this->rate('BE', 'EUR', 5, 0.34)];
+        $repo->coverage = ['households' => 6, 'countries' => 1];
+
+        $overall = $this->service($repo)->overallSummary();
+
+        self::assertSame(5, $overall['households']);
+    }
+
+    public function testOverallHouseholdsTakesTheLargestPublishedSet(): void
+    {
+        // Les ensembles se recoupent sans qu'on puisse les recomposer : un même
+        // foyer peut porter un tarif ET une consommation. On retient le plus
+        // grand, borne basse exacte, plutôt qu'une somme qui compterait double.
+        $repo = new FakeStatisticsRepository();
+        $repo->rates       = [$this->rate('BE', 'EUR', 5, 0.34)];
+        $repo->electricity = [['bucket' => 'BE', 'households' => 8, 'value' => 3000.0]];
+
+        self::assertSame(8, $this->service($repo)->overallSummary()['households']);
     }
 
     public function testEmptyCorpusYieldsAnEmptySummaryRatherThanZeroes(): void

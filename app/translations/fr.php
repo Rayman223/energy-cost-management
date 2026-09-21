@@ -87,7 +87,7 @@ return [
     'landing.cta'            => 'Se connecter',
     'landing.stats_title'    => 'Ce que dit la communauté',
     'landing.stats_intro'    => 'Les foyers qui utilisent l\'application et acceptent d\'y contribuer alimentent des statistiques publiques : prix moyen du kWh et consommation annuelle, pays par pays. Aucune donnée individuelle n\'est publiée.',
-    'landing.stats_households' => 'foyers contributeurs',
+    'landing.stats_households' => 'foyers inscrits',
     'landing.stats_countries'  => 'pays représentés',
     'landing.stats_link'     => 'Voir les statistiques',
     'landing.guides_title'   => 'Comprendre sa facture',

@@ -184,8 +184,28 @@ final class StatisticsService
         $water  = self::overallUsage($overview['water']);
         $mix    = self::overallMix($overview['mix']);
 
+        // Foyers qui alimentent RÉELLEMENT les chiffres publiés, et non tous
+        // les contributeurs déclarés que compte `coverage()` : un compte au
+        // profil complet mais sans grille ni relevé ne pèse dans aucun agrégat,
+        // et l'annoncer à côté de moyennes laisse croire qu'il y a compté.
+        //
+        // Les ensembles se recoupent sans qu'on puisse les recomposer depuis
+        // les lignes publiées (un même foyer peut porter un tarif ET une
+        // consommation) : on retient le plus grand, qui est la borne basse
+        // exacte — « au moins tant de foyers derrière ces chiffres ».
+        $households = 0;
+        foreach ([$elec, $gas, $water] as $usage) {
+            $households = max($households, $usage['households'] ?? 0);
+        }
+        foreach ($prices as $price) {
+            $households = max($households, $price['households']);
+        }
+        if ($mix !== null) {
+            $households = max($households, $mix['fixed'] + $mix['dynamic']);
+        }
+
         return [
-            'households'  => $overview['coverage']['households'],
+            'households'  => $households,
             'countries'   => \count($countries),
             'prices'      => $prices,
             'electricity' => $elec,

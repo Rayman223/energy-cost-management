@@ -81,7 +81,7 @@ return [
     'landing.cta'            => 'Aanmelden',
     'landing.stats_title'    => 'Wat de gemeenschap toont',
     'landing.stats_intro'    => 'Huishoudens die de app gebruiken en toestemming geven om bij te dragen, voeden openbare statistieken: gemiddelde kWh-prijs en jaarverbruik, land per land. Er worden nooit individuele gegevens gepubliceerd.',
-    'landing.stats_households' => 'bijdragende huishoudens',
+    'landing.stats_households' => 'geregistreerde huishoudens',
     'landing.stats_countries'  => 'vertegenwoordigde landen',
     'landing.stats_link'     => 'Bekijk de statistieken',
     'landing.guides_title'   => 'Begrijp uw factuur',

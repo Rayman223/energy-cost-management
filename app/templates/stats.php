@@ -306,14 +306,18 @@ $symbol = \App\Domain\Currency::symbol($currency ?? 'EUR');
   </div>
   <?php else: ?>
 
+  <?php // Foyers et pays RÉELLEMENT agrégés, pas les contributeurs déclarés que
+        // compte `coverage()` : un compte au profil complet mais sans grille ni
+        // relevé ne pèse dans aucun chiffre de cette page, et l'annoncer ici
+        // laisserait croire qu'il y a compté (#85). ?>
   <div class="stat-cards">
     <div class="stat-card">
       <div class="stat-label"><?= $this->te('stats.coverage_households') ?></div>
-      <div class="stat-value"><?= $this->e($this->num((float) $overview['coverage']['households'], 0)) ?></div>
+      <div class="stat-value"><?= $this->e($this->num((float) ($overall['households'] ?? 0), 0)) ?></div>
     </div>
     <div class="stat-card">
       <div class="stat-label"><?= $this->te('stats.coverage_countries') ?></div>
-      <div class="stat-value"><?= $this->e($this->num((float) $overview['coverage']['countries'], 0)) ?></div>
+      <div class="stat-value"><?= $this->e($this->num((float) ($overall['countries'] ?? 0), 0)) ?></div>
     </div>
   </div>
 

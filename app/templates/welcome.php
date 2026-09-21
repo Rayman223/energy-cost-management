@@ -10,7 +10,7 @@
  * @var ?string      $donateUrl URL de soutien au projet (#3), ou null si non configurée.
  * @var ?string      $adsenseClient Identifiant éditeur AdSense (#185), null si publicité désactivée.
  * @var ?\App\Seo\PageMeta $meta Métadonnées de référencement (#84).
- * @var array<string,mixed>|null $coverage Foyers et pays contributeurs (#85), ou null
+ * @var array<string,mixed>|null $coverage Foyers et pays INSCRITS (#85), ou null
  *                              si la base est injoignable : la landing doit se rendre
  *                              quoi qu'il arrive, c'est la porte d'entrée du site.
  */
@@ -73,7 +73,14 @@
     </section>
     <?php // Chiffres réels plutôt qu'une promesse : c'est ce qui distingue cette
           // page d'une plaquette, et ce qui donne au visiteur une raison d'aller
-          // plus loin (#85). Masqué tant que le corpus est sous le seuil. ?>
+          // plus loin (#85). Masqué tant que le corpus est sous le seuil.
+          //
+          // Ils décrivent la COMMUNAUTÉ INSCRITE (`coverage()`, une requête),
+          // pas les données publiées : un foyer inscrit sans grille ni relevé y
+          // compte. D'où « foyers inscrits » et non « contributeurs », et un
+          // total qui peut dépasser celui de /stats, lequel ne montre que les
+          // foyers derrière ses chiffres. Aligner les deux imposerait les sept
+          // agrégats par pays sur la page la plus visitée du site. ?>
     <section class="landing-stats">
       <h2><?= $this->te('landing.stats_title') ?></h2>
       <p><?= $this->te('landing.stats_intro') ?></p>

@@ -81,7 +81,7 @@ return [
     'landing.cta'            => 'Sign in',
     'landing.stats_title'    => 'What the community shows',
     'landing.stats_intro'    => 'Households using the app who agree to contribute feed public statistics: average kWh price and yearly consumption, country by country. No individual data is ever published.',
-    'landing.stats_households' => 'contributing households',
+    'landing.stats_households' => 'registered households',
     'landing.stats_countries'  => 'countries covered',
     'landing.stats_link'     => 'See the statistics',
     'landing.guides_title'   => 'Understand your bill',
