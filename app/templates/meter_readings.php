@@ -211,14 +211,34 @@ $meterSelect = function (string $prefix, string $energyType) use ($metersByEnerg
   <div class="gas-grid">
     <div class="gas-form">
       <?php // Sélecteur masqué s'il n'y a qu'une batterie : le choix serait vide de
-            // sens, mais le champ reste dans le DOM — le JS y lit toujours la cible. ?>
+            // sens, mais le champ reste dans le DOM — le JS y lit toujours la cible.
+            //
+            // Une batterie HORS SERVICE reste listée et sélectionnable, suffixée de
+            // sa date de fin de service — mêmes attributs, même raison que les
+            // compteurs fermés (cf. $meterSelect) : `decommissioned_on` est une
+            // borne EXCLUE, un relevé antérieur reste légitime, et c'est le serveur
+            // qui tranche, sur `reading_at`. Sans ces attributs, un relevé daté de
+            // la fin de service partait pour revenir en 422 — message anglais brut
+            // du repository, affiché tel quel dans #battery-feedback (#68). ?>
       <div class="form-row<?= count($batteries) > 1 ? '' : ' bat-row-hidden' ?>">
         <label class="form-label" for="battery-target"><?= $this->te('battery.col_battery') ?></label>
-        <select id="battery-target" class="form-input">
-          <?php foreach ($batteries as $battery): ?>
-          <option value="<?= $this->e((string) $battery->id) ?>"><?= $this->e($battery->label()) ?></option>
-          <?php endforeach; ?>
-        </select>
+        <select id="battery-target" class="form-input"><?php
+          foreach ($batteries as $battery):
+              $outOfService = $battery->isDecommissionedOn($closureToday);
+              $label        = $this->e($battery->label());
+              if ($outOfService && $battery->decommissionedOn !== null) {
+                  $label .= ' — ' . $this->te('battery.out_of_service_on', ['date' => $battery->decommissionedOn->format('Y-m-d')]);
+              }
+
+              // `data-closed` DÈS QUE la date existe, même à venir : une fin de
+              // service PROGRAMMÉE refuse déjà les relevés datés d'après elle.
+              // `data-closed-now` dit à part si elle a pris effet.
+              echo '<option value="' . $this->e((string) $battery->id) . '"'
+                  . ($battery->decommissionedOn !== null ? ' data-closed="' . $this->e($battery->decommissionedOn->format('Y-m-d')) . '"' : '')
+                  . ($outOfService ? ' data-closed-now="1"' : '')
+                  . '>' . $label . '</option>';
+          endforeach;
+        ?></select>
       </div>
       <div class="cards cards-2"><div class="form-row"><label class="form-label" for="battery-date"><?= $this->te('meter.reading_date') ?></label><input id="battery-date" type="date" class="form-input" value="<?= $this->e($today) ?>"></div><div class="form-row"><label class="form-label" for="battery-time"><?= $this->te('meter.reading_time') ?></label><input id="battery-time" type="time" class="form-input" value="<?= $this->e($now) ?>"></div></div>
       <div class="cards cards-2">
@@ -274,6 +294,11 @@ $meterSelect = function (string $prefix, string $energyType) use ($metersByEnerg
             // Relevé daté du jour de fermeture ou après : la saisie est verrouillée
             // à l'écran, comme elle le serait par le serveur.
             'meterClosedOn' => $this->t('meters.entry_blocked'),
+            // Mêmes deux états pour une batterie hors service (#68), en propre :
+            // le vocabulaire des compteurs (« ce compteur est fermé ») ne se
+            // transpose pas, et seul ce couple évite le refus serveur en anglais.
+            'batteryDecommissioned' => $this->t('battery.entry_decommissioned'),
+            'batteryDecommissionedOn' => $this->t('battery.entry_blocked'),
         ],
     ];
 ?>

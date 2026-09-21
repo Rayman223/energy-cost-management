@@ -60,12 +60,20 @@ function meterTarget(prefix) {
   return document.getElementById(`${prefix}-meter`)?.value || '';
 }
 
-// Le compteur sélectionné est-il fermé ? L'option reste sélectionnable — la borne
-// de fermeture est EXCLUE, un relevé antérieur y a toute sa place — mais l'état
-// mérite d'être dit : sans cela, un relevé du jour partirait pour revenir en 422.
+// Le <select> qui porte l'état de fin de vie de la cible. Les trois fluides
+// l'appellent `<prefix>-meter` ; la batterie, plus ancienne, `battery-target`.
+// Renommer le champ casserait les scripts et les tests qui le visent — la
+// disparité se résout ici, une fois.
+function closureSelect(prefix) {
+  return document.getElementById(prefix === 'battery' ? 'battery-target' : `${prefix}-meter`);
+}
+
+// Le compteur (ou la batterie) sélectionné est-il fermé ? L'option reste
+// sélectionnable — la borne de fermeture est EXCLUE, un relevé antérieur y a
+// toute sa place — mais l'état mérite d'être dit : sans cela, un relevé du jour
+// partirait pour revenir en 422.
 function selectedMeterClosedOn(prefix) {
-  const select = document.getElementById(`${prefix}-meter`);
-  const option = select?.selectedOptions?.[0];
+  const option = closureSelect(prefix)?.selectedOptions?.[0];
 
   return option?.getAttribute('data-closed') || null;
 }
@@ -74,20 +82,43 @@ function selectedMeterClosedOn(prefix) {
 // une fermeture programmée refuse les relevés datés d'après elle sans que le
 // compteur soit fermé aujourd'hui. Seul l'état déjà acquis se dit au présent.
 function selectedMeterAlreadyClosed(prefix) {
-  const select = document.getElementById(`${prefix}-meter`);
-
-  return select?.selectedOptions?.[0]?.hasAttribute('data-closed-now') === true;
+  return closureSelect(prefix)?.selectedOptions?.[0]?.hasAttribute('data-closed-now') === true;
 }
 
 // Champs de VALEUR d'un fluide — ceux qu'on verrouille quand le relevé serait
 // refusé. La date et l'heure restent actives : c'est en les corrigeant que
 // l'utilisateur débloque la saisie, les verrouiller l'enfermerait.
 function valueFieldsOf(prefix) {
-  const ids = prefix === 'electricity'
-    ? ELEC_KEYS.map((key) => `electricity-${key}`)
-    : [`${prefix}-value`];
+  let ids;
+  if (prefix === 'electricity') {
+    ids = ELEC_KEYS.map((key) => `electricity-${key}`);
+  } else if (prefix === 'battery') {
+    // Charge ET décharge : l'API en accepte une seule, mais toutes deux tombent
+    // sous le même refus. N'en verrouiller qu'une laisserait un envoi partir.
+    ids = BATTERY_KEYS.map((key) => `battery-${key}`);
+  } else {
+    ids = [`${prefix}-value`];
+  }
 
   return ids.map((id) => document.getElementById(id)).filter(Boolean);
+}
+
+// Libellés des deux états, par fluide. Même mécanique, vocabulaire distinct :
+// une batterie n'est pas « fermée », elle est hors service (#68).
+function closureLabels(prefix) {
+  return prefix === 'battery'
+    ? {
+      blockedKey: 'batteryDecommissionedOn',
+      blockedFallback: 'This battery has been out of service since {date}: pick an earlier date.',
+      closedKey: 'batteryDecommissioned',
+      closedFallback: 'This battery is out of service: only readings dated before its out-of-service date are accepted.',
+    }
+    : {
+      blockedKey: 'meterClosedOn',
+      blockedFallback: 'This meter closed on {date}: pick an earlier date.',
+      closedKey: 'meterClosed',
+      closedFallback: 'This meter is closed: only readings dated before its closing date are accepted.',
+    };
 }
 
 // Signale la fermeture sans rien bloquer. Le bouton reste actif : c'est le
@@ -100,6 +131,10 @@ function valueFieldsOf(prefix) {
 // courant juste après une fermeture, saisir le dernier index relevé la veille.
 // Griser dès qu'un compteur fermé est sélectionné interdirait depuis le web ce
 // que le serveur accepte.
+//
+// Vaut aussi pour la batterie (#68) : `decommissioned_on` lui est opposée depuis
+// #55 exactement comme la fermeture au compteur, et le refus remontait jusqu'à
+// l'écran en anglais brut, faute de passer par ici.
 function syncClosedState(prefix) {
   const closedOn = selectedMeterClosedOn(prefix);
   const date = document.getElementById(`${prefix}-date`)?.value || '';
@@ -115,10 +150,11 @@ function syncClosedState(prefix) {
     field.disabled = blocked;
   });
 
+  const labels = closureLabels(prefix);
   if (blocked) {
-    setFeedback(`${prefix}-feedback`, tr('meterClosedOn', 'This meter closed on {date}: pick an earlier date.', { date: closedOn }), 'err');
+    setFeedback(`${prefix}-feedback`, tr(labels.blockedKey, labels.blockedFallback, { date: closedOn }), 'err');
   } else if (closedOn !== null && selectedMeterAlreadyClosed(prefix)) {
-    setFeedback(`${prefix}-feedback`, tr('meterClosed', 'This meter is closed: only readings dated before its closing date are accepted.'), '');
+    setFeedback(`${prefix}-feedback`, tr(labels.closedKey, labels.closedFallback), '');
   } else {
     setFeedback(`${prefix}-feedback`, '');
   }
@@ -528,9 +564,9 @@ document.getElementById('electricity-btn')?.addEventListener('click', submitElec
 document.getElementById('gas-btn')?.addEventListener('click', () => submitUtility('gas', 'gas_entry'));
 document.getElementById('water-btn')?.addEventListener('click', () => submitUtility('water', 'water_entry'));
 document.getElementById('battery-btn')?.addEventListener('click', submitBattery);
-// Changer de batterie recharge l'historique : le tableau appartient à la batterie
-// sélectionnée, le laisser tel quel afficherait les index d'une autre.
-document.getElementById('battery-target')?.addEventListener('change', () => reloadBattery(1));
+// Changer de batterie recharge l'historique (le tableau appartient à la batterie
+// sélectionnée) et réévalue le verrou de fin de service : les deux sont câblés
+// plus bas, avec les trois fluides.
 
 // ── Suppression de relevés ──────────────────────────────────────────────────
 
@@ -665,9 +701,11 @@ document.getElementById('battery-delete-all')?.addEventListener('click', () => {
 });
 
 // Changer de compteur recharge son historique : la liste affichée doit toujours
-// être celle de la cible que la saisie et la suppression viseront.
-['electricity', 'gas', 'water'].forEach((prefix) => {
-  document.getElementById(`${prefix}-meter`)?.addEventListener('change', () => {
+// être celle de la cible que la saisie et la suppression viseront. La batterie
+// suit la même règle — et depuis #68 le même verrou de fin de service, d'où sa
+// présence ici plutôt que dans un écouteur à part.
+['electricity', 'gas', 'water', 'battery'].forEach((prefix) => {
+  closureSelect(prefix)?.addEventListener('change', () => {
     syncClosedState(prefix);
     RELOADERS[prefix](1);
   });
