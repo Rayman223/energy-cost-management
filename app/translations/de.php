@@ -1042,6 +1042,7 @@ return [
     'meters.col_readings'                          => 'Zählerstände',
     'meters.unnamed_hint'                          => 'Ohne Namen — vergeben Sie einen, um ihn von den anderen zu unterscheiden.',
     'meters.closed_on'                             => 'geschlossen am {date}',
+    'meters.closes_on'                             => 'schließt am {date}',
     'meters.energy_field'                          => 'Energie',
     'meters.energy_frozen'                         => 'Die Energieart lässt sich nicht mehr ändern: Sie bestimmt, woher die Stände des Zählers kommen.',
     'meters.label_field'                           => 'Name des Zählers',

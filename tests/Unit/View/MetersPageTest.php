@@ -178,13 +178,29 @@ final class MetersPageTest extends TestCase
 
         self::assertStringContainsString('fermé le 2026-01-15', $html);
         self::assertStringContainsString('is-closed', $html);
+        self::assertStringContainsString('mtr-badge--closed', $html);
     }
 
-    /** Un compteur fermé dans le futur est encore ouvert : la borne est exclue (#1). */
-    public function testMeterClosingLaterIsNotFlaggedYet(): void
+    /**
+     * Un compteur fermé dans le futur est encore ouvert : la borne est exclue (#1) —
+     * donc ni grisage, ni badge ambre. Mais la DATE doit se voir (#69) : sans elle,
+     * programmer une fermeture ne produisait aucun retour à l'écran, et rien ne
+     * distinguait une saisie enregistrée d'une saisie perdue.
+     */
+    public function testMeterClosingLaterShowsItsDateWithoutBeingGreyedOut(): void
     {
         $future = new Meter(id: 5, energyType: 'electricity', closedOn: $this->at('2027-01-01'));
 
-        self::assertStringNotContainsString('is-closed', $this->render([$future]));
+        $html = $this->render([$future]);
+
+        self::assertStringContainsString('ferme le 2027-01-01', $html);
+        self::assertStringNotContainsString('is-closed', $html);
+        self::assertStringNotContainsString('mtr-badge--closed', $html);
+    }
+
+    /** Sans date de fermeture, aucun badge — le cas de loin le plus courant. */
+    public function testOpenMeterCarriesNoClosureBadge(): void
+    {
+        self::assertStringNotContainsString('mtr-badge', $this->render([new Meter(id: 6, energyType: 'water')]));
     }
 }

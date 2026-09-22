@@ -1041,6 +1041,7 @@ return [
     'meters.col_readings'                          => 'Standen',
     'meters.unnamed_hint'                          => 'Naamloos — geef hem een naam om hem van de andere te onderscheiden.',
     'meters.closed_on'                             => 'afgesloten op {date}',
+    'meters.closes_on'                             => 'sluit af op {date}',
     'meters.energy_field'                          => 'Energie',
     'meters.energy_frozen'                         => 'De energiesoort kan niet meer wijzigen: ze bepaalt waar de standen van de meter vandaan komen.',
     'meters.label_field'                           => 'Naam van de meter',

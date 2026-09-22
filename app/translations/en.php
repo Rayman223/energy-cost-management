@@ -1042,6 +1042,7 @@ return [
     'meters.col_readings'                          => 'Readings',
     'meters.unnamed_hint'                          => 'Unnamed — give it one to tell it apart from the others.',
     'meters.closed_on'                             => 'closed on {date}',
+    'meters.closes_on'                             => 'closes on {date}',
     'meters.energy_field'                          => 'Energy',
     'meters.energy_frozen'                         => 'The energy can no longer change: it decides where the meter\'s readings come from.',
     'meters.label_field'                           => 'Meter name',
