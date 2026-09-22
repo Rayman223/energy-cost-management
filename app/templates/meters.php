@@ -119,8 +119,18 @@ $openEnergies = array_values(array_filter(
                 // dans l'URL du bouton « Modifier » : impossible à trouver pour qui
                 // écrit un agent, alors que le guide d'API le réclame. ?>
           <span class="mtr-note"><?= $this->te('meters.api_id', ['id' => $meter->id]) ?></span>
+          <?php // La DATE se montre dès qu'elle existe, le GRISAGE seulement quand la
+                // fermeture a pris effet : deux questions distinctes, longtemps posées
+                // par la même condition (#69). Une fermeture programmée ne laissait
+                // alors aucune trace — l'utilisateur qui la saisissait n'avait aucune
+                // confirmation, sauf à rouvrir le formulaire d'édition. ?>
           <?php if ($closed && $meter->closedOn !== null): ?>
           <span class="mtr-badge mtr-badge--closed"><?= $this->te('meters.closed_on', ['date' => $meter->closedOn->format('Y-m-d')]) ?></span>
+          <?php elseif ($meter->closedOn !== null): ?>
+          <?php // Badge NEUTRE, et ligne en pleine opacité : le compteur accepte encore
+                // des relevés jusqu'à cette borne, exclue. L'ambre est réservé à ce qui
+                // est déjà hors service. ?>
+          <span class="mtr-badge"><?= $this->te('meters.closes_on', ['date' => $meter->closedOn->format('Y-m-d')]) ?></span>
           <?php endif; ?>
         </td>
         <td><?= $this->te($meter->energyLabelKey()) ?></td>

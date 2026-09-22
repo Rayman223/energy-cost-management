@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Unit\View;
 
 use App\Domain\Battery;
+use App\Domain\Meter;
 use App\Support\Dates;
 use App\View\ViewFactory;
 use DateTimeImmutable;
@@ -51,8 +52,16 @@ final class MeterReadingsPageTest extends TestCase
         );
     }
 
-    /** @param list<Battery> $batteries */
-    private function render(array $batteries, string $locale = 'fr'): string
+    private function meter(?DateTimeImmutable $closedOn, string $label = 'Cuisine'): Meter
+    {
+        return new Meter(id: 1, energyType: 'electricity', label: $label, closedOn: $closedOn);
+    }
+
+    /**
+     * @param list<Battery>                $batteries
+     * @param array<string, list<Meter>>   $metersByEnergy
+     */
+    private function render(array $batteries, string $locale = 'fr', array $metersByEnergy = []): string
     {
         $view = ViewFactory::create(\dirname(__DIR__, 3) . '/app/templates', $locale);
 
@@ -66,7 +75,7 @@ final class MeterReadingsPageTest extends TestCase
             'gasLatest'      => null,
             'waterLatest'    => null,
             'batteries'      => $batteries,
-            'metersByEnergy' => [],
+            'metersByEnergy' => $metersByEnergy,
             'available'      => ['fr', 'en', 'nl', 'de'],
             'timezone'       => self::TZ,
             'clockTimezone'  => self::TZ,
@@ -77,6 +86,15 @@ final class MeterReadingsPageTest extends TestCase
     private function batteryOption(string $html): string
     {
         self::assertSame(1, preg_match('#<select id="battery-target".*?</select>#s', $html, $select));
+        self::assertSame(1, preg_match('#<option .*?</option>#s', $select[0], $option));
+
+        return $option[0];
+    }
+
+    /** Le fragment `<option …>` du compteur électrique, isolé du reste de la page. */
+    private function meterOption(string $html): string
+    {
+        self::assertSame(1, preg_match('#<select id="electricity-meter".*?</select>#s', $html, $select));
         self::assertSame(1, preg_match('#<option .*?</option>#s', $select[0], $option));
 
         return $option[0];
@@ -155,5 +173,46 @@ final class MeterReadingsPageTest extends TestCase
     public function testSectionIsAbsentWithoutAnyBattery(): void
     {
         self::assertStringNotContainsString('battery-target', $this->render([]));
+    }
+
+    /**
+     * Même découpage pour le sélecteur de COMPTEUR (#69) : un compteur déjà fermé
+     * se dit au passé et porte `data-closed-now`.
+     */
+    public function testClosedMeterIsSuffixedInThePastAndFlaggedAsAlreadyClosed(): void
+    {
+        $closedOn = $this->day(-3);
+
+        $option = $this->meterOption($this->render([], metersByEnergy: ['electricity' => [$this->meter($closedOn)]]));
+
+        self::assertStringContainsString('fermé le ' . $closedOn->format('Y-m-d'), $option);
+        self::assertStringContainsString('data-closed="' . $closedOn->format('Y-m-d') . '"', $option);
+        self::assertStringContainsString('data-closed-now="1"', $option);
+    }
+
+    /**
+     * Fermeture PROGRAMMÉE : le compteur accepte encore des relevés, donc rien ne
+     * doit le dire fermé — mais taire la date laissait le choisir sans savoir
+     * qu'il ferme bientôt, alors que la saisie d'après la borne est déjà refusée.
+     */
+    public function testMeterClosingLaterIsSuffixedInTheFutureWithoutClaimingItTookEffect(): void
+    {
+        $closedOn = $this->day(10);
+
+        $option = $this->meterOption($this->render([], metersByEnergy: ['electricity' => [$this->meter($closedOn)]]));
+
+        self::assertStringContainsString('ferme le ' . $closedOn->format('Y-m-d'), $option);
+        self::assertStringNotContainsString('fermé le', $option);
+        self::assertStringContainsString('data-closed="' . $closedOn->format('Y-m-d') . '"', $option);
+        self::assertStringNotContainsString('data-closed-now', $option);
+    }
+
+    /** Un compteur en service n'est suffixé d'aucune date — le cas courant. */
+    public function testOpenMeterIsNeitherSuffixedNorFlagged(): void
+    {
+        $option = $this->meterOption($this->render([], metersByEnergy: ['electricity' => [$this->meter(null)]]));
+
+        self::assertStringNotContainsString('data-closed', $option);
+        self::assertStringNotContainsString(' — ', $option);
     }
 }

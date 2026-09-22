@@ -1050,6 +1050,7 @@ return [
     'meters.col_readings'                          => 'Relevés',
     'meters.unnamed_hint'                          => 'Sans nom — donnez-lui-en un pour le distinguer des autres.',
     'meters.closed_on'                             => 'fermé le {date}',
+    'meters.closes_on'                             => 'ferme le {date}',
     'meters.energy_field'                          => 'Énergie',
     'meters.energy_frozen'                         => 'L\'énergie ne peut plus changer : elle décide d\'où viennent les relevés du compteur.',
     'meters.label_field'                           => 'Nom du compteur',

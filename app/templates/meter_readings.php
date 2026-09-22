@@ -30,7 +30,8 @@ $closureToday = \App\Support\Dates::todayIn($timezone ?? 'UTC');
  * compteur comme il l'a toujours fait.
  *
  * Un compteur FERMÉ reste listé et reste SÉLECTIONNABLE, suffixé « fermé le … »
- * pour que son état se voie. Le désactiver interdirait depuis le web ce que la
+ * pour que son état se voie — et « ferme le … » quand la date n'est pas encore
+ * venue (#69). Le désactiver interdirait depuis le web ce que la
  * borne EXCLUE autorise justement : saisir le dernier relevé pris la veille de la
  * fermeture, ou rattraper un carnet plus ancien — le cas d'usage le plus fréquent
  * d'un compteur qu'on vient de fermer. C'est le serveur qui tranche, et il
@@ -64,8 +65,15 @@ $meterSelect = function (string $prefix, string $energyType) use ($metersByEnerg
     foreach ($meters as $meter) {
         $closed = $meter->isClosedOn($closureToday);
         $label  = $meter->isNamed() ? $this->e($meter->label) : $this->te($meter->defaultLabelKey());
-        if ($closed && $meter->closedOn !== null) {
-            $label .= ' — ' . $this->te('meters.closed_on', ['date' => $meter->closedOn->format('Y-m-d')]);
+
+        // Le suffixe suit la DATE, pas l'état : une fermeture encore à venir se dit
+        // au futur plutôt que de ne rien dire (#69). Le taire laissait choisir un
+        // compteur sur le point de fermer sans que rien ne le signale, alors que la
+        // saisie allait déjà être refusée pour les dates d'après la borne.
+        if ($meter->closedOn !== null) {
+            $label .= ' — ' . ($closed
+                ? $this->te('meters.closed_on', ['date' => $meter->closedOn->format('Y-m-d')])
+                : $this->te('meters.closes_on', ['date' => $meter->closedOn->format('Y-m-d')]));
         }
 
         // La DATE de fermeture, et pas un simple drapeau : c'est elle que le JS
