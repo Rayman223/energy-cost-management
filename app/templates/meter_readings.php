@@ -71,9 +71,15 @@ $meterSelect = function (string $prefix, string $energyType) use ($metersByEnerg
         // compteur sur le point de fermer sans que rien ne le signale, alors que la
         // saisie allait déjà être refusée pour les dates d'après la borne.
         if ($meter->closedOn !== null) {
+            // Seule la CLÉ change entre les deux temps : la date, elle, est la même.
+            // Elle sort donc du ternaire — mais les clés y restent LITTÉRALES, et en
+            // première position : TemplateCatalogTest les extrait par regex, et une
+            // clé passée en expression sortirait de son champ sans rien casser,
+            // c'est-à-dire sans que rien ne signale la perte du garde-fou.
+            $date = ['date' => $meter->closedOn->format('Y-m-d')];
             $label .= ' — ' . ($closed
-                ? $this->te('meters.closed_on', ['date' => $meter->closedOn->format('Y-m-d')])
-                : $this->te('meters.closes_on', ['date' => $meter->closedOn->format('Y-m-d')]));
+                ? $this->te('meters.closed_on', $date)
+                : $this->te('meters.closes_on', $date));
         }
 
         // La DATE de fermeture, et pas un simple drapeau : c'est elle que le JS
