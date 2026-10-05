@@ -1534,17 +1534,6 @@ final class CostCalculationService
     }
 
     /**
-     * Sous-périodes dont la grille indexe l'énergie sur le prix de marché, ET pour
-     * lesquelles le calcul dynamique est réellement possible.
-     *
-     * Le kill-switch serveur et l'absence de dépôt de prix ramènent la liste à vide :
-     * une grille dynamique est alors calculée comme une grille fixe, sans que rien ne
-     * soit modifié en base — le mode ressort intact si le serveur réactive les prix.
-     *
-     * @param list<TariffSegment> $segments
-     * @return list<int>
-     */
-    /**
      * Restreint les sous-périodes indexées à une seule FAMILLE d'indexation (#93) :
      * celle de la sous-période dominante.
      *

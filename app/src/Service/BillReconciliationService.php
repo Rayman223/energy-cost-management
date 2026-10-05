@@ -204,7 +204,9 @@ final class BillReconciliationService
         // exact. Même raisonnement pour un mois non clos, dont le prix est provisoire :
         // Belpex_RLP_M n'est publié qu'en fin de mois.
         //
-        // Les modes `dynamic_*` n'exposent pas ces champs : le `?? null` les laisse donc
+        // Les modes `dynamic_*` exposent `load_weighting: null` et `monthly_partial:
+        // false` ({@see CostCalculationService::monthlyMeta()}), et une réponse classique
+        // ne porte pas ces clés du tout : le `?? null` couvre les deux cas et les laisse
         // intacts, sans aucune régression.
         $weighting = $estimate['load_weighting'] ?? null;
         if (($weighting !== null && $weighting !== LoadWeighting::ActualLoad->value)

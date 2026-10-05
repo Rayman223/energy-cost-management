@@ -15,7 +15,12 @@ use DateTimeZone;
  *   - {@see self::Day} en tarif fixe — aucune résolution intra-journalière n'entre
  *     dans le calcul, un index par jour suffit et n'alourdit pas la base ;
  *   - {@see self::Hour} en 'dynamic_hourly' — un index par MTU horaire ENTSO-E ;
- *   - {@see self::QuarterHour} en 'dynamic_quarter' — un index par MTU de 15 min.
+ *   - {@see self::QuarterHour} en 'dynamic_quarter' — un index par MTU de 15 min ;
+ *   - {@see self::QuarterHour} aussi en 'indexed_monthly' (#93) : le prix facturé est
+ *     plat sur le mois, mais la PONDÉRATION du prix unitaire exige la courbe de charge
+ *     au pas de 15 min ({@see \App\Service\MonthlyIndexedPriceCalculator}). Plafonner
+ *     au jour y rejetterait silencieusement les index intra-journaliers et condamnerait
+ *     le calcul au baseload — donc aussi le rapprochement facture.
  *
  * Le mode étant porté par la grille, donc versionné par valid_from/valid_to (#245),
  * la granularité se résout relevé par relevé : c'est le rôle de
@@ -41,9 +46,9 @@ enum ReadingGranularity
     public static function forPricingMode(string $pricingMode): self
     {
         return match ($pricingMode) {
-            'dynamic_quarter' => self::QuarterHour,
-            'dynamic_hourly'  => self::Hour,
-            default           => self::Day,
+            'dynamic_quarter', 'indexed_monthly' => self::QuarterHour,
+            'dynamic_hourly'                     => self::Hour,
+            default                              => self::Day,
         };
     }
 

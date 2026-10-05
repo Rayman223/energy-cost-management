@@ -30,6 +30,11 @@ final class ReadingGranularityTest extends TestCase
         self::assertSame(ReadingGranularity::Day, ReadingGranularity::forPricingMode('fixed'));
         self::assertSame(ReadingGranularity::Hour, ReadingGranularity::forPricingMode('dynamic_hourly'));
         self::assertSame(ReadingGranularity::QuarterHour, ReadingGranularity::forPricingMode('dynamic_quarter'));
+
+        // Tarif indexé mensuel (#93) : le prix facturé est plat sur le mois, mais sa
+        // pondération se mesure sur la courbe de charge au pas de 15 min. Plafonner au
+        // jour condamnerait le calcul au baseload — et avec lui le rapprochement facture.
+        self::assertSame(ReadingGranularity::QuarterHour, ReadingGranularity::forPricingMode('indexed_monthly'));
     }
 
     /** Un mode hors liste blanche retombe sur le plafond le plus strict, pas sur le plus permissif. */
