@@ -667,6 +667,7 @@ return [
     'reconciliation.title'                         => 'Rechnungsabgleich',
     'reconciliation.subtitle'                      => 'Die Formel Ihres Vertrags ermitteln',
     'reconciliation.intro'                         => 'Geben Sie den tatsächlich abgerechneten Energiebetrag Ihres Lieferanten Monat für Monat ein. Die Anwendung vergleicht ihn mit ihrer eigenen Berechnung und leitet daraus den Koeffizienten und die Marge ab, die auf Ihren Marktpreis angewandt werden — Parameter, die auf Preisblättern selten klar ausgewiesen sind.',
+    'reconciliation.electricity_only'              => 'Der Abgleich betrifft ausschließlich Strom: nur diese Energie hat einen indexierten Marktpreis. Gas- und Wasserrechnungen werden hier nicht erfasst.',
     'reconciliation.dynamic_required'              => 'Diese Seite erfordert den dynamischen Tarif.',
     'reconciliation.dynamic_required_hint'         => 'Bei einem Festtarif hängt der Energieanteil von keinem Marktpreis ab: Es gibt also weder Koeffizient noch Marge zu ermitteln. Aktivieren Sie den dynamischen Tarif in Ihrem Profil, um den Abgleich zu nutzen.',
     'reconciliation.go_to_account'                 => 'Zu meinem Konto',

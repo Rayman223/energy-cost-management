@@ -26,6 +26,19 @@ use App\Repository\Contract\EnergyBillRepositoryInterface;
 final class BillReconciliationService
 {
     /**
+     * Énergie rapprochée, et la seule possible (#93).
+     *
+     * Le rapprochement cherche le couple (coefficient, offset) d'une formule indexée sur
+     * un prix de marché. Or `dynamic_prices.energy_type` est un `ENUM('electricity')` : il
+     * n'existe pas d'index spot gaz ou eau en base, et le calcul rejoué est
+     * {@see CostCalculationService::estimateMonthElectricityDynamic()}. Le périmètre est
+     * donc écrit ici une fois pour toutes, plutôt que passé en paramètre : une signature
+     * générique laissait croire qu'une facture de gaz pouvait être rapprochée, ce qui
+     * l'aurait confrontée à un coût d'électricité.
+     */
+    public const ENERGY_TYPE = 'electricity';
+
+    /**
      * Raisons d'exclusion d'un mois. Exposées telles quelles à la vue, qui les traduit via
      * `reconciliation.skipped.<raison>`.
      */
@@ -72,6 +85,8 @@ final class BillReconciliationService
      * La résolution ne porte que sur la page affichée : mêler un contrat en cours à un
      * contrat antérieur produirait un couple moyen ne correspondant à aucun des deux.
      *
+     * Le périmètre est l'électricité seule ({@see self::ENERGY_TYPE}).
+     *
      * @param int $page Page 1-indexée ; ramenée dans les bornes disponibles.
      * @return array{
      *     rows: list<array{year: int, month: int, period: string, billed_ttc: float|null, computed_ttc: float|null, gap: float|null, covered_kwh: float, avg_indexed_price: float|null, note: string, id: int, skipped: string|null}>,
@@ -83,9 +98,9 @@ final class BillReconciliationService
      *     total: int
      * }
      */
-    public function reconcile(string $energyType = 'electricity', int $page = 1): array
+    public function reconcile(int $page = 1): array
     {
-        $total = $this->billRepo->countFor($energyType);
+        $total = $this->billRepo->countFor(self::ENERGY_TYPE);
         $pages = max(1, (int) ceil($total / self::PAGE_SIZE));
         $page  = max(1, min($page, $pages));
 
@@ -94,7 +109,7 @@ final class BillReconciliationService
         $current  = null;
         $currency = null;
 
-        foreach ($this->billRepo->listFor($energyType, self::PAGE_SIZE, ($page - 1) * self::PAGE_SIZE) as $bill) {
+        foreach ($this->billRepo->listFor(self::ENERGY_TYPE, self::PAGE_SIZE, ($page - 1) * self::PAGE_SIZE) as $bill) {
             $estimate = $this->costService->estimateMonthElectricityDynamic($bill->year, $bill->month);
 
             $skip = $this->skipReason($estimate);

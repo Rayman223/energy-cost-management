@@ -676,6 +676,7 @@ return [
     'reconciliation.title'                         => 'Rapprochement facture',
     'reconciliation.subtitle'                      => 'Retrouver la formule de votre contrat',
     'reconciliation.intro'                         => 'Saisissez la part énergie facturée par votre fournisseur, mois par mois. L\'application la compare à son propre calcul et en déduit le coefficient et la marge appliqués à votre prix de marché — ces paramètres sont rarement lisibles sur une fiche tarifaire.',
+    'reconciliation.electricity_only'              => 'Le rapprochement ne porte que sur l\'électricité : elle seule a un prix de marché indexé. Les factures de gaz et d\'eau ne se saisissent pas ici.',
     'reconciliation.dynamic_required'              => 'Cette page requiert le tarif dynamique.',
     'reconciliation.dynamic_required_hint'         => 'En tarif fixe, la part énergie ne dépend d\'aucun prix de marché : il n\'y a ni coefficient ni marge à retrouver. Activez le tarif dynamique dans votre profil pour utiliser le rapprochement.',
     'reconciliation.go_to_account'                 => 'Aller à mon compte',

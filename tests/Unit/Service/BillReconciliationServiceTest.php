@@ -108,6 +108,33 @@ final class BillReconciliationServiceTest extends TestCase
     }
 
     /**
+     * Périmètre fermé sur l'électricité (#93). Le service rejoue
+     * `estimateMonthElectricityDynamic()` et il n'existe pas de prix spot gaz en base
+     * (`dynamic_prices.energy_type` est un `ENUM('electricity')`) : une facture de gaz
+     * ne doit pas entrer dans le rapprochement, sans quoi elle serait comparée à un
+     * coût d'électricité.
+     */
+    public function testOnlyElectricityBillsAreReconciled(): void
+    {
+        $bills = new FakeEnergyBillRepository([
+            new EnergyBill(1, 'electricity', 2026, 6, amountHtva: null, amountTtc: 5.00),
+            new EnergyBill(2, 'gas', 2026, 6, amountHtva: null, amountTtc: 120.00),
+            new EnergyBill(3, 'water', 2026, 6, amountHtva: null, amountTtc: 40.00),
+        ]);
+
+        $result = $this->service(
+            $bills,
+            [['hour' => '2026-06-10 10:00:00', 'import_kwh' => 10.0]],
+            ['2026-06-10 10:00:00' => 0.20],
+        )->reconcile();
+
+        self::assertSame(1, $result['total']);
+        self::assertCount(1, $result['rows']);
+        self::assertSame(5.00, $result['rows'][0]['billed_ttc']);
+        self::assertSame('electricity', BillReconciliationService::ENERGY_TYPE);
+    }
+
+    /**
      * Cas nominal à un mois : l'écart est affiché, et la correction d'offset à coefficient
      * figé annule exactement cet écart. C'est la sortie utile du cas « une seule facture ».
      */
@@ -299,13 +326,13 @@ final class BillReconciliationServiceTest extends TestCase
 
         $service = $this->service($bills, [['hour' => '2026-06-10 10:00:00', 'import_kwh' => 10.0]], ['2026-06-10 10:00:00' => 0.20]);
 
-        $first = $service->reconcile('electricity', 1);
+        $first = $service->reconcile(1);
         self::assertCount(BillReconciliationService::PAGE_SIZE, $first['rows']);
         self::assertSame(15, $first['total']);
         self::assertSame(2, $first['pages']);
         self::assertSame(1, $first['page']);
 
-        $second = $service->reconcile('electricity', 2);
+        $second = $service->reconcile(2);
         self::assertCount(3, $second['rows']);
         self::assertSame(2, $second['page']);
     }
@@ -319,8 +346,8 @@ final class BillReconciliationServiceTest extends TestCase
 
         $service = $this->service($bills, [['hour' => '2026-06-10 10:00:00', 'import_kwh' => 10.0]], ['2026-06-10 10:00:00' => 0.20]);
 
-        self::assertSame(1, $service->reconcile('electricity', 99)['page']);
-        self::assertCount(1, $service->reconcile('electricity', 99)['rows']);
+        self::assertSame(1, $service->reconcile(99)['page']);
+        self::assertCount(1, $service->reconcile(99)['rows']);
     }
 
     /** Sans aucune facture, la pagination reste cohérente (une page vide, pas zéro page). */

@@ -5,6 +5,10 @@
 
 .rec-intro { color: var(--muted); font-size: .88rem; line-height: 1.6; margin: 20px 0 0; max-width: 76ch; }
 
+/* Périmètre de la page (#93) : électricité seule, dit dans les deux états. */
+.rec-scope { color: var(--muted); font-size: .84rem; line-height: 1.6; margin: 16px 0 0;
+             max-width: 76ch; padding-left: 10px; border-left: 2px solid var(--border); }
+
 /* État « tarif fixe » : la page n'a pas d'objet, on explique pourquoi. */
 .rec-empty { background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
              padding: 32px 24px; margin-top: 24px; text-align: center; }
