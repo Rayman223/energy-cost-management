@@ -208,8 +208,35 @@ Deux réglages, à deux endroits **différents depuis #245** :
 **Page /tariffs — sur la grille électricité concernée :**
 
 - **Tarif de cette grille** → *Tarif dynamique — quart-horaire (15 min)*
-  (`tariff_grids.pricing_mode = dynamic_quarter`). Les autres valeurs sont `fixed`
-  et `dynamic_hourly`.
+  (`tariff_grids.pricing_mode = dynamic_quarter`). Les autres valeurs sont `fixed`,
+  `dynamic_hourly` et `indexed_monthly`.
+
+> **Contrat à prix VARIABLE : choisir `indexed_monthly`, pas un mode dynamique.**
+>
+> Un contrat belge à prix variable est facturé `X × Belpex_RLP_M + Y`, avec **un
+> seul prix unitaire pour tout le mois** — `Belpex_RLP_M` étant la moyenne des
+> cotations day-ahead du mois **pondérée par un profil de consommation** (profil
+> RLP de Synergrid), et non la moyenne arithmétique. C'est ce que couvre
+> `indexed_monthly` (#93) ; `dynamic_hourly` et `dynamic_quarter`, eux, facturent
+> chaque créneau à son propre prix. Le préfixe marque la famille : `dynamic_*` =
+> prix du créneau, `indexed_*` = moyenne de marché plate sur la période.
+>
+> `X` et `Y` se saisissent **à la main**, depuis votre fiche tarifaire, dans les
+> lignes `spot_coefficient` et `spot_offset` de la grille — exactement comme en
+> dynamique. Attention à l'unité : les fiches belges expriment le plus souvent `Y`
+> en **€/MWh** (`+ 1,5 €/MWh`) alors que `spot_offset` est en **€/kWh TTC**, soit
+> un facteur 1000.
+>
+> La pondération suit une cascade, annoncée au dashboard : votre **courbe réelle**
+> au pas de 15 min si au moins 80 % de la consommation y est réellement mesurée
+> (c'est le cas le plus juste, et il redonne au centime près le total d'une
+> facturation quart-horaire, la formule étant affine) ; sinon un **profil standard**
+> s'il est disponible en base ; sinon la **moyenne simple**, qui sous-estime
+> structurellement un profil résidentiel. Un mois non clos est signalé comme
+> provisoire, `Belpex_RLP_M` n'étant publié qu'en fin de mois.
+>
+> Pousser ses index au pas de 15 min est donc utile même sans tarif dynamique, et
+> c'est désormais toujours autorisé (#93).
 
 Le mode appartient à la grille, donc au contrat, et vaut pour **sa seule période
 de validité**. Pour dater une bascule fixe → dynamique, on ne modifie pas la

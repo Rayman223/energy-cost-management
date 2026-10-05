@@ -15,11 +15,31 @@ final class TariffGrid
      * il est ainsi versionné par valid_from/valid_to, et une bascule fixe ↔ dynamique
      * ne réécrit plus les périodes antérieures.
      *
+     * Deux familles de modes indexés, distinguées par leur préfixe :
+     *   - `dynamic_*` : le prix de l'énergie change À CHAQUE CRÉNEAU (MTU horaire ou
+     *     quart-horaire) — c'est le contrat « dynamique » au sens courant ;
+     *   - `indexed_*` : le prix est une MOYENNE de marché, unique sur toute la période
+     *     d'indexation. `indexed_monthly` (#93) couvre le contrat belge à prix
+     *     variable, facturé `X × Belpex_RLP_M + Y` avec un seul prix unitaire par
+     *     mois. La place est libre pour un futur `indexed_quarterly`.
+     *
      * @var list<string>
      */
-    public const PRICING_MODES = ['fixed', 'dynamic_hourly', 'dynamic_quarter'];
+    public const PRICING_MODES = ['fixed', 'dynamic_hourly', 'dynamic_quarter', 'indexed_monthly'];
 
     public const PRICING_MODE_DEFAULT = 'fixed';
+
+    /**
+     * Modes dont le prix de l'énergie varie DANS la période de facturation.
+     *
+     * Sert à distinguer ce qui permet un arbitrage temporel (décaler sa consommation
+     * fait baisser la facture) de ce qui ne le permet pas : sous `indexed_monthly` le
+     * prix est plat sur le mois, donc déplacer un kWh d'une heure à l'autre ne change
+     * rien au montant.
+     *
+     * @var list<string>
+     */
+    public const TIME_VARYING_MODES = ['dynamic_hourly', 'dynamic_quarter'];
 
     /** @param array<string,TariffLine> $lines  line_key => ligne (montant + kind + libellé) */
     public function __construct(
@@ -49,6 +69,28 @@ final class TariffGrid
     public function isDynamic(): bool
     {
         return $this->pricingMode !== self::PRICING_MODE_DEFAULT;
+    }
+
+    /**
+     * Le prix de l'énergie varie-t-il à l'intérieur de la période de facturation ?
+     *
+     * Vrai pour les modes `dynamic_*`, faux pour `fixed` comme pour `indexed_monthly`
+     * — ce dernier applique une moyenne de marché, donc un prix unitaire plat sur tout
+     * le mois. À utiliser partout où l'enjeu est l'arbitrage temporel (valorisation
+     * d'une batterie, par exemple) plutôt que la simple indexation sur le marché.
+     */
+    public function isTimeVarying(): bool
+    {
+        return in_array($this->pricingMode, self::TIME_VARYING_MODES, true);
+    }
+
+    /**
+     * Contrat à prix unitaire mensuel indexé (#93) : moyenne de marché du mois,
+     * pondérée, injectée dans `coefficient × spot + offset`.
+     */
+    public function isMonthlyIndexed(): bool
+    {
+        return $this->pricingMode === 'indexed_monthly';
     }
 
     /** Mode normalisé : toute valeur hors liste blanche retombe sur 'fixed'. */

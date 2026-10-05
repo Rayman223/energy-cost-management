@@ -36,6 +36,7 @@ final class BillReconciliationServiceTest extends TestCase
         string $validFrom = '2026-01-01',
         ?string $validTo = null,
         float $vatRate = 21.0,
+        string $pricingMode = TariffGrid::PRICING_MODE_DEFAULT,
     ): TariffGrid {
         return new TariffGrid(
             id: $id,
@@ -50,6 +51,7 @@ final class BillReconciliationServiceTest extends TestCase
                 'spot_offset'      => new TariffLine('spot_offset', $offsetTtc, ComponentKind::SpotOffset),
             ],
             vatRate: $vatRate,
+            pricingMode: $pricingMode,
         );
     }
 
@@ -105,6 +107,73 @@ final class BillReconciliationServiceTest extends TestCase
         self::assertSame([], $result['rows']);
         self::assertSame(SpotFormulaFit::MODE_UNDETERMINED, $result['fit']->mode);
         self::assertNull($result['current']);
+    }
+
+    /**
+     * #93 — un contrat à prix unitaire mensuel n'est rapprochable que si le prix du
+     * mois a été pondéré par la COURBE RÉELLE. Sans relevés au pas de 15 min, la
+     * pondération retombe sur le baseload : l'erreur de forme de consommation serait
+     * alors absorbée par le coefficient déduit, et l'utilisateur se verrait proposer un
+     * couple faux présenté comme exact. Le mois est donc écarté, avec sa raison.
+     */
+    public function testSkipsMonthWhoseWeightingIsNotTheActualLoadCurve(): void
+    {
+        $bills = new FakeEnergyBillRepository([
+            new EnergyBill(1, 'electricity', 2026, 6, amountHtva: null, amountTtc: 5.00),
+        ]);
+
+        // Cotations couvrant tout juin, mais aucun relevé quart-horaire natif.
+        $quarterPrices = [];
+        for ($day = 1; $day <= 30; $day++) {
+            for ($hour = 0; $hour < 24; $hour++) {
+                foreach ([0, 15, 30, 45] as $minute) {
+                    $quarterPrices[sprintf('2026-06-%02d %02d:%02d:00', $day, $hour, $minute)] = 0.20;
+                }
+            }
+        }
+
+        $legacy = new FakeLegacyDailyRepository(
+            monthlyDeltasForMonth: $this->deltasFor('2026-06-01 00:00:00', '2026-07-01 00:00:00'),
+            hourlyImportDeltas: [['hour' => '2026-06-10 10:00:00', 'import_kwh' => 10.0]],
+        );
+
+        $cost = new CostCalculationService(
+            legacyRepo: $legacy,
+            tariffRepo: new FakeTariffRepository(grid: $this->gridWithSpot(1.0, 0.0, pricingMode: 'indexed_monthly')),
+            gasRepo: new FakeGasReadingRepository(),
+            calculator: new TariffCalculatorService(),
+            dynamicPriceRepo: new FakeDynamicPriceRepository(quarterPricesBySlot: $quarterPrices),
+            dynamicEnabled: true,
+        );
+
+        $result = (new BillReconciliationService($bills, $cost))->reconcile();
+
+        self::assertCount(1, $result['rows']);
+        self::assertSame(
+            BillReconciliationService::SKIP_ESTIMATED_WEIGHTING,
+            $result['rows'][0]['skipped'],
+        );
+        self::assertSame(SpotFormulaFit::MODE_UNDETERMINED, $result['fit']->mode);
+    }
+
+    /**
+     * Non-régression : les modes `dynamic_*` n'exposent pas de pondération, donc le
+     * garde-fou ci-dessus ne doit rien changer pour eux.
+     */
+    public function testTimeVaryingModesAreUnaffectedByTheWeightingGuard(): void
+    {
+        $bills = new FakeEnergyBillRepository([
+            new EnergyBill(1, 'electricity', 2026, 6, amountHtva: null, amountTtc: 5.00),
+        ]);
+
+        $result = $this->service(
+            $bills,
+            [['hour' => '2026-06-10 10:00:00', 'import_kwh' => 10.0]],
+            ['2026-06-10 10:00:00' => 0.20],
+        )->reconcile();
+
+        self::assertCount(1, $result['rows']);
+        self::assertNull($result['rows'][0]['skipped']);
     }
 
     /**

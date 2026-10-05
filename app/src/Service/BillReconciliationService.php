@@ -6,6 +6,7 @@ namespace App\Service;
 
 use App\Domain\BillPeriod;
 use App\Domain\EnergyBill;
+use App\Domain\LoadWeighting;
 use App\Domain\SpotFormula;
 use App\Domain\SpotFormulaFit;
 use App\Repository\Contract\EnergyBillRepositoryInterface;
@@ -46,6 +47,7 @@ final class BillReconciliationService
     public const SKIP_NO_AMOUNT   = 'no_amount';
     public const SKIP_NO_COVERAGE = 'no_coverage';
     public const SKIP_MIXED_GRIDS = 'mixed_grids';
+    public const SKIP_ESTIMATED_WEIGHTING = 'estimated_weighting';
 
     /**
      * Source unique des raisons, pour le garde-fou i18n (TemplateCatalogTest dérive
@@ -59,6 +61,7 @@ final class BillReconciliationService
         self::SKIP_NO_AMOUNT,
         self::SKIP_NO_COVERAGE,
         self::SKIP_MIXED_GRIDS,
+        self::SKIP_ESTIMATED_WEIGHTING,
     ];
 
     /**
@@ -192,6 +195,22 @@ final class BillReconciliationService
         // mêlerait deux couples et le résultat ne correspondrait à aucun des deux.
         if ($estimate['spot_base']['formula_uniform'] !== true) {
             return self::SKIP_MIXED_GRIDS;
+        }
+
+        // Contrat à prix unitaire mensuel (#93) : le prix du mois n'est fidèle que s'il a
+        // été pondéré par la COURBE RÉELLE. Pondéré par un profil standard ou par le
+        // baseload, il porte une erreur de forme de consommation — qui serait alors
+        // absorbée par le coefficient déduit, donnant un couple faux présenté comme
+        // exact. Même raisonnement pour un mois non clos, dont le prix est provisoire :
+        // Belpex_RLP_M n'est publié qu'en fin de mois.
+        //
+        // Les modes `dynamic_*` n'exposent pas ces champs : le `?? null` les laisse donc
+        // intacts, sans aucune régression.
+        $weighting = $estimate['load_weighting'] ?? null;
+        if (($weighting !== null && $weighting !== LoadWeighting::ActualLoad->value)
+            || ($estimate['monthly_partial'] ?? false) === true
+        ) {
+            return self::SKIP_ESTIMATED_WEIGHTING;
         }
 
         return null;

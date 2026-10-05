@@ -42,10 +42,43 @@ final class TariffGridPricingModeTest extends TestCase
     public function testWhitelistIsClosed(): void
     {
         self::assertSame(
-            ['fixed', 'dynamic_hourly', 'dynamic_quarter'],
+            ['fixed', 'dynamic_hourly', 'dynamic_quarter', 'indexed_monthly'],
             TariffGrid::PRICING_MODES,
         );
         self::assertContains(TariffGrid::PRICING_MODE_DEFAULT, TariffGrid::PRICING_MODES);
+    }
+
+    /**
+     * #93 — un contrat à prix variable est bien indexé sur le marché, mais son prix est
+     * PLAT sur le mois. `isDynamic()` (indexé ?) et `isTimeVarying()` (variable dans la
+     * période ?) cessent donc de coïncider : c'est la distinction que le mode introduit.
+     */
+    public function testIndexedMonthlyIsDynamicButNotTimeVarying(): void
+    {
+        $grid = $this->grid('indexed_monthly');
+
+        self::assertTrue($grid->isDynamic());
+        self::assertFalse($grid->isTimeVarying());
+        self::assertTrue($grid->isMonthlyIndexed());
+    }
+
+    public function testTimeVaryingCoversOnlyTheDynamicFamily(): void
+    {
+        self::assertSame(['dynamic_hourly', 'dynamic_quarter'], TariffGrid::TIME_VARYING_MODES);
+
+        self::assertTrue($this->grid('dynamic_hourly')->isTimeVarying());
+        self::assertTrue($this->grid('dynamic_quarter')->isTimeVarying());
+        self::assertFalse($this->grid()->isTimeVarying());
+
+        self::assertFalse($this->grid('dynamic_hourly')->isMonthlyIndexed());
+        self::assertFalse($this->grid()->isMonthlyIndexed());
+    }
+
+    public function testNormalizationAcceptsIndexedMonthly(): void
+    {
+        self::assertSame('indexed_monthly', TariffGrid::normalizePricingMode('indexed_monthly'));
+        self::assertSame('fixed', TariffGrid::normalizePricingMode('indexed'));
+        self::assertSame('fixed', TariffGrid::normalizePricingMode('indexed_yearly'));
     }
 
     /**

@@ -290,6 +290,38 @@ not rewrite past months. Each term falls back independently: with no
 applies (even alongside a grid coefficient), and with no `spot_coefficient` line
 the coefficient is simply neutral.
 
+> **Watch the unit.** Belgian tariff sheets usually state the `Y` term in
+> **€/MWh** (e.g. `+ 1.5 €/MWh`), while `spot_offset` is in **€/kWh incl. VAT** —
+> divide by 1000 before entering it.
+
+**Variable tariff vs dynamic tariff** (`tariff_grids.pricing_mode`). A Belgian
+*variable* contract is not a dynamic one: it bills `X × Belpex_RLP_M + Y`, with a
+**single unit price for the whole month**, where `Belpex_RLP_M` is the month's
+day-ahead quotations averaged **weighted by a consumption profile** — not a plain
+arithmetic mean. That is `indexed_monthly`, next to `dynamic_hourly` and
+`dynamic_quarter` which bill every slot at its own price. The `indexed_*` prefix
+marks the family: a market average, flat over the indexing period.
+
+The weighting is part of the price, so it is computed in a three-step cascade and
+reported in the response (`load_weighting`) and on the dashboard:
+
+1. `actual_load` — your own 15-minute load curve, when at least 80 % of the
+   consumption is genuinely metered at that resolution. The formula being affine,
+   this gives *exactly* the same total as slot-by-slot billing: an
+   `indexed_monthly` and a `dynamic_quarter` contract then agree to the cent.
+2. `standard_profile` — a standard load profile (Synergrid RLP and equivalents),
+   which is what the supplier actually applies. Not wired to any data source yet;
+   the table is planned, see issue #93.
+3. `baseload` — plain arithmetic mean, last resort. It structurally understates a
+   residential profile, whose consumption concentrates on the priciest hours.
+
+A month whose quotations cover less than 80 % of the calendar is left out and
+billed at the supplier tariff, as any uncovered slot already is. A month that is
+not closed yet is flagged provisional (`monthly_partial`), since `Belpex_RLP_M` is
+only published once the month ends — and `/reconciliation` refuses to derive a
+contract formula from such a month, which would otherwise absorb the weighting
+error into the coefficient it proposes.
+
 The VAT rate comes from the grid too (`tariff_grids.vat_rate`) — a single source
 for both the spot price and the VAT breakdown of the TTC amounts, versioned by
 validity period so a rate change (Belgium's 21 % → 6 % on residential

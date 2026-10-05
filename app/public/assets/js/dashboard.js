@@ -377,8 +377,25 @@ function tariffGapHtml(data) {
     // Résolution effective du calcul (#230) : en mode 15 min, l'utilisateur doit
     // pouvoir distinguer un calcul réellement quart-horaire d'un repli à l'heure, et
     // savoir ce qui a manqué. En mode horaire assumé, pas de note — rien à signaler.
+    // Tarif indexé mensuel (#93) : le prix est une MOYENNE du mois, et sa pondération
+    // fait partie du prix — deux pondérations donnent deux factures. Les clés sont
+    // écrites en littéraux plutôt que concaténées : le garde-fou i18n du dépôt repère
+    // les clés par motif sur les appels de traduction, et une clé construite par
+    // concaténation lui échapperait.
     let resolutionNote = '';
-    if (dyn.resolution === 'quarter') {
+    if (dyn.resolution === 'monthly') {
+      let weightingKey = 'dash.dynamic.weighting_baseload';
+      if (dyn.load_weighting === 'actual_load') weightingKey = 'dash.dynamic.weighting_actual_load';
+      else if (dyn.load_weighting === 'standard_profile') weightingKey = 'dash.dynamic.weighting_standard_profile';
+
+      const estimated = dyn.load_weighting !== 'actual_load' || dyn.monthly_partial === true;
+      const provisional = dyn.monthly_partial === true
+        ? ` ${tr('dash.dynamic.monthly_provisional')}`
+        : '';
+
+      resolutionNote = `<div class="cost-formula-note${estimated ? ' cost-formula-note--fallback' : ''}">${
+        tr('dash.dynamic.resolution_monthly')} ${tr(weightingKey)}${provisional}</div>`;
+    } else if (dyn.resolution === 'quarter') {
       resolutionNote = `<div class="cost-formula-note">${tr('dash.dynamic.resolution_quarter')}</div>`;
     } else if (dyn.resolution_requested === 'quarter') {
       resolutionNote = `<div class="cost-formula-note cost-formula-note--fallback">${
