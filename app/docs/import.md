@@ -12,8 +12,8 @@ sur les contraintes `UNIQUE` composites :
 - **Électricité** → modèle à registres (`meter_readings`, unique `(register_id,
   reading_at)`). Registres : `import_t1`, `import_t2`, `export_t1`, `export_t2`,
   `production` (index cumulés en kWh, ≥ 0).
-- **Gaz / eau** → `utility_readings` (unique `(user_id, energy_type, reading_at)`),
-  index compteur m³ ≥ 0.
+- **Gaz / eau** → `utility_readings` (unique `(meter_id, reading_at)` depuis le
+  passage de `meters` au multi-énergie, #55), index compteur m³ ≥ 0.
 - **Batterie (#26)** → `battery_readings` (unique `(battery_id, reading_at)`),
   index cumulés `charge` / `discharge` en kWh ≥ 0. Les deux colonnes sont
   **nullables** et se relèvent indépendamment : un second fichier **complète** un
@@ -81,6 +81,16 @@ différences de fond :
   n'ajouterait rien. Les relevés surnuméraires d'une même journée sont comptés
   comme **doublons**, sans erreur — un export horaire d'onduleur se réduit donc
   tout seul, sans que l'utilisateur ait à le pré-filtrer.
+
+**Plafond des index électricité (#165, #93)** — au plus **un index par registre et
+par tranche de 15 minutes**, délimitée dans le fuseau de l'utilisateur. Ce plafond
+ne dépend **pas** du tarif : le pas de relevé appartient au compteur, pas au
+contrat. Une courbe de charge quart-horaire s'importe donc intégralement, y compris
+en tarif fixe — auparavant le créneau suivait `tariff_grids.pricing_mode` et un
+fichier couvrant une période en tarif fixe était réduit à un relevé par jour. Les
+relevés surnuméraires d'un même quart d'heure sont comptés comme **doublons**, sans
+erreur. Ordre de grandeur : un an de télérelevé quart-horaire représente ~35 000
+lignes par registre, bien en deçà du plafond de 200 000 lignes par fichier.
 
 Le type « Batterie » n'apparaît dans le formulaire que si le compte a déclaré au
 moins une batterie sur `/batteries`. Les index de batterie ne sont poussés vers

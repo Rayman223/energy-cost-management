@@ -10,8 +10,12 @@ use DateTimeZone;
 use PHPUnit\Framework\TestCase;
 
 /**
- * Créneaux de plafonnement des index (#165) et leur dérivation depuis le mode de
- * tarification de la grille active (#10).
+ * Créneaux de plafonnement des index (#165) : alignement, durée et libellés.
+ *
+ * La dérivation depuis le mode de tarification (#10) a disparu avec #93 — le pas de
+ * relevé appartient au compteur, pas au contrat —, d'où le retrait des cas qui
+ * couvraient `forPricingMode()`. L'alignement et le traitement des changements
+ * d'heure, eux, sont inchangés.
  */
 final class ReadingGranularityTest extends TestCase
 {
@@ -23,20 +27,6 @@ final class ReadingGranularityTest extends TestCase
         [$start, $end] = $g->bucket(new DateTimeImmutable($moment, new DateTimeZone('UTC')), new DateTimeZone($timezone));
 
         return [$start->format('Y-m-d H:i'), $end->format('Y-m-d H:i')];
-    }
-
-    public function testPricingModeDecidesGranularity(): void
-    {
-        self::assertSame(ReadingGranularity::Day, ReadingGranularity::forPricingMode('fixed'));
-        self::assertSame(ReadingGranularity::Hour, ReadingGranularity::forPricingMode('dynamic_hourly'));
-        self::assertSame(ReadingGranularity::QuarterHour, ReadingGranularity::forPricingMode('dynamic_quarter'));
-    }
-
-    /** Un mode hors liste blanche retombe sur le plafond le plus strict, pas sur le plus permissif. */
-    public function testUnknownPricingModeFallsBackToDay(): void
-    {
-        self::assertSame(ReadingGranularity::Day, ReadingGranularity::forPricingMode('dynamic_minute'));
-        self::assertSame(ReadingGranularity::Day, ReadingGranularity::forPricingMode(''));
     }
 
     public function testHourBucketIsAlignedOnTheFullHour(): void

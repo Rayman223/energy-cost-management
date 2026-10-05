@@ -9,17 +9,22 @@ use DateTimeZone;
 
 /**
  * Granularité de plafonnement des index électricité : au plus un relevé par
- * registre et par créneau aligné. Le créneau suit la **résolution de facturation**
- * de la grille tarifaire active à la date du relevé (issue #10, cf.
- * {@see self::forPricingMode()}) :
- *   - {@see self::Day} en tarif fixe — aucune résolution intra-journalière n'entre
- *     dans le calcul, un index par jour suffit et n'alourdit pas la base ;
- *   - {@see self::Hour} en 'dynamic_hourly' — un index par MTU horaire ENTSO-E ;
- *   - {@see self::QuarterHour} en 'dynamic_quarter' — un index par MTU de 15 min.
+ * registre et par créneau aligné.
  *
- * Le mode étant porté par la grille, donc versionné par valid_from/valid_to (#245),
- * la granularité se résout relevé par relevé : c'est le rôle de
- * {@see \App\Service\ReadingGranularityPolicy}, seul point d'entrée des appelants.
+ * Le créneau ne dépend **pas** du contrat (issue #93). Le pas de relevé est une
+ * propriété du COMPTEUR — un compteur communicant produit du quart-horaire quel que
+ * soit le tarif souscrit — alors que `tariff_grids.pricing_mode` décrit la façon de
+ * FACTURER. Les lier rejetait la courbe de charge de tout utilisateur en tarif fixe
+ * (ou indexé au mois, #93) : la saisie web refusait le deuxième index du jour et
+ * l'API d'ingestion jetait le surplus en silence. L'électricité est donc plafonnée
+ * au quart d'heure en permanence, cf.
+ * {@see \App\Service\ReadingGranularityPolicy::electricityDefault()}.
+ *
+ * Les trois cas restent utilisés :
+ *   - {@see self::QuarterHour} — plafond des index électricité, un par MTU de 15 min ;
+ *   - {@see self::Hour} — un index par MTU horaire ENTSO-E ;
+ *   - {@see self::Day} — plafond journalier des index de batterie (#26) et
+ *     délimitation du jour civil dans les agrégations.
  *
  * Les créneaux sont **alignés** (jour calendaire, heure pleine, ou quart d'heure
  * :00/:15/:30/:45) et calculés dans le fuseau de l'utilisateur, cohérent avec le
@@ -30,22 +35,6 @@ enum ReadingGranularity
     case Day;
     case Hour;
     case QuarterHour;
-
-    /**
-     * Granularité imposée par un mode de tarification (`tariff_grids.pricing_mode`).
-     *
-     * Source unique du mapping mode → créneau. Tout mode inconnu retombe sur le
-     * plafond le plus strict ({@see self::Day}), comme
-     * {@see TariffGrid::normalizePricingMode()} retombe sur 'fixed'.
-     */
-    public static function forPricingMode(string $pricingMode): self
-    {
-        return match ($pricingMode) {
-            'dynamic_quarter' => self::QuarterHour,
-            'dynamic_hourly'  => self::Hour,
-            default           => self::Day,
-        };
-    }
 
     /**
      * Bornes `[start, end)` du créneau aligné contenant $moment, exprimées dans
