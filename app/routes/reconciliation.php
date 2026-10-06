@@ -8,6 +8,7 @@ use App\Infrastructure\Database;
 use App\Repository\DynamicPriceRepository;
 use App\Repository\ElectricityReadingRepository;
 use App\Repository\EnergyBillRepository;
+use App\Repository\LoadProfileRepository;
 use App\Repository\TariffRepository;
 use App\Repository\UserRepository;
 use App\Repository\UtilityReadingRepository;
@@ -185,6 +186,7 @@ if ($isDynamic) {
         dynamicEnabled: true,
         supplierMarkupPerKwh: $profile->supplierMarkupPerKwh ?? 0.0,
         tariffTimezone: $timezone,
+        loadProfileRepo: new LoadProfileRepository($pdo),
     );
 
     // Page hors bornes (URL bricolée, facture supprimée depuis) : le service la ramène

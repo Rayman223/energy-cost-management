@@ -310,8 +310,9 @@ reported in the response (`load_weighting`) and on the dashboard:
    this gives *exactly* the same total as slot-by-slot billing: an
    `indexed_monthly` and a `dynamic_quarter` contract then agree to the cent.
 2. `standard_profile` — a standard load profile (Synergrid RLP and equivalents),
-   which is what the supplier actually applies. Not wired to any data source yet;
-   the table is planned, see issue #93.
+   which is what the supplier actually applies. Pick it per grid under `/tariffs`
+   once a profile has been imported (see below); without a profile code on the
+   grid, this rung is skipped entirely — a profile is contractual, never a default.
 3. `baseload` — plain arithmetic mean, last resort. It structurally understates a
    residential profile, whose consumption concentrates on the priciest hours.
 
@@ -321,6 +322,45 @@ not closed yet is flagged provisional (`monthly_partial`), since `Belpex_RLP_M` 
 only published once the month ends — and `/reconciliation` refuses to derive a
 contract formula from such a month, which would otherwise absorb the weighting
 error into the coefficient it proposes.
+
+### Importing a load profile
+
+Synergrid offers no API: profiles are published as files by the DSOs. Convert the
+sheet to a two-column CSV and import it — the delimiter, the BOM and the decimal
+comma are auto-detected, as for meter readings:
+
+```csv
+timestamp;fraction
+2026-01-01 00:00;0.000021
+2026-01-01 00:15;0.000020
+```
+
+```bash
+php app/scripts/import_load_profile.php --file=rlp0n-2026.csv            # dry-run
+php app/scripts/import_load_profile.php --file=rlp0n-2026.csv --execute  # writes
+```
+
+Options: `--code` (default `RLP0N`), `--country` (`BE`), `--resolution` (`15` or
+`60`), `--timezone` (`Europe/Brussels` — Synergrid stamps local time, values are
+converted to UTC), `--ts-col`, `--value-col`, `--source`. Re-importing the same
+file corrects the values instead of duplicating them.
+
+**The weight scale is irrelevant**: the calculation takes a weighted mean, which
+divides by the sum of the weights. Normalised fractions, percentages or raw kWh all
+yield the same price, so nothing is renormalised on import. Rows landing in the same
+slot are **summed**, which is what lets a quarter-hourly file be imported at
+`--resolution=60`.
+
+Note that the RLP is a *measured* profile — that is what distinguishes it from the
+synthetic SLP, defined ahead of time. A month's coefficients are therefore only
+known **after** that month, which is precisely why `Belpex_RLP_M` is published once
+the month closes. The table fills up over time, like `dynamic_prices`; loading a
+whole year upfront is impossible by construction.
+
+> Do not confuse the profile with Synergrid's **monthly RLP weights** (12
+> percentages per year and per DSO). Those spread an *annual* consumption across
+> months; they do not weight intra-month quotations, and importing them here would
+> produce a wrong — and plausible-looking — price.
 
 The VAT rate comes from the grid too (`tariff_grids.vat_rate`) — a single source
 for both the spot price and the VAT breakdown of the TTC amounts, versioned by

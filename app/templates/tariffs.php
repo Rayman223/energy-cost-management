@@ -352,6 +352,22 @@ $energyLabels = [
         </select>
         <p class="dates-hint"><?= $this->te('tariffs.pricing_mode_hint') ?></p>
       </div>
+      <?php if ($loadProfileOptions !== []): ?>
+      <?php // Profil de pondération du tarif indexé mensuel (#93). Rendu seulement si
+            // au moins un profil est importé : proposer un choix qui ne pondérerait
+            // rien ferait croire à un réglage sans effet. Masqué hors mode indexé par
+            // le JS, et de toute façon neutralisé côté dépôt. ?>
+      <div class="form-row full" data-load-profile-row>
+        <label class="form-label"><?= $this->te('tariffs.load_profile') ?></label>
+        <select name="load_profile_code" class="form-select">
+          <option value=""><?= $this->te('tariffs.load_profile_none') ?></option>
+          <?php foreach ($loadProfileOptions as $code): ?>
+          <option value="<?= $this->e($code) ?>" <?= $formProfile === $code ? 'selected' : '' ?>><?= $this->e($code) ?></option>
+          <?php endforeach; ?>
+        </select>
+        <p class="dates-hint"><?= $this->te('tariffs.load_profile_hint') ?></p>
+      </div>
+      <?php endif; ?>
       <?php elseif ($energy === 'electricity'): ?>
       <?php // Tarif dynamique coupé côté serveur : le select est absent (donc non
             // soumis) et la route reconduit le mode enregistré. Dire pourquoi évite de

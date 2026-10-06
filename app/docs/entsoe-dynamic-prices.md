@@ -230,10 +230,15 @@ Deux réglages, à deux endroits **différents depuis #245** :
 > La pondération suit une cascade, annoncée au dashboard : votre **courbe réelle**
 > au pas de 15 min si au moins 80 % de la consommation y est réellement mesurée
 > (c'est le cas le plus juste, et il redonne au centime près le total d'une
-> facturation quart-horaire, la formule étant affine) ; sinon un **profil standard**
-> s'il est disponible en base ; sinon la **moyenne simple**, qui sous-estime
-> structurellement un profil résidentiel. Un mois non clos est signalé comme
-> provisoire, `Belpex_RLP_M` n'étant publié qu'en fin de mois.
+> facturation quart-horaire, la formule étant affine) ; sinon le **profil standard**
+> désigné sur la grille, s'il a été importé ; sinon la **moyenne simple**, qui
+> sous-estime structurellement un profil résidentiel. Un mois non clos est signalé
+> comme provisoire, `Belpex_RLP_M` n'étant publié qu'en fin de mois.
+>
+> Pour **reproduire la facture**, c'est le profil standard qu'il faut : le
+> fournisseur pondère avec le RLP, pas avec votre courbe. Le champ **Profil de
+> pondération** n'apparaît sur `/tariffs` qu'une fois un profil importé (§6 bis),
+> et il appartient à la grille, donc à la période de validité du contrat.
 >
 > Pousser ses index au pas de 15 min est donc utile même sans tarif dynamique, et
 > c'est désormais toujours autorisé (#93).
@@ -268,6 +273,70 @@ de prix — sans configuration supplémentaire.
 > saisit dans la grille tarifaire sous **/tariffs**, via les lignes
 > `spot_coefficient` et `spot_offset`. Voir
 > [`architecture.md`](architecture.md).
+
+---
+
+## 6 bis. Importer un profil de charge (RLP)
+
+Nécessaire seulement pour le tarif `indexed_monthly`, et seulement si vous voulez
+**reproduire la facture** de votre fournisseur plutôt que calculer votre coût réel.
+
+Synergrid ne publie **aucune API** : les profils sont des fichiers diffusés par les
+GRD. Convertissez la feuille en CSV à deux colonnes — le délimiteur, le BOM et la
+virgule décimale sont détectés automatiquement, comme pour l'import de relevés :
+
+```csv
+timestamp;fraction
+2026-01-01 00:00;0.000021
+2026-01-01 00:15;0.000020
+```
+
+```bash
+# Validation seule : aucune écriture, résumé affiché
+php app/scripts/import_load_profile.php --file=rlp0n-2026.csv
+
+# Import effectif
+php app/scripts/import_load_profile.php --file=rlp0n-2026.csv --execute
+```
+
+| Option | Défaut | Rôle |
+| --- | --- | --- |
+| `--file` | *(requis)* | CSV à importer |
+| `--code` | `RLP0N` | Code du profil, tel qu'il sera proposé sur `/tariffs` |
+| `--country` | `BE` | Pays (ISO 3166-1 alpha-2) |
+| `--resolution` | `15` | Pas des points : `15` ou `60` uniquement |
+| `--timezone` | `Europe/Brussels` | Fuseau des horodatages **nus** ; converti en UTC |
+| `--ts-col` / `--value-col` | `timestamp` / `fraction` | Noms de colonnes |
+| `--source` | `synergrid` | Provenance notée en base |
+| `--execute` | *(absent)* | Sans ce drapeau, rien n'est écrit |
+
+Points à connaître :
+
+- **L'échelle des valeurs est indifférente.** Le calcul fait une moyenne pondérée,
+  qui divise par la somme des poids : fractions normalisées à 1, pourcentages ou kWh
+  bruts donnent le même prix. Rien n'est renormalisé à l'import.
+- **Les lignes d'un même créneau se somment.** C'est ce qui permet d'importer un
+  fichier quart-horaire en `--resolution=60` : les quatre quarts forment le poids de
+  l'heure. Le script annonce le nombre d'agrégations.
+- **Réimporter le même fichier corrige les valeurs**, il ne les duplique pas (clé
+  unique `code + pays + résolution + instant`).
+- **Le pas de 15 min est préférable** : il s'agrège vers l'heure si les cotations
+  retenues sont horaires, alors que l'inverse est impossible. Le calcul demande 15
+  min d'abord, puis se rabat sur 60.
+- **Un horodatage portant un offset** (`2026-01-01T00:00:00+01:00`) est respecté tel
+  quel. À l'heure répétée du retour à l'heure d'hiver, un horodatage local nu est
+  ambigu et PHP retient la première occurrence — fournir l'offset lève le doute.
+
+> **Le RLP est un profil MESURÉ**, et c'est ce qui le distingue du SLP, synthétique
+> et défini à l'avance. Les coefficients d'un mois ne sont donc connus qu'**après**
+> ce mois — raison pour laquelle `Belpex_RLP_M` n'est publié qu'une fois le mois
+> clos. La table se remplit au fil de l'eau, comme `dynamic_prices` ; charger
+> « l'année à venir » est impossible par construction.
+
+> **Ne pas confondre** avec le fichier de **poids mensuels** du RLP (12 pourcentages
+> par an et par GRD). Ceux-là répartissent une consommation *annuelle* entre les
+> mois ; ils ne pondèrent pas des cotations intra-mensuelles, et les importer ici
+> donnerait un prix faux et silencieusement plausible.
 
 ---
 

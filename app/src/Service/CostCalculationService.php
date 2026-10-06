@@ -13,8 +13,10 @@ use App\Domain\TariffSegment;
 use App\Repository\Contract\DynamicPriceRepositoryInterface;
 use App\Repository\Contract\GasReadingRepositoryInterface;
 use App\Repository\Contract\LegacyDailyRepositoryInterface;
+use App\Repository\Contract\LoadProfileRepositoryInterface;
 use App\Repository\Contract\MeterReadingRepositoryInterface;
 use App\Repository\Contract\TariffRepositoryInterface;
+use App\Repository\LoadProfileRepository;
 use App\Support\Dates;
 use DateTimeImmutable;
 use DateTimeZone;
@@ -106,6 +108,7 @@ final class CostCalculationService
         private readonly CostBreakdownAggregator $aggregator = new CostBreakdownAggregator(),
         private readonly SpotFormulaResolver $formulaResolver = new SpotFormulaResolver(),
         private readonly MonthlyIndexedPriceCalculator $monthlyCalculator = new MonthlyIndexedPriceCalculator(),
+        private readonly ?LoadProfileRepositoryInterface $loadProfileRepo = null,
     ) {
     }
 
@@ -1305,7 +1308,14 @@ final class CostCalculationService
         $isDynamic = array_fill_keys($dynamicIndexes, true);
         $window    = $this->dynamicWindow($deltas, $segments, $dynamicIndexes);
 
-        $series = $this->resolveDynamicSeries($window[0], $window[1], $this->requestedResolutionMode($segments, $dynamicIndexes));
+        // Grille de la sous-période indexée dominante : elle porte le profil de
+        // pondération du contrat (#93), comme elle porte déjà la formule et la TVA.
+        $series = $this->resolveDynamicSeries(
+            $window[0],
+            $window[1],
+            $this->requestedResolutionMode($segments, $dynamicIndexes),
+            $segments[$this->dominantIndex($segments, $dynamicIndexes)]->grid,
+        );
         if (isset($series['reason'])) {
             // Aucune série exploitable : en facturation, la période reste due — elle
             // repasse intégralement au tarif fournisseur, motif à l'appui, plutôt que
@@ -1787,7 +1797,7 @@ final class CostCalculationService
      *               slots: list<array{slot: string, import_kwh: float}>, fallback: ?string}
      *         |array{reason: string} Motif d'indisponibilité si la série est inexploitable.
      */
-    private function resolveDynamicSeries(DateTimeImmutable $from, DateTimeImmutable $to, string $requestedMode): array
+    private function resolveDynamicSeries(DateTimeImmutable $from, DateTimeImmutable $to, string $requestedMode, ?TariffGrid $indexedGrid = null): array
     {
         // +1 h : la borne haute des deltas est le dernier relevé, dont le créneau de
         // prix commence avant lui — l'élargir garantit de couvrir ce dernier créneau.
@@ -1800,7 +1810,7 @@ final class CostCalculationService
         // moyenne pondérée de ce mois. Le reste de buildResponse() est indifférent à
         // cette uniformité : un « créneau » y est une clé et une quantité.
         if ($requestedMode === 'indexed_monthly') {
-            return $this->resolveMonthlyIndexedSeries($from, $to, $to1);
+            return $this->resolveMonthlyIndexedSeries($from, $to, $to1, $indexedGrid);
         }
 
         if ($requestedMode === 'dynamic_quarter' && $repo !== null) {
@@ -1898,7 +1908,7 @@ final class CostCalculationService
      *               monthly: list<MonthlyIndexedPrice>}
      *         |array{reason: string}
      */
-    private function resolveMonthlyIndexedSeries(DateTimeImmutable $from, DateTimeImmutable $to, DateTimeImmutable $to1): array
+    private function resolveMonthlyIndexedSeries(DateTimeImmutable $from, DateTimeImmutable $to, DateTimeImmutable $to1, ?TariffGrid $indexedGrid = null): array
     {
         $repo = $this->dynamicPriceRepo;
         if ($repo === null) {
@@ -1936,11 +1946,27 @@ final class CostCalculationService
             $this->legacyRepo->getQuarterImportDeltas($from, $to),
         );
 
+        // Profil de pondération du contrat (#93), deuxième niveau de la cascade. Absent
+        // du contrat ou absent de la base, la cascade se rabat d'elle-même sur la courbe
+        // réelle puis le baseload : il n'y a jamais de poids inventés.
+        $profileCode    = $indexedGrid?->loadProfileCode;
+        $profileWeights = [];
+        if ($profileCode !== null && $this->loadProfileRepo !== null) {
+            // `$indexedGrid` est non nul ici : c'est lui qui a fourni $profileCode.
+            $country = $indexedGrid->country ?? LoadProfileRepository::DEFAULT_COUNTRY;
+            // Le pas de 15 min d'abord : il s'agrège vers l'heure si la série de
+            // cotations retenue est horaire, alors que l'inverse est impossible.
+            $profileWeights = $this->loadProfileRepo->weightsBetween($profileCode, $country, $from, $to1, 15);
+            if ($profileWeights === []) {
+                $profileWeights = $this->loadProfileRepo->weightsBetween($profileCode, $country, $from, $to1, 60);
+            }
+        }
+
         // Fenêtre de FACTURATION ($to, pas $to1) : l'heure ajoutée ne sert qu'à aller
         // chercher la cotation du dernier créneau. La passer ici ferait naître un mois
         // suivant d'une heure, trivialement « couvert » par une seule cotation, qui
         // remonterait ensuite comme mois partiel au baseload.
-        $monthly = $this->monthlyCalculator->perMonth($from, $to, $candidates, $load);
+        $monthly = $this->monthlyCalculator->perMonth($from, $to, $candidates, $load, $profileWeights, $profileCode);
         if ($monthly === []) {
             return ['reason' => 'Cotations trop lacunaires pour calculer une moyenne mensuelle.'];
         }
