@@ -708,7 +708,7 @@ return [
     'reconciliation.skipped.no_amount'             => 'Kein Betrag erfasst.',
     'reconciliation.skipped.no_coverage'           => 'Keine Stunde durch einen Marktpreis abgedeckt.',
     'reconciliation.skipped.mixed_grids'           => 'Monat über zwei Verträge mit unterschiedlichen Formeln verteilt.',
-    'reconciliation.skipped.estimated_weighting'   => 'Geschätzter Monatspreis — keine Viertelstundenwerte, oder der Monat ist noch nicht abgeschlossen. Die Formel daraus abzuleiten ergäbe ein verzerrtes Ergebnis.',
+    'reconciliation.skipped.estimated_weighting'   => 'Monatspreis ohne Verbrauchsform — weder Viertelstundenwerte noch Gewichtungsprofil — oder der Monat ist noch nicht abgeschlossen. Die Formel daraus abzuleiten ergäbe ein verzerrtes Ergebnis.',
     'reconciliation.fit_title'                     => 'Abgeleitete Formel',
     'reconciliation.fit_coefficient'               => 'Koeffizient',
     'reconciliation.fit_offset'                    => 'Marge (brutto)',

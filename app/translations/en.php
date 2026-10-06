@@ -709,7 +709,7 @@ return [
     'reconciliation.skipped.no_amount'             => 'No amount entered.',
     'reconciliation.skipped.no_coverage'           => 'No hour covered by a market price.',
     'reconciliation.skipped.mixed_grids'           => 'Month spanning two contracts with different formulas.',
-    'reconciliation.skipped.estimated_weighting'   => 'Estimated monthly price — no 15-minute readings, or the month is not closed yet. Deriving the formula from it would skew the result.',
+    'reconciliation.skipped.estimated_weighting'   => 'Monthly price with no consumption shape — neither 15-minute readings nor a weighting profile — or the month is not closed yet. Deriving the formula from it would skew the result.',
     'reconciliation.fit_title'                     => 'Derived formula',
     'reconciliation.fit_coefficient'               => 'Coefficient',
     'reconciliation.fit_offset'                    => 'Margin (incl. VAT)',

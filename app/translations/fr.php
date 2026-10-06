@@ -717,7 +717,7 @@ return [
     'reconciliation.skipped.no_amount'             => 'Aucun montant saisi.',
     'reconciliation.skipped.no_coverage'           => 'Aucune heure couverte par un prix de marché.',
     'reconciliation.skipped.mixed_grids'           => 'Mois à cheval sur deux contrats aux formules différentes.',
-    'reconciliation.skipped.estimated_weighting'   => 'Prix du mois estimé — faute de relevés au pas de 15 min, ou mois non clos. Déduire la formule dessus donnerait un couple faussé.',
+    'reconciliation.skipped.estimated_weighting'   => 'Prix du mois sans forme de consommation — ni relevés au pas de 15 min, ni profil de pondération — ou mois non clos. Déduire la formule dessus donnerait un couple faussé.',
     'reconciliation.fit_title'                     => 'Formule déduite',
     'reconciliation.fit_coefficient'               => 'Coefficient',
     'reconciliation.fit_offset'                    => 'Marge (TTC)',

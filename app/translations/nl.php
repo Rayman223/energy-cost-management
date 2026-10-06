@@ -708,7 +708,7 @@ return [
     'reconciliation.skipped.no_amount'             => 'Geen bedrag ingevoerd.',
     'reconciliation.skipped.no_coverage'           => 'Geen enkel uur gedekt door een marktprijs.',
     'reconciliation.skipped.mixed_grids'           => 'Maand verdeeld over twee contracten met verschillende formules.',
-    'reconciliation.skipped.estimated_weighting'   => 'Geschatte maandprijs — geen kwartierwaarden, of de maand is nog niet afgesloten. De formule hieruit afleiden zou een vertekend resultaat geven.',
+    'reconciliation.skipped.estimated_weighting'   => 'Maandprijs zonder verbruiksvorm — geen kwartierwaarden en geen wegingsprofiel — of de maand is nog niet afgesloten. De formule hieruit afleiden zou een vertekend resultaat geven.',
     'reconciliation.fit_title'                     => 'Afgeleide formule',
     'reconciliation.fit_coefficient'               => 'Coëfficiënt',
     'reconciliation.fit_offset'                    => 'Marge (incl. btw)',
