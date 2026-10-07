@@ -105,6 +105,17 @@ fi
 
 if [ "$status" -ne 2 ]; then
     log "[ERROR] cron_load_profile_check.php a terminé avec le code $status."
+    # Une vérification qui échoue (base injoignable, config cassée) ne doit pas se
+    # taire : ce serait le même oubli silencieux que celui que ce script surveille.
+    # Une seule notification par série d'échecs : le marqueur __ERROR__ de l'état
+    # disparaît au premier passage réussi (état supprimé ou réécrit).
+    if [ -x "$NOTIFY_BIN" ] && ! grep -qxF '__ERROR__' "$STATE_FILE" 2>/dev/null; then
+        if "$NOTIFY_BIN" -e "Energy Cost Management" -s "Vérification des profils RLP en échec" \
+            -d "cron_load_profile_check.php a terminé avec le code $status" \
+            -m "Voir le journal : $LOG_FILE" -i "alert"; then
+            printf '__ERROR__\n' >> "$STATE_FILE" 2>/dev/null || true
+        fi
+    fi
     exit "$status"
 fi
 

@@ -9,10 +9,10 @@ namespace App\Support;
  *
  * Le suffixe `?v=<mtime>` force le rechargement par le navigateur dès qu'un
  * fichier change, sans build tooling : la version est la date de dernière
- * modification du fichier sur le disque. Les chemins sont relatifs à la page
- * appelante (les entrées vivent dans app/public/, les assets dans
- * app/public/assets/), ce qui reste correct quel que soit le préfixe de
- * déploiement (sous-répertoire).
+ * modification du fichier sur le disque. Les chemins partent de la racine de
+ * l'application ({@see Url::to()}), préfixe de déploiement compris : relatifs à la
+ * page, ils casseraient sur une route imbriquée (`/admin/load-profiles`,
+ * `/guides/…`), où « assets/… » se résoudrait en « /admin/assets/… » (404).
  */
 final class Assets
 {
@@ -33,6 +33,8 @@ final class Assets
 
         $version = is_file($fsPath) ? (string) filemtime($fsPath) : null;
 
-        return $version !== null ? $relativePath . '?v=' . $version : $relativePath;
+        $url = Url::to($relativePath);
+
+        return $version !== null ? $url . '?v=' . $version : $url;
     }
 }

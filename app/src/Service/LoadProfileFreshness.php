@@ -28,7 +28,8 @@ use DateTimeZone;
  *    ancien relève d'un rattrapage, pas d'une alerte récurrente).
  *
  * Un mois est COMPLET quand ses points couvrent au moins
- * {@see self::MIN_COVERAGE_PCT} % des créneaux du mois, à l'une des deux résolutions.
+ * {@see self::MIN_COVERAGE_PCT} % des créneaux du mois, à la résolution que le calcul
+ * lit pour ce profil (15 min dès qu'il en existe, l'heure sinon).
  * Un fichier tronqué compte donc comme manquant : le calcul, lui, l'utiliserait tel
  * quel (il pondère sur les créneaux communs), mais sur une partie du mois seulement.
  */
@@ -144,7 +145,7 @@ final class LoadProfileFreshness
             $months = [];
             if ($profile['months'] !== []) {
                 [$from, $to] = self::window($profile['months'][0], $profile['months'][count($profile['months']) - 1]);
-                $points      = $pointsFor($profile['code'], $profile['country'], $from, $to);
+                $points      = self::resolutionTheCalculatorReads($pointsFor($profile['code'], $profile['country'], $from, $to));
                 foreach ($profile['months'] as $month) {
                     $months[$month] = self::coveragePct($month, $points[$month] ?? []);
                 }
@@ -153,6 +154,33 @@ final class LoadProfileFreshness
         }
 
         return $out;
+    }
+
+    /**
+     * Ne garde que la résolution que le calcul lira, comme sa cascade
+     * ({@see CostCalculationService}) : le pas de 15 min dès qu'il en existe un point
+     * sur la fenêtre, l'heure sinon. Un mois importé à 60 min au milieu d'une série
+     * quart-horaire n'est PAS lu par le calcul — le compter complet masquerait
+     * exactement le repli silencieux que ce service doit signaler.
+     *
+     * @param array<string, array<int, int>> $points mois => résolution => points
+     * @return array<string, array<int, int>>
+     */
+    private static function resolutionTheCalculatorReads(array $points): array
+    {
+        $has15 = false;
+        foreach ($points as $byResolution) {
+            if (($byResolution[15] ?? 0) > 0) {
+                $has15 = true;
+                break;
+            }
+        }
+        $keep = $has15 ? 15 : 60;
+
+        return array_map(
+            static fn (array $byResolution): array => array_intersect_key($byResolution, [$keep => true]),
+            $points,
+        );
     }
 
     /**

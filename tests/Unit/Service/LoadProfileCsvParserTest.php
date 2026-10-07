@@ -58,6 +58,37 @@ final class LoadProfileCsvParserTest extends TestCase
         self::assertEqualsWithDelta(1.0, $result->sum(), 1e-12);
     }
 
+    /** « 2,85E-05 » : un petit coefficient exporté en notation scientifique. */
+    public function testScientificNotationWithDecimalCommaIsAccepted(): void
+    {
+        $result = $this->parse("timestamp;fraction\n2026-01-01 00:00;2,5E-05\n");
+
+        self::assertSame(0, $result->rejected);
+        self::assertEqualsWithDelta(2.5e-5, $result->sum(), 1e-15);
+    }
+
+    /**
+     * « 1/09/2026 0:15 » d'un tableur belge est le 1er septembre, pas le 9 janvier
+     * qu'y lirait DateTimeImmutable (m/d/Y).
+     */
+    public function testSlashDatesAreReadDayFirst(): void
+    {
+        $result = $this->parse("timestamp;fraction\n1/09/2026 0:15;1\n13/09/2026 00:00;1\n");
+
+        self::assertSame(0, $result->rejected);
+        self::assertSame('2026-08-31 22:15:00', $result->firstSlot());
+        self::assertSame('2026-09-12 22:00:00', $result->lastSlot());
+    }
+
+    /** Dates impossibles et formes souples : rejetées, jamais reportées en silence. */
+    public function testCalendarInvalidAndRelativeDatesAreRejected(): void
+    {
+        $result = $this->parse("timestamp;fraction\n2026-01-01 00:00;1\n2026-02-30 00:00;1\n31/04/2026 00:00;1\nnow;1\n+1 day;1\n");
+
+        self::assertSame(1, $result->count());
+        self::assertSame(4, $result->rejected);
+    }
+
     /**
      * Quatre quarts importés à 60 min forment le poids de l'heure : SOMMÉS, jamais
      * écrasés — sinon trois quarts sur quatre disparaîtraient en silence.

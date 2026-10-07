@@ -124,6 +124,32 @@ final class LoadProfileFreshnessTest extends TestCase
         self::assertSame(0.0, $missing[1]['coverage_pct']);
     }
 
+    /**
+     * Un mois importé à 60 min au milieu d'une série quart-horaire : le calcul lit le
+     * pas de 15 min dès qu'il en existe et ignore ce mois — il manque donc.
+     */
+    public function testHourlyMonthAmidQuarterHourSeriesIsMissing(): void
+    {
+        $pointsFor = static fn (): array => [
+            '2026-08' => [15 => 2976],
+            '2026-09' => [60 => 720],
+        ];
+
+        $report = (new LoadProfileFreshness(graceDays: 5))->report([$this->grid('2026-08-01')], $pointsFor, $this->at('2026-10-07'));
+
+        self::assertSame(['2026-09'], array_column(LoadProfileFreshness::missing($report), 'month'));
+    }
+
+    /** Une série entièrement horaire est lue telle quelle. */
+    public function testHourlyOnlySeriesIsComplete(): void
+    {
+        $pointsFor = static fn (): array => ['2026-09' => [60 => 720]];
+
+        $report = (new LoadProfileFreshness(graceDays: 5))->report([$this->grid('2026-09-01')], $pointsFor, $this->at('2026-10-07'));
+
+        self::assertSame([], LoadProfileFreshness::missing($report));
+    }
+
     public function testNoQueryWhenNothingIsRequired(): void
     {
         $called    = false;

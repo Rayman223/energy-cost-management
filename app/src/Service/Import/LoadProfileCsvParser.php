@@ -171,9 +171,10 @@ final class LoadProfileCsvParser
             // donc le signe « % » est retiré sans conversion. La virgule décimale est
             // convertie ICI : RowSource ne la normalise que sur une valeur purement
             // numérique, et « 0,25 % » d'un export tableur lui échappait — la ligne
-            // était rejetée.
+            // était rejetée. La notation scientifique (« 2,85123E-05 », forme que prend
+            // un petit coefficient RLP dans un export tableur) suit la même règle.
             $rawValue = str_replace(['%', ' ', "\u{A0}"], '', $rawValue);
-            if (preg_match('/^\d+,\d+$/', $rawValue)) {
+            if (preg_match('/^\d+,\d+(?:[eE][-+]?\d+)?$/', $rawValue)) {
                 $rawValue = str_replace(',', '.', $rawValue);
             }
             if ($rawTs === '' || !is_numeric($rawValue) || (float) $rawValue < 0.0) {
@@ -181,12 +182,12 @@ final class LoadProfileCsvParser
                 continue;
             }
 
-            try {
-                $instant = (new DateTimeImmutable($rawTs, $tz))->setTimezone($utc);
-            } catch (\Throwable $e) {
+            $instant = self::parseInstant($rawTs, $tz);
+            if ($instant === null) {
                 $rejected++;
                 continue;
             }
+            $instant = $instant->setTimezone($utc);
 
             $minute = $resolution === 60 ? 0 : intdiv((int) $instant->format('i'), 15) * 15;
             $slot   = $instant->setTime((int) $instant->format('G'), $minute, 0);
@@ -212,5 +213,48 @@ final class LoadProfileCsvParser
         ksort($weights);
 
         return new LoadProfileParseResult(array_values($weights), $resolution, $rejected, $merged);
+    }
+
+    /**
+     * Horodatage d'une ligne, ou null s'il est illisible.
+     *
+     * Deux formes seulement :
+     *  - ISO (`AAAA-MM-JJ[ HH:MM[:SS]]`, offset facultatif) ;
+     *  - `JJ/MM/AAAA[ HH:MM[:SS]]`, l'export CSV d'un tableur belge. Lu JOUR/MOIS
+     *    explicitement : `DateTimeImmutable` y verrait un `m/d/Y` américain, et
+     *    « 1/09/2026 0:15 » deviendrait le 9 janvier — des poids écrits en silence
+     *    dans le mauvais mois.
+     *
+     * Tout le reste est rejeté, y compris les formes souples de `DateTimeImmutable`
+     * (« now », « +1 day ») et les dates calendairement invalides (« 2026-02-30 »),
+     * qu'il reporterait en silence au mois suivant ({@see ReadingParser}).
+     */
+    private static function parseInstant(string $raw, DateTimeZone $tz): ?DateTimeImmutable
+    {
+        if (preg_match('#^(\d{1,2})/(\d{1,2})/(\d{4})(?:[ T](\d{1,2}):(\d{2})(?::(\d{2}))?)?$#', $raw, $m) === 1) {
+            [$day, $month, $year] = [(int) $m[1], (int) $m[2], (int) $m[3]];
+            [$hour, $minute, $second] = [(int) ($m[4] ?? 0), (int) ($m[5] ?? 0), (int) ($m[6] ?? 0)];
+            if (!checkdate($month, $day, $year) || $hour > 23 || $minute > 59 || $second > 59) {
+                return null;
+            }
+
+            return (new DateTimeImmutable('now', $tz))
+                ->setDate($year, $month, $day)
+                ->setTime($hour, $minute, $second);
+        }
+
+        if (preg_match('/^\d{4}-\d{2}-\d{2}(?:[T ]\d{1,2}:\d{2}(?::\d{2}(?:\.\d+)?)?)?(?:Z|[+-]\d{2}:?\d{2})?$/', $raw) !== 1) {
+            return null;
+        }
+        $parsed = date_parse($raw);
+        if ($parsed['error_count'] > 0 || $parsed['warning_count'] > 0) {
+            return null;
+        }
+
+        try {
+            return new DateTimeImmutable($raw, $tz);
+        } catch (\Exception) {
+            return null;
+        }
     }
 }

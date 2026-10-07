@@ -138,6 +138,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             'dry_run'    => $dryRun,
             'written'    => $written,
         ];
+    } catch (\PDOException $e) {
+        // AVANT le cas suivant : PDOException étend RuntimeException, et son message
+        // (SQL, nom de table) n'est pas un message de validation.
+        error_log('[load-profiles] ' . $e->getMessage());
+        $error = $view->t('load_profiles.failed');
     } catch (\InvalidArgumentException | \RuntimeException $e) {
         // Messages de validation, sûrs à afficher tels quels.
         $error = $e->getMessage();
