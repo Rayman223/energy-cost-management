@@ -282,7 +282,8 @@ Nécessaire seulement pour le tarif `indexed_monthly`, et seulement si vous voul
 **reproduire la facture** de votre fournisseur plutôt que calculer votre coût réel.
 
 Synergrid ne publie **aucune API** : les profils sont des fichiers diffusés par les
-GRD. Convertissez la feuille en CSV à deux colonnes — le délimiteur, le BOM et la
+GRD ([page de téléchargement](https://www.synergrid.be/fr/centre-de-documentation/statistiques-et-donnees/profils-slp-spp-rlp)).
+Convertissez la feuille en CSV à deux colonnes — le délimiteur, le BOM et la
 virgule décimale sont détectés automatiquement, comme pour l'import de relevés :
 
 ```csv
@@ -290,6 +291,14 @@ timestamp;fraction
 2026-01-01 00:00;0.000021
 2026-01-01 00:15;0.000020
 ```
+
+Deux voies d'import, même lecture du fichier :
+
+- **Page `/admin/load-profiles`** (comptes admin, lien depuis *Administration*) :
+  formulaire d'envoi avec case *Simulation* cochée par défaut, et tableau des mois
+  exigés par les grilles indexées — complets, partiels ou manquants. C'est la page
+  vers laquelle pointe la notification Unraid (§ 6 ter).
+- **Script CLI**, pour un import en lot ou scripté :
 
 ```bash
 # Validation seule : aucune écriture, résumé affiché
@@ -337,6 +346,81 @@ Points à connaître :
 > par an et par GRD). Ceux-là répartissent une consommation *annuelle* entre les
 > mois ; ils ne pondèrent pas des cotations intra-mensuelles, et les importer ici
 > donnerait un prix faux et silencieusement plausible.
+
+---
+
+## 6 ter. Rappel mensuel : vérification et notification Unraid
+
+Un mois de profil oublié ne se voit nulle part : le calcul retombe **sans bruit**
+sur la moyenne simple des cotations, et `/reconciliation` écarte le mois. Le script
+`app/scripts/cron_load_profile_check.php` le détecte ; il n'importe rien.
+
+```bash
+php app/scripts/cron_load_profile_check.php                  # code 0 = à jour, 2 = mois manquant, 1 = erreur
+php app/scripts/cron_load_profile_check.php --grace-days=10  # attendre 10 jours après la clôture
+```
+
+Il ne vérifie que les profils que des grilles **`indexed_monthly`** désignent, sur
+leur période de validité. Un mois est exigé **5 jours** après sa clôture
+(`--grace-days`, Synergrid publiant après coup sans calendrier fixe) et compte comme
+complet à partir de **80 %** de ses créneaux. Seuls les **12** derniers mois
+exigibles sont examinés (`--lookback`). Sortie, une ligne par mois :
+
+```
+[OK] RLP0N BE 2026-08 100.0
+[MISSING] RLP0N BE 2026-09 0.0
+[UPLOAD_URL] https://energie.example.tld/admin/load-profiles
+[DOWNLOAD_URL] https://www.synergrid.be/fr/centre-de-documentation/...
+```
+
+`[UPLOAD_URL]` n'apparaît que si `seo.base_url` est configurée : en CLI, il n'y a
+pas de requête HTTP dont déduire l'adresse publique.
+
+### Notification Unraid
+
+[`app/scripts/cron_load_profile_unraid.sh`](../scripts/cron_load_profile_unraid.sh)
+exécute la vérification dans le conteneur et, si un mois manque, envoie une
+**notification Unraid** (niveau *warning*) :
+
+- le **clic** sur la notification ouvre la page d'import `/admin/load-profiles` ;
+- le **message** rappelle les trois étapes et donne l'adresse de téléchargement
+  Synergrid.
+
+Une seule notification **par mois manquant** : les mois déjà signalés sont retenus
+dans `STATE_FILE`. Le log répète l'avertissement à chaque passage ; un mois importé
+sort de l'état, et serait de nouveau signalé s'il venait à manquer encore.
+
+| Variable | Défaut |
+| --- | --- |
+| `APP_URL` | *(vide)* — URL publique de l'application, prioritaire sur `seo.base_url` |
+| `APP_NAME` | `energyv3` |
+| `CONTAINER` | `swag` |
+| `CONTAINER_APP_DIR` | `/config/www/$APP_NAME` |
+| `LOG_FILE` | `/mnt/user/appdata/swag/log/energy-load-profile.log` |
+| `STATE_FILE` | `/mnt/user/appdata/swag/log/energy-load-profile.notified` |
+| `GRACE_DAYS` / `LOOKBACK` | `5` / `12` |
+| `NOTIFY_BIN` | `/usr/local/emhttp/webGui/scripts/notify` |
+
+**Mise en place** (plugin *User Scripts*, comme au § 9) :
+
+1. *Settings → User Scripts → **Add New Script***, nommé par exemple
+   `energy-load-profile`.
+2. Coller ce wrapper, en adaptant `APP_URL` :
+
+   ```bash
+   #!/bin/bash
+   APP_URL="https://energie.example.tld" \
+     exec bash /mnt/user/appdata/swag/www/energyv3/app/scripts/cron_load_profile_unraid.sh
+   ```
+
+3. *Set Schedule* → **Custom** : `0 9 * * *` (une fois par jour ; sans mois
+   manquant, rien n'est notifié).
+4. **Run Script** une première fois et lire la fenêtre de log.
+
+> Le lien d'une notification Unraid n'est **cliquable qu'en affichage détaillé**
+> des notifications (réglage d'affichage dans les paramètres de notification
+> d'Unraid) ; en affichage résumé, l'adresse reste lisible dans le message. Une URL externe s'ouvre **à la
+> place** de l'onglet de l'interface Unraid, pas dans un nouvel onglet.
 
 ---
 

@@ -81,6 +81,85 @@ final class LoadProfileRepository implements LoadProfileRepositoryInterface
     }
 
     /**
+     * Nombre de points par mois (UTC) et par résolution, sur `[$from, $to[` — de quoi
+     * juger si un mois est importé en entier (#101).
+     *
+     * @return array<string, array<int, int>> 'Y-m' => [resolution_min => points]
+     */
+    public function pointsByMonth(string $code, string $country, DateTimeImmutable $from, DateTimeImmutable $to): array
+    {
+        $stmt = $this->pdo->prepare(
+            "SELECT DATE_FORMAT(slot_start, '%Y-%m') AS month,
+                    resolution_min,
+                    COUNT(*) AS points
+             FROM load_profiles
+             WHERE code = :code
+               AND country = :country
+               AND slot_start >= :from
+               AND slot_start <  :to
+             GROUP BY month, resolution_min
+             ORDER BY month"
+        );
+        $stmt->execute([
+            'code'    => $code,
+            'country' => $country,
+            'from'    => Dates::toDbString($from),
+            'to'      => Dates::toDbString($to),
+        ]);
+
+        $out = [];
+        /** @var array<int, array{month: string, resolution_min: int|string, points: int|string}> $rows */
+        $rows = $stmt->fetchAll();
+        foreach ($rows as $row) {
+            $out[$row['month']][(int) $row['resolution_min']] = (int) $row['points'];
+        }
+
+        return $out;
+    }
+
+    /**
+     * Profils que des grilles tarifaires désignent réellement, tous comptes
+     * confondus : les grilles électricité `indexed_monthly` portant un
+     * `load_profile_code`, avec leur période de validité (#101).
+     *
+     * C'est ce qu'il faut tenir à jour — un profil importé que rien n'utilise ne
+     * mérite pas de notification. Le pays retombe sur {@see self::DEFAULT_COUNTRY}
+     * comme dans {@see \App\Service\CostCalculationService}, sans quoi la
+     * vérification chercherait un profil que le calcul ne lira jamais.
+     *
+     * @return list<array{code: string, country: string, valid_from: string, valid_to: ?string}>
+     */
+    public function profilesInUse(): array
+    {
+        $stmt = $this->pdo->query(
+            "SELECT load_profile_code AS code, country, valid_from, valid_to
+             FROM tariff_grids
+             WHERE energy_type = 'electricity'
+               AND pricing_mode = 'indexed_monthly'
+               AND load_profile_code IS NOT NULL
+               AND load_profile_code <> ''
+             ORDER BY load_profile_code, valid_from"
+        );
+        if ($stmt === false) {
+            return [];
+        }
+
+        $out = [];
+        /** @var array<int, array{code: string, country: ?string, valid_from: string, valid_to: ?string}> $rows */
+        $rows = $stmt->fetchAll();
+        foreach ($rows as $row) {
+            $out[] = [
+                'code'       => $row['code'],
+                'country'    => ($row['country'] ?? '') !== '' ? (string) $row['country'] : self::DEFAULT_COUNTRY,
+                'valid_from' => $row['valid_from'],
+                'valid_to'   => $row['valid_to'],
+            ];
+        }
+
+        return $out;
+    }
+
+    /**
      * Insère / met à jour une série de poids. La clé unique
      * (code, country, resolution_min, slot_start) rend l'opération idempotente : un
      * fichier réimporté corrige les valeurs au lieu de les dupliquer.

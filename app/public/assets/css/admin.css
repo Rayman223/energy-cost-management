@@ -19,3 +19,9 @@ select, input[type=file], input[type=text] { width: 100%; box-sizing: border-box
   border-radius: 8px; border: 1px solid var(--border); background: var(--bg); color: var(--text); }
 form button[type=submit]:not(.theme-toggle) { margin-top: 12px; background: var(--blue); color: #fff; }
 .mt-10 { margin-top: 10px; }
+/* Profils de charge (#101). */
+.pill.partial { background: rgba(210,160,60,.15); color: var(--amber); }
+.lp-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 0 12px; margin-top: 10px; }
+.lp-summary { margin: 8px 0 0; padding-left: 18px; font-size: .84rem; }
+.lp-summary code { display: inline-block; margin: 2px 4px 2px 0; }
+label input[type=checkbox] { margin-right: 6px; }

@@ -55,6 +55,8 @@ $routes = [
     ''                => 'dashboard.php',
     '/account'        => 'account.php',
     '/admin'          => 'admin.php',
+    // Profils de charge (#101) : cible du lien de la notification Unraid.
+    '/admin/load-profiles' => 'admin/load-profiles.php',
     '/tariffs'        => 'tariffs.php',
     '/reconciliation' => 'reconciliation.php',
     '/advances'       => 'advances.php',

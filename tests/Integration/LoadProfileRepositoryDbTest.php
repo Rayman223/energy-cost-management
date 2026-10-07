@@ -17,6 +17,7 @@ final class LoadProfileRepositoryDbTest extends DatabaseTestCase
     protected function clean(): void
     {
         $this->pdo()->exec('DELETE FROM load_profiles');
+        $this->pdo()->exec("DELETE FROM tariff_grids WHERE name = 'lp-test'");
     }
 
     private function at(string $utc): DateTimeImmutable
@@ -126,5 +127,52 @@ final class LoadProfileRepositoryDbTest extends DatabaseTestCase
     public function testUpsertOfAnEmptySeriesWritesNothing(): void
     {
         self::assertSame(0, (new LoadProfileRepository($this->pdo()))->upsertWeights('RLP0N', 'BE', 15, [], 'test'));
+    }
+
+    private function grid(string $mode, ?string $code, ?string $country, string $from, ?string $to = null): void
+    {
+        $stmt = $this->pdo()->prepare(
+            "INSERT INTO tariff_grids (user_id, energy_type, pricing_mode, load_profile_code, country, name, valid_from, valid_to)
+             VALUES (NULL, 'electricity', :mode, :code, :country, 'lp-test', :from, :to)"
+        );
+        $stmt->execute(['mode' => $mode, 'code' => $code, 'country' => $country, 'from' => $from, 'to' => $to]);
+    }
+
+    /**
+     * Décompte par mois UTC et par résolution (#101) : c'est ce qui dit si un mois a
+     * été importé en entier.
+     */
+    public function testPointsAreCountedPerMonthAndResolution(): void
+    {
+        $this->seed(['2026-06-30 23:45:00' => 0.1, '2026-07-01 00:00:00' => 0.1, '2026-07-01 00:15:00' => 0.1]);
+        $this->seed(['2026-07-01 00:00:00' => 0.2], resolution: 60);
+        $this->seed(['2026-07-01 00:00:00' => 0.2], code: 'RLP0E');
+
+        $points = (new LoadProfileRepository($this->pdo()))
+            ->pointsByMonth('RLP0N', 'BE', $this->at('2026-06-01 00:00:00'), $this->at('2026-08-01 00:00:00'));
+
+        self::assertSame(['2026-06' => [15 => 1], '2026-07' => [15 => 2, 60 => 1]], $points);
+    }
+
+    /**
+     * Seules les grilles indexées désignant un profil comptent (#101), tous comptes
+     * confondus, et un pays absent retombe sur la Belgique comme dans le calcul.
+     */
+    public function testProfilesInUseListsIndexedGridsWithAProfile(): void
+    {
+        $this->grid('indexed_monthly', 'RLP0N', null, '2026-01-01', '2026-07-01');
+        $this->grid('indexed_monthly', 'RLP0E', 'NL', '2026-03-01');
+        $this->grid('indexed_monthly', null, 'BE', '2026-01-01');
+        $this->grid('dynamic_quarter', 'RLP0N', 'BE', '2026-01-01');
+
+        $usage = array_values(array_filter(
+            (new LoadProfileRepository($this->pdo()))->profilesInUse(),
+            static fn (array $u): bool => in_array($u['code'], ['RLP0N', 'RLP0E'], true),
+        ));
+
+        self::assertSame([
+            ['code' => 'RLP0E', 'country' => 'NL', 'valid_from' => '2026-03-01', 'valid_to' => null],
+            ['code' => 'RLP0N', 'country' => 'BE', 'valid_from' => '2026-01-01', 'valid_to' => '2026-07-01'],
+        ], $usage);
     }
 }
