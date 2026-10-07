@@ -141,6 +141,34 @@ final class IngestControllerTest extends TestCase
         self::assertCount(1, $this->elec->calls);
     }
 
+    /**
+     * #93 — fin du rejet silencieux. La politique réellement câblée sur l'API est
+     * {@see ReadingGranularityPolicy::electricityDefault()} : une courbe de charge
+     * quart-horaire est conservée intégralement, quel que soit le tarif de
+     * l'utilisateur. Auparavant, un pousseur automatique en tarif fixe voyait 95 de
+     * ses 96 lectures quotidiennes disparaître sans erreur ni avertissement.
+     */
+    public function testElectricityDefaultPolicyKeepsEveryQuarterReading(): void
+    {
+        $controller = new IngestController(
+            $this->elec,
+            $this->gas,
+            $this->water,
+            ReadingGranularityPolicy::electricityDefault('UTC')
+        );
+
+        $res = $controller->electricity($this->post(['readings' => [
+            ['timestamp' => '2026-07-02T07:00:00Z', 'import_t1' => 100.0],
+            ['timestamp' => '2026-07-02T07:15:00Z', 'import_t1' => 100.5],
+            ['timestamp' => '2026-07-02T07:30:00Z', 'import_t1' => 101.0],
+            ['timestamp' => '2026-07-02T07:45:00Z', 'import_t1' => 101.5],
+        ]]));
+
+        self::assertSame(4, $res->data['received']);
+        self::assertSame(4, $res->data['inserted']);
+        self::assertCount(4, $this->elec->calls);
+    }
+
     public function testDailyLimitKeepsDifferentRegistersSameDay(): void
     {
         // import_t1 le matin, production le soir : registres indépendants, tout passe.
