@@ -2,7 +2,6 @@
 
 declare(strict_types=1);
 
-use App\Domain\ReadingGranularity;
 use App\Http\Controller\BatteryReadingController;
 use App\Http\Controller\CostController;
 use App\Http\Controller\IngestController;
@@ -135,17 +134,18 @@ try {
     );
 
     // Plafonnement des index élec par registre et par créneau aligné (issue #165) :
-    // le créneau suit la résolution de facturation de la grille active à la date du
-    // relevé (issue #10) — jour en fixe, heure en dynamique horaire, 15 min en
-    // dynamique quart-horaire. Kill-switch serveur prioritaire : sans import de prix
-    // de marché, tout le monde est traité comme fixe. Fuseau de l'utilisateur pour
-    // délimiter le créneau (repli UTC neutre si pas de profil). Construit DANS le
-    // bootstrap gardé : la politique instancie le DateTimeZone du profil, et un
-    // identifiant devenu illisible doit dégrader en 503 JSON, pas en fatal nu.
+    // un index par MTU de 15 min, QUEL QUE SOIT le mode de tarification (#93). Le pas
+    // de relevé appartient au compteur, pas au contrat : le faire suivre la résolution
+    // de facturation (issue #10) privait de courbe de charge tout utilisateur en tarif
+    // fixe ou indexé au mois. Le kill-switch `dynamic_prices.enabled` ne joue donc plus
+    // ici — la saisie d'index ne dépend pas de l'import de prix de marché — mais garde
+    // tous ses autres effets (calcul dynamique, /reconciliation, choix du mode).
+    // Fuseau de l'utilisateur pour délimiter le créneau (repli UTC neutre si pas de
+    // profil). Construit DANS le bootstrap gardé : la politique valide le DateTimeZone
+    // du profil, et un identifiant devenu illisible doit dégrader en 503 JSON, pas en
+    // fatal nu.
     $userTimezone = $profile->timezone ?? 'UTC';
-    $elecThrottle = DynamicPricing::isEnabled($config)
-        ? ReadingGranularityPolicy::fromTariffs($tariffRepo, $userTimezone)
-        : ReadingGranularityPolicy::constant(ReadingGranularity::Day, $userTimezone);
+    $elecThrottle = ReadingGranularityPolicy::electricityDefault($userTimezone);
 } catch (\Throwable $e) {
     JsonResponse::error('Bootstrap failed: ' . $e->getMessage(), 503)->send();
     exit;
