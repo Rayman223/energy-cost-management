@@ -57,6 +57,8 @@ interface TariffRepositoryInterface
      *
      * @param list<array{key: string, amount: float, kind: string, label: ?string}> $lines
      * @param string $pricingMode Électricité : mode du contrat porté par CETTE grille (#245).
+     * @param ?string $loadProfileCode Tarif indexé mensuel : profil de pondération du
+     *        contrat (#93). Ignoré — et remis à `null` — sous tout autre mode.
      */
     public function saveGrid(
         string $energyType,
@@ -70,6 +72,7 @@ interface TariffRepositoryInterface
         bool $shared = false,
         float $vatRate = 21.0,
         string $pricingMode = TariffGrid::PRICING_MODE_DEFAULT,
+        ?string $loadProfileCode = null,
     ): int;
 
     /**

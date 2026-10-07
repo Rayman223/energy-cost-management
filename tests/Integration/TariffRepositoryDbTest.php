@@ -363,6 +363,63 @@ final class TariffRepositoryDbTest extends DatabaseTestCase
     }
 
     /**
+     * #93 phase 4 — le code du profil de pondération fait l'aller-retour, et il est
+     * NEUTRALISÉ dès que le mode ne sait pas s'en servir.
+     *
+     * Conserver un profil sur une grille repassée en fixe laisserait un réglage mort en
+     * base, qui réappliquerait silencieusement une pondération abandonnée au prochain
+     * passage en indexé.
+     */
+    public function testLoadProfileCodeRoundTripsAndIsClearedOutsideIndexedMode(): void
+    {
+        $user = new TariffRepository($this->pdo(), $this->userId, false);
+
+        $id = $user->saveGrid(
+            'electricity',
+            'Variable indexé',
+            new DateTimeImmutable('2026-01-01'),
+            null,
+            $this->lines(['spot_coefficient' => 1.08]),
+            pricingMode: 'indexed_monthly',
+            loadProfileCode: 'RLP0N',
+        );
+
+        self::assertSame('RLP0N', $user->findById($id)?->loadProfileCode);
+
+        // Même grille repassée en dynamique quart-horaire : le profil n'a plus d'objet.
+        $user->updateGrid(
+            $id,
+            'electricity',
+            'Dynamique',
+            new DateTimeImmutable('2026-01-01'),
+            null,
+            $this->lines(['spot_coefficient' => 1.08]),
+            pricingMode: 'dynamic_quarter',
+            loadProfileCode: 'RLP0N',
+        );
+
+        self::assertNull($user->findById($id)?->loadProfileCode);
+    }
+
+    /** La chaîne vide du sélecteur « aucun » est stockée comme NULL, pas comme ''. */
+    public function testEmptyLoadProfileCodeIsStoredAsNull(): void
+    {
+        $user = new TariffRepository($this->pdo(), $this->userId, false);
+
+        $id = $user->saveGrid(
+            'electricity',
+            'Variable sans profil',
+            new DateTimeImmutable('2026-01-01'),
+            null,
+            $this->lines(['spot_coefficient' => 1.08]),
+            pricingMode: 'indexed_monthly',
+            loadProfileCode: '',
+        );
+
+        self::assertNull($user->findById($id)?->loadProfileCode);
+    }
+
+    /**
      * `hasDynamicGrid()` repose sur `pricing_mode <> 'fixed'`, donc il doit voir le
      * nouveau mode sans modification — c'est ce qui ouvre /reconciliation à un contrat
      * à prix variable (#93).

@@ -10,6 +10,7 @@ use App\Domain\TariffTemplateCatalog;
 use App\Http\SecurityHeaders;
 use App\I18n\Locale;
 use App\Infrastructure\Database;
+use App\Repository\LoadProfileRepository;
 use App\Repository\TariffRepository;
 use App\Repository\TariffTemplateRepository;
 use App\Repository\TariffTemplateUsageRepository;
@@ -238,6 +239,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $pricingMode = $stored->pricingMode ?? TariffGrid::PRICING_MODE_DEFAULT;
             }
 
+            // Profil de pondération du tarif indexé mensuel (#93). Le dépôt remet la
+            // valeur à null dès que le mode ne sait pas s'en servir, de sorte qu'un
+            // réglage abandonné ne ressurgisse pas au prochain passage en indexé.
+            $loadProfileCode = trim((string) ($_POST['load_profile_code'] ?? ''));
+
             // Sauvegarde optionnelle comme template : on valide le nom AVANT de
             // persister la grille, pour ne pas laisser une grille enregistrée alors
             // que l'action signale une erreur.
@@ -254,6 +260,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $validFromDate,
                     $validToDate,
                     $lines, $pcs, $country, $currency, $vatRate, $pricingMode,
+                    $loadProfileCode,
                 );
             } else {
                 $tariffRepo->saveGrid(
@@ -261,6 +268,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $validFromDate,
                     $validToDate,
                     $lines, $pcs, $country, $currency, $shared, $vatRate, $pricingMode,
+                    $loadProfileCode,
                 );
 
                 // Compteur de popularité : une nouvelle grille issue d'un template
@@ -409,6 +417,7 @@ if ($editGrid !== null) {
     $formValidTo   = $editGrid->validTo?->format('Y-m-d');
     $formPcs       = $editGrid->pcsCoefficient;
     $formMode      = $editGrid->pricingMode;
+    $formProfile   = $editGrid->loadProfileCode;
 } elseif ($duplicateGrid !== null) {
     $formCountry  = $duplicateGrid->country;
     $formCurrency = $duplicateGrid->currency;
@@ -418,6 +427,7 @@ if ($editGrid !== null) {
     $formName = mb_substr($view->t('tariffs.duplicate_name', ['name' => $duplicateGrid->name]), 0, 120);
     $formPcs  = $duplicateGrid->pcsCoefficient;
     $formMode = $duplicateGrid->pricingMode;
+    $formProfile = $duplicateGrid->loadProfileCode;
 } else {
     // #189 : continuité avec la reprise de structure/montants depuis $latest — le
     // pays de la dernière grille prime, le profil ne sert qu'à la toute première.
@@ -429,6 +439,9 @@ if ($editGrid !== null) {
     // régime ; forcer 'fixed' ferait retomber en tarif fixe à chaque renouvellement,
     // silencieusement.
     $formMode     = $latest !== null ? $latest->pricingMode : TariffGrid::PRICING_MODE_DEFAULT;
+    // Même raisonnement que le mode : prolonger le contrat, c'est en général garder
+    // son profil d'indexation.
+    $formProfile  = $latest !== null ? $latest->loadProfileCode : null;
 }
 
 $buildFieldsFromSpecs = static function (array $specs, array $amounts, string $energy) use ($fieldLabel): array {
@@ -548,6 +561,20 @@ foreach (TariffGrid::PRICING_MODES as $mode) {
     $pricingModeOptions[$mode] = $view->t('tariffs.pricing_mode_' . $mode);
 }
 
+// Profils de pondération disponibles pour le pays de la grille (#93). Liste vide =
+// aucun profil importé : le sélecteur n'est alors pas rendu du tout, plutôt que de
+// proposer un choix qui ne pondérerait rien. Le code déjà enregistré est conservé
+// dans la liste même s'il a disparu de la base, pour ne pas l'effacer en silence au
+// premier enregistrement — même garde que le pays dans /account.
+$loadProfileOptions = [];
+if ($modeEditable) {
+    $loadProfileOptions = (new LoadProfileRepository($pdo))
+        ->availableCodes($formCountry ?? LoadProfileRepository::DEFAULT_COUNTRY);
+    if ($formProfile !== null && !in_array($formProfile, $loadProfileOptions, true)) {
+        $loadProfileOptions[] = $formProfile;
+    }
+}
+
 // Kinds concernés par le grisage, exportés vers le JS pour qu'il suive le mode en
 // direct : ComponentKind reste la source unique, plutôt qu'une liste recopiée dans
 // le script — une nouvelle composante spot y serait sinon oubliée en silence.
@@ -597,6 +624,8 @@ echo $view->render('tariffs', [
     'modeEditable'     => $modeEditable,
     'formMode'         => $formMode,
     'pricingModeOptions' => $pricingModeOptions,
+    'formProfile'        => $formProfile,
+    'loadProfileOptions' => $loadProfileOptions,
     'supplierEnergyKinds' => $supplierEnergyKinds,
     'spotFormulaKinds'    => $spotFormulaKinds,
     'available'        => Locale::available($config),

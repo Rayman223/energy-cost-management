@@ -14,6 +14,7 @@ use PHPUnit\Framework\TestCase;
 use Tests\Fake\FakeDynamicPriceRepository;
 use Tests\Fake\FakeGasReadingRepository;
 use Tests\Fake\FakeLegacyDailyRepository;
+use Tests\Fake\FakeLoadProfileRepository;
 use Tests\Fake\FakeMeterReadingRepository;
 use Tests\Fake\FakeTariffRepository;
 
@@ -2688,6 +2689,157 @@ final class CostCalculationServiceTest extends TestCase
         self::assertTrue($r['available']);
         self::assertTrue($r['monthly_partial']);
         self::assertTrue($r['monthly_prices'][0]['partial']);
+    }
+
+    /**
+     * #93 phase 4 — le profil du CONTRAT pondère les cotations.
+     *
+     * Sans relevés quart-horaires natifs, la cascade descendrait au baseload (moyenne
+     * simple). Avec un profil en base et son code sur la grille, elle s'arrête au
+     * niveau intermédiaire : le prix suit la forme de consommation standard, qui est
+     * celle que le fournisseur applique.
+     *
+     * Les cotations valent 0,10 € à 10 h et 0,30 € à 11 h ; le profil pèse 0,25 / 0,75,
+     * donc le prix du mois vaut (0,25×0,10 + 0,75×0,30) / 1,00 = 0,25 €/kWh — contre
+     * 0,20 € en baseload sur ce jeu de données.
+     */
+    public function testIndexedMonthlyUsesTheContractLoadProfile(): void
+    {
+        $legacy = new FakeLegacyDailyRepository(
+            monthlyDeltasForMonth: $this->electricityDeltasFor('2026-06-01 00:00:00', '2026-07-01 00:00:00'),
+            hourlyImportDeltas: [
+                ['hour' => '2026-06-10 10:00:00', 'import_kwh' => 5.0],
+                ['hour' => '2026-06-10 11:00:00', 'import_kwh' => 5.0],
+            ],
+            quarterImportDeltas: [],
+        );
+
+        $profiles = new FakeLoadProfileRepository(weights: [
+            '2026-06-10 10:00:00' => 0.25,
+            '2026-06-10 11:00:00' => 0.75,
+        ]);
+
+        $grid = new TariffGrid(
+            id: 1,
+            energyType: 'electricity',
+            name: 'Variable indexé',
+            validFrom: new DateTimeImmutable('2026-01-01'),
+            validTo: null,
+            lines: [],
+            pricingMode: 'indexed_monthly',
+            loadProfileCode: 'RLP0N',
+        );
+
+        $svc = new CostCalculationService(
+            legacyRepo: $legacy,
+            tariffRepo: new FakeTariffRepository(grid: $grid),
+            gasRepo: new FakeGasReadingRepository(),
+            calculator: new TariffCalculatorService(),
+            dynamicPriceRepo: new FakeDynamicPriceRepository(quarterPricesBySlot: self::juneQuarterPrices(0.20, [
+                '2026-06-10 10:00:00' => 0.10,
+                '2026-06-10 11:00:00' => 0.30,
+            ])),
+            dynamicEnabled: true,
+            tariffTimezone: 'UTC',
+            loadProfileRepo: $profiles,
+        );
+
+        $r = $svc->estimateMonthElectricityDynamic(2026, 6);
+
+        self::assertTrue($r['available']);
+        self::assertSame('standard_profile', $r['load_weighting']);
+        self::assertSame('RLP0N', $r['monthly_prices'][0]['profile_code']);
+        self::assertEqualsWithDelta(0.25, $r['monthly_prices'][0]['price_htva'], 0.0001);
+        // Le profil demandé est bien celui du contrat, pas un défaut.
+        self::assertSame('RLP0N', $profiles->calls[0]['code']);
+    }
+
+    /**
+     * Grille sans code de profil : le dépôt n'est pas même interrogé, et la cascade
+     * retombe sur le baseload. Un profil ne s'applique jamais par défaut — il est
+     * contractuel.
+     */
+    public function testIndexedMonthlyWithoutProfileCodeNeverQueriesTheRepository(): void
+    {
+        $legacy = new FakeLegacyDailyRepository(
+            monthlyDeltasForMonth: $this->electricityDeltasFor('2026-06-01 00:00:00', '2026-07-01 00:00:00'),
+            hourlyImportDeltas: [['hour' => '2026-06-10 10:00:00', 'import_kwh' => 10.0]],
+            quarterImportDeltas: [],
+        );
+        $profiles = new FakeLoadProfileRepository(weights: ['2026-06-10 10:00:00' => 1.0]);
+
+        $svc = new CostCalculationService(
+            legacyRepo: $legacy,
+            tariffRepo: new FakeTariffRepository(grid: self::withPricingMode(
+                new FakeTariffRepository(grid: $this->electricityGrid()),
+                'indexed_monthly'
+            )->grid),
+            gasRepo: new FakeGasReadingRepository(),
+            calculator: new TariffCalculatorService(),
+            dynamicPriceRepo: new FakeDynamicPriceRepository(quarterPricesBySlot: self::juneQuarterPrices(0.20)),
+            dynamicEnabled: true,
+            tariffTimezone: 'UTC',
+            loadProfileRepo: $profiles,
+        );
+
+        $r = $svc->estimateMonthElectricityDynamic(2026, 6);
+
+        self::assertTrue($r['available']);
+        self::assertSame('baseload', $r['load_weighting']);
+        self::assertSame([], $profiles->calls);
+        self::assertNull($r['monthly_prices'][0]['profile_code']);
+    }
+
+    /**
+     * Profil absent au pas de 15 min mais présent à l'heure : le dépôt est réinterrogé
+     * en 60 min. Le quart s'agrège vers l'heure, l'inverse est impossible — d'où cet
+     * ordre et non le contraire.
+     */
+    public function testIndexedMonthlyFallsBackToTheHourlyProfileResolution(): void
+    {
+        $legacy = new FakeLegacyDailyRepository(
+            monthlyDeltasForMonth: $this->electricityDeltasFor('2026-06-01 00:00:00', '2026-07-01 00:00:00'),
+            hourlyImportDeltas: [
+                ['hour' => '2026-06-10 10:00:00', 'import_kwh' => 5.0],
+                ['hour' => '2026-06-10 11:00:00', 'import_kwh' => 5.0],
+            ],
+            quarterImportDeltas: [],
+        );
+
+        $profiles = new FakeLoadProfileRepository(
+            weights: ['2026-06-10 10:00:00' => 0.25, '2026-06-10 11:00:00' => 0.75],
+            servedResolution: 60,
+        );
+
+        $grid = new TariffGrid(
+            id: 1,
+            energyType: 'electricity',
+            name: 'Variable indexé',
+            validFrom: new DateTimeImmutable('2026-01-01'),
+            validTo: null,
+            lines: [],
+            pricingMode: 'indexed_monthly',
+            loadProfileCode: 'RLP0N',
+        );
+
+        $svc = new CostCalculationService(
+            legacyRepo: $legacy,
+            tariffRepo: new FakeTariffRepository(grid: $grid),
+            gasRepo: new FakeGasReadingRepository(),
+            calculator: new TariffCalculatorService(),
+            dynamicPriceRepo: new FakeDynamicPriceRepository(quarterPricesBySlot: self::juneQuarterPrices(0.20, [
+                '2026-06-10 10:00:00' => 0.10,
+                '2026-06-10 11:00:00' => 0.30,
+            ])),
+            dynamicEnabled: true,
+            tariffTimezone: 'UTC',
+            loadProfileRepo: $profiles,
+        );
+
+        $r = $svc->estimateMonthElectricityDynamic(2026, 6);
+
+        self::assertSame('standard_profile', $r['load_weighting']);
+        self::assertSame([15, 60], array_column($profiles->calls, 'resolution'));
     }
 
     /** Hors mode mensuel, les trois champs existent mais restent neutres. */

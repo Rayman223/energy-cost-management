@@ -55,6 +55,15 @@ final class TariffGrid
         public readonly string $currency = 'EUR',
         public readonly float $vatRate = 21.0,
         public readonly string $pricingMode = self::PRICING_MODE_DEFAULT,
+        /**
+         * Profil de pondération du tarif indexé mensuel (#93), p. ex. 'RLP0N'.
+         *
+         * Contractuel : le fournisseur référence « RLP » dans sa formule d'indexation,
+         * donc le code appartient à la grille et suit sa période de validité, comme la
+         * TVA (#232) et le mode (#245). `null` laisse la cascade de pondération se
+         * rabattre sur la courbe réelle puis sur le baseload.
+         */
+        public readonly ?string $loadProfileCode = null,
     ) {
     }
 

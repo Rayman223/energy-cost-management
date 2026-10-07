@@ -21,6 +21,7 @@ use App\Repository\BatteryRepository;
 use App\Repository\DynamicPriceRepository;
 use App\Repository\ElectricityReadingRepository;
 use App\Repository\MeterRepository;
+use App\Repository\LoadProfileRepository;
 use App\Repository\TariffRepository;
 use App\Repository\UserRepository;
 use App\Repository\UtilityReadingRepository;
@@ -131,6 +132,7 @@ try {
         waterRepo: $waterRepo,
         supplierMarkupPerKwh: $profile->supplierMarkupPerKwh ?? 0.0,
         tariffTimezone: $profile->timezone ?? 'UTC',
+        loadProfileRepo: new LoadProfileRepository($pdo),
     );
 
     // Plafonnement des index élec par registre et par créneau aligné (issue #165) :

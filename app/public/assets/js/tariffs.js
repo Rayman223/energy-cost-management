@@ -118,6 +118,20 @@
     });
   }
 
+  // Profil de pondération (#93) : il ne sert QUE au tarif indexé mensuel, où le prix
+  // est une moyenne du mois. Bloc indépendant du grisage des lignes ci-dessus : les
+  // deux suivent le même sélecteur mais n'ont pas la même raison d'être, et la ligne
+  // du profil n'est rendue que si des profils ont été importés.
+  var profileRow = document.querySelector('[data-load-profile-row]');
+  if (modeSelect && profileRow) {
+    var refreshProfileRow = function () {
+      profileRow.hidden = modeSelect.value !== 'indexed_monthly';
+    };
+
+    refreshProfileRow();
+    modeSelect.addEventListener('change', refreshProfileRow);
+  }
+
   // ── Panneau « Point de départ » : filtre les templates selon le pays ──────
   // Les templates génériques (sans pays) sont toujours visibles ; ceux liés à un
   // pays n'apparaissent QUE si ce pays est sélectionné (issue #187). Sans pays

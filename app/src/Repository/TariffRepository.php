@@ -20,7 +20,7 @@ use RuntimeException;
  */
 final class TariffRepository implements TariffRepositoryInterface
 {
-    private const COLUMNS = 'id, user_id, energy_type, pricing_mode, country, currency, vat_rate, name, valid_from, valid_to, pcs_coefficient';
+    private const COLUMNS = 'id, user_id, energy_type, pricing_mode, load_profile_code, country, currency, vat_rate, name, valid_from, valid_to, pcs_coefficient';
 
     public function __construct(
         private readonly PDO $pdo,
@@ -159,19 +159,21 @@ final class TariffRepository implements TariffRepositoryInterface
         bool $shared = false,
         float $vatRate = 21.0,
         string $pricingMode = TariffGrid::PRICING_MODE_DEFAULT,
+        ?string $loadProfileCode = null,
     ): int {
         $this->assertCanManageShared($shared);
 
         $this->pdo->beginTransaction();
         try {
             $stmt = $this->pdo->prepare(
-                'INSERT INTO tariff_grids (user_id, energy_type, pricing_mode, country, currency, vat_rate, name, valid_from, valid_to, pcs_coefficient)
-                 VALUES (:user_id, :type, :mode, :country, :currency, :vat, :name, :from, :to, :pcs)'
+                'INSERT INTO tariff_grids (user_id, energy_type, pricing_mode, load_profile_code, country, currency, vat_rate, name, valid_from, valid_to, pcs_coefficient)
+                 VALUES (:user_id, :type, :mode, :profile, :country, :currency, :vat, :name, :from, :to, :pcs)'
             );
             $stmt->execute([
                 'user_id'  => $shared ? null : $this->userId,
                 'type'     => $energyType,
                 'mode'     => self::pricingModeFor($energyType, $pricingMode),
+                'profile'  => self::loadProfileFor($energyType, $pricingMode, $loadProfileCode),
                 'country'  => $country,
                 'currency' => $currency,
                 'vat'      => $vatRate,
@@ -206,6 +208,7 @@ final class TariffRepository implements TariffRepositoryInterface
         string $currency = 'EUR',
         float $vatRate = 21.0,
         string $pricingMode = TariffGrid::PRICING_MODE_DEFAULT,
+        ?string $loadProfileCode = null,
     ): void {
         $this->assertCanModify($id);
 
@@ -215,6 +218,7 @@ final class TariffRepository implements TariffRepositoryInterface
                 'UPDATE tariff_grids
                  SET energy_type = :type,
                      pricing_mode = :mode,
+                     load_profile_code = :profile,
                      country = :country,
                      currency = :currency,
                      vat_rate = :vat,
@@ -228,6 +232,7 @@ final class TariffRepository implements TariffRepositoryInterface
                 'id'       => $id,
                 'type'     => $energyType,
                 'mode'     => self::pricingModeFor($energyType, $pricingMode),
+                'profile'  => self::loadProfileFor($energyType, $pricingMode, $loadProfileCode),
                 'country'  => $country,
                 'currency' => $currency,
                 'vat'      => $vatRate,
@@ -366,6 +371,29 @@ final class TariffRepository implements TariffRepositoryInterface
             : TariffGrid::PRICING_MODE_DEFAULT;
     }
 
+    /**
+     * Code de profil à persister (#93) : `null` dès que le mode ne sait pas s'en servir.
+     *
+     * Le profil ne pondère que le prix unitaire MENSUEL. Le conserver sur une grille
+     * fixe ou dynamique laisserait un réglage mort en base, qui réapparaîtrait au
+     * moment où l'utilisateur repasserait en indexé — en lui appliquant silencieusement
+     * un profil qu'il croyait avoir abandonné. Même raisonnement que
+     * {@see self::pricingModeFor()} pour le gaz et l'eau.
+     *
+     * La chaîne vide du `<select>` « aucun » est ramenée à `null` : une colonne
+     * nullable ne doit pas porter deux représentations de l'absence.
+     */
+    private static function loadProfileFor(string $energyType, string $pricingMode, ?string $code): ?string
+    {
+        if (self::pricingModeFor($energyType, $pricingMode) !== 'indexed_monthly') {
+            return null;
+        }
+
+        $code = trim((string) $code);
+
+        return $code === '' ? null : mb_substr($code, 0, 32);
+    }
+
     private function assertCanManageShared(bool $shared): void
     {
         if ($shared && $this->isAdmin === false) {
@@ -489,6 +517,9 @@ final class TariffRepository implements TariffRepositoryInterface
             currency: (string) $row['currency'],
             vatRate: isset($row['vat_rate']) ? (float) $row['vat_rate'] : 21.0,
             pricingMode: TariffGrid::normalizePricingMode((string) ($row['pricing_mode'] ?? TariffGrid::PRICING_MODE_DEFAULT)),
+            loadProfileCode: isset($row['load_profile_code']) && $row['load_profile_code'] !== ''
+                ? (string) $row['load_profile_code']
+                : null,
         );
     }
 }

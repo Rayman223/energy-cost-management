@@ -25,6 +25,10 @@ CREATE TABLE IF NOT EXISTS tariff_grids (
     -- (`indexed_monthly` = contrat belge à prix variable, X × Belpex_RLP_M + Y, #93).
     pricing_mode     ENUM('fixed', 'dynamic_hourly', 'dynamic_quarter', 'indexed_monthly') NOT NULL DEFAULT 'fixed'
                      COMMENT 'Electricite : mode de tarification du contrat (fixe / dynamique 1h / dynamique 15min / indexe mensuel)',
+    -- Profil de pondération du tarif indexé mensuel (#93). Contractuel — le fournisseur
+    -- référence « RLP » dans sa formule — donc versionné comme le mode et la TVA.
+    load_profile_code VARCHAR(32) NULL
+                     COMMENT 'Electricite indexee : code du profil de ponderation (NULL = courbe reelle, sinon baseload)',
     country          VARCHAR(2) NULL COMMENT 'ISO 3166-1 alpha-2 (NULL = générique)',
     currency         CHAR(3) NOT NULL DEFAULT 'EUR' COMMENT 'Devise ISO 4217 (pas de conversion automatique)',
     vat_rate         DECIMAL(5,2) NOT NULL DEFAULT 21.00 COMMENT 'Taux de TVA de la grille en % (montants saisis TTC)',
@@ -98,6 +102,34 @@ CREATE TABLE IF NOT EXISTS dynamic_prices (
     fetched_at     DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     UNIQUE KEY uq_dynamic_prices (energy_type, bidding_zone, resolution_min, period_start),
     INDEX idx_dynamic_prices_period (period_start)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ── Profils de charge (RLP Synergrid) — pondération du tarif indexé (#93) ──
+-- Pour reproduire la facture d'un contrat à prix variable, il faut pondérer les
+-- cotations par le profil que le FOURNISSEUR applique (le RLP), et non par la courbe
+-- réelle du client — plus juste physiquement, mais différente de la facture.
+--
+-- SÉRIE MESURÉE, pas millésime figé : le RLP repose sur la consommation réellement
+-- mesurée d'un groupe de clients (contrairement au SLP, synthétique et défini à
+-- l'avance). Les coefficients du mois ne sont donc connus qu'APRÈS lui — d'où le fait
+-- que Belpex_RLP_M ne soit publié qu'une fois le mois clos. La table se remplit au fil
+-- de l'eau, comme dynamic_prices, et aucune colonne d'année n'est nécessaire :
+-- slot_start porte déjà la date.
+--
+-- À ne pas confondre avec le fichier de POIDS MENSUELS du RLP (12 % par an et par
+-- GRD) : celui-là répartit une consommation annuelle entre les mois, il ne pondère pas
+-- des cotations intra-mensuelles.
+CREATE TABLE IF NOT EXISTS load_profiles (
+    id             BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    code           VARCHAR(32) NOT NULL COMMENT 'Code publié : RLP0N, RLP0E, SPP, ...',
+    country        CHAR(2) NOT NULL DEFAULT 'BE' COMMENT 'ISO 3166-1 alpha-2 (profil réglementaire, donc national)',
+    slot_start     DATETIME NOT NULL COMMENT 'Début du créneau (UTC), même convention que dynamic_prices.period_start',
+    resolution_min SMALLINT UNSIGNED NOT NULL DEFAULT 15 COMMENT '15 ou 60',
+    fraction       DECIMAL(14,12) NOT NULL COMMENT 'Poids du créneau ; seule la pondération relative compte',
+    source         VARCHAR(40) NOT NULL DEFAULT 'synergrid',
+    created_at     DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY uq_load_profiles_slot (code, country, resolution_min, slot_start),
+    INDEX idx_load_profiles_window (code, country, slot_start)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- ── Comptes utilisateurs (identité OpenID Connect, sans mot de passe) ────

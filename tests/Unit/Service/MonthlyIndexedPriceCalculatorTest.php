@@ -166,6 +166,110 @@ final class MonthlyIndexedPriceCalculatorTest extends TestCase
         self::assertFalse($june->isMeasured());
     }
 
+    /**
+     * Un profil au pas de 15 min confronté à une série HORAIRE doit s'agréger sur
+     * l'heure. Sans cet alignement, seules les clés en `:00:00` seraient reconnues et
+     * la moyenne ne porterait que sur le premier quart de chaque heure, en ignorant
+     * silencieusement les trois autres — un prix plausible et faux.
+     *
+     * Ici le poids est concentré sur les trois derniers quarts de 11 h : agrégé, il vaut
+     * 0,9 sur l'heure de 11 h contre 0,1 sur celle de 10 h, donc
+     * (0,1×0,10 + 0,9×0,30) / 1,0 = 0,28 €/kWh. Sans agrégation, le premier quart de
+     * 11 h étant nul, on obtiendrait 0,10 €/kWh — le prix de la seule heure de 10 h.
+     */
+    public function testStandardProfileAggregatesOntoAnHourlySeries(): void
+    {
+        $prices = $this->fullMonthHourly('2026-06', 30, 0.20, [
+            '2026-06-10 10:00:00' => 0.10,
+            '2026-06-10 11:00:00' => 0.30,
+        ]);
+
+        $result = (new MonthlyIndexedPriceCalculator())->perMonth(
+            $this->at('2026-06-01 00:00:00'),
+            $this->at('2026-07-01 00:00:00'),
+            $this->hourlyCandidate($prices),
+            [],
+            [
+                '2026-06-10 10:00:00' => 0.1,
+                '2026-06-10 11:00:00' => 0.0,
+                '2026-06-10 11:15:00' => 0.3,
+                '2026-06-10 11:30:00' => 0.3,
+                '2026-06-10 11:45:00' => 0.3,
+            ],
+            'RLP0N',
+        );
+
+        self::assertSame(LoadWeighting::StandardProfile, $result['2026-06']->weighting);
+        self::assertEqualsWithDelta(0.28, $result['2026-06']->priceHtva, self::DELTA);
+    }
+
+    /**
+     * L'échelle des poids est indifférente : seule leur pondération relative compte.
+     * Des fractions normalisées à 1 et les mêmes valeurs en pourcentage donnent donc le
+     * même prix — c'est ce qui permet d'importer un export Synergrid sans le
+     * renormaliser.
+     */
+    public function testProfileWeightScaleDoesNotChangeThePrice(): void
+    {
+        $prices = $this->fullMonthHourly('2026-06', 30, 0.20, [
+            '2026-06-10 10:00:00' => 0.10,
+            '2026-06-10 11:00:00' => 0.30,
+        ]);
+        $calculator = new MonthlyIndexedPriceCalculator();
+
+        $asFraction = $calculator->perMonth(
+            $this->at('2026-06-01 00:00:00'),
+            $this->at('2026-07-01 00:00:00'),
+            $this->hourlyCandidate($prices),
+            [],
+            ['2026-06-10 10:00:00' => 0.25, '2026-06-10 11:00:00' => 0.75],
+        );
+        $asPercent = $calculator->perMonth(
+            $this->at('2026-06-01 00:00:00'),
+            $this->at('2026-07-01 00:00:00'),
+            $this->hourlyCandidate($prices),
+            [],
+            ['2026-06-10 10:00:00' => 25.0, '2026-06-10 11:00:00' => 75.0],
+        );
+
+        self::assertEqualsWithDelta(0.25, $asFraction['2026-06']->priceHtva, self::DELTA);
+        self::assertEqualsWithDelta(
+            $asFraction['2026-06']->priceHtva,
+            $asPercent['2026-06']->priceHtva,
+            self::DELTA,
+        );
+    }
+
+    /**
+     * La courbe réelle reste prioritaire sur le profil : elle décrit CETTE
+     * consommation, là où le profil décrit celle d'un groupe.
+     */
+    public function testActualLoadTakesPrecedenceOverTheStandardProfile(): void
+    {
+        $prices = $this->fullMonthHourly('2026-06', 30, 0.20, [
+            '2026-06-10 10:00:00' => 0.10,
+            '2026-06-10 11:00:00' => 0.30,
+        ]);
+
+        $result = (new MonthlyIndexedPriceCalculator())->perMonth(
+            $this->at('2026-06-01 00:00:00'),
+            $this->at('2026-07-01 00:00:00'),
+            $this->hourlyCandidate($prices),
+            [
+                ['slot' => '2026-06-10 10:00:00', 'import_kwh' => 3.0, 'native' => true],
+                ['slot' => '2026-06-10 11:00:00', 'import_kwh' => 1.0, 'native' => true],
+            ],
+            ['2026-06-10 10:00:00' => 0.25, '2026-06-10 11:00:00' => 0.75],
+            'RLP0N',
+        );
+
+        $june = $result['2026-06'];
+        self::assertSame(LoadWeighting::ActualLoad, $june->weighting);
+        // (3×0,10 + 1×0,30) / 4 = 0,15 €/kWh, et non les 0,25 € du profil.
+        self::assertEqualsWithDelta(0.15, $june->priceHtva, self::DELTA);
+        self::assertNull($june->profileCode);
+    }
+
     /** Deux mois civils = deux prix, calculés chacun sur ses propres cotations. */
     public function testEachCalendarMonthIsPricedIndependently(): void
     {

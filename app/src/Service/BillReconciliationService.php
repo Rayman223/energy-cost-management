@@ -197,19 +197,30 @@ final class BillReconciliationService
             return self::SKIP_MIXED_GRIDS;
         }
 
-        // Contrat à prix unitaire mensuel (#93) : le prix du mois n'est fidèle que s'il a
-        // été pondéré par la COURBE RÉELLE. Pondéré par un profil standard ou par le
-        // baseload, il porte une erreur de forme de consommation — qui serait alors
-        // absorbée par le coefficient déduit, donnant un couple faux présenté comme
-        // exact. Même raisonnement pour un mois non clos, dont le prix est provisoire :
-        // Belpex_RLP_M n'est publié qu'en fin de mois.
+        // Contrat à prix unitaire mensuel (#93) : le prix du mois doit porter une forme
+        // de consommation, sans quoi l'erreur de pondération serait absorbée par le
+        // coefficient déduit — un couple faux présenté comme exact.
+        //
+        // Deux pondérations sur trois conviennent, et c'est contre-intuitif :
+        //   - `standard_profile` est la MEILLEURE ici, bien qu'elle décrive un groupe et
+        //     non l'utilisateur. On cherche les paramètres du FOURNISSEUR, et c'est avec
+        //     ce profil (le RLP) qu'il calcule son prix : le prix reconstitué est alors
+        //     le sien, donc le couple déduit est exact ;
+        //   - `actual_load` reste acceptable, et c'est le seul recours sans profil
+        //     importé. Elle décrit mieux la consommation réelle, mais s'écarte
+        //     légèrement du prix facturé — l'écart passe dans le coefficient ;
+        //   - `baseload` est écartée : elle ne porte AUCUNE information de forme, et
+        //     sous-estime structurellement un profil résidentiel.
+        //
+        // Un mois non clos est écarté quelle que soit la pondération : son prix est
+        // provisoire, Belpex_RLP_M n'étant publié qu'en fin de mois.
         //
         // Les modes `dynamic_*` exposent `load_weighting: null` et `monthly_partial:
         // false` ({@see CostCalculationService::monthlyMeta()}), et une réponse classique
         // ne porte pas ces clés du tout : le `?? null` couvre les deux cas et les laisse
         // intacts, sans aucune régression.
         $weighting = $estimate['load_weighting'] ?? null;
-        if (($weighting !== null && $weighting !== LoadWeighting::ActualLoad->value)
+        if ($weighting === LoadWeighting::Baseload->value
             || ($estimate['monthly_partial'] ?? false) === true
         ) {
             return self::SKIP_ESTIMATED_WEIGHTING;

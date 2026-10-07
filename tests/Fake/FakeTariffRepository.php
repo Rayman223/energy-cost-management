@@ -112,6 +112,7 @@ final class FakeTariffRepository implements TariffRepositoryInterface
         bool $shared = false,
         float $vatRate = 21.0,
         string $pricingMode = TariffGrid::PRICING_MODE_DEFAULT,
+        ?string $loadProfileCode = null,
     ): int {
         $this->savedGrid = [
             'energy_type'  => $energyType,
@@ -125,6 +126,7 @@ final class FakeTariffRepository implements TariffRepositoryInterface
             'shared'       => $shared,
             'vat_rate'     => $vatRate,
             'pricing_mode' => $pricingMode,
+            'load_profile_code' => $loadProfileCode,
         ];
 
         return $this->nextId;

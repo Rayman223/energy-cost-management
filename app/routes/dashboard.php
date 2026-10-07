@@ -10,6 +10,7 @@ use App\Repository\BatteryRepository;
 use App\Repository\DynamicPriceRepository;
 use App\Repository\ElectricityReadingRepository;
 use App\Repository\StatisticsRepository;
+use App\Repository\LoadProfileRepository;
 use App\Repository\TariffRepository;
 use App\Repository\UserRepository;
 use App\Repository\UtilityReadingRepository;
@@ -162,6 +163,7 @@ try {
         waterRepo: $waterRepo,
         supplierMarkupPerKwh: $profile->supplierMarkupPerKwh ?? 0.0,
         tariffTimezone: $timezone,
+        loadProfileRepo: new LoadProfileRepository($pdo),
     );
 
     $deltas      = $elecRepo->getMonthlyDeltas();

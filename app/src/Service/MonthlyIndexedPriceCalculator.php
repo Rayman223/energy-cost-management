@@ -199,22 +199,21 @@ final class MonthlyIndexedPriceCalculator
         if ($nativeShare >= self::ACTUAL_LOAD_MIN_PCT) {
             // Seuls les créneaux NATIFS pondèrent : un créneau étalé au prorata porterait
             // une forme de consommation inventée.
-            $weights = [];
-            foreach ($monthLoad as $row) {
-                if ($row['native'] !== true) {
-                    continue;
-                }
-                $key = $this->alignSlot($row['slot'], $resolutionMin);
-                $weights[$key] = ($weights[$key] ?? 0.0) + $row['import_kwh'];
-            }
+            $native = array_filter($monthLoad, static fn (array $r): bool => $r['native'] === true);
 
-            $price = $this->average($prices, $weights);
+            $price = $this->average($prices, $this->alignWeights(
+                array_combine(
+                    array_column($native, 'slot'),
+                    array_column($native, 'import_kwh'),
+                ),
+                $resolutionMin,
+            ));
             if ($price !== null) {
                 return ['price' => $price, 'weighting' => LoadWeighting::ActualLoad, 'coverage_pct' => $nativeShare];
             }
         }
 
-        $monthProfile = $this->pricesOfMonth($month, $profileWeights);
+        $monthProfile = $this->alignWeights($this->pricesOfMonth($month, $profileWeights), $resolutionMin);
         if ($monthProfile !== []) {
             $price = $this->average($prices, $monthProfile);
             if ($price !== null) {
@@ -260,12 +259,31 @@ final class MonthlyIndexedPriceCalculator
     }
 
     /**
-     * Clé de pondération ramenée à la résolution de la série de cotations : une courbe
-     * au pas de 15 min pondère une série horaire en s'agrégeant sur l'heure.
+     * Ramène des poids à la résolution de la série de cotations, en SOMMANT ceux qui
+     * retombent dans le même créneau.
+     *
+     * Indispensable dès que les deux granularités diffèrent, et pour les deux niveaux de
+     * la cascade : un profil (ou une courbe) au pas de 15 min confronté à une série
+     * horaire ne partagerait sinon qu'une clé sur quatre — celles en `:00:00` — et la
+     * moyenne ne porterait que sur le premier quart de chaque heure, en ignorant
+     * silencieusement les trois autres.
+     *
+     * @param array<string, float> $weights
+     * @return array<string, float>
      */
-    private function alignSlot(string $slot, int $resolutionMin): string
+    private function alignWeights(array $weights, int $resolutionMin): array
     {
-        return $resolutionMin >= 60 ? substr($slot, 0, 13) . ':00:00' : $slot;
+        if ($resolutionMin < 60) {
+            return $weights;
+        }
+
+        $aligned = [];
+        foreach ($weights as $slot => $weight) {
+            $key = substr($slot, 0, 13) . ':00:00';
+            $aligned[$key] = ($aligned[$key] ?? 0.0) + $weight;
+        }
+
+        return $aligned;
     }
 
     /**

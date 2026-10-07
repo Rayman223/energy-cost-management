@@ -18,6 +18,7 @@ use Tests\Fake\FakeDynamicPriceRepository;
 use Tests\Fake\FakeEnergyBillRepository;
 use Tests\Fake\FakeGasReadingRepository;
 use Tests\Fake\FakeLegacyDailyRepository;
+use Tests\Fake\FakeLoadProfileRepository;
 use Tests\Fake\FakeTariffRepository;
 
 /**
@@ -37,6 +38,7 @@ final class BillReconciliationServiceTest extends TestCase
         ?string $validTo = null,
         float $vatRate = 21.0,
         string $pricingMode = TariffGrid::PRICING_MODE_DEFAULT,
+        ?string $loadProfileCode = null,
     ): TariffGrid {
         return new TariffGrid(
             id: $id,
@@ -52,6 +54,7 @@ final class BillReconciliationServiceTest extends TestCase
             ],
             vatRate: $vatRate,
             pricingMode: $pricingMode,
+            loadProfileCode: $loadProfileCode,
         );
     }
 
@@ -110,13 +113,14 @@ final class BillReconciliationServiceTest extends TestCase
     }
 
     /**
-     * #93 — un contrat à prix unitaire mensuel n'est rapprochable que si le prix du
-     * mois a été pondéré par la COURBE RÉELLE. Sans relevés au pas de 15 min, la
-     * pondération retombe sur le baseload : l'erreur de forme de consommation serait
-     * alors absorbée par le coefficient déduit, et l'utilisateur se verrait proposer un
-     * couple faux présenté comme exact. Le mois est donc écarté, avec sa raison.
+     * #93 — un mois pondéré au BASELOAD n'est pas rapprochable : la moyenne simple ne
+     * porte aucune information de forme de consommation, et l'écart serait absorbé par
+     * le coefficient déduit, donnant un couple faux présenté comme exact.
+     *
+     * Ici, ni relevés au pas de 15 min ni profil importé : la cascade descend jusqu'au
+     * baseload, et le mois est écarté avec sa raison.
      */
-    public function testSkipsMonthWhoseWeightingIsNotTheActualLoadCurve(): void
+    public function testSkipsMonthWeightedWithTheBaseload(): void
     {
         $bills = new FakeEnergyBillRepository([
             new EnergyBill(1, 'electricity', 2026, 6, amountHtva: null, amountTtc: 5.00),
@@ -154,6 +158,51 @@ final class BillReconciliationServiceTest extends TestCase
             $result['rows'][0]['skipped'],
         );
         self::assertSame(SpotFormulaFit::MODE_UNDETERMINED, $result['fit']->mode);
+    }
+
+    /**
+     * Un mois pondéré par le PROFIL STANDARD est rapproché — et c'est le cas le plus
+     * légitime, contre l'intuition.
+     *
+     * On cherche les paramètres du FOURNISSEUR, et c'est avec ce profil (le RLP) qu'il
+     * calcule son prix : le prix reconstitué est donc exactement le sien, et le couple
+     * déduit est exact. L'écarter priverait du rapprochement l'utilisateur qui a
+     * justement pris la peine de désigner le bon profil.
+     */
+    public function testReconcilesMonthWeightedWithTheSupplierStandardProfile(): void
+    {
+        $bills = new FakeEnergyBillRepository([
+            new EnergyBill(1, 'electricity', 2026, 6, amountHtva: null, amountTtc: 5.00),
+        ]);
+
+        $quarterPrices = [];
+        for ($day = 1; $day <= 30; $day++) {
+            for ($hour = 0; $hour < 24; $hour++) {
+                foreach ([0, 15, 30, 45] as $minute) {
+                    $quarterPrices[sprintf('2026-06-%02d %02d:%02d:00', $day, $hour, $minute)] = 0.20;
+                }
+            }
+        }
+
+        $legacy = new FakeLegacyDailyRepository(
+            monthlyDeltasForMonth: $this->deltasFor('2026-06-01 00:00:00', '2026-07-01 00:00:00'),
+            hourlyImportDeltas: [['hour' => '2026-06-10 10:00:00', 'import_kwh' => 10.0]],
+        );
+
+        $cost = new CostCalculationService(
+            legacyRepo: $legacy,
+            tariffRepo: new FakeTariffRepository(grid: $this->gridWithSpot(1.0, 0.0, pricingMode: 'indexed_monthly', loadProfileCode: 'RLP0N')),
+            gasRepo: new FakeGasReadingRepository(),
+            calculator: new TariffCalculatorService(),
+            dynamicPriceRepo: new FakeDynamicPriceRepository(quarterPricesBySlot: $quarterPrices),
+            dynamicEnabled: true,
+            loadProfileRepo: new FakeLoadProfileRepository(weights: ['2026-06-10 10:00:00' => 1.0]),
+        );
+
+        $result = (new BillReconciliationService($bills, $cost))->reconcile();
+
+        self::assertCount(1, $result['rows']);
+        self::assertNull($result['rows'][0]['skipped'], 'le profil du fournisseur doit être rapprochable');
     }
 
     /**
