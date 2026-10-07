@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Service;
 
+use App\Domain\LoadWeighting;
+use App\Domain\MonthlyIndexedPrice;
 use App\Domain\SpotFormula;
 use App\Domain\TariffCoverage;
 use App\Domain\TariffGrid;
@@ -103,6 +105,7 @@ final class CostCalculationService
         private readonly TariffPeriodSplitter $splitter = new TariffPeriodSplitter(),
         private readonly CostBreakdownAggregator $aggregator = new CostBreakdownAggregator(),
         private readonly SpotFormulaResolver $formulaResolver = new SpotFormulaResolver(),
+        private readonly MonthlyIndexedPriceCalculator $monthlyCalculator = new MonthlyIndexedPriceCalculator(),
     ) {
     }
 
@@ -1291,6 +1294,14 @@ final class CostCalculationService
             return $this->classicResponse($deltas, $segments, $days, $quantities, null);
         }
 
+        // Une période ne peut être résolue que dans UNE famille d'indexation (#93) :
+        // mêler des sous-périodes facturées au créneau et d'autres à la moyenne du mois
+        // n'est pas une approximation, c'est une erreur de modèle. Les sous-périodes de
+        // l'autre famille repassent au tarif fournisseur, et `is_mixed` le signale de
+        // lui-même. Les mélanges horaire/quart-horaire, eux, restent intacts : ils
+        // partagent la même famille et leur écart n'est qu'un pas de temps.
+        $dynamicIndexes = $this->sameFamilyIndexes($segments, $dynamicIndexes);
+
         $isDynamic = array_fill_keys($dynamicIndexes, true);
         $window    = $this->dynamicWindow($deltas, $segments, $dynamicIndexes);
 
@@ -1442,7 +1453,11 @@ final class CostCalculationService
             // mode : un utilisateur en 'dynamic_quarter' doit voir qu'il a été
             // facturé à l'heure, et pourquoi, plutôt que de croire au quart d'heure.
             'resolution'           => $series['resolution'],
-            'resolution_requested' => $requested === 'dynamic_quarter' ? 'quarter' : 'hourly',
+            'resolution_requested' => match ($requested) {
+                'dynamic_quarter' => 'quarter',
+                'indexed_monthly' => 'monthly',
+                default           => 'hourly',
+            },
             'resolution_fallback'  => $series['fallback'],
             'price_source'   => $priceSource,
             'tariff_name'    => $this->tariffName($segments),
@@ -1452,6 +1467,7 @@ final class CostCalculationService
             'deltas'         => $deltas,
             'formula'        => $this->formulaMeta($segments[$dominantDyn], $formulas[$dominantDyn]),
             'spot_base'      => $this->spotBaseMeta($indexedBaseTtc, $coveredKwh, $uncoveredTtc, $formulas, $segments, $dynamicIndexes),
+            ...$this->monthlyMeta($series),
             'energy_dynamic' => round($energyTtc, 2),
             // Rapportés à la seule consommation des sous-périodes indexées : sur une
             // période mixte, y inclure les jours au tarif fournisseur ferait passer la
@@ -1515,6 +1531,76 @@ final class CostCalculationService
         }
 
         return $response;
+    }
+
+    /**
+     * Restreint les sous-périodes indexées à une seule FAMILLE d'indexation (#93) :
+     * celle de la sous-période dominante.
+     *
+     * Deux familles coexistent — prix propre à chaque créneau (`dynamic_*`) et moyenne
+     * de marché plate sur la période (`indexed_*`). Une sous-période `fixed` ne se
+     * rencontre ici qu'en projection forcée, où elle est annoncée au pas horaire
+     * ({@see projectedMode()}) : elle appartient donc à la famille « au créneau ».
+     *
+     * @param list<TariffSegment> $segments
+     * @param list<int> $dynamicIndexes
+     * @return list<int>
+     */
+    private function sameFamilyIndexes(array $segments, array $dynamicIndexes): array
+    {
+        $dominantMonthly = $segments[$this->dominantIndex($segments, $dynamicIndexes)]->grid->isMonthlyIndexed();
+
+        $kept = [];
+        foreach ($dynamicIndexes as $i) {
+            if ($segments[$i]->grid->isMonthlyIndexed() === $dominantMonthly) {
+                $kept[] = $i;
+            }
+        }
+
+        return $kept;
+    }
+
+    /**
+     * Champs propres au prix unitaire mensuel, ajoutés à la réponse (#93).
+     *
+     * `load_weighting` expose la pondération la plus GROSSIÈRE rencontrée sur la
+     * période : annoncer « courbe réelle » alors qu'un des mois a été ramené au
+     * baseload laisserait croire à une précision qui n'existe pas sur l'ensemble.
+     *
+     * Les trois clés sont présentes même hors mode mensuel (à `null` / vide), pour que
+     * les consommateurs n'aient pas à distinguer « champ absent » de « non pondéré ».
+     *
+     * @param array<string, mixed> $series
+     * @return array{load_weighting: ?string, monthly_prices: list<array<string, mixed>>, monthly_partial: bool}
+     */
+    private function monthlyMeta(array $series): array
+    {
+        /** @var list<MonthlyIndexedPrice> $monthly */
+        $monthly = $series['monthly'] ?? [];
+        if ($monthly === []) {
+            return ['load_weighting' => null, 'monthly_prices' => [], 'monthly_partial' => false];
+        }
+
+        $ranks = [
+            LoadWeighting::ActualLoad->value      => 0,
+            LoadWeighting::StandardProfile->value => 1,
+            LoadWeighting::Baseload->value        => 2,
+        ];
+
+        $coarsest = $monthly[0]->weighting;
+        $partial  = false;
+        foreach ($monthly as $price) {
+            if ($ranks[$price->weighting->value] > $ranks[$coarsest->value]) {
+                $coarsest = $price->weighting;
+            }
+            $partial = $partial || $price->partial;
+        }
+
+        return [
+            'load_weighting'  => $coarsest->value,
+            'monthly_prices'  => array_map(static fn (MonthlyIndexedPrice $p): array => $p->toArray(), $monthly),
+            'monthly_partial' => $partial,
+        ];
     }
 
     /**
@@ -1709,6 +1795,14 @@ final class CostCalculationService
         $repo     = $this->dynamicPriceRepo;
         $fallback = null;
 
+        // Contrat à prix unitaire mensuel (#93) : la série n'est pas une suite de prix
+        // de créneaux mais une CARTE PLATE — tous les créneaux d'un même mois portent la
+        // moyenne pondérée de ce mois. Le reste de buildResponse() est indifférent à
+        // cette uniformité : un « créneau » y est une clé et une quantité.
+        if ($requestedMode === 'indexed_monthly') {
+            return $this->resolveMonthlyIndexedSeries($from, $to, $to1);
+        }
+
         if ($requestedMode === 'dynamic_quarter' && $repo !== null) {
             $quarterPrices = $repo->getQuarterPrices($from, $to1);
             $quarterSlots  = $quarterPrices === [] ? [] : $this->legacyRepo->getQuarterImportDeltas($from, $to);
@@ -1784,6 +1878,125 @@ final class CostCalculationService
             ),
             'fallback'     => $fallback,
         ];
+    }
+
+    /**
+     * Série d'un contrat à prix unitaire MENSUEL indexé (#93).
+     *
+     * La facturation se fait au créneau horaire, comme en dynamique horaire, mais tous
+     * les créneaux d'un même mois portent le MÊME prix : la moyenne pondérée des
+     * cotations du mois. Rien d'autre ne change — et comme la formule du contrat est
+     * affine, pondérer par la courbe réelle redonne exactement le total d'une
+     * facturation créneau par créneau. La différence avec `dynamic_quarter` ne porte
+     * donc que sur la pondération employée À DÉFAUT de courbe réelle.
+     *
+     * La courbe au pas de 15 min ne sert ici qu'à PONDÉRER, jamais à facturer : son
+     * drapeau `native` distingue un vrai relevé quart-horaire d'un étalement au prorata.
+     *
+     * @return array{resolution: string, price_source: string, prices: array<string, float>,
+     *               slots: list<array{slot: string, import_kwh: float}>, fallback: ?string,
+     *               monthly: list<MonthlyIndexedPrice>}
+     *         |array{reason: string}
+     */
+    private function resolveMonthlyIndexedSeries(DateTimeImmutable $from, DateTimeImmutable $to, DateTimeImmutable $to1): array
+    {
+        $repo = $this->dynamicPriceRepo;
+        if ($repo === null) {
+            return ['reason' => 'Tarif indexé sans source de prix de marché.'];
+        }
+
+        $hourlyImport = $this->legacyRepo->getHourlyImportDeltas($from, $to);
+        if ($hourlyImport === []) {
+            return ['reason' => 'Pas de relevés horaires sur la période.'];
+        }
+
+        // Candidats ordonnés par préférence : le quart natif décrit le mois plus finement
+        // que l'heure, et la moyenne horaire reconstruite ne vient qu'en dernier.
+        $candidates = [];
+        foreach ([
+            ['source' => 'native_quarter', 'resolution_min' => 15, 'prices' => $repo->getQuarterPrices($from, $to1)],
+            ['source' => 'native_hourly',  'resolution_min' => 60, 'prices' => $repo->getHourlyPrices($from, $to1)],
+            ['source' => 'avg_hourly',     'resolution_min' => 60, 'prices' => $repo->getAveragePriceByHour($from, $to1)],
+        ] as $candidate) {
+            if ($candidate['prices'] !== []) {
+                $candidates[] = $candidate;
+            }
+        }
+
+        if ($candidates === []) {
+            return ['reason' => 'Aucun prix dynamique pour cette période (lancez cron_dynamic_prices).'];
+        }
+
+        $load = array_map(
+            static fn (array $r): array => [
+                'slot'       => $r['quarter'],
+                'import_kwh' => $r['import_kwh'],
+                'native'     => $r['native'],
+            ],
+            $this->legacyRepo->getQuarterImportDeltas($from, $to),
+        );
+
+        // Fenêtre de FACTURATION ($to, pas $to1) : l'heure ajoutée ne sert qu'à aller
+        // chercher la cotation du dernier créneau. La passer ici ferait naître un mois
+        // suivant d'une heure, trivialement « couvert » par une seule cotation, qui
+        // remonterait ensuite comme mois partiel au baseload.
+        $monthly = $this->monthlyCalculator->perMonth($from, $to, $candidates, $load);
+        if ($monthly === []) {
+            return ['reason' => 'Cotations trop lacunaires pour calculer une moyenne mensuelle.'];
+        }
+
+        // Carte plate : chaque créneau facturé reçoit le prix de SON mois. Un créneau
+        // d'un mois non résolu reste sans clé et retombe donc sur le tarif fournisseur,
+        // alimentant `uncovered_ttc` comme n'importe quel créneau sans prix.
+        $prices    = [];
+        $kwhByMonth = [];
+        foreach ($hourlyImport as $row) {
+            $month = substr($row['hour'], 0, 7);
+            if (isset($monthly[$month])) {
+                $prices[$row['hour']] = $monthly[$month]->priceHtva;
+                $kwhByMonth[$month]   = ($kwhByMonth[$month] ?? 0.0) + $row['import_kwh'];
+            }
+        }
+
+        if ($prices === []) {
+            return ['reason' => 'Aucun prix dynamique pour cette période (lancez cron_dynamic_prices).'];
+        }
+
+        // Seuls les mois REELLEMENT facturés sont exposés : un mois résolu mais sans
+        // aucun créneau de consommation ne doit pas peser sur la pondération annoncée.
+        $monthly = array_intersect_key($monthly, $kwhByMonth);
+
+        return [
+            'resolution'   => 'monthly',
+            // Série du mois le plus consommateur : les champs scalaires de la réponse
+            // n'en portent qu'une, comme `tariff_rates` ne porte qu'une grille.
+            'price_source' => $monthly[$this->heaviestMonth($kwhByMonth)]->priceSource,
+            'prices'       => $prices,
+            'slots'        => array_map(
+                static fn (array $r): array => ['slot' => $r['hour'], 'import_kwh' => $r['import_kwh']],
+                $hourlyImport,
+            ),
+            'fallback'     => null,
+            'monthly'      => array_values($monthly),
+        ];
+    }
+
+    /**
+     * Mois portant le plus de kWh ; à consommation nulle partout, le premier rencontré
+     * — il faut bien désigner un mois, et l'ordre des relevés est chronologique.
+     *
+     * @param array<string, float> $kwhByMonth
+     */
+    private function heaviestMonth(array $kwhByMonth): string
+    {
+        $best = array_key_first($kwhByMonth);
+        foreach ($kwhByMonth as $month => $kwh) {
+            if ($kwh > $kwhByMonth[$best]) {
+                $best = $month;
+            }
+        }
+
+        return (string) $best;
     }
 
     /**

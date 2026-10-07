@@ -334,6 +334,57 @@ final class TariffRepositoryDbTest extends DatabaseTestCase
     }
 
     /**
+     * #93 — le mode indexé mensuel fait l'aller-retour en base.
+     *
+     * Ce test vaut surtout comme détecteur de migration oubliée : sans l'ajout de la
+     * valeur à l'ENUM, MySQL la tronque en chaîne vide — en SILENCE si
+     * STRICT_TRANS_TABLES n'est pas actif — et la grille ressortirait non indexée, donc
+     * facturée au tarif fournisseur sans le moindre signal.
+     */
+    public function testIndexedMonthlyModeRoundTrips(): void
+    {
+        $user = new TariffRepository($this->pdo(), $this->userId, false);
+
+        $id = $user->saveGrid(
+            'electricity',
+            'Variable indexé',
+            new DateTimeImmutable('2026-01-01'),
+            null,
+            $this->lines(['spot_coefficient' => 1.08, 'spot_offset' => 0.03]),
+            pricingMode: 'indexed_monthly',
+        );
+
+        $grid = $user->findById($id);
+        self::assertNotNull($grid);
+        self::assertSame('indexed_monthly', $grid->pricingMode);
+        self::assertTrue($grid->isDynamic());
+        self::assertTrue($grid->isMonthlyIndexed());
+        self::assertFalse($grid->isTimeVarying());
+    }
+
+    /**
+     * `hasDynamicGrid()` repose sur `pricing_mode <> 'fixed'`, donc il doit voir le
+     * nouveau mode sans modification — c'est ce qui ouvre /reconciliation à un contrat
+     * à prix variable (#93).
+     */
+    public function testHasDynamicGridSeesIndexedMonthlyGrid(): void
+    {
+        $user = new TariffRepository($this->pdo(), $this->userId, false);
+        self::assertFalse($user->hasDynamicGrid());
+
+        $user->saveGrid(
+            'electricity',
+            'Variable indexé',
+            new DateTimeImmutable('2026-01-01'),
+            null,
+            $this->lines(['spot_coefficient' => 1.08]),
+            pricingMode: 'indexed_monthly',
+        );
+
+        self::assertTrue($user->hasDynamicGrid());
+    }
+
+    /**
      * Normalisation en écriture : valeur hors liste blanche → 'fixed', et mode forcé à
      * 'fixed' hors électricité. L'API accepte des grilles importées sans valider ce
      * champ, et un ENUM MySQL sans STRICT_TRANS_TABLES tronquerait en silence.

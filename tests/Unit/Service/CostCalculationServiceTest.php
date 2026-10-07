@@ -2499,4 +2499,238 @@ final class CostCalculationServiceTest extends TestCase
         // Le texte technique reste, pour l'API et les logs.
         self::assertSame('No active electricity tariff configured', $r['reason']);
     }
+
+    // ───────────────────────────────────────────────────────────────────────────
+    // Tarif indexé mensuel (#93) — prix unitaire unique, moyenne pondérée du mois
+    // ───────────────────────────────────────────────────────────────────────────
+
+    /**
+     * Cotations couvrant tout juin, au pas de 15 min, à $base — sauf $overrides.
+     *
+     * @param array<string, float> $overrides
+     * @return array<string, float>
+     */
+    private static function juneQuarterPrices(float $base, array $overrides = []): array
+    {
+        $prices = [];
+        for ($day = 1; $day <= 30; $day++) {
+            for ($hour = 0; $hour < 24; $hour++) {
+                foreach ([0, 15, 30, 45] as $minute) {
+                    $prices[sprintf('2026-06-%02d %02d:%02d:00', $day, $hour, $minute)] = $base;
+                }
+            }
+        }
+
+        return array_merge($prices, $overrides);
+    }
+
+    /**
+     * LE test de l'issue #93. La formule du contrat étant affine, pondérer les
+     * cotations par la courbe de charge RÉELLE donne exactement le total d'une
+     * facturation créneau par créneau :
+     *
+     *   Σ kwh × (c·p·(1+tva) + y) = c·(1+tva)·Σ(kwh·p) + y·Σ kwh
+     *
+     * Autrement dit, un contrat à prix variable et un contrat dynamique facturent le
+     * même montant tant que la courbe est connue. C'est la justification de l'approche
+     * « carte de prix plate » : il n'y a pas de second moteur de calcul, et la
+     * différence entre les deux modes ne porte que sur la pondération employée À DÉFAUT
+     * de courbe réelle.
+     *
+     * Jeu de données : 1, 2, 3 et 4 kWh aux quatre quarts de 10 h, cotés 0,10 / 0,20 /
+     * 0,30 / 0,40 €. Σ(kwh·p) = 3,00 € et Σ kwh = 10, donc la moyenne pondérée vaut
+     * 0,30 €/kWh et les deux modes doivent donner 10 × 0,30 × 1,21 = 3,63 €.
+     */
+    public function testIndexedMonthlyMatchesQuarterHourlyTotalWhenRealCurveIsKnown(): void
+    {
+        $quarterDeltas = [
+            ['quarter' => '2026-06-10 10:00:00', 'import_kwh' => 1.0, 'native' => true],
+            ['quarter' => '2026-06-10 10:15:00', 'import_kwh' => 2.0, 'native' => true],
+            ['quarter' => '2026-06-10 10:30:00', 'import_kwh' => 3.0, 'native' => true],
+            ['quarter' => '2026-06-10 10:45:00', 'import_kwh' => 4.0, 'native' => true],
+        ];
+        $quarterPrices = self::juneQuarterPrices(0.20, [
+            '2026-06-10 10:00:00' => 0.10,
+            '2026-06-10 10:15:00' => 0.20,
+            '2026-06-10 10:30:00' => 0.30,
+            '2026-06-10 10:45:00' => 0.40,
+        ]);
+
+        $makeLegacy = static fn (): FakeLegacyDailyRepository => new FakeLegacyDailyRepository(
+            monthlyDeltasForMonth: [
+                'from'        => '2026-06-01 00:00:00',
+                'to'          => '2026-06-15 12:00:00',
+                'prelev_jour' => 10.0,
+                'prelev_nuit' => 0.0,
+                'injec_jour'  => 0.0,
+                'injec_nuit'  => 0.0,
+                'solar'       => 0.0,
+            ],
+            hourlyImportDeltas: [['hour' => '2026-06-10 10:00:00', 'import_kwh' => 10.0]],
+            quarterImportDeltas: $quarterDeltas,
+        );
+
+        $quarterResult = $this->makeDynamicService(
+            $makeLegacy(),
+            new FakeTariffRepository(grid: $this->electricityGrid()),
+            new FakeDynamicPriceRepository(quarterPricesBySlot: $quarterPrices),
+            pricingMode: 'dynamic_quarter',
+        )->estimateMonthElectricityDynamic(2026, 6);
+
+        $monthlyResult = $this->makeDynamicService(
+            $makeLegacy(),
+            new FakeTariffRepository(grid: $this->electricityGrid()),
+            new FakeDynamicPriceRepository(quarterPricesBySlot: $quarterPrices),
+            pricingMode: 'indexed_monthly',
+        )->estimateMonthElectricityDynamic(2026, 6);
+
+        self::assertTrue($quarterResult['available']);
+        self::assertTrue($monthlyResult['available']);
+        self::assertEqualsWithDelta(3.63, $quarterResult['energy_dynamic'], 0.0001);
+        self::assertEqualsWithDelta(
+            $quarterResult['energy_dynamic'],
+            $monthlyResult['energy_dynamic'],
+            0.0001,
+        );
+
+        // Mêmes montants, mais pas la même mécanique : l'un facture au créneau, l'autre
+        // applique un prix unitaire unique obtenu par pondération réelle.
+        self::assertSame('quarter', $quarterResult['resolution']);
+        self::assertSame('monthly', $monthlyResult['resolution']);
+        self::assertSame('monthly', $monthlyResult['resolution_requested']);
+        self::assertSame('actual_load', $monthlyResult['load_weighting']);
+    }
+
+    /** Toutes les heures du mois sont facturées au MÊME prix unitaire. */
+    public function testIndexedMonthlyBillsEveryHourAtTheSameMonthlyPrice(): void
+    {
+        $legacy = new FakeLegacyDailyRepository(
+            monthlyDeltasForMonth: $this->electricityDeltasFor('2026-06-01 00:00:00', '2026-06-15 12:00:00'),
+            hourlyImportDeltas: [
+                ['hour' => '2026-06-10 03:00:00', 'import_kwh' => 5.0],
+                ['hour' => '2026-06-10 19:00:00', 'import_kwh' => 5.0],
+            ],
+            quarterImportDeltas: [],
+        );
+
+        // Cotations très contrastées entre la nuit et le soir : en dynamique, les deux
+        // heures coûteraient des sommes différentes. En indexé mensuel, non.
+        $r = $this->makeDynamicService(
+            $legacy,
+            new FakeTariffRepository(grid: $this->electricityGrid()),
+            new FakeDynamicPriceRepository(quarterPricesBySlot: self::juneQuarterPrices(0.20, [
+                '2026-06-10 03:00:00' => 0.02,
+                '2026-06-10 19:00:00' => 0.90,
+            ])),
+            pricingMode: 'indexed_monthly',
+        )->estimateMonthElectricityDynamic(2026, 6);
+
+        self::assertTrue($r['available']);
+        self::assertSame('monthly', $r['resolution']);
+        self::assertCount(1, $r['monthly_prices']);
+        self::assertSame('2026-06', $r['monthly_prices'][0]['month']);
+
+        // Sans courbe quart-horaire native : repli baseload, soit la moyenne des
+        // cotations du mois. Les deux heures sont donc facturées au même prix, et le
+        // total vaut 10 kWh × prix × 1,21.
+        self::assertSame('baseload', $r['load_weighting']);
+        $unit = $r['monthly_prices'][0]['price_htva'];
+        self::assertEqualsWithDelta(10.0 * $unit * 1.21, $r['energy_dynamic'], 0.01);
+    }
+
+    /**
+     * L'invariant du rapprochement facture (#229) doit tenir aussi en indexé mensuel,
+     * sans quoi /reconciliation déduirait un couple faux :
+     *   energy_dynamic = coefficient × indexed_ttc + offset × covered_kwh + uncovered_ttc
+     */
+    public function testIndexedMonthlySpotBaseReconstitutesEnergyDynamic(): void
+    {
+        $legacy = new FakeLegacyDailyRepository(
+            monthlyDeltasForMonth: $this->electricityDeltasFor('2026-06-01 00:00:00', '2026-06-15 12:00:00'),
+            hourlyImportDeltas: [['hour' => '2026-06-10 10:00:00', 'import_kwh' => 10.0]],
+            quarterImportDeltas: [],
+        );
+
+        $r = $this->makeDynamicService(
+            $legacy,
+            new FakeTariffRepository(grid: $this->electricityGridWithSpot(1.08, 0.03)),
+            new FakeDynamicPriceRepository(quarterPricesBySlot: self::juneQuarterPrices(0.20)),
+            pricingMode: 'indexed_monthly',
+        )->estimateMonthElectricityDynamic(2026, 6);
+
+        self::assertTrue($r['available']);
+        $base = $r['spot_base'];
+        self::assertTrue($base['formula_uniform']);
+
+        $rebuilt = 1.08 * $base['indexed_ttc'] + 0.03 * $base['covered_kwh'] + $base['uncovered_ttc'];
+        self::assertEqualsWithDelta($r['energy_dynamic'], round($rebuilt, 2), 0.01);
+    }
+
+    /**
+     * Mois en cours : le prix est provisoire, puisque Belpex_RLP_M n'est publié qu'une
+     * fois le mois clos. La réponse doit le dire plutôt que de le taire.
+     */
+    public function testIndexedMonthlyFlagsAPartialMonth(): void
+    {
+        $legacy = new FakeLegacyDailyRepository(
+            monthlyDeltasForMonth: $this->electricityDeltasFor('2026-06-01 00:00:00', '2026-06-10 00:00:00'),
+            hourlyImportDeltas: [['hour' => '2026-06-05 10:00:00', 'import_kwh' => 10.0]],
+            quarterImportDeltas: [],
+        );
+
+        $r = $this->makeDynamicService(
+            $legacy,
+            new FakeTariffRepository(grid: $this->electricityGrid()),
+            new FakeDynamicPriceRepository(quarterPricesBySlot: self::juneQuarterPrices(0.20)),
+            pricingMode: 'indexed_monthly',
+        )->estimateMonthElectricityDynamic(2026, 6);
+
+        self::assertTrue($r['available']);
+        self::assertTrue($r['monthly_partial']);
+        self::assertTrue($r['monthly_prices'][0]['partial']);
+    }
+
+    /** Hors mode mensuel, les trois champs existent mais restent neutres. */
+    public function testTimeVaryingModesExposeNeutralMonthlyMeta(): void
+    {
+        $legacy = new FakeLegacyDailyRepository(
+            monthlyDeltasForMonth: $this->electricityDeltas(),
+            hourlyImportDeltas: [['hour' => '2026-06-10 10:00:00', 'import_kwh' => 10.0]],
+        );
+
+        $r = $this->makeDynamicService(
+            $legacy,
+            new FakeTariffRepository(grid: $this->electricityGrid()),
+            new FakeDynamicPriceRepository(hourlyPricesByHour: ['2026-06-10 10:00:00' => 0.20]),
+            pricingMode: 'dynamic_hourly',
+        )->estimateMonthElectricityDynamic(2026, 6);
+
+        self::assertTrue($r['available']);
+        self::assertNull($r['load_weighting']);
+        self::assertSame([], $r['monthly_prices']);
+        self::assertFalse($r['monthly_partial']);
+        self::assertSame('hourly', $r['resolution_requested']);
+    }
+
+    /**
+     * Sans aucune cotation, un contrat indexé mensuel retombe sur le tarif fournisseur
+     * comme n'importe quel contrat indexé — la période reste due.
+     */
+    public function testIndexedMonthlyWithoutPricesFallsBackToSupplierTariff(): void
+    {
+        $legacy = new FakeLegacyDailyRepository(
+            monthlyDeltas: $this->electricityDeltas(),
+            hourlyImportDeltas: [['hour' => '2026-06-10 10:00:00', 'import_kwh' => 10.0]],
+        );
+
+        $r = $this->makeDynamicService(
+            $legacy,
+            new FakeTariffRepository(grid: $this->electricityGrid()),
+            new FakeDynamicPriceRepository(),
+            pricingMode: 'indexed_monthly',
+        )->estimateCurrentMonthElectricity();
+
+        self::assertTrue($r['available']);
+        self::assertArrayHasKey('dynamic_unavailable_reason', $r);
+    }
 }

@@ -16,11 +16,15 @@ CREATE TABLE IF NOT EXISTS tariff_grids (
     id               BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     user_id          BIGINT UNSIGNED NULL COMMENT 'NULL = grille du catalogue partagé (admin) ; sinon surcharge personnelle',
     energy_type      ENUM('electricity', 'gas', 'water') NOT NULL,
-    -- Électricité : le contrat est fixe ou dynamique, et ce choix est VERSIONNÉ par
-    -- valid_from/valid_to comme le reste de la grille (#245). Une bascule de contrat
+    -- Électricité : le contrat est fixe, dynamique ou indexé, et ce choix est VERSIONNÉ
+    -- par valid_from/valid_to comme le reste de la grille (#245). Une bascule de contrat
     -- ne réécrit donc plus les périodes antérieures. Ignoré pour gaz/eau.
-    pricing_mode     ENUM('fixed', 'dynamic_hourly', 'dynamic_quarter') NOT NULL DEFAULT 'fixed'
-                     COMMENT 'Electricite : mode de tarification du contrat (fixe / dynamique 1h / dynamique 15min)',
+    --
+    -- Le préfixe marque la famille : `dynamic_*` = prix propre à chaque créneau ;
+    -- `indexed_*` = moyenne de marché, prix unitaire plat sur la période d'indexation
+    -- (`indexed_monthly` = contrat belge à prix variable, X × Belpex_RLP_M + Y, #93).
+    pricing_mode     ENUM('fixed', 'dynamic_hourly', 'dynamic_quarter', 'indexed_monthly') NOT NULL DEFAULT 'fixed'
+                     COMMENT 'Electricite : mode de tarification du contrat (fixe / dynamique 1h / dynamique 15min / indexe mensuel)',
     country          VARCHAR(2) NULL COMMENT 'ISO 3166-1 alpha-2 (NULL = générique)',
     currency         CHAR(3) NOT NULL DEFAULT 'EUR' COMMENT 'Devise ISO 4217 (pas de conversion automatique)',
     vat_rate         DECIMAL(5,2) NOT NULL DEFAULT 21.00 COMMENT 'Taux de TVA de la grille en % (montants saisis TTC)',
