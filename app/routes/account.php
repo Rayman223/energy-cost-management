@@ -8,7 +8,6 @@ declare(strict_types=1);
  */
 
 use App\Domain\EuropeanCountries;
-use App\Domain\ReadingGranularity;
 use App\Domain\Timezones;
 use App\Domain\UserProfile;
 use App\Http\SecurityHeaders;
@@ -259,19 +258,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             // Import self-service : la cible est TOUJOURS l'utilisateur courant
             // (aucun champ « utilisateur cible » — l'import ne concerne que soi).
             // Plafonnement des index élec par registre et par créneau aligné
-            // (issue #165) : le créneau suit la grille active à la date de CHAQUE
-            // relevé (issue #10), de sorte qu'un fichier couvrant une bascule
-            // fixe → dynamique est dédupliqué au jour avant et au quart d'heure
-            // après. Délimité dans le fuseau de l'utilisateur.
+            // (issue #165) : un index par MTU de 15 min sur tout le fichier, quel que
+            // soit le mode de tarification des grilles traversées (#93). Un import
+            // d'historique conserve donc sa pleine résolution, là où il était
+            // auparavant dédupliqué au jour sur les périodes en tarif fixe.
+            // Délimité dans le fuseau de l'utilisateur.
             $importTimezone = $profileForLocale->timezone ?? 'UTC';
             $importReport = (new ImportRunner())->runFromRequest(
                 $pdo,
                 $userId,
                 $_POST,
                 $_FILES,
-                DynamicPricing::isEnabled($config)
-                    ? ReadingGranularityPolicy::fromTariffs($tariffRepo, $importTimezone)
-                    : ReadingGranularityPolicy::constant(ReadingGranularity::Day, $importTimezone),
+                ReadingGranularityPolicy::electricityDefault($importTimezone),
                 // Fuseau où se délimite le jour civil du plafond des index de
                 // batterie (#26) : un relevé par batterie et par jour.
                 $importTimezone,

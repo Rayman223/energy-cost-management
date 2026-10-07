@@ -12,7 +12,6 @@ use App\Service\ReadingGranularityPolicy;
 use PHPUnit\Framework\TestCase;
 use Tests\Fake\FakeElectricityIngestion;
 use Tests\Fake\FakeMeterReadingRepository;
-use Tests\Fake\FakeTariffRepository;
 
 final class MeterEntryControllerTest extends TestCase
 {
@@ -349,51 +348,42 @@ final class MeterEntryControllerTest extends TestCase
     }
 
     /**
-     * Câblage bout en bout de la politique tarifaire (#10) : le créneau appliqué est
-     * celui de la grille active à la date du relevé, pas un réglage global. Deux
-     * index à 15 min d'écart passent sous une grille quart-horaire.
+     * Câblage bout en bout de #93 : le plafond élec vaut le quart d'heure quel que
+     * soit le contrat. Les deux cas qui vivaient ici — grille quart-horaire
+     * permissive, grille fixe restrictive — n'ont plus d'objet, la politique
+     * n'interrogeant plus les tarifs.
+     *
+     * Quatre index du MÊME registre dans la même heure, sur des quarts distincts,
+     * passent donc tous, là où une grille fixe n'en acceptait qu'un par jour.
      */
-    public function testPolicyDerivedFromDynamicQuarterGridAllowsTwoReadingsInOneHour(): void
+    public function testElectricityDefaultPolicyAcceptsFourReadingsInTheSameHour(): void
     {
-        $elec = new FakeElectricityIngestion();
-        $elec->insertIndexes(new \DateTimeImmutable('2026-06-25 07:02:00', new \DateTimeZone('UTC')), ['import_t1' => 1000.0]);
+        $elec   = new FakeElectricityIngestion();
+        $policy = ReadingGranularityPolicy::electricityDefault('UTC');
+        $index  = 1000.0;
 
-        $tariffs = new FakeTariffRepository(new \App\Domain\TariffGrid(
-            id: 1,
-            energyType: 'electricity',
-            name: 'Dyn 15 min',
-            validFrom: new \DateTimeImmutable('2026-01-01'),
-            validTo: null,
-            lines: [],
-            pricingMode: 'dynamic_quarter',
-        ));
+        foreach (['07:00:00', '07:15:00', '07:30:00', '07:45:00'] as $time) {
+            $res = $this->policyController($elec, $policy)
+                ->electricity($this->elecPost([
+                    'reading_at' => '2026-06-25 ' . $time,
+                    'import_t1'  => $index += 5.0,
+                ]));
 
-        $res = $this->policyController($elec, ReadingGranularityPolicy::fromTariffs($tariffs, 'UTC'))
-            ->electricity($this->elecPost(['reading_at' => '2026-06-25 07:20:00', 'import_t1' => 1005.0]));
-
-        self::assertSame(200, $res->status);
-        self::assertIsArray($res->data);
-        self::assertSame(1, $res->data['inserted']);
+            self::assertSame(200, $res->status, 'relevé de ' . $time);
+            self::assertIsArray($res->data);
+            self::assertSame(1, $res->data['inserted'], 'relevé de ' . $time);
+        }
     }
 
-    /** Même relevé, mais sous une grille fixe : le plafond journalier s'applique. */
-    public function testPolicyDerivedFromFixedGridKeepsDailyLimit(): void
+    /** Le plafond reste réel : deux index dans le MÊME quart d'heure sont refusés. */
+    public function testElectricityDefaultPolicyStillRejectsTwoReadingsInOneSlot(): void
     {
         $elec = new FakeElectricityIngestion();
         $elec->insertIndexes(new \DateTimeImmutable('2026-06-25 07:02:00', new \DateTimeZone('UTC')), ['import_t1' => 1000.0]);
 
-        $tariffs = new FakeTariffRepository(new \App\Domain\TariffGrid(
-            id: 1,
-            energyType: 'electricity',
-            name: 'Fixe',
-            validFrom: new \DateTimeImmutable('2026-01-01'),
-            validTo: null,
-            lines: [],
-        ));
-
         $this->expectException(ValidationException::class);
-        $this->expectExceptionMessage('import_t1 : un seul index par jour est autorisé');
-        $this->policyController($elec, ReadingGranularityPolicy::fromTariffs($tariffs, 'UTC'))
-            ->electricity($this->elecPost(['reading_at' => '2026-06-25 07:20:00', 'import_t1' => 1005.0]));
+        $this->expectExceptionMessage('import_t1 : un seul index par tranche de 15 minutes est autorisé (25/06/2026 07:00).');
+        $this->policyController($elec, ReadingGranularityPolicy::electricityDefault('UTC'))
+            ->electricity($this->elecPost(['reading_at' => '2026-06-25 07:10:00', 'import_t1' => 1005.0]));
     }
 }

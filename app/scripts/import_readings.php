@@ -24,9 +24,7 @@ declare(strict_types=1);
  *   php import_readings.php --type=electricity --file=elec.csv --user=2 --execute
  */
 
-use App\Domain\ReadingGranularity;
 use App\Infrastructure\Database;
-use App\Repository\TariffRepository;
 use App\Repository\UserRepository;
 use App\Security\UserContext;
 use App\Service\Import\ImportMapping;
@@ -35,7 +33,6 @@ use App\Service\Import\ImportRunner;
 use App\Service\Import\RowSource;
 use App\Service\ReadingGranularityPolicy;
 use App\Support\CliArguments;
-use App\Support\DynamicPricing;
 
 require_once __DIR__ . '/../../vendor/autoload.php';
 
@@ -97,14 +94,12 @@ try {
     exit(1);
 }
 
-// Plafonnement des index élec par créneau, comme la voie web (issue #165) : le
-// créneau suit la grille active à la date de CHAQUE relevé (issue #10) — jour en
-// fixe, heure en dynamique horaire, 15 min en dynamique quart-horaire. Sans effet
-// sur gaz/eau. Créneau délimité dans le fuseau du profil de l'utilisateur cible.
+// Plafonnement des index élec par créneau, comme la voie web (issue #165) : un index
+// par MTU de 15 min, quel que soit le mode de tarification (#93) — le pas de relevé
+// appartient au compteur, pas au contrat. Sans effet sur gaz/eau. Créneau délimité
+// dans le fuseau du profil de l'utilisateur cible.
 $timezone = (new UserRepository($pdo))->getProfile($userId)->timezone ?? 'UTC';
-$throttle = DynamicPricing::isEnabled($config)
-    ? ReadingGranularityPolicy::fromTariffs(new TariffRepository($pdo, $userId), $timezone)
-    : ReadingGranularityPolicy::constant(ReadingGranularity::Day, $timezone);
+$throttle = ReadingGranularityPolicy::electricityDefault($timezone);
 
 fwrite(STDOUT, sprintf(
     "[IMPORT] type=%s user=#%d fichier=%s mode=%s%s",
