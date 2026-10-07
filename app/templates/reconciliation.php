@@ -69,6 +69,12 @@ $cur = $this->currencySymbol($currency);
 <div class="alert alert-err alert--push">✗ <?= $this->e($error) ?></div>
 <?php endif; ?>
 
+<!-- ── Périmètre de la page (#93) ────────────────────────────────────────────
+     Affiché dans les DEUX états : le rapprochement ne porte que sur
+     l'électricité, et l'utilisateur doit le savoir avant de chercher en vain où
+     saisir sa facture de gaz. -->
+<p class="rec-scope"><?= $this->te('reconciliation.electricity_only') ?></p>
+
 <?php if (!$isDynamic): ?>
 <!-- ── Tarif fixe : la page n'a pas d'objet ──────────────────────────────── -->
 <div class="rec-empty">

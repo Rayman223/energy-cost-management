@@ -667,6 +667,7 @@ return [
     'reconciliation.title'                         => 'Factuurafstemming',
     'reconciliation.subtitle'                      => 'Achterhaal de formule van uw contract',
     'reconciliation.intro'                         => 'Voer het energiebedrag in dat uw leverancier werkelijk heeft gefactureerd, maand per maand. De toepassing vergelijkt dit met haar eigen berekening en leidt daaruit de coëfficiënt en de marge af die op uw marktprijs worden toegepast — parameters die zelden duidelijk op een tariefkaart staan.',
+    'reconciliation.electricity_only'              => 'De afstemming geldt alleen voor elektriciteit: dat is de enige energie met een geïndexeerde marktprijs. Gas- en waterfacturen voert u hier niet in.',
     'reconciliation.dynamic_required'              => 'Deze pagina vereist het dynamische tarief.',
     'reconciliation.dynamic_required_hint'         => 'Bij een vast tarief hangt het energiedeel niet af van een marktprijs: er is dan geen coëfficiënt of marge te achterhalen. Schakel het dynamische tarief in uw profiel in om de afstemming te gebruiken.',
     'reconciliation.go_to_account'                 => 'Naar mijn account',

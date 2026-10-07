@@ -52,11 +52,16 @@ $view    = LocaleContext::viewFor($config, $users, $userId, $profile?->locale, _
 $error   = null;
 $success = null;
 
-// Le rapprochement n'a de sens qu'en tarif dynamique : sans prix de marché, la part
-// énergie ne dépend d'aucun coefficient à retrouver. Depuis #245, le mode vient des
+// Le rapprochement n'a de sens qu'en tarif indexé sur un prix de marché : sans spot, la
+// part énergie ne dépend d'aucun coefficient à retrouver. Depuis #245, le mode vient des
 // grilles : la page s'ouvre dès qu'UNE grille électricité visible est indexée au spot,
 // sans exiger qu'elle couvre la période — l'utilisateur doit pouvoir rapprocher une
 // facture d'un contrat dynamique passé, y compris après être repassé au fixe.
+//
+// `hasDynamicGrid()` teste `pricing_mode <> 'fixed'`, donc tout mode indexé présent ou
+// futur ouvre la page sans retoucher cette garde (cf. #93, qui ajoute un mode à prix
+// unitaire mensuel). Le périmètre reste l'électricité seule :
+// {@see BillReconciliationService::ENERGY_TYPE}.
 $tariffRepo = new TariffRepository($pdo, $userId, $isAdmin);
 $isDynamic  = DynamicPricing::isEnabled($config) && $tariffRepo->hasDynamicGrid();
 
@@ -136,7 +141,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             $note = mb_substr(trim((string) ($_POST['note'] ?? '')), 0, 255);
 
-            $billRepo->upsert('electricity', $year, $month, $amountHtva, $amountTtc, $note);
+            $billRepo->upsert(BillReconciliationService::ENERGY_TYPE, $year, $month, $amountHtva, $amountTtc, $note);
             $success = $view->t('reconciliation.saved', ['period' => sprintf('%04d-%02d', $year, $month)]);
         }
 
@@ -186,7 +191,7 @@ if ($isDynamic) {
     // dans l'intervalle disponible plutôt que de rendre un tableau vide sans explication.
     $requestedPage = filter_var($_GET['page'] ?? 1, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]) ?: 1;
 
-    $result   = (new BillReconciliationService($billRepo, $costSvc))->reconcile('electricity', $requestedPage);
+    $result   = (new BillReconciliationService($billRepo, $costSvc))->reconcile($requestedPage);
     $rows     = $result['rows'];
     $fit      = $result['fit'];
     $current  = $result['current'];

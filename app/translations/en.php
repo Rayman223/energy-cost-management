@@ -668,6 +668,7 @@ return [
     'reconciliation.title'                         => 'Bill reconciliation',
     'reconciliation.subtitle'                      => 'Recover your contract formula',
     'reconciliation.intro'                         => 'Enter the energy amount your supplier actually billed, month by month. The app compares it with its own calculation and derives the coefficient and margin applied to your market price — parameters that tariff sheets rarely state plainly.',
+    'reconciliation.electricity_only'              => 'Reconciliation covers electricity only: it is the sole energy with an indexed market price. Gas and water bills are not entered here.',
     'reconciliation.dynamic_required'              => 'This page requires dynamic pricing.',
     'reconciliation.dynamic_required_hint'         => 'On a fixed tariff the energy share does not depend on any market price, so there is no coefficient or margin to recover. Enable dynamic pricing in your profile to use reconciliation.',
     'reconciliation.go_to_account'                 => 'Go to my account',
