@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 use App\Infrastructure\Database;
 use App\Repository\LoadProfileRepository;
-use App\Service\Import\RowSource;
+use App\Service\Import\LoadProfileCsvParser;
 
 /**
  * Importe un profil de charge (RLP Synergrid et équivalents) depuis un CSV (#93).
@@ -38,6 +38,9 @@ use App\Service\Import\RowSource;
  * nu est ambigu ; PHP retient la première occurrence. Les quatre créneaux concernés
  * reçoivent donc le poids du premier passage. Fournir des horodatages avec offset
  * lève l'ambiguïté.
+ *
+ * PENDANT WEB : la page /admin/load-profiles importe le même format, par le même
+ * parseur ({@see LoadProfileCsvParser}, #101), et liste les mois manquants.
  *
  * USAGE :
  *   php app/scripts/import_load_profile.php --file=rlp0n-2026.csv [options]
@@ -73,16 +76,10 @@ $parseArgs = static function (array $argv): array {
     return $out;
 };
 
-$args       = $parseArgs($argv);
-$file       = (string) ($args['file'] ?? '');
-$code       = strtoupper(trim((string) ($args['code'] ?? LoadProfileRepository::DEFAULT_CODE)));
-$country    = strtoupper(trim((string) ($args['country'] ?? LoadProfileRepository::DEFAULT_COUNTRY)));
-$resolution = (int) ($args['resolution'] ?? 15);
-$timezone   = (string) ($args['timezone'] ?? 'Europe/Brussels');
-$tsCol      = strtolower(trim((string) ($args['ts-col'] ?? 'timestamp')));
-$valueCol   = strtolower(trim((string) ($args['value-col'] ?? 'fraction')));
-$source     = (string) ($args['source'] ?? 'synergrid');
-$execute    = isset($args['execute']);
+$args    = $parseArgs($argv);
+$file    = (string) ($args['file'] ?? '');
+$source  = (string) ($args['source'] ?? 'synergrid');
+$execute = isset($args['execute']);
 
 if ($file === '') {
     fwrite(STDERR, "[ERROR] --file=<chemin> est requis.\n");
@@ -92,129 +89,60 @@ if (!is_readable($file)) {
     fwrite(STDERR, '[ERROR] Fichier illisible : ' . $file . "\n");
     exit(1);
 }
-if ($code === '' || mb_strlen($code) > 32) {
-    fwrite(STDERR, "[ERROR] --code doit faire 1 à 32 caractères.\n");
-    exit(1);
-}
-if (!preg_match('/^[A-Z]{2}$/', $country)) {
-    fwrite(STDERR, "[ERROR] --country doit être un code ISO 3166-1 alpha-2.\n");
-    exit(1);
-}
-// 15 et 60 seulement : ce sont les deux résolutions que le calcul sait joindre aux
-// cotations. Accepter un pas arbitraire produirait des poids qui ne tomberaient sur
-// aucun créneau coté, donc une pondération silencieusement ignorée.
-if ($resolution !== 15 && $resolution !== 60) {
-    fwrite(STDERR, "[ERROR] --resolution doit valoir 15 ou 60.\n");
-    exit(1);
-}
 
+// Validation et lecture partagées avec la page /admin/load-profiles (#101).
 try {
-    $tz = new DateTimeZone($timezone);
-} catch (\Throwable $e) {
-    fwrite(STDERR, '[ERROR] Fuseau inconnu : ' . $timezone . "\n");
+    $code       = LoadProfileCsvParser::normalizeCode((string) ($args['code'] ?? LoadProfileRepository::DEFAULT_CODE));
+    $country    = LoadProfileCsvParser::normalizeCountry((string) ($args['country'] ?? LoadProfileRepository::DEFAULT_COUNTRY));
+    $resolution = LoadProfileCsvParser::checkResolution((int) ($args['resolution'] ?? 15));
+    $tz         = LoadProfileCsvParser::timezone((string) ($args['timezone'] ?? LoadProfileCsvParser::DEFAULT_TIMEZONE));
+} catch (\InvalidArgumentException $e) {
+    fwrite(STDERR, '[ERROR] ' . $e->getMessage() . "\n");
     exit(1);
 }
 
-$utc    = new DateTimeZone('UTC');
 $handle = fopen($file, 'rb');
 if ($handle === false) {
     fwrite(STDERR, '[ERROR] Ouverture impossible : ' . $file . "\n");
     exit(1);
 }
 
-$weights  = [];
-$seen     = [];
-$merged   = 0;
-$rejected = 0;
-$line     = 1; // l'en-tête est consommé par RowSource
-
 try {
-    foreach (RowSource::fromCsv($handle) as $row) {
-        $line++;
-
-        $rawTs    = trim((string) ($row[$tsCol] ?? ''));
-        $rawValue = (string) ($row[$valueCol] ?? '');
-
-        if ($rawTs === '' || $rawValue === '') {
-            $rejected++;
-            continue;
-        }
-
-        // Un pourcentage reste un poids : seule la pondération relative compte, donc
-        // le signe « % » est retiré sans conversion.
-        $rawValue = str_replace(['%', ' ', "\u{A0}"], '', $rawValue);
-        if (!is_numeric($rawValue)) {
-            $rejected++;
-            continue;
-        }
-
-        $fraction = (float) $rawValue;
-        if ($fraction < 0.0) {
-            $rejected++;
-            continue;
-        }
-
-        try {
-            // Horodatage nu => fuseau local du profil ; horodatage avec offset => tel quel.
-            $instant = new DateTimeImmutable($rawTs, $tz);
-        } catch (\Throwable $e) {
-            $rejected++;
-            continue;
-        }
-
-        $slot = $instant->setTimezone($utc)->setTime(
-            (int) $instant->setTimezone($utc)->format('G'),
-            $resolution === 60 ? 0 : intdiv((int) $instant->setTimezone($utc)->format('i'), 15) * 15,
-            0
-        );
-        $key = $slot->format('Y-m-d H:i:00');
-
-        // Plusieurs lignes dans le même créneau : les poids se SOMMENT, ils ne
-        // s'écrasent pas. C'est le cas d'un CSV quart-horaire importé en --resolution=60,
-        // où les quatre quarts d'une heure doivent former le poids de cette heure —
-        // retenir la dernière valeur en perdrait les trois autres en silence. Même
-        // agrégation que côté calcul, dans MonthlyIndexedPriceCalculator.
-        $weights[$key] = [
-            'slot_start' => $slot,
-            'fraction'   => ($weights[$key]['fraction'] ?? 0.0) + $fraction,
-        ];
-        $merged += isset($seen[$key]) ? 1 : 0;
-        $seen[$key] = true;
-    }
+    $result = (new LoadProfileCsvParser())->parse(
+        $handle,
+        (string) ($args['ts-col'] ?? LoadProfileCsvParser::DEFAULT_TS_COL),
+        (string) ($args['value-col'] ?? LoadProfileCsvParser::DEFAULT_VALUE_COL),
+        $resolution,
+        $tz,
+    );
+} catch (\InvalidArgumentException $e) {
+    fwrite(STDERR, '[ERROR] ' . $e->getMessage() . "\n");
+    exit(1);
 } finally {
     fclose($handle);
 }
-
-if ($weights === []) {
-    fwrite(STDERR, "[ERROR] Aucun point exploitable. Vérifiez --ts-col / --value-col.\n");
-    exit(1);
-}
-
-$values = array_map(static fn (array $w): float => $w['fraction'], $weights);
-$keys   = array_keys($weights);
-sort($keys);
 
 fwrite(STDOUT, sprintf(
     "[PROFIL] %s / %s — %d point(s) au pas de %d min, %s → %s%s\n",
     $code,
     $country,
-    count($weights),
+    $result->count(),
     $resolution,
-    $keys[0],
-    $keys[count($keys) - 1],
-    $rejected > 0 ? sprintf(' (%d ligne(s) rejetée(s))', $rejected) : ''
+    $result->firstSlot(),
+    $result->lastSlot(),
+    $result->rejected > 0 ? sprintf(' (%d ligne(s) rejetée(s))', $result->rejected) : ''
 ));
-if ($merged > 0) {
+if ($result->merged > 0) {
     fwrite(STDOUT, sprintf(
         "[PROFIL] %d ligne(s) agrégée(s) dans un créneau déjà rencontré (poids sommés).\n",
-        $merged
+        $result->merged
     ));
 }
 fwrite(STDOUT, sprintf(
     "[PROFIL] somme des poids = %.6f, min = %.9f, max = %.9f\n",
-    array_sum($values),
-    min($values),
-    max($values)
+    $result->sum(),
+    $result->min(),
+    $result->max()
 ));
 
 if (!$execute) {
@@ -225,7 +153,7 @@ if (!$execute) {
 try {
     $pdo   = (new Database($config['database']))->pdo();
     $count = (new LoadProfileRepository($pdo))
-        ->upsertWeights($code, $country, $resolution, array_values($weights), $source);
+        ->upsertWeights($code, $country, $resolution, $result->weights, $source);
 } catch (\Throwable $e) {
     fwrite(STDERR, '[ERROR] ' . $e->getMessage() . "\n");
     exit(1);

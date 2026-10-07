@@ -261,6 +261,9 @@ php app/scripts/gas_cost_audit.php --from=2026-01-01 --to=2026-07-01 --user=2 --
 # Day-ahead dynamic prices (13:30 after market publication, 18:30 catch-up).
 # Full setup — token, 15-min prices, Unraid script: app/docs/entsoe-dynamic-prices.md
 30 13,18 * * * /usr/bin/php /path/app/scripts/cron_dynamic_prices.php >> /var/log/energy-dynamic.log 2>&1
+# Missing RLP load-profile months for monthly indexed tariffs (exit 2 = to import).
+# On Unraid, cron_load_profile_unraid.sh sends a notification instead.
+0 9 * * *  /usr/bin/php /path/app/scripts/cron_load_profile_check.php    >> /var/log/energy-load-profile.log 2>&1
 # Daily full SQL backup (03:00) — pure-PHP dump | gzip into backups/, 30-day rotation
 0 3 * * *  /usr/bin/php /path/app/scripts/backup_db.php            >> /var/log/energy-backup.log 2>&1
 ```
@@ -335,10 +338,20 @@ timestamp;fraction
 2026-01-01 00:15;0.000020
 ```
 
+Admins can upload it from **`/admin/load-profiles`** (dry run ticked by default),
+which also lists the months the indexed grids require — complete, partial or
+missing. The same parser is available from the CLI:
+
 ```bash
 php app/scripts/import_load_profile.php --file=rlp0n-2026.csv            # dry-run
 php app/scripts/import_load_profile.php --file=rlp0n-2026.csv --execute  # writes
 ```
+
+Since the RLP is published month by month, a forgotten month silently falls back to
+the baseload. `app/scripts/cron_load_profile_check.php` exits with code `2` when a
+required month is missing, and `app/scripts/cron_load_profile_unraid.sh` turns that
+into an **Unraid notification** linking to the upload page — once per missing month.
+Setup: [`app/docs/entsoe-dynamic-prices.md`](app/docs/entsoe-dynamic-prices.md) § 6 ter.
 
 Options: `--code` (default `RLP0N`), `--country` (`BE`), `--resolution` (`15` or
 `60`), `--timezone` (`Europe/Brussels` — Synergrid stamps local time, values are

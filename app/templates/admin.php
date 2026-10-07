@@ -102,6 +102,12 @@ $csrf = \App\Security\Csrf::field();
     <p class="hint"><?= $this->te('admin.catalog_hint') ?></p>
     <p><a href="<?= $this->url('tariffs') ?>">→ <?= $this->te('nav.tariffs') ?></a></p>
   </div>
+
+  <div class="card">
+    <h2><?= $this->te('load_profiles.title') ?></h2>
+    <p class="hint"><?= $this->te('admin.load_profiles_hint') ?></p>
+    <p><a href="<?= $this->url('admin/load-profiles') ?>">→ <?= $this->te('load_profiles.title') ?></a></p>
+  </div>
 </div>
 <script defer src="<?= \App\Support\Assets::url('assets/js/header.js') ?>"></script>
 <script defer src="<?= \App\Support\Assets::url('assets/js/lang-switcher.js') ?>"></script>
