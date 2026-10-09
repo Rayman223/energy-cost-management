@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Service\Import;
 
+use App\Repository\LoadProfileRepository;
 use DateTimeImmutable;
 use DateTimeZone;
 use InvalidArgumentException;
@@ -52,12 +53,12 @@ final class LoadProfileCsvParser
      */
     public static function normalizeCode(string $code): string
     {
-        $code = strtoupper(trim($code));
-        if (!preg_match('/^[A-Z0-9_-]{1,32}$/', $code)) {
+        $normalized = LoadProfileRepository::normalizeCode($code);
+        if ($normalized === null) {
             throw new InvalidArgumentException('Code de profil invalide : 1 à 32 caractères (lettres, chiffres, « _ » ou « - »).');
         }
 
-        return $code;
+        return $normalized;
     }
 
     /**

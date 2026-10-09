@@ -389,9 +389,9 @@ final class TariffRepository implements TariffRepositoryInterface
             return null;
         }
 
-        $code = trim((string) $code);
-
-        return $code === '' ? null : mb_substr($code, 0, 32);
+        // Même règle qu'à l'import (#101) : un code invalide est écarté plutôt que
+        // stocké, sans quoi il serait réclamé chaque mois sans pouvoir être importé.
+        return LoadProfileRepository::normalizeCode((string) $code);
     }
 
     private function assertCanManageShared(bool $shared): void

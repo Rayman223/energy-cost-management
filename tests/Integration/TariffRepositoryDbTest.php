@@ -420,6 +420,29 @@ final class TariffRepositoryDbTest extends DatabaseTestCase
     }
 
     /**
+     * Même règle qu'à l'import (#101) : normalisé en majuscules, et un code que
+     * l'import refuserait est écarté — sinon il serait réclamé chaque mois par le
+     * rappel sans pouvoir être importé.
+     */
+    public function testLoadProfileCodeFollowsTheImportRule(): void
+    {
+        $user = new TariffRepository($this->pdo(), $this->userId, false);
+        $save = fn (string $code): int => $user->saveGrid(
+            'electricity',
+            'Variable ' . $code,
+            new DateTimeImmutable('2026-01-01'),
+            null,
+            $this->lines(['spot_coefficient' => 1.08]),
+            pricingMode: 'indexed_monthly',
+            loadProfileCode: $code,
+        );
+
+        self::assertSame('RLP0N', $user->findById($save(' rlp0n '))?->loadProfileCode);
+        self::assertNull($user->findById($save('RLP 0N'))?->loadProfileCode);
+        self::assertNull($user->findById($save(str_repeat('A', 33)))?->loadProfileCode);
+    }
+
+    /**
      * `hasDynamicGrid()` repose sur `pricing_mode <> 'fixed'`, donc il doit voir le
      * nouveau mode sans modification — c'est ce qui ouvre /reconciliation à un contrat
      * à prix variable (#93).

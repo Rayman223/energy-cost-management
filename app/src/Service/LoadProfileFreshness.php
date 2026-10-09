@@ -83,14 +83,21 @@ final class LoadProfileFreshness
 
         $out = [];
         foreach ($usage as $grid) {
-            $key = $grid['code'] . '/' . $grid['country'];
-            $out[$key] ??= ['code' => $grid['code'], 'country' => $grid['country'], 'months' => []];
-
             // Fin EXCLUE (#1) : le dernier jour couvert est la veille de valid_to.
             $first = substr($grid['valid_from'], 0, 7);
             $last  = $grid['valid_to'] === null
                 ? $latest
                 : (new DateTimeImmutable($grid['valid_to'], new DateTimeZone('UTC')))->modify('-1 day')->format('Y-m');
+
+            // Contrat clos avant la fenêtre : il n'exigera plus jamais rien, et une
+            // entrée vide se lirait « rien à importer POUR L'INSTANT ». Un contrat
+            // futur, lui, garde son entrée vide — le message est alors juste.
+            if ($last < $earliest) {
+                continue;
+            }
+
+            $key = $grid['code'] . '/' . $grid['country'];
+            $out[$key] ??= ['code' => $grid['code'], 'country' => $grid['country'], 'months' => []];
 
             $from = max($first, $earliest);
             $to   = min($last, $latest);

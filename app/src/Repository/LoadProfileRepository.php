@@ -24,6 +24,22 @@ final class LoadProfileRepository implements LoadProfileRepositoryInterface
 
     public const DEFAULT_COUNTRY = 'BE';
 
+    /**
+     * Forme d'un code de profil : majuscules, chiffres, « _ » et « - », 1 à 32
+     * caractères (colonne VARCHAR(32)). Règle UNIQUE, appliquée à l'import comme à
+     * l'enregistrement des grilles (#101) : un code accepté par une grille mais
+     * refusé à l'import serait signalé manquant chaque mois sans remède possible.
+     */
+    public const CODE_PATTERN = '/^[A-Z0-9_-]{1,32}$/';
+
+    /** Code normalisé (trim + majuscules), ou null s'il ne respecte pas {@see self::CODE_PATTERN}. */
+    public static function normalizeCode(string $code): ?string
+    {
+        $code = strtoupper(trim($code));
+
+        return preg_match(self::CODE_PATTERN, $code) === 1 ? $code : null;
+    }
+
     public function __construct(private readonly PDO $pdo)
     {
     }
