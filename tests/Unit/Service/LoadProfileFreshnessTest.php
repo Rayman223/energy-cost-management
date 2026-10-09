@@ -83,6 +83,24 @@ final class LoadProfileFreshnessTest extends TestCase
         self::assertSame(['2026-09'], $required['RLP0N/NL']['months']);
     }
 
+    /**
+     * Un contrat clos avant la fenêtre disparaît du rapport : une entrée vide se
+     * lirait « rien à importer pour l'instant », comme si des mois allaient venir.
+     */
+    public function testGridClosedBeforeTheWindowIsLeftOut(): void
+    {
+        $freshness = new LoadProfileFreshness(graceDays: 5, lookbackMonths: 12);
+
+        self::assertSame([], $freshness->requiredMonths([$this->grid('2023-01-01', '2024-07-01')], $this->at('2026-10-07')));
+
+        // Un autre contrat actif sur le même profil le fait réapparaître, sans les mois du premier.
+        $required = $freshness->requiredMonths(
+            [$this->grid('2023-01-01', '2024-07-01'), $this->grid('2026-09-01')],
+            $this->at('2026-10-07'),
+        );
+        self::assertSame(['2026-09'], $required['RLP0N/BE']['months']);
+    }
+
     /** Un contrat qui démarre ce mois-ci n'exige encore rien. */
     public function testGridStartingAfterTheLatestRequiredMonthRequiresNothing(): void
     {

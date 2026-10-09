@@ -111,7 +111,10 @@ $csrf = \App\Security\Csrf::field();
                   <td>
                     <?php if (\App\Service\LoadProfileFreshness::isComplete($pct)): ?>
                       <span class="pill active"><?= $this->te('load_profiles.complete') ?></span>
-                    <?php elseif ($pct > 0.0): ?>
+                    <?php // Sous 1 % : débordement d'un fichier horodaté en heure belge
+                          // (septembre commence le 31 août à 22:00 UTC), pas un import
+                          // partiel — « Partiel (0 %) » tromperait.
+                          elseif ($pct >= 1.0): ?>
                       <span class="pill partial"><?= $this->e($this->t('load_profiles.partial', ['pct' => (string) (int) floor($pct)])) ?></span>
                     <?php else: ?>
                       <span class="pill blocked"><?= $this->te('load_profiles.missing') ?></span>
