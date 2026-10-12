@@ -1,4 +1,7 @@
 <?php
+
+declare(strict_types=1);
+
 /**
  * Template du dashboard principal.
  *
@@ -35,7 +38,7 @@ $fmt = function (mixed $v, int $dec = 3, string $unit = 'kWh'): string {
 // Badge de variation vs mois précédent (#215). Le sens « favorable » dépend de
 // la nature de la card : baisse = bien pour une consommation, mal pour une
 // production/injection.
-$deltaBadge = function (?float $pct, bool $lowerIsBetter, bool $isNew = false): string {
+$deltaBadge = function (?float $pct, bool $lowerIsBetter, bool $isNew = false, bool $isCapped = false): string {
     // Mois de référence connu mais à zéro : pas de pourcentage possible, on
     // signale quand même le démarrage de la consommation.
     if ($pct === null && $isNew) {
@@ -60,8 +63,9 @@ $deltaBadge = function (?float $pct, bool $lowerIsBetter, bool $isNew = false): 
     // Valeur et libellé dans deux spans distincts (#86) : dans une card étroite le
     // libellé doit pouvoir passer à la ligne, la valeur chiffrée rester insécable.
     return '<div class="card-delta card-delta--' . $tone . '">'
-        . '<span class="card-delta-val">' . $arrow . ' ' . ($pct > 0.0 ? '+' : '')
-        . $this->num($pct, 1) . ' %</span> '
+        . '<span class="card-delta-val">' . $arrow . ' '
+        . ($isCapped ? ($pct > 0.0 ? '&gt; ' : '&lt; ') : '') . ($pct > 0.0 ? '+' : '')
+        . $this->num($pct, $isCapped ? 0 : 1) . ' %</span> '
         . '<span class="card-delta-ref">' . $this->te('dash.card.vs_prev_period') . '</span></div>';
 };
 ?>
@@ -123,9 +127,10 @@ $deltaBadge = function (?float $pct, bool $lowerIsBetter, bool $isNew = false): 
       <div class="card-label"><span class="dot <?= $this->e((string) $card['dot']) ?>"></span><?= $this->te((string) $card['label_key']) ?></div>
       <div class="card-value"><?= $fmt($card['value'], (int) $card['decimals'], (string) $card['unit']) ?></div>
       <?= $deltaBadge(
-          $card['delta_pct'] === null ? null : (float) $card['delta_pct'],
+          $card['delta_display_pct'] === null ? null : (float) $card['delta_display_pct'],
           (bool) $card['lower_is_better'],
           (bool) $card['is_new'],
+          (bool) $card['delta_is_capped'],
       ) ?>
     </div>
     <?php endforeach; ?>

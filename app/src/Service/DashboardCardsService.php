@@ -24,6 +24,9 @@ use DateTimeImmutable;
  *   - `unit`/`decimals` : unité affichée et précision
  *   - `delta_pct`       : variation en % vs la MÊME fenêtre du mois précédent
  *                         (null si incalculable, cf. {@see build()})
+ *   - `delta_display_pct` : variation bornée pour l'affichage, sans modifier
+ *                           `delta_pct` ; null si incalculable
+ *   - `delta_is_capped` : l'affichage indique que la variation dépasse la borne
  *   - `is_new`          : le mois précédent est connu et vaut 0 alors que le
  *                         mois en cours est consommé — un pourcentage serait une
  *                         division par zéro, le template affiche « nouveau »
@@ -39,6 +42,8 @@ use DateTimeImmutable;
  *     unit: string,
  *     decimals: int,
  *     delta_pct: float|null,
+ *     delta_display_pct: float|null,
+ *     delta_is_capped: bool,
  *     is_new: bool,
  *     lower_is_better: bool,
  * }
@@ -65,6 +70,9 @@ final class DashboardCardsService
      * une différence de consommation réelle : mieux vaut ne rien annoncer.
      */
     private const MIN_WINDOW_SECONDS = 86400;
+
+    /** Borne de présentation du badge (#91) : la variation calculée reste intacte. */
+    private const DELTA_DISPLAY_LIMIT = 999.0;
 
     /** Fenêtre inexploitable : ni valeur du mois en cours, ni référence. */
     private const NO_WINDOW = ['from' => null, 'to' => null, 'prev_from' => null, 'prev_to' => null];
@@ -320,6 +328,8 @@ final class DashboardCardsService
         bool $lowerIsBetter,
         ?string $labelKey = null,
     ): array {
+        $deltaPct = self::variation($value, $previous);
+
         return [
             'key'             => $key,
             'label_key'       => $labelKey ?? 'dash.card.' . $key,
@@ -328,7 +338,11 @@ final class DashboardCardsService
             'value'           => $value,
             'unit'            => $unit,
             'decimals'        => 3,
-            'delta_pct'       => self::variation($value, $previous),
+            'delta_pct'       => $deltaPct,
+            'delta_display_pct' => $deltaPct === null
+                ? null
+                : max(-self::DELTA_DISPLAY_LIMIT, min(self::DELTA_DISPLAY_LIMIT, $deltaPct)),
+            'delta_is_capped' => $deltaPct !== null && abs($deltaPct) > self::DELTA_DISPLAY_LIMIT,
             'is_new'          => self::isNew($value, $previous),
             'lower_is_better' => $lowerIsBetter,
         ];
