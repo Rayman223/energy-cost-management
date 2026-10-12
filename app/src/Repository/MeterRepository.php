@@ -23,7 +23,7 @@ use PDO;
  */
 final class MeterRepository
 {
-    private const COLUMNS = 'id, energy_type, label, closed_on';
+    private const COLUMNS = 'id, energy_type, label, closed_on, opened_on';
 
     /**
      * @param int $maxPerEnergy Plafond anti-abus, cf. {@see Limits::metersPerEnergy()}.
@@ -178,14 +178,15 @@ final class MeterRepository
         }
 
         $stmt = $this->pdo->prepare(
-            'INSERT INTO meters (user_id, energy_type, label, closed_on)
-             VALUES (:uid, :etype, :label, :closed)'
+            'INSERT INTO meters (user_id, energy_type, label, closed_on, opened_on)
+             VALUES (:uid, :etype, :label, :closed, :opened)'
         );
         $stmt->execute([
             'uid'    => $this->userId,
             'etype'  => $meter->energyType,
             'label'  => $meter->label,
             'closed' => $meter->closedOn?->format('Y-m-d'),
+            'opened' => $meter->openedOn?->format('Y-m-d'),
         ]);
 
         return (int) $this->pdo->lastInsertId();
@@ -202,7 +203,7 @@ final class MeterRepository
     public function update(int $id, Meter $meter): void
     {
         $stmt = $this->pdo->prepare(
-            'UPDATE meters SET label = :label, closed_on = :closed
+            'UPDATE meters SET label = :label, closed_on = :closed, opened_on = :opened
               WHERE id = :id AND user_id = :uid'
         );
         $stmt->execute([
@@ -210,6 +211,7 @@ final class MeterRepository
             'uid'    => $this->userId,
             'label'  => $meter->label,
             'closed' => $meter->closedOn?->format('Y-m-d'),
+            'opened' => $meter->openedOn?->format('Y-m-d'),
         ]);
     }
 
@@ -242,6 +244,7 @@ final class MeterRepository
                 'energy_type' => (string) $row['energy_type'],
                 'label'       => (string) $row['label'],
                 'closed_on'   => $row['closed_on'] !== null ? (string) $row['closed_on'] : null,
+                'opened_on'   => $row['opened_on'] !== null ? (string) $row['opened_on'] : null,
             ]);
         }
 

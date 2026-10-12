@@ -1074,6 +1074,12 @@ return [
     'import.meter_target'                          => 'Compteur visé',
     'import.meter_default'                         => 'Compteur par défaut',
     // Fermeture d'un compteur (#55).
+    // Mise en service des compteurs (#81).
+    'meters.opened_field'                         => 'Date de mise en service',
+    'meters.opened_hint'                          => 'Premier jour en service, inclus. Cette date évite de signaler des relevés manquants avant la pose dans les rapports électriques. Laissez vide si elle est inconnue ; la date de déclaration ne la remplace pas.',
+    'meters.opened_on'                            => 'mis en service le {date}',
+    'meters.invalid_opened_on'                    => 'Date de mise en service invalide.',
+    'meters.invalid_service_period'               => 'La fermeture doit être postérieure à la mise en service.',
     'meters.closed_field'                          => 'Date de fermeture',
     'meters.closed_hint'                           => 'À partir de cette date, le compteur n\'accepte plus aucun relevé. Ses relevés existants restent comptés dans tous les rapports : la dépense a bien eu lieu. Laissez vide pour un compteur en service.',
     'meters.invalid_closed_on'                     => 'Date de fermeture invalide.',

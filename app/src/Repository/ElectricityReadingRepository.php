@@ -94,6 +94,12 @@ final class ElectricityReadingRepository implements LegacyDailyRepositoryInterfa
     /** @var array<string, string> Cache 'Y-m-d' => instant de fermeture, au format de la base. */
     private array $closureInstants = [];
 
+    /** @var array<int, string>|null register_id => opened_on ('Y-m-d'). */
+    private ?array $fleetOpenings = null;
+
+    /** @var array<string, string> Cache date de mise en service => instant UTC. */
+    private array $openingInstants = [];
+
     /**
      * Topologie (compteur + registres) créée/résolue une seule fois par requête.
      * Évite ~7 requêtes superflues par ligne lors d'un import en masse (O1).
@@ -831,6 +837,7 @@ final class ElectricityReadingRepository implements LegacyDailyRepositoryInterfa
             $sum      = 0.0;
             $starts   = [];
             $ends     = [];
+            $periodEnds = [];
             $segments = [];
             foreach ($ids as $rid) {
                 $start = $startValues[$rid] ?? null;
@@ -851,7 +858,22 @@ final class ElectricityReadingRepository implements LegacyDailyRepositoryInterfa
                 $sum       += max(0.0, $end['value'] - $start['value']);
                 $starts[]   = $start['timestamp'];
                 $ends[]     = $end['timestamp'];
-                $segments[] = ['end' => $end['timestamp'], 'closed_at' => $this->closureInstantOf($rid)];
+                if ($start['timestamp'] < $to && $end['timestamp'] <= $to) {
+                    $periodEnds[] = $end['timestamp'];
+                }
+                $openedAt = $this->openingInstantOf($rid);
+                $closedAt = $this->closureInstantOf($rid);
+                // Hors de la vie de ce compteur, aucun relevé n'est attendu.
+                // Les deltas restent calculés comme avant : la date déclarée
+                // ne supprime jamais de consommation déjà enregistrée.
+                if (($openedAt === null || $openedAt < $to) && ($closedAt === null || $closedAt > $from)) {
+                    $segments[] = [
+                        'start' => $start['timestamp'],
+                        'end' => $end['timestamp'],
+                        'opened_at' => $openedAt,
+                        'closed_at' => $closedAt,
+                    ];
+                }
             }
 
             // Un registre vide vaut une contribution NULLE, pas un motif d'abandon
@@ -876,33 +898,17 @@ final class ElectricityReadingRepository implements LegacyDailyRepositoryInterfa
             $result[$outKey] = round($sum, 3);
 
             if ($registerKey === 'import_t1') {
-                // Borne de fin réelle (période en cours → dernier relevé), prise la
-                // PLUS TARDIVE : `to` décrit jusqu'où le rapport porte.
-                $result['to'] = max($ends);
+                // Un clamp vers le premier relevé d'un compteur futur ne décrit
+                // aucune donnée de cette période. L'écarter conserve aussi la
+                // fin effective d'un rapport dont les relevés s'arrêtent en cours
+                // de période : plafonner max($ends) à $to ne suffirait pas (#81).
+                $result['to'] = $periodEnds !== [] ? max($periodEnds) : $to;
 
-                // Fenêtre réellement COUVERTE par des relevés, exposée à part de
-                // `from`/`to` pour ne rien changer aux appelants historiques (#241).
-                // Les bornes sont clampées sur le relevé le plus proche quand
-                // l'instant demandé sort de la plage : les comparer à la période
-                // demandée dit si les données la couvrent vraiment, ou si le calcul
-                // ne porte que sur une fraction — un flux de relevés arrêté ne doit
-                // pas produire un coût partiel présenté comme complet.
-                //
-                // D'où l'INTERSECTION et non l'union sur un parc multi-compteur :
-                // début le plus tardif, fin la plus précoce. Un compteur qui a
-                // cessé d'être relevé dégrade `coverage_complete` — c'est voulu,
-                // mieux vaut un coût annoncé partiel qu'un coût partiel annoncé
-                // complet. À un compteur, max et min portent sur un seul élément :
-                // valeurs identiques à avant.
-                //
-                // La fin passe par {@see FleetCoverageWindow} (#76), qui n'oppose
-                // la date d'un compteur que tant qu'il est VIVANT : un compteur
-                // fermé n'est pas un compteur qu'on a cessé de relever, et rien
-                // n'est plus attendu de lui. Sans quoi remplacer son compteur
-                // figeait la couverture de tous les rapports suivants. Le repli
-                // sur `min($ends)` est inatteignable — $ends non vide implique
-                // $segments non vide — mais il garde le type de sortie strict.
-                $result['data_from'] = max($starts);
+                // Les deux bornes suivent la vie du parc : un compteur neuf
+                // ne limite pas les dates avant sa pose, un compteur retiré ne
+                // limite pas les dates après sa fermeture. Les trous de relevés
+                // pendant le service restent visibles, ainsi qu'un relais absent.
+                $result['data_from'] = FleetCoverageWindow::coveredSince($segments, $to) ?? max($starts);
                 $result['data_to']   = FleetCoverageWindow::coveredUntil($segments, $from) ?? min($ends);
             }
         }
@@ -1471,6 +1477,26 @@ final class ElectricityReadingRepository implements LegacyDailyRepositoryInterfa
         }
 
         return $this->closureInstants[$closedOn];
+    }
+
+    /** Mise en service située dans le fuseau du foyer, puis mémoïsée en UTC. */
+    private function openingInstantOf(int $registerId): ?string
+    {
+        $this->fleetOpenings ??= (new MeterTopology($this->pdo))->registerOpeningsForUser($this->userId);
+        $openedOn = $this->fleetOpenings[$registerId] ?? null;
+        if ($openedOn === null || $openedOn === '') {
+            return null;
+        }
+
+        if (!isset($this->openingInstants[$openedOn])) {
+            $openedAt = Meter::openingInstantFor($openedOn, $this->timezone);
+            if ($openedAt === null) {
+                return null;
+            }
+            $this->openingInstants[$openedOn] = Dates::toDbString($openedAt);
+        }
+
+        return $this->openingInstants[$openedOn];
     }
 
     /**

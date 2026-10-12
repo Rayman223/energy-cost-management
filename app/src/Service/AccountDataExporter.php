@@ -30,10 +30,10 @@ final class AccountDataExporter
             '"exported_at":' . self::enc((new \DateTimeImmutable('now'))->format('c')),
             '"user":' . self::enc($this->one('SELECT id, oidc_iss, oidc_sub, provider, display_name, role, status, terms_accepted_at, created_at, last_login_at FROM users WHERE id = :uid', $userId)),
             '"profile":' . self::enc($this->one('SELECT country, timezone, currency, bidding_zone, supplier_markup_per_kwh, locale, stats_opt_out FROM user_profiles WHERE user_id = :uid', $userId)),
-            // `closed_on` exportée depuis #55 : c'est une donnée saisie par
-            // l'utilisateur sur son parc, pas un détail interne — l'omettre
+            // Les dates de service sont des données saisies par
+            // l'utilisateur sur son parc, pas un détail interne — les omettre
             // rendrait l'export non reconstituable.
-            '"meters":' . self::enc($this->all('SELECT id, energy_type, label, country, timezone, closed_on, created_at FROM meters WHERE user_id = :uid ORDER BY id', $userId)),
+            '"meters":' . self::enc($this->all('SELECT id, energy_type, label, country, timezone, opened_on, closed_on, created_at FROM meters WHERE user_id = :uid ORDER BY id', $userId)),
         ];
         echo '{' . implode(',', $head);
 

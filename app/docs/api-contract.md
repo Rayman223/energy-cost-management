@@ -203,7 +203,20 @@ Trois précisions qui décident du comportement observable :
 
 Borne de fin **exclue** (#1), comme partout ailleurs : `closed_on = 2026-06-15`
 refuse dès le 15, le 14 reste ouvert. Rouvrir un compteur se fait en vidant le
-champ. Il n'existe pas de date d'ouverture : le premier relevé fait foi.
+champ.
+
+La **date de mise en service** (`opened_on`, facultative sur `/meters`) est une
+borne **incluse**, lue elle aussi dans le fuseau du foyer. Elle indique aux
+rapports électriques qu'aucun relevé n'était attendu avant la pose : ajouter un
+compteur neuf ne rend donc plus partiels les rapports antérieurs. Un premier
+relevé tardif après cette date reste une lacune. `NULL` signifie « début inconnu »
+et conserve le comportement des compteurs existants ; ni `created_at` ni le
+premier relevé ne servent à deviner la mise en service.
+
+Cette date concerne la couverture des rapports électriques : elle ne filtre pas
+les relevés existants et n'ajoute pas de refus à l'ingestion. Elle est conservée
+dans l'export de compte avec les autres données du compteur. La fermeture, si
+elle est renseignée, doit être strictement postérieure à la mise en service.
 
 `batteries.decommissioned_on` suit désormais exactement la même règle
 (`ingest_battery`, `battery_entry`, et l'import de fichier — refusé lui aussi

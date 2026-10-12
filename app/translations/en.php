@@ -1066,6 +1066,12 @@ return [
     'import.meter_target'                          => 'Target meter',
     'import.meter_default'                         => 'Default meter',
     // Meter closure (#55).
+    // Mise en service des compteurs (#81).
+    'meters.opened_field'                         => 'Commissioning date',
+    'meters.opened_hint'                          => 'First day in service, included. This date prevents electricity reports from flagging missing readings before installation. Leave blank if unknown; the registration date does not replace it.',
+    'meters.opened_on'                            => 'commissioned on {date}',
+    'meters.invalid_opened_on'                    => 'Invalid commissioning date.',
+    'meters.invalid_service_period'               => 'The closing date must be after the commissioning date.',
     'meters.closed_field'                          => 'Closing date',
     'meters.closed_hint'                           => 'From this date on, the meter accepts no further reading. Its existing readings still count in every report: the spending did happen. Leave empty for a meter in service.',
     'meters.invalid_closed_on'                     => 'Invalid closing date.',

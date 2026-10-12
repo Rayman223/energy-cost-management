@@ -1065,6 +1065,12 @@ return [
     'import.meter_target'                          => 'Doelmeter',
     'import.meter_default'                         => 'Standaardmeter',
     // Afsluiting van een meter (#55).
+    // Mise en service des compteurs (#81).
+    'meters.opened_field'                         => 'Datum van ingebruikname',
+    'meters.opened_hint'                          => 'Eerste dag in gebruik, inbegrepen. Zo melden elektriciteitsrapporten geen ontbrekende standen vóór de installatie. Laat leeg als de datum onbekend is; de registratiedatum vervangt deze niet.',
+    'meters.opened_on'                            => 'in gebruik sinds {date}',
+    'meters.invalid_opened_on'                    => 'Ongeldige datum van ingebruikname.',
+    'meters.invalid_service_period'               => 'De afsluitdatum moet na de datum van ingebruikname liggen.',
     'meters.closed_field'                          => 'Afsluitdatum',
     'meters.closed_hint'                           => 'Vanaf deze datum aanvaardt de meter geen enkele stand meer. Zijn bestaande standen blijven in alle rapporten meetellen: de uitgave heeft wel degelijk plaatsgevonden. Laat leeg voor een meter in dienst.',
     'meters.invalid_closed_on'                     => 'Ongeldige afsluitdatum.',
