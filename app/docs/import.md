@@ -110,6 +110,8 @@ soumettable (les champs hors type sont ignorés côté serveur).
 ```bash
 # Générique
 php app/scripts/import_readings.php --type=electricity --file=elec.csv --user=2 --execute
+# Plusieurs compteurs électriques (ancien fermé et remplaçant, par exemple)
+php app/scripts/import_readings.php --type=electricity --file=elec.csv --user=2 --meter-id=12 --execute
 php app/scripts/import_readings.php --type=gas --file=gaz.csv --value-col="Gaz naturel"
 
 # Enveloppes historiques (chemins/colonnes figés) — délèguent au même service
@@ -119,6 +121,15 @@ php app/scripts/import_eau.php --execute
 Dry-run par défaut ; `--execute` pour écrire ; `--user=<id>` pour la cible
 (défaut : 1er compte). Le dry-run exécute l'import dans une transaction annulée
 → compteurs fidèles sans écriture.
+
+**Compteur cible (CLI générique)** : `--meter-id=<id>` désigne le compteur à
+alimenter. Il doit appartenir à l'utilisateur cible et porter l'énergie choisie.
+Sans cette option, un unique compteur est sélectionné ; en l'absence de compteur,
+l'import conserve la création automatique. S'il existe plusieurs compteurs de
+cette énergie, même si certains sont fermés, la CLI refuse l'import avant toute
+écriture et affiche les identifiants disponibles : relancer avec `--meter-id`.
+Un compteur fermé reste sélectionnable pour importer son historique antérieur à
+la fermeture ; les relevés datés du jour de fermeture ou après restent refusés.
 
 **Plafond de lignes (stop-and-report)** : au-delà du plafond (~200 000 lignes,
 CLI comme web), l'import s'arrête et conserve les lignes déjà traitées — le bilan
