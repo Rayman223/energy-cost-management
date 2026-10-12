@@ -150,14 +150,21 @@ function syncClosedState(prefix) {
     field.disabled = blocked;
   });
 
+  // La fermeture décrit l'état du formulaire, pas le résultat d'une action.
+  // Sa zone dédiée préserve les confirmations pendant la saisie de la date (#77).
+  const state = document.getElementById(`${prefix}-closure-state`);
+  if (!state) return;
+
   const labels = closureLabels(prefix);
   if (blocked) {
-    setFeedback(`${prefix}-feedback`, tr(labels.blockedKey, labels.blockedFallback, { date: closedOn }), 'err');
+    state.textContent = tr(labels.blockedKey, labels.blockedFallback, { date: closedOn });
   } else if (closedOn !== null && selectedMeterAlreadyClosed(prefix)) {
-    setFeedback(`${prefix}-feedback`, tr(labels.closedKey, labels.closedFallback), '');
+    state.textContent = tr(labels.closedKey, labels.closedFallback);
   } else {
-    setFeedback(`${prefix}-feedback`, '');
+    state.textContent = '';
   }
+  state.className = blocked ? 'form-feedback err' : 'form-feedback';
+  state.hidden = state.textContent === '';
 }
 
 // Le message « aucun compteur déclaré » est rendu au CHARGEMENT de la page, mais
