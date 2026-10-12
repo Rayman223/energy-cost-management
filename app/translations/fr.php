@@ -1037,9 +1037,16 @@ return [
     'battery.efficiency'                           => 'Rendement',
     'battery.col_month'                            => 'Mois',
     'battery.partial_month'                        => 'mois incomplet',
-    'battery.month_dynamic'                        => 'Contrat indexé : non chiffré',
+    'battery.month_dynamic' => 'Contrat dynamique : non chiffré',
+    'battery.month_no_price' => 'Prix mensuel indexé indisponible : économie non chiffrée.',
+    'battery.price_provisional' => 'Prix mensuel provisoire',
+    'battery.price_estimated' => 'Prix mensuel estimé',
+    'battery.weighting_actual_load' => 'Pondération : courbe réelle',
+    'battery.weighting_standard_profile' => 'Pondération : profil standard',
+    'battery.weighting_baseload' => 'Pondération estimée : moyenne simple',
+    'battery.injection_fixed' => 'Le manque à gagner d’injection utilise les taux fixes saisis dans la grille, y compris sous contrat indexé mensuel.',
     'battery.month_no_tariff'                      => 'Aucune grille tarifaire',
-    'battery.dynamic_unsupported'                  => 'Un mois au moins relève d\'un contrat indexé au marché : valoriser une décharge au prix spot exige des relevés horaires, que la saisie journalière ne fournit pas. Ces mois restent sans chiffre plutôt qu\'avec une valeur fausse ; leur rendement, lui, est bien calculé.',
+    'battery.dynamic_unsupported' => 'Un mois au moins relève d’un contrat dynamique horaire ou quart-horaire : valoriser une décharge au prix de chaque créneau exige des relevés horaires, que la saisie journalière ne fournit pas. Ces mois restent sans chiffre ; leur rendement est calculé.',
     'battery.no_tariff_warning'                    => 'Un mois au moins n\'est couvert par aucune grille tarifaire : sans prix du kWh, l\'économie n\'est pas calculable. Complétez vos grilles sur la page Tarifs.',
 
     // Amortissement (#26, phase 4)

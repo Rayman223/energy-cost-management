@@ -419,15 +419,19 @@ final class TariffCalculatorService
      * @param float $t1Share Part des kWh évités qui l'auraient été en heures pleines,
      *                       dans [0, 1]. Bornée ici : une valeur hors plage viendrait
      *                       d'une hypothèse mal saisie, et extrapolerait le tarif.
+     * @param ?float $energyRateTtc Remplace toutes les lignes énergie par ce taux TTC, si fourni.
      */
-    public function avoidedImportRate(array $tariff, float $t1Share): float
+    public function avoidedImportRate(array $tariff, float $t1Share, ?float $energyRateTtc = null): float
     {
         $t1 = max(0.0, min(1.0, $t1Share));
         $t2 = 1.0 - $t1;
 
-        $rate = 0.0;
+        $rate = $energyRateTtc ?? 0.0;
         foreach ($tariff['lines'] ?? [] as $line) {
             $kind = ComponentKind::tryFrom((string) $line['kind']);
+            if ($energyRateTtc !== null && $kind?->isSupplierEnergy()) {
+                continue;
+            }
             $rate += match ($kind) {
                 // Sans distinction horaire : s'appliquent à chaque kWh prélevé.
                 ComponentKind::EnergyFlat, ComponentKind::PerKwh   => (float) $line['amount'],

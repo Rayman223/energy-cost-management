@@ -126,6 +126,9 @@ $deltaBadge = function (?float $pct, bool $lowerIsBetter, bool $isNew = false, b
     <div class="card <?= $this->e((string) $card['tone']) ?>">
       <div class="card-label"><span class="dot <?= $this->e((string) $card['dot']) ?>"></span><?= $this->te((string) $card['label_key']) ?></div>
       <div class="card-value"><?= $fmt($card['value'], (int) $card['decimals'], (string) $card['unit']) ?></div>
+      <?php if (isset($card['note_key'])): ?>
+      <div class="card-sub"><?= $this->te((string) $card['note_key']) ?></div>
+      <?php endif; ?>
       <?= $deltaBadge(
           $card['delta_display_pct'] === null ? null : (float) $card['delta_display_pct'],
           (bool) $card['lower_is_better'],

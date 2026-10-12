@@ -46,6 +46,7 @@ use DateTimeImmutable;
  *     delta_is_capped: bool,
  *     is_new: bool,
  *     lower_is_better: bool,
+ *     note_key?: string,
  * }
  */
 final class DashboardCardsService
@@ -233,6 +234,11 @@ final class DashboardCardsService
             $savingsCard = $this->card('battery_savings', 'green', 'dot--green', $savings, null, $currencySymbol, false);
             // Un montant se lit à deux décimales, pas à trois comme des kWh.
             $savingsCard['decimals'] = 2;
+            if ($month['monthly_partial'] ?? false) {
+                $savingsCard['note_key'] = 'battery.price_provisional';
+            } elseif (array_any($month['monthly_prices'] ?? [], static fn (array $price): bool => ($price['weighting'] ?? null) !== 'actual_load')) {
+                $savingsCard['note_key'] = 'battery.price_estimated';
+            }
             $cards[] = $savingsCard;
         }
 
