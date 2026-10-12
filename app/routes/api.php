@@ -169,7 +169,7 @@ $ingest   = new IngestController($elecRepo, $gasRepo, $waterRepo, $elecThrottle,
 // Le plafond est d'un relevé par jour civil de l'utilisateur, sans lien avec la
 // grille tarifaire : la valorisation est mensuelle.
 $batteries = new BatteryReadingController(
-    new BatteryRepository($pdo, $userId),
+    new BatteryRepository($pdo, $userId, Limits::metersPerEnergy($config)),
     static fn (int $batteryId): BatteryReadingRepository => new BatteryReadingRepository($pdo, $userId, $batteryId, $userTimezone),
     $userTimezone,
 );
