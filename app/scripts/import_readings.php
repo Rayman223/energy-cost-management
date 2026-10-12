@@ -10,6 +10,7 @@ declare(strict_types=1);
  *
  * Options :
  *   --user=<id>          Utilisateur cible (défaut : 1er compte). Cf. UserContext.
+ *   --meter-id=<id>      Compteur cible (requis si plusieurs pour cette énergie).
  *   --ts-col=<nom>       Colonne d'horodatage (défaut : timestamp).
  *   --value-col=<nom>    Colonne de valeur m³ (gaz/eau ; défaut : counter_m3).
  *   --map=col:reg,...    Mapping colonne→registre (électricité ; défaut : les
@@ -21,10 +22,12 @@ declare(strict_types=1);
  *
  * Exemples :
  *   php import_readings.php --type=gas --file=docs/gaz.csv --value-col="Gaz naturel"
- *   php import_readings.php --type=electricity --file=elec.csv --user=2 --execute
+ *   php import_readings.php --type=electricity --file=elec.csv --user=2 --meter-id=12 --execute
  */
 
+use App\Http\MeterResolver;
 use App\Infrastructure\Database;
+use App\Repository\MeterRepository;
 use App\Repository\UserRepository;
 use App\Security\UserContext;
 use App\Service\Import\ImportMapping;
@@ -46,6 +49,7 @@ $arg = static function (string $name) use ($cliArgs): ?string {
 $dryRun = !in_array('--execute', $cliArgs, true);
 $type   = strtolower(trim((string) ($arg('type') ?? '')));
 $file   = $arg('file');
+$rawMeterId = $arg('meter-id');
 
 if (!in_array($type, ImportMapping::ENERGY_TYPES, true)) {
     fwrite(STDERR, '[FATAL] --type requis (electricity|gas|water).' . PHP_EOL);
@@ -53,6 +57,11 @@ if (!in_array($type, ImportMapping::ENERGY_TYPES, true)) {
 }
 if ($file === null || !is_file($file)) {
     fwrite(STDERR, '[FATAL] --file=<chemin> introuvable : ' . ($file ?? '(manquant)') . PHP_EOL);
+    exit(1);
+}
+if ($rawMeterId !== null
+    && filter_var($rawMeterId, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]) === false) {
+    fwrite(STDERR, '[FATAL] --meter-id doit être un entier strictement positif.' . PHP_EOL);
     exit(1);
 }
 
@@ -89,6 +98,9 @@ $config = require __DIR__ . '/../bootstrap.php';
 try {
     $pdo    = (new Database($config['database']))->pdo();
     $userId = UserContext::cliUserId($pdo, UserContext::parseCliUserArg());
+    // Même garde que l'API : aucun choix implicite entre l'ancien compteur
+    // fermé et son remplaçant, et validation du propriétaire et de l'énergie.
+    $meterId = (new MeterResolver(new MeterRepository($pdo, $userId)))->resolve($rawMeterId, $type);
 } catch (\Throwable $e) {
     fwrite(STDERR, '[FATAL] ' . $e->getMessage() . PHP_EOL);
     exit(1);
@@ -102,9 +114,10 @@ $timezone = (new UserRepository($pdo))->getProfile($userId)->timezone ?? 'UTC';
 $throttle = ReadingGranularityPolicy::electricityDefault($timezone);
 
 fwrite(STDOUT, sprintf(
-    "[IMPORT] type=%s user=#%d fichier=%s mode=%s%s",
+    "[IMPORT] type=%s user=#%d compteur=%s fichier=%s mode=%s%s",
     $type,
     $userId,
+    $meterId === null ? 'nouveau' : '#' . $meterId,
     $file,
     $dryRun ? 'DRY-RUN' : 'EXECUTE',
     PHP_EOL
@@ -125,7 +138,17 @@ try {
     }
 
     // Orchestration transaction/dry-run/plafond partagée avec l'UI web.
-    $report = (new ImportRunner())->run($pdo, $mapping, $rows, $userId, $type, $dryRun, false, $throttle);
+    $report = (new ImportRunner())->run(
+        $pdo,
+        $mapping,
+        $rows,
+        $userId,
+        $type,
+        $dryRun,
+        throttle: $throttle,
+        timezone: $timezone,
+        meterId: $meterId,
+    );
 } catch (\Throwable $e) {
     fwrite(STDERR, '[FATAL] ' . $e->getMessage() . PHP_EOL);
     exit(1);
