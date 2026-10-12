@@ -10,6 +10,7 @@ use App\Service\TariffCalculatorService;
 use App\Support\Dates;
 use DateTimeImmutable;
 use DateTimeZone;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use Tests\Fake\FakeGasReadingRepository;
 use Tests\Fake\FakeLegacyDailyRepository;
@@ -215,6 +216,46 @@ final class DashboardCardsServiceTest extends TestCase
 
     // ── Variation vs mois précédent ──────────────────────────────────────────
 
+    public function testLargeVariationKeepsItsCalculatedValueButCapsItsDisplay(): void
+    {
+        $legacy = new FakeLegacyDailyRepository(deltasBetween: ['prelev_jour' => 0.001]);
+        $deltas = [...$this->deltas(), 'prelev_jour' => 250.0];
+
+        $card = $this->card($this->makeService($legacy)->build($deltas, 2026, 6), 'import_t1');
+
+        self::assertSame(24999900.0, $card['delta_pct']);
+        self::assertSame(999.0, $card['delta_display_pct']);
+        self::assertTrue($card['delta_is_capped']);
+        self::assertFalse($card['is_new']);
+    }
+
+    /** @return iterable<string, array{float, float, float, bool}> */
+    public static function displayVariationCases(): iterable
+    {
+        yield 'below limit' => [1098.9, 998.9, 998.9, false];
+        yield 'at limit' => [1099.0, 999.0, 999.0, false];
+        yield 'rounds to limit' => [1099.04, 999.0, 999.0, false];
+        yield 'above limit' => [1099.1, 999.1, 999.0, true];
+        yield 'negative at limit' => [-899.0, -999.0, -999.0, false];
+        yield 'negative above limit' => [-899.1, -999.1, -999.0, true];
+        yield 'ordinary decrease' => [50.0, -50.0, -50.0, false];
+        yield 'no consumption' => [0.0, -100.0, -100.0, false];
+        yield 'stable' => [100.0, 0.0, 0.0, false];
+    }
+
+    #[DataProvider('displayVariationCases')]
+    public function testDisplayVariationLimits(float $current, float $calculated, float $displayed, bool $capped): void
+    {
+        $legacy = new FakeLegacyDailyRepository(deltasBetween: ['prelev_jour' => 100.0]);
+        $deltas = [...$this->deltas(), 'prelev_jour' => $current];
+
+        $card = $this->card($this->makeService($legacy)->build($deltas, 2026, 6), 'import_t1');
+
+        self::assertSame($calculated, $card['delta_pct']);
+        self::assertSame($displayed, $card['delta_display_pct']);
+        self::assertSame($capped, $card['delta_is_capped']);
+    }
+
     public function testVariationAgainstPreviousMonth(): void
     {
         $legacy = new FakeLegacyDailyRepository(monthlyDeltasForMonth: [
@@ -245,6 +286,8 @@ final class DashboardCardsServiceTest extends TestCase
         $absent = $this->makeService(new FakeLegacyDailyRepository(), $this->gasReadings(), $this->waterReadings())
             ->build($this->deltas(30.0), 2026, 6);
         self::assertNull($this->card($absent, 'import_t1')['delta_pct']);
+        self::assertNull($this->card($absent, 'import_t1')['delta_display_pct']);
+        self::assertFalse($this->card($absent, 'import_t1')['delta_is_capped']);
 
         $zero = $this->makeService(
             new FakeLegacyDailyRepository(monthlyDeltasForMonth: ['prelev_jour' => 0.0]),
@@ -252,6 +295,8 @@ final class DashboardCardsServiceTest extends TestCase
             $this->waterReadings(),
         )->build($this->deltas(30.0), 2026, 6);
         self::assertNull($this->card($zero, 'import_t1')['delta_pct']);
+        self::assertNull($this->card($zero, 'import_t1')['delta_display_pct']);
+        self::assertFalse($this->card($zero, 'import_t1')['delta_is_capped']);
     }
 
     // ── Référence à zéro : « nouveau ce mois-ci » ────────────────────────────
@@ -652,6 +697,8 @@ final class DashboardCardsServiceTest extends TestCase
 
         foreach (['battery_discharge', 'battery_charge', 'battery_savings'] as $key) {
             self::assertNull($this->card($cards, $key)['delta_pct'], $key);
+            self::assertNull($this->card($cards, $key)['delta_display_pct'], $key);
+            self::assertFalse($this->card($cards, $key)['delta_is_capped'], $key);
             self::assertFalse($this->card($cards, $key)['is_new'], $key);
         }
     }
