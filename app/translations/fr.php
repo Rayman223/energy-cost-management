@@ -1041,6 +1041,7 @@ return [
     'battery.month_no_price' => 'Prix mensuel indexé indisponible : économie non chiffrée.',
     'battery.price_provisional' => 'Prix mensuel provisoire',
     'battery.price_estimated' => 'Prix mensuel estimé',
+    'battery.formula_rejected' => 'Un coefficient d’indexation invalide a été neutralisé. Vérifiez la grille tarifaire.',
     'battery.weighting_actual_load' => 'Pondération : courbe réelle',
     'battery.weighting_standard_profile' => 'Pondération : profil standard',
     'battery.weighting_baseload' => 'Pondération estimée : moyenne simple',

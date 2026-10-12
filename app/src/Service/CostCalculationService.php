@@ -1967,7 +1967,7 @@ final class CostCalculationService
      * Une courbe réseau absente laisse la cascade profil standard → baseload agir.
      * Les bornes UTC sont inclusives au début et exclusives à la fin.
      *
-     * @return array<string, array{price: MonthlyIndexedPrice, energy_rate_ttc: float}>
+     * @return array<string, array{price: MonthlyIndexedPrice, energy_rate_ttc: float, coefficient_rejected: bool}>
      */
     public function monthlyIndexedRates(TariffGrid $grid, DateTimeImmutable $from, DateTimeImmutable $to): array
     {
@@ -1982,6 +1982,7 @@ final class CostCalculationService
             $rates[$month] = [
                 'price' => $price,
                 'energy_rate_ttc' => $formula->rateTtc($price->priceHtva, $grid->vatRate),
+                'coefficient_rejected' => $formula->coefficientRejected,
             ];
         }
 

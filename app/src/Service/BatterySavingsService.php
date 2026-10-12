@@ -108,7 +108,7 @@ final class BatterySavingsService
      */
     private const UNKNOWN_MIX_T1_SHARE = 0.5;
 
-    /** @var array<string, array<string, array{price: MonthlyIndexedPrice, energy_rate_ttc: float}>> */
+    /** @var array<string, array<string, array{price: MonthlyIndexedPrice, energy_rate_ttc: float, coefficient_rejected: bool}>> */
     private array $monthlyRatesCache = [];
 
     public function __construct(
@@ -399,6 +399,7 @@ final class BatterySavingsService
                 $monthlyPrices[] = $resolved['price']->toArray() + [
                     'grid_id' => $segment->grid->id,
                     'energy_rate_ttc' => $energyRate,
+                    'coefficient_rejected' => $resolved['coefficient_rejected'],
                 ];
             }
 

@@ -1033,6 +1033,7 @@ return [
     'battery.month_no_price' => 'Monthly indexed price unavailable: savings not priced.',
     'battery.price_provisional' => 'Provisional monthly price',
     'battery.price_estimated' => 'Estimated monthly price',
+    'battery.formula_rejected' => 'An invalid indexing coefficient was neutralized. Check the tariff.',
     'battery.weighting_actual_load' => 'Weighting: actual load',
     'battery.weighting_standard_profile' => 'Weighting: standard profile',
     'battery.weighting_baseload' => 'Estimated weighting: simple average',

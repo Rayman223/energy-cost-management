@@ -1032,6 +1032,7 @@ return [
     'battery.month_no_price' => 'Monatlicher Indexpreis nicht verfügbar: Ersparnis nicht beziffert.',
     'battery.price_provisional' => 'Vorläufiger Monatspreis',
     'battery.price_estimated' => 'Geschätzter Monatspreis',
+    'battery.formula_rejected' => 'Ein ungültiger Indexierungskoeffizient wurde neutralisiert. Prüfen Sie die Tarifkarte.',
     'battery.weighting_actual_load' => 'Gewichtung: tatsächliche Verbrauchskurve',
     'battery.weighting_standard_profile' => 'Gewichtung: Standardprofil',
     'battery.weighting_baseload' => 'Geschätzte Gewichtung: einfacher Mittelwert',

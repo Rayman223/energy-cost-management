@@ -259,6 +259,9 @@ $currency     = $fleetBalance['currency'] ?? $currency;
           <?php endif; ?>
           <?php foreach ($month['monthly_prices'] ?? [] as $price): ?>
           <span class="bat-note"><?= $this->te('battery.weighting_' . (string) $price['weighting']) ?></span>
+          <?php if ($price['coefficient_rejected'] ?? false): ?>
+          <span class="bat-note"><?= $this->te('battery.formula_rejected') ?></span>
+          <?php endif; ?>
           <?php endforeach; ?>
         </td>
         <td class="num"><?= $month['charge_kwh'] !== null ? $this->e($this->num($month['charge_kwh'], 0)) . ' kWh' : '—' ?></td>

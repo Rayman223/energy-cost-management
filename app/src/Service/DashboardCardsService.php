@@ -47,6 +47,7 @@ use DateTimeImmutable;
  *     is_new: bool,
  *     lower_is_better: bool,
  *     note_key?: string,
+ *     warning_key?: string,
  * }
  */
 final class DashboardCardsService
@@ -230,14 +231,19 @@ final class DashboardCardsService
         if ($charge !== null && $charge > 0.0) {
             $cards[] = $this->card('battery_charge', 'green', 'dot--green-dim', $charge, null, 'kWh', false);
         }
-        if ($savings !== null && $savings > 0.0) {
-            $savingsCard = $this->card('battery_savings', 'green', 'dot--green', $savings, null, $currencySymbol, false);
+        if ($savings !== null && $savings !== 0.0) {
+            // Un prix mensuel négatif peut produire une perte : elle doit être visible.
+            $tone = $savings < 0.0 ? 'amber' : 'green';
+            $savingsCard = $this->card('battery_savings', $tone, 'dot--' . $tone, $savings, null, $currencySymbol, false);
             // Un montant se lit à deux décimales, pas à trois comme des kWh.
             $savingsCard['decimals'] = 2;
             if ($month['monthly_partial'] ?? false) {
                 $savingsCard['note_key'] = 'battery.price_provisional';
             } elseif (array_any($month['monthly_prices'] ?? [], static fn (array $price): bool => ($price['weighting'] ?? null) !== 'actual_load')) {
                 $savingsCard['note_key'] = 'battery.price_estimated';
+            }
+            if (array_any($month['monthly_prices'] ?? [], static fn (array $price): bool => ($price['coefficient_rejected'] ?? false) === true)) {
+                $savingsCard['warning_key'] = 'battery.formula_rejected';
             }
             $cards[] = $savingsCard;
         }

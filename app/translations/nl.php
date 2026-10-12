@@ -1032,6 +1032,7 @@ return [
     'battery.month_no_price' => 'Maandelijks geïndexeerde prijs niet beschikbaar: besparing niet becijferd.',
     'battery.price_provisional' => 'Voorlopige maandprijs',
     'battery.price_estimated' => 'Geschatte maandprijs',
+    'battery.formula_rejected' => 'Een ongeldige indexeringscoëfficiënt is geneutraliseerd. Controleer de tariefkaart.',
     'battery.weighting_actual_load' => 'Weging: werkelijke verbruikscurve',
     'battery.weighting_standard_profile' => 'Weging: standaardprofiel',
     'battery.weighting_baseload' => 'Geschatte weging: eenvoudig gemiddelde',

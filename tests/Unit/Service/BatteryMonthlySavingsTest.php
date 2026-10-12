@@ -149,6 +149,7 @@ final class BatteryMonthlySavingsTest extends TestCase
         self::assertSame(0.04, $month['injection_rate']);
         self::assertSame('baseload', $month['monthly_prices'][0]['weighting']);
         self::assertSame(0.20, $month['monthly_prices'][0]['price_htva']);
+        self::assertFalse($month['monthly_prices'][0]['coefficient_rejected']);
         self::assertFalse($month['partial']);
         self::assertFalse($month['unsupported_mode']);
         self::assertSame([], $legacy->hourlyWindowsRequested);
@@ -314,10 +315,33 @@ final class BatteryMonthlySavingsTest extends TestCase
 
     public function testNegativeIndexedRatesRemainNegative(): void
     {
-        [$service] = $this->services([$this->grid(coefficient: 1.0, offset: 0.0)], new FakeDynamicPriceRepository(hourlyPricesByHour: $this->prices(rate: -0.20)));
+        [$service, $cost, $legacy] = $this->services([$this->grid(coefficient: 1.0, offset: 0.0)], new FakeDynamicPriceRepository(hourlyPricesByHour: $this->prices(rate: -0.20)));
         $month = $this->month($service);
         self::assertSame(-0.162, $month['avoided_rate']);
         self::assertSame(-16.20, $month['gross_savings']);
+
+        $cards = (new DashboardCardsService($legacy, $cost))->build([], 2026, 1, $this->at('2026-02-01'), $month);
+        $savings = array_values(array_filter($cards, static fn (array $card): bool => $card['key'] === 'battery_savings'));
+        self::assertCount(1, $savings, 'A monetary loss must remain visible.');
+        self::assertSame(-16.20, $savings[0]['value']);
+        self::assertSame('amber', $savings[0]['tone']);
+    }
+
+    public function testRejectedFormulaCoefficientRemainsVisibleInBatteryResults(): void
+    {
+        foreach ([0.0, -1.0, 108.0] as $coefficient) {
+            $grid = $this->grid(coefficient: $coefficient);
+            [$service, $cost, $legacy] = $this->services([$grid], new FakeDynamicPriceRepository(hourlyPricesByHour: $this->prices()));
+            $rates = $cost->monthlyIndexedRates($grid, $this->at('2026-01-01'), $this->at('2026-02-01'));
+            self::assertTrue($rates['2026-01']['coefficient_rejected'] ?? false);
+            $month = $this->month($service);
+            self::assertSame(0.292, $month['avoided_rate']);
+            self::assertTrue($month['monthly_prices'][0]['coefficient_rejected'] ?? false);
+            $cards = (new DashboardCardsService($legacy, $cost))->build([], 2026, 1, $this->at('2026-02-01'), $month);
+            $savings = array_values(array_filter($cards, static fn (array $card): bool => $card['key'] === 'battery_savings'));
+            self::assertSame('battery.formula_rejected', $savings[0]['warning_key'] ?? null);
+            self::assertSame('battery.price_estimated', $savings[0]['note_key']);
+        }
     }
 
     public function testPricesAreRequestedForTheCivilMonthAndStopAtAsOf(): void
@@ -390,10 +414,11 @@ final class BatteryMonthlySavingsTest extends TestCase
     {
         $catalog = require dirname(__DIR__, 3) . '/app/translations/' . $locale . '.php';
         $view = ViewFactory::create(dirname(__DIR__, 3) . '/app/templates', $locale);
-        foreach (['estimated', 'provisional', 'missing'] as $case) {
+        foreach (['estimated', 'provisional', 'missing', 'rejected', 'negative'] as $case) {
             $end = $case === 'provisional' ? '2026-01-16' : '2026-02-01';
             [$service, $cost, $legacy] = $this->services(
-                [$this->grid()], new FakeDynamicPriceRepository(hourlyPricesByHour: $case === 'missing' ? [] : $this->prices($end)),
+                [$this->grid(coefficient: $case === 'rejected' ? 108.0 : 1.08)],
+                new FakeDynamicPriceRepository(hourlyPricesByHour: $case === 'missing' ? [] : $this->prices($end, $case === 'negative' ? -0.20 : 0.20)),
             );
             $balance = $service->balance([['battery' => $this->battery(), 'readings' => $this->readings($end)]], $this->at($end));
             $month = $balance['fleet']['months'][0];
@@ -405,9 +430,10 @@ final class BatteryMonthlySavingsTest extends TestCase
                 'maxCycles' => Battery::MAX_RATED_CYCLES,
             ]);
             $key = match ($case) {
-                'estimated' => 'battery.weighting_baseload',
+                'estimated', 'negative' => 'battery.weighting_baseload',
                 'provisional' => 'battery.price_provisional',
                 'missing' => 'battery.month_no_price',
+                'rejected' => 'battery.formula_rejected',
             };
             self::assertStringContainsString(htmlspecialchars($catalog[$key], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'), $html);
             self::assertStringContainsString(htmlspecialchars($catalog['battery.injection_fixed'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'), $html);
@@ -424,6 +450,14 @@ final class BatteryMonthlySavingsTest extends TestCase
             } else {
                 $key = $case === 'provisional' ? 'battery.price_provisional' : 'battery.price_estimated';
                 self::assertStringContainsString(htmlspecialchars($catalog[$key], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'), $html);
+                if ($case === 'rejected') {
+                    self::assertStringContainsString(htmlspecialchars($catalog['battery.formula_rejected'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'), $html);
+                } else {
+                    self::assertStringNotContainsString(htmlspecialchars($catalog['battery.formula_rejected'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'), $html);
+                }
+                if ($case === 'negative') {
+                    self::assertStringContainsString('class="card amber"', $html);
+                }
             }
         }
     }
