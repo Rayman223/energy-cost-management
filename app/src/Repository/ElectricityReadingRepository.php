@@ -33,11 +33,12 @@ final class ElectricityReadingRepository implements LegacyDailyRepositoryInterfa
 
     /** Durée d'un MTU quart-horaire, en secondes. */
     private const QUARTER_SECONDS = 900;
+    private const HOUR_SECONDS = 3600;
 
     /**
      * Marge admise sur l'écart entre deux relevés avant de cesser de considérer la
-     * cadence comme quart-horaire. `reading_at` est stocké tel que l'émetteur l'a
-     * envoyé (aucun alignement à l'ingestion) : un compteur ou un poller qui vise
+     * cadence comme quart-horaire ou horaire. `reading_at` est stocké tel que
+     * l'émetteur l'a envoyé (aucun alignement à l'ingestion) : un compteur ou un poller qui vise
      * les 15 min dérive de quelques secondes à chaque trame. Sans marge, un flux
      * réellement quart-horaire serait classé « reconstruit » et n'accéderait jamais
      * à la facturation au quart d'heure. 90 s reste très en dessous de la cadence
@@ -52,7 +53,7 @@ final class ElectricityReadingRepository implements LegacyDailyRepositoryInterfa
      * quart d'heure serait la présenter comme mesurée. Rendre ce cas natif suppose
      * d'aligner l'ingestion sur les MTU, pas d'élargir cette tolérance.
      */
-    private const QUARTER_JITTER_SECONDS = 90;
+    private const READING_JITTER_SECONDS = 90;
 
     /** Correspondance registre → clé du contrat JSON existant. */
     private const JSON_KEYS = [
@@ -1246,52 +1247,56 @@ final class ElectricityReadingRepository implements LegacyDailyRepositoryInterfa
      *   relevé horaire, ou un relevé cadencé mais décalé (poller à :07/:22/:37/:52),
      *   voit sa consommation répartie au lieu d'être facturée en entier au prix du
      *   seul quart où l'intervalle commence.
-     * - `native` : la CADENCE des relevés est-elle quart-horaire ? Vrai dès que
-     *   l'intervalle ne dépasse pas 15 min à la tolérance près — le jitter de quelques
-     *   secondes d'un compteur ou d'un poller ne doit pas faire passer un flux
-     *   réellement quart-horaire pour une reconstruction. Un créneau reste natif tant
-     *   que tout son kWh vient d'intervalles de cette cadence.
+     * - `measurement_resolution_min` : résolution de prix minimale compatible avec
+     *   la cadence des relevés : 15 ou 60 min, avec une tolérance de 90 s. Au-delà
+     *   d'une heure, null marque une répartition estimée. La résolution la moins fine
+     *   des contributions est retenue pour chaque créneau ; null domine.
      *
-     * L'appelant se sert du drapeau pour refuser de présenter comme quart-horaire un
-     * calcul qui ne l'est pas ; l'étalement, lui, vaut dans les deux cas.
+     * Une consommation horaire répartie sur quatre quarts reste mesurée à l'heure,
+     * mais pas au quart d'heure. L'appelant compare la cadence à la résolution des
+     * cotations ; l'étalement des quantités reste identique dans tous les cas.
      *
-     * @return array<int, array{quarter: string, import_kwh: float, native: bool}>
+     * @return array<int, array{quarter: string, import_kwh: float, measurement_resolution_min: int|null}>
      */
     public function getQuarterImportDeltas(DateTimeImmutable $from, DateTimeImmutable $to): array
     {
         $byMeter = $this->importIndexTotalsByMeter($from, $to);
         $utc     = Dates::utc();
 
-        /** @var array<string, array{kwh: float, native: bool}> $buckets */
+        /** @var array<string, array{kwh: float, measurement_resolution_min: int|null}> $buckets */
         $buckets = [];
-        $add = static function (string $slot, float $kwh, bool $native) use (&$buckets): void {
-            $current        = $buckets[$slot] ?? ['kwh' => 0.0, 'native' => true];
+        $add = static function (string $slot, float $kwh, ?int $resolutionMin) use (&$buckets): void {
+            $current = $buckets[$slot] ?? ['kwh' => 0.0, 'measurement_resolution_min' => 15];
+            $currentResolution = $current['measurement_resolution_min'];
             $buckets[$slot] = [
-                'kwh'    => $current['kwh'] + $kwh,
-                // Un créneau n'est natif que si TOUT son kWh vient de relevés au pas
-                // de 15 min : une seule part étalée suffit à le disqualifier.
-                'native' => $current['native'] && $native,
+                'kwh' => $current['kwh'] + $kwh,
+                'measurement_resolution_min' => $currentResolution === null || $resolutionMin === null
+                    ? null
+                    : max($currentResolution, $resolutionMin),
             ];
         };
 
         // Un compteur à la fois : la cadence comme le delta sont des propriétés du
-        // compteur, pas du foyer. Un créneau alimenté par deux compteurs n'est donc
-        // natif que si LES DEUX sont au pas de 15 min — c'est `$add()` qui compose
-        // ce ET, et il compose correctement de lui-même (#55).
+        // compteur, pas du foyer. Un créneau alimenté par plusieurs compteurs prend
+        // la résolution la moins fine de leurs intervalles (#55).
         foreach ($byMeter as $rows) {
             for ($i = 1, $iMax = count($rows); $i < $iMax; $i++) {
                 $delta  = max(0.0, $rows[$i]['total'] - $rows[$i - 1]['total']);
                 $start  = Dates::fromDbString($rows[$i - 1]['ts']);
                 $end    = Dates::fromDbString($rows[$i]['ts']);
                 $span   = $end->getTimestamp() - $start->getTimestamp();
-                $native = $span <= self::QUARTER_SECONDS + self::QUARTER_JITTER_SECONDS;
+                $resolutionMin = match (true) {
+                    $span <= self::QUARTER_SECONDS + self::READING_JITTER_SECONDS => 15,
+                    $span <= self::HOUR_SECONDS + self::READING_JITTER_SECONDS => 60,
+                    default => null,
+                };
 
                 $cursor = $start;
                 while ($cursor < $end) {
                     [$slotStart, $slotEnd] = ReadingGranularity::QuarterHour->bucket($cursor, $utc);
                     $sliceEnd = $slotEnd < $end ? $slotEnd : $end;
                     $share    = (float) ($sliceEnd->getTimestamp() - $cursor->getTimestamp()) / (float) $span;
-                    $add(Dates::toDbString($slotStart), $delta * $share, $native);
+                    $add(Dates::toDbString($slotStart), $delta * $share, $resolutionMin);
                     $cursor = $sliceEnd;
                 }
             }
@@ -1304,7 +1309,7 @@ final class ElectricityReadingRepository implements LegacyDailyRepositoryInterfa
             $out[] = [
                 'quarter'    => $slot,
                 'import_kwh' => round($bucket['kwh'], 3),
-                'native'     => $bucket['native'],
+                'measurement_resolution_min' => $bucket['measurement_resolution_min'],
             ];
         }
 

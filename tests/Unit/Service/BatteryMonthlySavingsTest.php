@@ -184,14 +184,21 @@ final class BatteryMonthlySavingsTest extends TestCase
         }
     }
 
-    public function testActualLoadWeightingIsSharedWithTheMonthlyCalculator(): void
+    public static function measurementResolutions(): iterable
+    {
+        yield 'quarter readings' => [15];
+        yield 'hourly readings' => [60];
+    }
+
+    #[DataProvider('measurementResolutions')]
+    public function testActualLoadWeightingIsSharedWithTheMonthlyCalculator(int $measurementResolution): void
     {
         $prices = $this->prices();
         $prices['2026-01-01 00:00:00'] = 0.10;
         $prices['2026-01-01 01:00:00'] = 0.30;
         $legacy = new FakeLegacyDailyRepository(quarterImportDeltas: [
-            ['quarter' => '2026-01-01 00:00:00', 'import_kwh' => 1.0, 'native' => true],
-            ['quarter' => '2026-01-01 01:00:00', 'import_kwh' => 9.0, 'native' => true],
+            ['quarter' => '2026-01-01 00:00:00', 'import_kwh' => 1.0, 'measurement_resolution_min' => $measurementResolution],
+            ['quarter' => '2026-01-01 01:00:00', 'import_kwh' => 9.0, 'measurement_resolution_min' => $measurementResolution],
         ]);
         [$service] = $this->services([$this->grid()], new FakeDynamicPriceRepository(hourlyPricesByHour: $prices), legacy: $legacy);
         $month = $this->month($service);

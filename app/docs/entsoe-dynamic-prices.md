@@ -228,9 +228,11 @@ Deux réglages, à deux endroits **différents depuis #245** :
 > un facteur 1000.
 >
 > La pondération suit une cascade, annoncée au dashboard : votre **courbe réelle**
-> au pas de 15 min si au moins 80 % de la consommation y est réellement mesurée
-> (c'est le cas le plus juste, et il redonne au centime près le total d'une
-> facturation quart-horaire, la formule étant affine) ; sinon le **profil standard**
+> si au moins 80 % de la consommation est mesurée à une cadence compatible avec
+> les cotations retenues (15 ou 60 min). Des relevés horaires conviennent aux prix
+> horaires, mais pas aux prix 15 min ; les relevés journaliers restent estimés.
+> La formule étant affine, cette pondération redonne le total d'une facturation
+> par créneau à la résolution correspondante ; sinon le **profil standard**
 > désigné sur la grille, s'il a été importé ; sinon la **moyenne simple**, qui
 > sous-estime structurellement un profil résidentiel. Un mois non clos est signalé
 > comme provisoire, `Belpex_RLP_M` n'étant publié qu'en fin de mois.
