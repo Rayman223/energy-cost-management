@@ -1,4 +1,6 @@
 <?php
+declare(strict_types=1);
+
 /**
  * @var string|null $dbError
  * @var array<string,mixed>|null $gasLatest
@@ -163,6 +165,7 @@ $meterSelect = function (string $prefix, string $energyType) use ($metersByEnerg
       </div>
       <?php endforeach; ?>
     </div>
+    <div class="form-feedback" id="electricity-closure-state" hidden></div>
     <button class="btn btn-amber" id="electricity-btn"><?= $this->te('common.save') ?></button>
     <div class="form-feedback" id="electricity-feedback"></div>
   </div>
@@ -194,6 +197,7 @@ $meterSelect = function (string $prefix, string $energyType) use ($metersByEnerg
       <div class="card-sub" id="gas-latest"<?= $gasLatest ? '' : ' hidden' ?>><?= $this->te('meter.latest') ?> : <strong id="gas-latest-value"><?= $gasLatest ? $this->e($this->num((float) $gasLatest['counter_m3'], 3)) : '' ?> m³</strong></div>
       <div class="cards cards-2"><div class="form-row"><label class="form-label" for="gas-date"><?= $this->te('meter.reading_date') ?></label><input id="gas-date" type="date" class="form-input" value="<?= $this->e($today) ?>"></div><div class="form-row"><label class="form-label" for="gas-time"><?= $this->te('meter.reading_time') ?></label><input id="gas-time" type="time" class="form-input" value="<?= $this->e($now) ?>"></div></div>
       <div class="form-row"><label class="form-label" for="gas-value"><?= $this->te('meter.counter_m3') ?></label><input id="gas-value" type="number" step="0.001" min="0" class="form-input" placeholder="8523.456"></div>
+      <div class="form-feedback" id="gas-closure-state" hidden></div>
       <button class="btn btn-amber" id="gas-btn"><?= $this->te('common.save') ?></button><div class="form-feedback" id="gas-feedback"></div>
     </div>
     <div>
@@ -209,6 +213,7 @@ $meterSelect = function (string $prefix, string $energyType) use ($metersByEnerg
       <div class="card-sub" id="water-latest"<?= $waterLatest ? '' : ' hidden' ?>><?= $this->te('meter.latest') ?> : <strong id="water-latest-value"><?= $waterLatest ? $this->e($this->num((float) $waterLatest['counter_m3'], 3)) : '' ?> m³</strong></div>
       <div class="cards cards-2"><div class="form-row"><label class="form-label" for="water-date"><?= $this->te('meter.reading_date') ?></label><input id="water-date" type="date" class="form-input" value="<?= $this->e($today) ?>"></div><div class="form-row"><label class="form-label" for="water-time"><?= $this->te('meter.reading_time') ?></label><input id="water-time" type="time" class="form-input" value="<?= $this->e($now) ?>"></div></div>
       <div class="form-row"><label class="form-label" for="water-value"><?= $this->te('meter.counter_m3') ?></label><input id="water-value" type="number" step="0.001" min="0" class="form-input" placeholder="1234.567"></div>
+      <div class="form-feedback" id="water-closure-state" hidden></div>
       <button class="btn btn-amber" id="water-btn"><?= $this->te('common.save') ?></button><div class="form-feedback" id="water-feedback"></div>
     </div>
     <div>
@@ -260,6 +265,7 @@ $meterSelect = function (string $prefix, string $energyType) use ($metersByEnerg
         <div class="form-row"><label class="form-label" for="battery-discharge"><?= $this->te('meter.battery_discharge') ?></label><input id="battery-discharge" type="number" step="0.001" min="0" class="form-input" placeholder="kWh"></div>
       </div>
       <p class="card-sub"><?= $this->te('meter.battery_hint') ?></p>
+      <div class="form-feedback" id="battery-closure-state" hidden></div>
       <button class="btn btn-amber" id="battery-btn"><?= $this->te('common.save') ?></button><div class="form-feedback" id="battery-feedback"></div>
     </div>
     <div>
