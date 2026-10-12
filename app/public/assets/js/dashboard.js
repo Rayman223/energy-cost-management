@@ -636,6 +636,10 @@ function tariffGapHtml(data) {
     return `<tr class="annual-group"><th colspan="3">${title}</th></tr>`;
   }
 
+  function noteRow(note) {
+    return `<tr><td colspan="3"><span class="at-note">${note}</span></td></tr>`;
+  }
+
   /** Ligne « — » motivée, pour une énergie sans données ou sans tarif. */
   function unavailableRow(block) {
     return row(`<span class="t-muted">${reasonHtml(block, 'dash.annual.no_data')}</span>`, '', '');
@@ -647,8 +651,25 @@ function tariffGapHtml(data) {
 
     (block.registers || []).forEach((r) => {
       const labelFn = REGISTER_LABELS[r.key];
-      html += row(labelFn ? labelFn() : escapeHtml(r.key), qty(r.kwh, 'kWh'), '');
+      html += row(labelFn ? labelFn() : escapeHtml(r.key), qty(r.kwh, 'kWh'), money(r.cost));
+      if (r.key === 'import_t2') {
+        html += row(tr('dash.annual.import_total'), qty(block.import_kwh, 'kWh'), money(block.import_cost), 'annual-volume-subtotal');
+      } else if (r.key === 'export_t2') {
+        html += row(tr('dash.annual.export_total'), qty(block.export_kwh, 'kWh'), money(block.export_cost), 'annual-volume-subtotal');
+      }
     });
+
+    const householdNote = block.household_kwh == null
+      ? tr('dash.annual.household_missing_pv') : tr('dash.annual.household_formula');
+    html += row(tr('dash.annual.household') + ` <span class="at-note">${householdNote}</span>`, qty(block.household_kwh, 'kWh'), '', 'annual-volume-subtotal');
+    html += row(tr('dash.annual.other_cost'), '', money(block.other_cost));
+    if (block.rounding_adjustment != null && block.rounding_adjustment !== 0) {
+      html += row(tr('dash.annual.rounding_adjustment'), '', money(block.rounding_adjustment));
+    }
+    html += noteRow(tr('dash.annual.cost_note'));
+    if (block.costs_prorated) {
+      html += noteRow(tr('dash.annual.prorated_note'));
+    }
 
     return html + row(tr('dash.annual.cost_total'), '', money(block.cost), 'annual-subtotal');
   }
@@ -662,7 +683,7 @@ function tariffGapHtml(data) {
     // kWh absent = aucune grille gaz sur l'année : le volume reste affiché, et le
     // motif porté par la réponse dit pourquoi la conversion manque.
     const pcs = block.pcs != null ? ` <span class="at-note">${tr('dash.annual.pcs', { value: _qtyFmt.format(Number(block.pcs)) })}</span>` : '';
-    html += row(tr('dash.annual.energy'), qty(block.kwh, 'kWh') + (block.kwh != null ? pcs : ''), '');
+    html += row(tr('dash.annual.energy'), qty(block.kwh, 'kWh') + (block.kwh != null ? pcs : ''), money(block.cost));
 
     if (block.kwh == null && block.reason_key) {
       html += row(`<span class="t-muted">${tr(block.reason_key)}</span>`, '', '');
@@ -676,7 +697,7 @@ function tariffGapHtml(data) {
     if (!block || !block.available) return html + unavailableRow(block);
 
     return html
-      + row(tr('dash.annual.volume'), qty(block.m3, 'm³'), '')
+      + row(tr('dash.annual.volume'), qty(block.m3, 'm³'), money(block.cost))
       + row(tr('dash.annual.cost_total'), '', money(block.cost), 'annual-subtotal');
   }
 

@@ -72,6 +72,23 @@ final class CostBreakdownAggregator
 
         $result += $this->aggregateSolar($breakdowns);
 
+        // La ventilation T1/T2 est déjà calculée avec les volumes de chaque
+        // grille. La reconstruire depuis les lignes fusionnées perdrait ces poids.
+        if (isset($breakdowns[0]['register_costs'])) {
+            $registerCosts = [];
+            $prorated = false;
+            foreach ($breakdowns as $breakdown) {
+                /** @var array<string, float> $amounts */
+                $amounts = $breakdown['register_costs'] ?? [];
+                foreach ($amounts as $key => $amount) {
+                    $registerCosts[$key] = ($registerCosts[$key] ?? 0.0) + $amount;
+                }
+                $prorated = $prorated || ($breakdown['register_costs_prorated'] ?? false) === true;
+            }
+            $result['register_costs'] = $registerCosts;
+            $result['register_costs_prorated'] = $prorated;
+        }
+
         if (array_key_exists('import_kwh', $result)) {
             $result['net_cost_per_kwh'] = TariffCalculatorService::netCostPerKwh($result);
         }

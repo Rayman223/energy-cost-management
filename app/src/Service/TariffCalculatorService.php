@@ -71,6 +71,7 @@ final class TariffCalculatorService
         $solar  = $this->solarInfo($tariff, $kwhT1, $kwhT2, $kwhExportT1, $kwhExportT2, $kwhSolar);
 
         $breakdown = array_merge($result, $solar);
+        $breakdown += $this->electricityRegisterCosts($result, $kwhT1, $kwhT2);
         $breakdown['net_cost_per_kwh'] = self::netCostPerKwh($breakdown);
 
         return $breakdown;
@@ -106,9 +107,54 @@ final class TariffCalculatorService
         $solar  = $this->solarInfo($tariff, $kwhT1, $kwhT2, $kwhExportT1, $kwhExportT2, $kwhSolar);
 
         $breakdown = array_merge(['mode' => 'dynamic'], $result, $solar);
+        $breakdown += $this->electricityRegisterCosts($result, $kwhT1, $kwhT2);
         $breakdown['net_cost_per_kwh'] = self::netCostPerKwh($breakdown);
 
         return $breakdown;
+    }
+
+    /**
+     * Ventile les montants TTC AVANT l'agrégation des grilles : les charges au
+     * kWh commun et l'énergie dynamique suivent les volumes T1/T2 de CETTE
+     * sous-période, pas le rapport des volumes sur toute l'année.
+     * Les abonnements restent séparés des registres.
+     *
+     * @param array<string, mixed> $cost
+     * @return array{register_costs: array<string, float>, register_costs_prorated: bool}
+     */
+    private function electricityRegisterCosts(array $cost, float $kwhT1, float $kwhT2): array
+    {
+        $amounts = ['import_t1' => 0.0, 'import_t2' => 0.0, 'export_t1' => 0.0, 'export_t2' => 0.0, 'other' => 0.0];
+        $totalKwh = $kwhT1 + $kwhT2;
+        $prorated = false;
+        /** @var list<array<string, mixed>> $lines */
+        $lines = $cost['lines'] ?? [];
+        foreach ($lines as $line) {
+            $kind = ComponentKind::fromStringOrDefault((string) $line['kind']);
+            $amount = (float) $line['amount'];
+            if ($kind === ComponentKind::EnergyFlat || $kind === ComponentKind::PerKwh) {
+                if ($totalKwh > 0.0) {
+                    $partT1 = $amount * $kwhT1 / $totalKwh;
+                    $amounts['import_t1'] += $partT1;
+                    $amounts['import_t2'] += $amount - $partT1;
+                } else {
+                    $amounts['other'] += $amount;
+                }
+                $prorated = $prorated || ($line['key'] ?? null) === 'energy_dynamic';
+                continue;
+            }
+
+            $key = match ($kind) {
+                ComponentKind::EnergyT1, ComponentKind::PerKwhT1 => 'import_t1',
+                ComponentKind::EnergyT2, ComponentKind::PerKwhT2 => 'import_t2',
+                ComponentKind::InjectionT1 => 'export_t1',
+                ComponentKind::InjectionT2 => 'export_t2',
+                default => 'other',
+            };
+            $amounts[$key] += $amount;
+        }
+
+        return ['register_costs' => $amounts, 'register_costs_prorated' => $prorated];
     }
 
     /**
