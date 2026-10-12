@@ -195,6 +195,68 @@ final class AnnualConsumptionServiceTest extends TestCase
         self::assertSame(0.0, $registers[1]['kwh']);
     }
 
+    public function testImportSubtotalSumsDisplayedAmountsAndReconcilesWithAnnualCost(): void
+    {
+        $deltas = $this->elecDeltas();
+        $deltas['prelev_jour'] = 1.0;
+        $deltas['prelev_nuit'] = 1.0;
+        $deltas['injec_jour'] = 0.0;
+        $deltas['injec_nuit'] = 0.0;
+        $grid = new TariffGrid(1, 'electricity', 'Élec', new DateTimeImmutable('2024-01-01'), null, [
+            'energy_t1' => new TariffLine('energy_t1', 0.006, ComponentKind::EnergyT1),
+            'energy_t2' => new TariffLine('energy_t2', 0.006, ComponentKind::EnergyT2),
+        ]);
+        $block = $this->service(
+            new FakeLegacyDailyRepository(deltasBetween: $deltas),
+            new FakeGasReadingRepository(),
+            null,
+            ['electricity' => [$grid]],
+        )->build(self::YEAR)['electricity'];
+
+        // Chaque ligne vaut 0,006 € : affichée à 0,01 €, leur sous-total doit
+        // être 0,02 €. Le moteur arrondit le coût annuel de 0,012 € à 0,01 €.
+        self::assertSame(0.01, $block['registers'][0]['cost']);
+        self::assertSame(0.01, $block['registers'][1]['cost']);
+        self::assertSame(0.02, $block['import_cost']);
+        self::assertSame(-0.01, $block['rounding_adjustment']);
+        self::assertSame(0.01, $block['cost']);
+        self::assertEqualsWithDelta(
+            $block['cost'],
+            $block['import_cost'] + $block['export_cost'] + $block['other_cost'] + $block['rounding_adjustment'],
+            0.0001,
+        );
+    }
+
+    public function testExportSubtotalSumsDisplayedCreditsAndReconcilesWithAnnualCost(): void
+    {
+        $deltas = $this->elecDeltas();
+        $deltas['prelev_jour'] = 0.0;
+        $deltas['prelev_nuit'] = 0.0;
+        $deltas['injec_jour'] = 1.0;
+        $deltas['injec_nuit'] = 1.0;
+        $grid = new TariffGrid(1, 'electricity', 'Élec', new DateTimeImmutable('2024-01-01'), null, [
+            'injection_t1' => new TariffLine('injection_t1', 0.006, ComponentKind::InjectionT1),
+            'injection_t2' => new TariffLine('injection_t2', 0.006, ComponentKind::InjectionT2),
+        ]);
+        $block = $this->service(
+            new FakeLegacyDailyRepository(deltasBetween: $deltas),
+            new FakeGasReadingRepository(),
+            null,
+            ['electricity' => [$grid]],
+        )->build(self::YEAR)['electricity'];
+
+        self::assertSame(-0.01, $block['registers'][2]['cost']);
+        self::assertSame(-0.01, $block['registers'][3]['cost']);
+        self::assertSame(-0.02, $block['export_cost']);
+        self::assertSame(0.01, $block['rounding_adjustment']);
+        self::assertSame(-0.01, $block['cost']);
+        self::assertEqualsWithDelta(
+            $block['cost'],
+            $block['import_cost'] + $block['export_cost'] + $block['other_cost'] + $block['rounding_adjustment'],
+            0.0001,
+        );
+    }
+
     public function testGasEnergyIsConvertedGridByGridAndSummed(): void
     {
         // Deux grilles sur l'année, de PCS différents : le kWh annuel ne peut pas

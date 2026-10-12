@@ -663,6 +663,9 @@ function tariffGapHtml(data) {
       ? tr('dash.annual.household_missing_pv') : tr('dash.annual.household_formula');
     html += row(tr('dash.annual.household') + ` <span class="at-note">${householdNote}</span>`, qty(block.household_kwh, 'kWh'), '', 'annual-volume-subtotal');
     html += row(tr('dash.annual.other_cost'), '', money(block.other_cost));
+    if (block.rounding_adjustment != null && block.rounding_adjustment !== 0) {
+      html += row(tr('dash.annual.rounding_adjustment'), '', money(block.rounding_adjustment));
+    }
     html += noteRow(tr('dash.annual.cost_note'));
     if (block.costs_prorated) {
       html += noteRow(tr('dash.annual.prorated_note'));

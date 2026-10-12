@@ -364,6 +364,7 @@ return [
     'dash.annual.household_formula' => '(import + PV − export)',
     'dash.annual.household_missing_pv' => '(PV production not measured)',
     'dash.annual.other_cost' => 'Fixed fees and other charges',
+    'dash.annual.rounding_adjustment' => 'Rounding adjustment',
     'dash.annual.cost_note' => 'Estimated amounts including VAT. Export amounts are credits deducted from the annual cost.',
     'dash.annual.prorated_note' => 'Dynamic energy costs are split between T1 and T2 in proportion to the kWh in each tariff period.',
     'dash.annual.volume'      => 'Volume',

@@ -363,6 +363,7 @@ return [
     'dash.annual.household_formula' => '(Bezug + PV − Einspeisung)',
     'dash.annual.household_missing_pv' => '(PV-Erzeugung nicht gemessen)',
     'dash.annual.other_cost' => 'Fixkosten und sonstige Gebühren',
+    'dash.annual.rounding_adjustment' => 'Rundungsdifferenz',
     'dash.annual.cost_note' => 'Geschätzte Beträge inklusive MwSt. Einspeisebeträge sind Gutschriften, die von den Jahreskosten abgezogen werden.',
     'dash.annual.prorated_note' => 'Dynamische Energiekosten werden im Verhältnis der kWh jeder Tarifperiode auf T1 und T2 verteilt.',
     'dash.annual.volume'      => 'Volumen',

@@ -373,6 +373,7 @@ return [
     'dash.annual.household_formula' => '(import + PV − export)',
     'dash.annual.household_missing_pv' => '(production PV non mesurée)',
     'dash.annual.other_cost' => 'Frais fixes et autres charges',
+    'dash.annual.rounding_adjustment' => 'Écart d’arrondi',
     'dash.annual.cost_note' => 'Montants estimés TTC. Les montants d’export sont des crédits déduits du coût annuel.',
     'dash.annual.prorated_note' => 'La part énergie dynamique est répartie entre T1 et T2 au prorata des kWh de chaque période tarifaire.',
     'dash.annual.volume'      => 'Volume',

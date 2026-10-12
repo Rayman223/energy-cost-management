@@ -363,6 +363,7 @@ return [
     'dash.annual.household_formula' => '(afname + PV − injectie)',
     'dash.annual.household_missing_pv' => '(PV-productie niet gemeten)',
     'dash.annual.other_cost' => 'Vaste kosten en overige lasten',
+    'dash.annual.rounding_adjustment' => 'Afrondingsverschil',
     'dash.annual.cost_note' => 'Geschatte bedragen inclusief btw. Injectiebedragen zijn vergoedingen die van de jaarkosten worden afgetrokken.',
     'dash.annual.prorated_note' => 'Dynamische energiekosten worden over T1 en T2 verdeeld naar verhouding van de kWh in elke tariefperiode.',
     'dash.annual.volume'      => 'Volume',
