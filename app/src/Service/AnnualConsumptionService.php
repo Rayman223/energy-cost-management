@@ -29,7 +29,7 @@ use DateTimeImmutable;
  * qui n'ont pas été relevés : {@see build()} l'annonce par `partial`, et chaque
  * bloc par `complete`.
  *
- * @phpstan-type AnnualRegister array{key: string, kwh: float}
+ * @phpstan-type AnnualRegister array{key: string, kwh: float, cost: float|null}
  * @phpstan-type AnnualBlock array{
  *     available: bool,
  *     complete: bool,
@@ -108,7 +108,7 @@ final class AnnualConsumptionService
     }
 
     /**
-     * Électricité : un total par registre, plus le coût annuel.
+     * Électricité : volumes et montants par registre, sous-totaux et coût annuel.
      *
      * @return array<string, mixed>
      */
@@ -121,11 +121,16 @@ final class AnnualConsumptionService
 
         /** @var array<string, mixed> $deltas */
         $deltas    = is_array($estimate['deltas'] ?? null) ? $estimate['deltas'] : [];
+        /** @var array<string, mixed> $cost */
+        $cost = is_array($estimate['cost'] ?? null) ? $estimate['cost'] : [];
+        /** @var array<string, float> $amounts */
+        $amounts = is_array($cost['register_costs'] ?? null) ? $cost['register_costs'] : [];
         $registers = [];
         foreach (self::ELECTRICITY_REGISTERS as $register) {
             $registers[] = [
                 'key' => $register['key'],
                 'kwh' => (float) ($deltas[$register['delta_key']] ?? 0.0),
+                'cost' => isset($amounts[$register['key']]) ? round($amounts[$register['key']], 2) : null,
             ];
         }
 
@@ -133,11 +138,27 @@ final class AnnualConsumptionService
         // registre de production n'est déclaré ou qu'il n'a rien produit.
         $solar = $deltas['solar'] ?? null;
         if (is_numeric($solar) && (float) $solar > 0.0) {
-            $registers[] = ['key' => 'production', 'kwh' => (float) $solar];
+            $registers[] = ['key' => 'production', 'kwh' => (float) $solar, 'cost' => null];
         }
+
+        $import = (float) ($deltas['prelev_jour'] ?? 0.0) + (float) ($deltas['prelev_nuit'] ?? 0.0);
+        $export = (float) ($deltas['injec_jour'] ?? 0.0) + (float) ($deltas['injec_nuit'] ?? 0.0);
 
         return self::available($estimate) + [
             'registers' => $registers,
+            'import_kwh' => $import,
+            'export_kwh' => $export,
+            // Une injection sans mesure PV ne permet pas de connaître la
+            // consommation du domicile. Sans injection, l'import suffit.
+            'household_kwh' => is_numeric($solar) || $export === 0.0
+                ? $import + (float) ($solar ?? 0.0) - $export
+                : null,
+            'import_cost' => isset($amounts['import_t1'], $amounts['import_t2'])
+                ? round($amounts['import_t1'] + $amounts['import_t2'], 2) : null,
+            'export_cost' => isset($amounts['export_t1'], $amounts['export_t2'])
+                ? round($amounts['export_t1'] + $amounts['export_t2'], 2) : null,
+            'other_cost' => isset($amounts['other']) ? round($amounts['other'], 2) : null,
+            'costs_prorated' => ($cost['register_costs_prorated'] ?? false) === true,
             // Fenêtre réellement couverte par les relevés, distincte des bornes
             // demandées : c'est elle qui dit si l'année est complète.
             'data_from' => self::stringOrNull($deltas['data_from'] ?? null),
