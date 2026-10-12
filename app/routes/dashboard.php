@@ -177,7 +177,7 @@ try {
     $batteryFleet = (new BatteryRepository($pdo, $userId))->listAll();
     $batteryMonth = null;
     if ($batteryFleet !== []) {
-        $batteryMonth = (new BatterySavingsService($tariffRepo, $elecRepo))->fleetMonth(
+        $batteryMonth = (new BatterySavingsService($tariffRepo, $elecRepo, costService: $costSvc))->fleetMonth(
             array_map(
                 static fn (Battery $battery): array => [
                     'battery'  => $battery,
@@ -185,6 +185,7 @@ try {
                 ],
                 $batteryFleet,
             ),
+            $now,
             $now,
         );
     }

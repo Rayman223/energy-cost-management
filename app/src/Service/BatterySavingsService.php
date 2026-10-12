@@ -6,6 +6,7 @@ namespace App\Service;
 
 use App\Domain\Battery;
 use App\Domain\BatteryDischargeProfile;
+use App\Domain\MonthlyIndexedPrice;
 use App\Domain\TariffGrid;
 use App\Repository\Contract\BatteryReadingsInterface;
 use App\Repository\Contract\LegacyDailyRepositoryInterface;
@@ -41,6 +42,9 @@ use DateTimeImmutable;
  * d'index journaliers. Elles sont donc DÉCLARÉES sur la batterie
  * ({@see Battery::$pvChargeShare}, {@see Battery::$dischargeProfile}) et le
  * résultat les rappelle, pour qu'un chiffre supposé ne se lise pas comme une mesure.
+ * En mode indexé mensuel, l'énergie est remplacée par la moyenne de marché du mois,
+ * transformée par la formule et la TVA de la grille. La pondération et le caractère
+ * provisoire du prix accompagnent le résultat ; l'injection reste au taux fixe saisi.
  *
  * ── Ce qui n'est pas couvert ───────────────────────────────────────────────
  * Les contrats indexés au marché (`dynamic_hourly` / `dynamic_quarter`) : valoriser
@@ -62,6 +66,9 @@ use DateTimeImmutable;
  *     partial: bool,
  *     unsupported_mode: bool,
  *     no_tariff: bool,
+ *     missing_monthly_price: bool,
+ *     monthly_partial: bool,
+ *     monthly_prices: list<array<string, mixed>>,
  *     currency: string|null,
  * }
  * @phpstan-type BatteryBalance array{
@@ -79,6 +86,7 @@ use DateTimeImmutable;
  *     months_valued: int,
  *     has_unsupported_months: bool,
  *     has_untariffed_months: bool,
+ *     has_missing_monthly_prices: bool,
  *     currency: string|null,
  * }
  */
@@ -100,12 +108,16 @@ final class BatterySavingsService
      */
     private const UNKNOWN_MIX_T1_SHARE = 0.5;
 
+    /** @var array<string, array<string, array{price: MonthlyIndexedPrice, energy_rate_ttc: float, coefficient_rejected: bool}>> */
+    private array $monthlyRatesCache = [];
+
     public function __construct(
         private readonly TariffRepositoryInterface $tariffs,
         private readonly LegacyDailyRepositoryInterface $elecRepo,
         private readonly TariffCalculatorService $calculator = new TariffCalculatorService(),
         private readonly TariffPeriodSplitter $splitter = new TariffPeriodSplitter(),
         private readonly MonthlyConsumptionInterpolator $interpolator = new MonthlyConsumptionInterpolator(),
+        private readonly ?CostCalculationService $costService = null,
     ) {
     }
 
@@ -124,6 +136,7 @@ final class BatterySavingsService
     {
         $asOf     = $asOf ?? Dates::nowUtc();
         $balances = [];
+        $this->monthlyRatesCache = [];
 
         foreach ($fleet as $entry) {
             $balances[] = $this->balanceFor($entry['battery'], $entry['readings'], $asOf);
@@ -143,10 +156,13 @@ final class BatterySavingsService
      * disparaissent alors, plutôt que d'afficher des zéros.
      *
      * @param list<array{battery: Battery, readings: BatteryReadingsInterface}> $fleet
+     * @param DateTimeImmutable|null $asOf Borne du prix mensuel provisoire ; maintenant en UTC par défaut.
      * @return BatteryMonth|null
      */
-    public function fleetMonth(array $fleet, DateTimeImmutable $monthStart): ?array
+    public function fleetMonth(array $fleet, DateTimeImmutable $monthStart, ?DateTimeImmutable $asOf = null): ?array
     {
+        $asOf = $asOf ?? Dates::nowUtc();
+        $this->monthlyRatesCache = [];
         $monthStart = $monthStart->setTimezone(Dates::utc())->modify('first day of this month')->setTime(0, 0, 0);
 
         $merged = null;
@@ -160,7 +176,7 @@ final class BatterySavingsService
                 continue;
             }
 
-            $month = $this->valueMonth($entry['battery'], $entry['readings']->indexSeries(), $monthStart);
+            $month = $this->valueMonth($entry['battery'], $entry['readings']->indexSeries(), $monthStart, $asOf);
             if ($month === null) {
                 continue;
             }
@@ -180,7 +196,7 @@ final class BatterySavingsService
         $months = [];
 
         foreach ($this->monthsOf($battery, $asOf) as $monthStart) {
-            $month = $this->valueMonth($battery, $series, $monthStart);
+            $month = $this->valueMonth($battery, $series, $monthStart, $asOf);
             if ($month !== null) {
                 $months[] = $month;
             }
@@ -237,7 +253,7 @@ final class BatterySavingsService
      * @param array{charge: list<array{ts:int,value:float}>, discharge: list<array{ts:int,value:float}>} $series
      * @return BatteryMonth|null
      */
-    private function valueMonth(Battery $battery, array $series, DateTimeImmutable $monthStart): ?array
+    private function valueMonth(Battery $battery, array $series, DateTimeImmutable $monthStart, DateTimeImmutable $asOf): ?array
     {
         $monthEnd = $monthStart->modify('+1 month');
 
@@ -270,11 +286,18 @@ final class BatterySavingsService
             'partial'          => $partial,
             'unsupported_mode' => false,
             'no_tariff'        => false,
+            'missing_monthly_price' => false,
+            'monthly_partial' => false,
+            'monthly_prices'  => [],
             'currency'         => null,
         ];
 
-        $rates = $this->ratesFor($battery, $monthStart, $monthEnd);
-        if ($rates['unsupported_mode'] || $rates['no_tariff']) {
+        $rates = $this->ratesFor($battery, $monthStart, $monthEnd, $asOf);
+        $row['monthly_prices'] = $rates['monthly_prices'];
+        $row['monthly_partial'] = $rates['monthly_partial'];
+        $row['missing_monthly_price'] = $rates['missing_monthly_price'];
+        $row['partial'] = $row['partial'] || $rates['monthly_partial'];
+        if ($rates['unsupported_mode'] || $rates['no_tariff'] || $rates['missing_monthly_price']) {
             $row['unsupported_mode'] = $rates['unsupported_mode'];
             $row['no_tariff']        = $rates['no_tariff'];
 
@@ -308,15 +331,23 @@ final class BatterySavingsService
      * Taux du mois, moyennés sur ses sous-périodes tarifaires.
      *
      * Un contrat peut basculer en cours de mois (#196) : chaque segment est pondéré
-     * par sa part de jours. Un SEUL segment indexé au marché suffit à rendre le mois
-     * non valorisable — on ne panache pas un demi-mois chiffré avec un demi-mois
-     * inconnu, le total serait faux sans être signalé comme tel.
+     * par sa part de jours. Un SEUL segment à prix variable dans la journée, ou un
+     * segment mensuel sans prix, suffit à rendre le mois non valorisable : un total
+     * qui ne chiffrerait qu'une partie du mois serait trompeur.
      *
-     * @return array{avoided: float, injection: float, t1_share: float, currency: string|null, unsupported_mode: bool, no_tariff: bool}
+     * @return array{avoided: float, injection: float, t1_share: float, currency: string|null, unsupported_mode: bool, no_tariff: bool, missing_monthly_price: bool, monthly_partial: bool, monthly_prices: list<array<string, mixed>>}
      */
-    private function ratesFor(Battery $battery, DateTimeImmutable $monthStart, DateTimeImmutable $monthEnd): array
+    private function ratesFor(Battery $battery, DateTimeImmutable $monthStart, DateTimeImmutable $monthEnd, DateTimeImmutable $asOf): array
     {
-        $empty = ['avoided' => 0.0, 'injection' => 0.0, 't1_share' => 0.0, 'currency' => null];
+        $empty = [
+            'avoided' => 0.0,
+            'injection' => 0.0,
+            't1_share' => 0.0,
+            'currency' => null,
+            'missing_monthly_price' => false,
+            'monthly_partial' => false,
+            'monthly_prices' => [],
+        ];
         $days  = (int) $monthStart->format('t');
 
         $grids = $this->tariffs->findActiveGridsBetween(
@@ -331,7 +362,7 @@ final class BatterySavingsService
         }
 
         foreach ($segments as $segment) {
-            if ($segment->grid->isDynamic()) {
+            if ($segment->grid->isTimeVarying()) {
                 return $empty + ['unsupported_mode' => true, 'no_tariff' => false];
             }
         }
@@ -339,6 +370,8 @@ final class BatterySavingsService
         $t1Share   = $this->t1ShareFor($battery, $monthStart, $monthEnd);
         $avoided   = 0.0;
         $injection = 0.0;
+        $monthlyPrices = [];
+        $monthlyPartial = false;
         /** @var list<string> $currencies */
         $currencies = [];
 
@@ -346,7 +379,31 @@ final class BatterySavingsService
             $tariff   = $segment->grid->toCalculationTariff();
             $fraction = $segment->fraction($days);
 
-            $avoided   += $this->calculator->avoidedImportRate($tariff, $t1Share) * $fraction;
+            $energyRate = null;
+            if ($segment->grid->isMonthlyIndexed()) {
+                $priceEnd = min($monthEnd, $asOf->setTimezone(Dates::utc()));
+                // Le repository peut réhydrater la même grille pour chaque batterie.
+                $cacheKey = $segment->grid->id . ':' . $monthStart->getTimestamp() . ':' . $priceEnd->getTimestamp();
+                if (!array_key_exists($cacheKey, $this->monthlyRatesCache)) {
+                    $this->monthlyRatesCache[$cacheKey] = $this->costService?->monthlyIndexedRates(
+                        $segment->grid, $monthStart, $priceEnd,
+                    ) ?? [];
+                }
+                $resolved = $this->monthlyRatesCache[$cacheKey][$monthStart->format('Y-m')] ?? null;
+                if ($resolved === null) {
+                    $empty['missing_monthly_price'] = true;
+                    return $empty + ['unsupported_mode' => false, 'no_tariff' => false];
+                }
+                $energyRate = $resolved['energy_rate_ttc'];
+                $monthlyPartial = $monthlyPartial || $resolved['price']->partial;
+                $monthlyPrices[] = $resolved['price']->toArray() + [
+                    'grid_id' => $segment->grid->id,
+                    'energy_rate_ttc' => $energyRate,
+                    'coefficient_rejected' => $resolved['coefficient_rejected'],
+                ];
+            }
+
+            $avoided   += $this->calculator->avoidedImportRate($tariff, $t1Share, $energyRate) * $fraction;
             $injection += $this->calculator->injectionRate($tariff) * $fraction;
             $currencies[] = $segment->grid->currency;
         }
@@ -362,6 +419,9 @@ final class BatterySavingsService
             'currency'  => count($unique) === 1 ? $unique[0] : null,
             'unsupported_mode' => false,
             'no_tariff'        => false,
+            'missing_monthly_price' => false,
+            'monthly_partial' => $monthlyPartial,
+            'monthly_prices' => $monthlyPrices,
         ];
     }
 
@@ -467,6 +527,7 @@ final class BatterySavingsService
         $valued      = 0;
         $unsupported = false;
         $untariffed  = false;
+        $missingMonthly = false;
         /** @var list<string> $currencies */
         $currencies = [];
 
@@ -478,6 +539,7 @@ final class BatterySavingsService
 
             $unsupported = $unsupported || $month['unsupported_mode'];
             $untariffed  = $untariffed || $month['no_tariff'];
+            $missingMonthly = $missingMonthly || $month['missing_monthly_price'];
 
             if ($month['gross_savings'] === null) {
                 continue;
@@ -509,6 +571,7 @@ final class BatterySavingsService
             'months_valued'     => $valued,
             'has_unsupported_months' => $unsupported,
             'has_untariffed_months'  => $untariffed,
+            'has_missing_monthly_prices' => $missingMonthly,
             'currency'          => count($unique) === 1 ? $unique[0] : null,
         ];
     }
@@ -584,6 +647,9 @@ final class BatterySavingsService
             'partial'          => $a['partial'] || $b['partial'],
             'unsupported_mode' => $a['unsupported_mode'] || $b['unsupported_mode'],
             'no_tariff'        => $a['no_tariff'] || $b['no_tariff'],
+            'missing_monthly_price' => $a['missing_monthly_price'] || $b['missing_monthly_price'],
+            'monthly_partial' => $a['monthly_partial'] || $b['monthly_partial'],
+            'monthly_prices' => array_values(array_unique(array_merge($a['monthly_prices'], $b['monthly_prices']), SORT_REGULAR)),
             'currency'         => $a['currency'] === $b['currency'] ? $a['currency'] : null,
         ];
     }

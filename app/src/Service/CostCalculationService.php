@@ -1920,56 +1920,11 @@ final class CostCalculationService
             return ['reason' => 'Pas de relevés horaires sur la période.'];
         }
 
-        // Candidats ordonnés par préférence : le quart natif décrit le mois plus finement
-        // que l'heure, et la moyenne horaire reconstruite ne vient qu'en dernier.
-        $candidates = [];
-        foreach ([
-            ['source' => 'native_quarter', 'resolution_min' => 15, 'prices' => $repo->getQuarterPrices($from, $to1)],
-            ['source' => 'native_hourly',  'resolution_min' => 60, 'prices' => $repo->getHourlyPrices($from, $to1)],
-            ['source' => 'avg_hourly',     'resolution_min' => 60, 'prices' => $repo->getAveragePriceByHour($from, $to1)],
-        ] as $candidate) {
-            if ($candidate['prices'] !== []) {
-                $candidates[] = $candidate;
-            }
+        $resolved = $this->monthlyIndexedPrices($from, $to, $to1, $indexedGrid);
+        if ($resolved['reason'] !== null) {
+            return ['reason' => $resolved['reason']];
         }
-
-        if ($candidates === []) {
-            return ['reason' => 'Aucun prix dynamique pour cette période (lancez cron_dynamic_prices).'];
-        }
-
-        $load = array_map(
-            static fn (array $r): array => [
-                'slot'       => $r['quarter'],
-                'import_kwh' => $r['import_kwh'],
-                'native'     => $r['native'],
-            ],
-            $this->legacyRepo->getQuarterImportDeltas($from, $to),
-        );
-
-        // Profil de pondération du contrat (#93), deuxième niveau de la cascade. Absent
-        // du contrat ou absent de la base, la cascade se rabat d'elle-même sur la courbe
-        // réelle puis le baseload : il n'y a jamais de poids inventés.
-        $profileCode    = $indexedGrid?->loadProfileCode;
-        $profileWeights = [];
-        if ($profileCode !== null && $this->loadProfileRepo !== null) {
-            // `$indexedGrid` est non nul ici : c'est lui qui a fourni $profileCode.
-            $country = $indexedGrid->country ?? LoadProfileRepository::DEFAULT_COUNTRY;
-            // Le pas de 15 min d'abord : il s'agrège vers l'heure si la série de
-            // cotations retenue est horaire, alors que l'inverse est impossible.
-            $profileWeights = $this->loadProfileRepo->weightsBetween($profileCode, $country, $from, $to1, 15);
-            if ($profileWeights === []) {
-                $profileWeights = $this->loadProfileRepo->weightsBetween($profileCode, $country, $from, $to1, 60);
-            }
-        }
-
-        // Fenêtre de FACTURATION ($to, pas $to1) : l'heure ajoutée ne sert qu'à aller
-        // chercher la cotation du dernier créneau. La passer ici ferait naître un mois
-        // suivant d'une heure, trivialement « couvert » par une seule cotation, qui
-        // remonterait ensuite comme mois partiel au baseload.
-        $monthly = $this->monthlyCalculator->perMonth($from, $to, $candidates, $load, $profileWeights, $profileCode);
-        if ($monthly === []) {
-            return ['reason' => 'Cotations trop lacunaires pour calculer une moyenne mensuelle.'];
-        }
+        $monthly = $resolved['monthly'];
 
         // Carte plate : chaque créneau facturé reçoit le prix de SON mois. Un créneau
         // d'un mois non résolu reste sans clé et retombe donc sur le tarif fournisseur,
@@ -2004,6 +1959,95 @@ final class CostCalculationService
             ),
             'fallback'     => null,
             'monthly'      => array_values($monthly),
+        ];
+    }
+
+    /**
+     * Prix et taux énergie mensuels, indépendants des créneaux de facturation.
+     * Une courbe réseau absente laisse la cascade profil standard → baseload agir.
+     * Les bornes UTC sont inclusives au début et exclusives à la fin.
+     *
+     * @return array<string, array{price: MonthlyIndexedPrice, energy_rate_ttc: float, coefficient_rejected: bool}>
+     */
+    public function monthlyIndexedRates(TariffGrid $grid, DateTimeImmutable $from, DateTimeImmutable $to): array
+    {
+        if (!$grid->isMonthlyIndexed() || !$this->dynamicEnabled || $to <= $from) {
+            return [];
+        }
+
+        $formula = $this->formulaResolver->resolve($grid, $this->supplierMarkupPerKwh);
+        $rates = [];
+        $resolved = $this->monthlyIndexedPrices($from, $to, $to, $grid);
+        foreach ($resolved['monthly'] as $month => $price) {
+            $rates[$month] = [
+                'price' => $price,
+                'energy_rate_ttc' => $formula->rateTtc($price->priceHtva, $grid->vatRate),
+                'coefficient_rejected' => $formula->coefficientRejected,
+            ];
+        }
+
+        return $rates;
+    }
+
+    /** @return array{monthly: array<string, MonthlyIndexedPrice>, reason: ?string} */
+    private function monthlyIndexedPrices(DateTimeImmutable $from, DateTimeImmutable $to, DateTimeImmutable $to1, ?TariffGrid $indexedGrid): array
+    {
+        $repo = $this->dynamicPriceRepo;
+        if ($repo === null) {
+            return ['monthly' => [], 'reason' => 'Tarif indexé sans source de prix de marché.'];
+        }
+
+        // Candidats ordonnés par préférence : le quart natif décrit le mois plus finement
+        // que l'heure, et la moyenne horaire reconstruite ne vient qu'en dernier.
+        $candidates = [];
+        foreach ([
+            ['source' => 'native_quarter', 'resolution_min' => 15, 'prices' => $repo->getQuarterPrices($from, $to1)],
+            ['source' => 'native_hourly',  'resolution_min' => 60, 'prices' => $repo->getHourlyPrices($from, $to1)],
+            ['source' => 'avg_hourly',     'resolution_min' => 60, 'prices' => $repo->getAveragePriceByHour($from, $to1)],
+        ] as $candidate) {
+            if ($candidate['prices'] !== []) {
+                $candidates[] = $candidate;
+            }
+        }
+
+        if ($candidates === []) {
+            return ['monthly' => [], 'reason' => 'Aucun prix dynamique pour cette période (lancez cron_dynamic_prices).'];
+        }
+
+        $load = array_map(
+            static fn (array $r): array => [
+                'slot'       => $r['quarter'],
+                'import_kwh' => $r['import_kwh'],
+                'native'     => $r['native'],
+            ],
+            $this->legacyRepo->getQuarterImportDeltas($from, $to),
+        );
+
+        // Profil de pondération du contrat (#93), deuxième niveau de la cascade. Absent
+        // du contrat ou absent de la base, la cascade se rabat d'elle-même sur la courbe
+        // réelle puis le baseload : il n'y a jamais de poids inventés.
+        $profileCode    = $indexedGrid?->loadProfileCode;
+        $profileWeights = [];
+        if ($profileCode !== null && $this->loadProfileRepo !== null) {
+            // `$indexedGrid` est non nul ici : c'est lui qui a fourni $profileCode.
+            $country = $indexedGrid->country ?? LoadProfileRepository::DEFAULT_COUNTRY;
+            // Le pas de 15 min d'abord : il s'agrège vers l'heure si la série de
+            // cotations retenue est horaire, alors que l'inverse est impossible.
+            $profileWeights = $this->loadProfileRepo->weightsBetween($profileCode, $country, $from, $to1, 15);
+            if ($profileWeights === []) {
+                $profileWeights = $this->loadProfileRepo->weightsBetween($profileCode, $country, $from, $to1, 60);
+            }
+        }
+
+        // Fenêtre de FACTURATION ($to, pas $to1) : l'heure ajoutée ne sert qu'à aller
+        // chercher la cotation du dernier créneau. La passer ici ferait naître un mois
+        // suivant d'une heure, trivialement « couvert » par une seule cotation, qui
+        // remonterait ensuite comme mois partiel au baseload.
+        $monthly = $this->monthlyCalculator->perMonth($from, $to, $candidates, $load, $profileWeights, $profileCode);
+
+        return [
+            'monthly' => $monthly,
+            'reason' => $monthly === [] ? 'Cotations trop lacunaires pour calculer une moyenne mensuelle.' : null,
         ];
     }
 

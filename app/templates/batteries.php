@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 use App\Domain\Battery;
 use App\Domain\BatteryDischargeProfile;
 
@@ -109,8 +111,12 @@ $currency     = $fleetBalance['currency'] ?? $currency;
     <span class="bat-summary-label"><?= $this->te('battery.net_savings') ?></span>
     <span class="bat-summary-value"><?= $this->e($this->money($fleetBalance['net_savings'], $currency)) ?></span>
   </div>
-  <p class="bat-summary-note"><?= $this->te('battery.balance_method') ?></p>
+  <p class="bat-summary-note"><?= $this->te('battery.balance_method') ?> <?= $this->te('battery.injection_fixed') ?></p>
 </div>
+
+<?php if ($fleetBalance['has_missing_monthly_prices'] ?? false): ?>
+<p class="bat-gap"><?= $this->te('battery.month_no_price') ?></p>
+<?php endif; ?>
 
 <?php
 // ── Amortissement ─────────────────────────────────────────────────────────
@@ -248,6 +254,15 @@ $currency     = $fleetBalance['currency'] ?? $currency;
           <?php if ($month['partial']): ?>
           <span class="bat-note"><?= $this->te('battery.partial_month') ?></span>
           <?php endif; ?>
+          <?php if ($month['monthly_partial'] ?? false): ?>
+          <span class="bat-note"><?= $this->te('battery.price_provisional') ?></span>
+          <?php endif; ?>
+          <?php foreach ($month['monthly_prices'] ?? [] as $price): ?>
+          <span class="bat-note"><?= $this->te('battery.weighting_' . (string) $price['weighting']) ?></span>
+          <?php if ($price['coefficient_rejected'] ?? false): ?>
+          <span class="bat-note"><?= $this->te('battery.formula_rejected') ?></span>
+          <?php endif; ?>
+          <?php endforeach; ?>
         </td>
         <td class="num"><?= $month['charge_kwh'] !== null ? $this->e($this->num($month['charge_kwh'], 0)) . ' kWh' : '—' ?></td>
         <td class="num"><?= $month['discharge_kwh'] !== null ? $this->e($this->num($month['discharge_kwh'], 0)) . ' kWh' : '—' ?></td>
@@ -256,7 +271,7 @@ $currency     = $fleetBalance['currency'] ?? $currency;
         <?php // Motif affiché plutôt qu'un tiret muet : « pas de chiffre » sans
               // raison est indiagnosticable depuis l'écran. ?>
         <td colspan="2" class="bat-gap">
-          <?= $month['unsupported_mode'] ? $this->te('battery.month_dynamic') : $this->te('battery.month_no_tariff') ?>
+          <?= $month['unsupported_mode'] ? $this->te('battery.month_dynamic') : (($month['missing_monthly_price'] ?? false) ? $this->te('battery.month_no_price') : $this->te('battery.month_no_tariff')) ?>
         </td>
         <?php else: ?>
         <td class="num"><?= $this->e($this->money($month['gross_savings'], $month['currency'] ?? $currency)) ?></td>

@@ -8,19 +8,25 @@ use App\I18n\Locale;
 use App\Infrastructure\Database;
 use App\Repository\BatteryReadingRepository;
 use App\Repository\BatteryRepository;
-use App\Repository\Exception\LimitReachedException;
+use App\Repository\DynamicPriceRepository;
 use App\Repository\ElectricityReadingRepository;
+use App\Repository\Exception\LimitReachedException;
+use App\Repository\LoadProfileRepository;
 use App\Repository\TariffRepository;
 use App\Repository\UserRepository;
+use App\Repository\UtilityReadingRepository;
 use App\Security\AuthGuard;
 use App\Security\Csrf;
 use App\Security\UserContext;
 use App\Service\BatteryPaybackService;
 use App\Service\BatterySavingsService;
+use App\Service\CostCalculationService;
+use App\Service\TariffCalculatorService;
 use App\Support\Adsense;
 use App\Support\Dates;
 use App\Support\DiscordLink;
 use App\Support\DonateLink;
+use App\Support\DynamicPricing;
 use App\Support\Limits;
 use App\Support\LocaleContext;
 
@@ -270,10 +276,25 @@ $fleet = $batteryRepo->listAll();
 $balance  = null;
 $paybacks = [];
 if ($fleet !== []) {
-    $savings = new BatterySavingsService(
-        new TariffRepository($pdo, $userId, $isAdmin),
-        new ElectricityReadingRepository($pdo, $userId, $profile->timezone ?? 'UTC'),
+    $timezone = $profile->timezone ?? 'UTC';
+    $zone = $profile?->biddingZone;
+    $zone = ($zone !== null && $zone !== '')
+        ? $zone
+        : (string) ($config['dynamic_prices']['bidding_zone'] ?? DynamicPriceRepository::DEFAULT_ZONE);
+    $tariffs = new TariffRepository($pdo, $userId, $isAdmin);
+    $electricity = new ElectricityReadingRepository($pdo, $userId, $timezone);
+    $costService = new CostCalculationService(
+        legacyRepo: $electricity,
+        tariffRepo: $tariffs,
+        gasRepo: new UtilityReadingRepository($pdo, $userId, 'gas'),
+        calculator: new TariffCalculatorService(),
+        dynamicPriceRepo: new DynamicPriceRepository($pdo, $zone),
+        dynamicEnabled: DynamicPricing::isEnabled($config),
+        supplierMarkupPerKwh: $profile->supplierMarkupPerKwh ?? 0.0,
+        tariffTimezone: $timezone,
+        loadProfileRepo: new LoadProfileRepository($pdo),
     );
+    $savings = new BatterySavingsService($tariffs, $electricity, costService: $costService);
 
     $balance = $savings->balance(array_map(
         static fn (Battery $battery): array => [
