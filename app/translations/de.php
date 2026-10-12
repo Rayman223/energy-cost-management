@@ -1065,6 +1065,12 @@ return [
     'import.meter_target'                          => 'Zielzähler',
     'import.meter_default'                         => 'Standardzähler',
     // Schließung eines Zählers (#55).
+    // Mise en service des compteurs (#81).
+    'meters.opened_field'                         => 'Datum der Inbetriebnahme',
+    'meters.opened_hint'                          => 'Erster Betriebstag, eingeschlossen. So melden Stromberichte keine fehlenden Zählerstände vor der Installation. Bei unbekanntem Datum leer lassen; das Registrierungsdatum ersetzt es nicht.',
+    'meters.opened_on'                            => 'in Betrieb seit {date}',
+    'meters.invalid_opened_on'                    => 'Ungültiges Datum der Inbetriebnahme.',
+    'meters.invalid_service_period'               => 'Das Schließungsdatum muss nach dem Datum der Inbetriebnahme liegen.',
     'meters.closed_field'                          => 'Schließungsdatum',
     'meters.closed_hint'                           => 'Ab diesem Datum nimmt der Zähler keinen Stand mehr an. Seine bisherigen Stände zählen weiterhin in allen Auswertungen: die Ausgabe hat ja stattgefunden. Für einen Zähler in Betrieb leer lassen.',
     'meters.invalid_closed_on'                     => 'Ungültiges Schließungsdatum.',

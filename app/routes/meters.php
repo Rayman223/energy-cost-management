@@ -80,6 +80,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $closedOn = $parsed;
             }
 
+            $openedRaw = trim((string) ($_POST['opened_on'] ?? ''));
+            $openedOn = null;
+            if ($openedRaw !== '') {
+                $parsed = DateTimeImmutable::createFromFormat('!Y-m-d', $openedRaw, Dates::utc());
+                if ($parsed === false || $parsed->format('Y-m-d') !== $openedRaw) {
+                    throw new \InvalidArgumentException($view->t('meters.invalid_opened_on'));
+                }
+                $openedOn = $parsed;
+            }
+            if ($openedOn !== null && $closedOn !== null && $closedOn <= $openedOn) {
+                throw new \InvalidArgumentException($view->t('meters.invalid_service_period'));
+            }
+
             $editId = filter_var($_POST['meter_id'] ?? null, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
             $editId = $editId === false ? null : $editId;
 
@@ -100,6 +113,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     energyType: $existing->energyType,
                     label:      $label,
                     closedOn:   $closedOn,
+                    openedOn:   $openedOn,
                 ));
             } else {
                 $energyType = (string) ($_POST['energy_type'] ?? '');
@@ -107,7 +121,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     throw new \InvalidArgumentException($view->t('meters.invalid_energy'));
                 }
 
-                $meterRepo->insert(new Meter(id: 0, energyType: $energyType, label: $label, closedOn: $closedOn));
+                $meterRepo->insert(new Meter(id: 0, energyType: $energyType, label: $label, closedOn: $closedOn, openedOn: $openedOn));
             }
 
             $success = $view->t('meters.saved');

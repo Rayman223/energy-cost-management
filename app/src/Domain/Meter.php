@@ -36,6 +36,9 @@ use InvalidArgumentException;
  * relevés continuent de compter dans tous les rapports : la dépense a bien eu
  * lieu, la fermeture ne la rétracte pas. Les lectures ne sont donc jamais
  * filtrées sur cette date.
+ * `openedOn` est la mise en service INCLUSE, facultative (#81). NULL signifie
+ * début inconnu : ni la création de la ligne ni le premier relevé ne prouvent
+ * la pose. Cette information sert à la couverture des rapports électriques.
  *
  * Les colonnes `country` et `timezone` de la table ne sont pas reprises : plus
  * aucun code ne les lit depuis le passage au modèle à registres. Les faire
@@ -62,6 +65,7 @@ final class Meter
         public readonly string $energyType,
         public readonly string $label = '',
         public readonly ?DateTimeImmutable $closedOn = null,
+        public readonly ?DateTimeImmutable $openedOn = null,
     ) {
         // Garde-fou de dernier recours : une énergie inconnue ne vient jamais
         // d'une saisie (la route valide avant, avec un message traduit) mais d'un
@@ -146,6 +150,14 @@ final class Meter
         return (new DateTimeImmutable($closedOn . ' 00:00:00', $zone))->setTimezone(Dates::utc());
     }
 
+    /** Mise en service incluse, lue dans le fuseau du foyer ; NULL = début inconnu. */
+    public static function openingInstantFor(?string $openedOn, string $timezone): ?DateTimeImmutable
+    {
+        return $openedOn === null || $openedOn === ''
+            ? null
+            : Dates::startOfDayIn($openedOn, $timezone);
+    }
+
     /**
      * Reconstruit un compteur depuis une ligne de `meters`.
      *
@@ -153,17 +165,19 @@ final class Meter
      * pour que la comparaison avec les bornes de période porte sur le même
      * référentiel (même choix que {@see Battery::fromRow()}).
      *
-     * @param array{id: int|string, energy_type: string, label: string, closed_on: ?string} $row
+     * @param array{id: int|string, energy_type: string, label: string, closed_on: ?string, opened_on?: ?string} $row
      */
     public static function fromRow(array $row): self
     {
         $closedOn = $row['closed_on'];
+        $openedOn = $row['opened_on'] ?? null;
 
         return new self(
             id:         (int) $row['id'],
             energyType: $row['energy_type'],
             label:      $row['label'],
             closedOn:   $closedOn !== null ? new DateTimeImmutable($closedOn . ' 00:00:00', Dates::utc()) : null,
+            openedOn:   $openedOn !== null ? new DateTimeImmutable($openedOn . ' 00:00:00', Dates::utc()) : null,
         );
     }
 }

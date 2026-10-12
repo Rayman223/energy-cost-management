@@ -299,4 +299,30 @@ final class MeterTopology
 
         return $closures;
     }
+
+    /**
+     * Mise en service par registre, pour la couverture des rapports (#81).
+     * Les dates inconnues sont absentes ; aucune date n'est inférée des relevés.
+     *
+     * @return array<int, string> register_id => opened_on ('Y-m-d')
+     */
+    public function registerOpeningsForUser(int $userId): array
+    {
+        $stmt = $this->pdo->prepare(
+            "SELECT reg.id, m.opened_on
+               FROM meter_registers reg
+               JOIN meters m ON m.id = reg.meter_id
+              WHERE m.user_id = :uid AND m.energy_type = 'electricity' AND m.opened_on IS NOT NULL"
+        );
+        $stmt->execute(['uid' => $userId]);
+
+        $openings = [];
+        foreach ($stmt->fetchAll() as $row) {
+            if (is_array($row)) {
+                $openings[(int) $row['id']] = (string) $row['opened_on'];
+            }
+        }
+
+        return $openings;
+    }
 }

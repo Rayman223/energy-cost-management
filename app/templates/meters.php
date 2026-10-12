@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 use App\Domain\Meter;
 
 /**
@@ -119,6 +121,9 @@ $openEnergies = array_values(array_filter(
                 // dans l'URL du bouton « Modifier » : impossible à trouver pour qui
                 // écrit un agent, alors que le guide d'API le réclame. ?>
           <span class="mtr-note"><?= $this->te('meters.api_id', ['id' => $meter->id]) ?></span>
+          <?php if ($meter->openedOn !== null): ?>
+          <span class="mtr-badge"><?= $this->te('meters.opened_on', ['date' => $meter->openedOn->format('Y-m-d')]) ?></span>
+          <?php endif; ?>
           <?php // La DATE se montre dès qu'elle existe, le GRISAGE seulement quand la
                 // fermeture a pris effet : deux questions distinctes, longtemps posées
                 // par la même condition (#69). Une fermeture programmée ne laissait
@@ -198,6 +203,12 @@ $openEnergies = array_values(array_filter(
                placeholder="<?= $this->e($this->t('meters.label_placeholder')) ?>"
                value="<?= $this->e($editing->label ?? '') ?>">
         <p class="dates-hint"><?= $this->te('meters.label_hint') ?></p>
+      </div>
+      <div class="form-row">
+        <label class="form-label" for="mtr-opened"><?= $this->te('meters.opened_field') ?> <span class="unit"><?= $this->te('common.optional') ?></span></label>
+        <input type="date" id="mtr-opened" name="opened_on" class="form-input"
+               value="<?= $this->e($editing?->openedOn?->format('Y-m-d') ?? '') ?>">
+        <p class="dates-hint"><?= $this->te('meters.opened_hint') ?></p>
       </div>
       <div class="form-row">
         <label class="form-label" for="mtr-closed"><?= $this->te('meters.closed_field') ?> <span class="unit"><?= $this->te('common.end_exclusive') ?></span></label>
