@@ -28,8 +28,8 @@ use DateTimeZone;
 final class MonthlyIndexedPriceCalculator
 {
     /**
-     * Part minimale (%) de la consommation devant être réellement MESURÉE au pas de
-     * 15 min pour pondérer par la courbe réelle.
+     * Part minimale (%) de la consommation devant être réellement MESURÉE à une
+     * cadence compatible avec la résolution des cotations retenues (15 ou 60 min).
      *
      * Même valeur que le seuil de résolution de {@see CostCalculationService}, mais
      * sémantique différente : celui-ci décide de la provenance du POIDS, pas de la
@@ -55,10 +55,10 @@ final class MonthlyIndexedPriceCalculator
      *        dont la couverture suffit est retenue pour le mois entier : mélanger deux
      *        résolutions dans une même moyenne la biaiserait, les créneaux n'ayant plus
      *        le même poids temporel.
-     * @param list<array{slot: string, import_kwh: float, native: bool}> $load
-     *        Courbe de charge de l'utilisateur. `native` distingue un relevé réellement
-     *        pris à ce pas d'un étalement au prorata — ce dernier est plat dans la
-     *        journée, donc équivalent au baseload tout en prétendant à la précision.
+     * @param list<array{slot: string, import_kwh: float, measurement_resolution_min: int|null}> $load
+     *        Courbe de charge de l'utilisateur. La résolution de mesure doit être
+     *        au moins aussi fine que celle des prix. null désigne une répartition
+     *        estimée, qui ne doit jamais pondérer la courbe réelle.
      * @param array<string, float> $profileWeights Profil de charge standard, mêmes clés
      *        que les cotations. Vide = indisponible, la cascade saute ce niveau.
      * @param ?string $profileCode Code du profil standard, pour l'affichage.
@@ -182,7 +182,7 @@ final class MonthlyIndexedPriceCalculator
      * des créneaux cotés ; sinon le suivant prend la main.
      *
      * @param array<string, float> $prices
-     * @param list<array{slot: string, import_kwh: float, native: bool}> $load
+     * @param list<array{slot: string, import_kwh: float, measurement_resolution_min: int|null}> $load
      * @param array<string, float> $profileWeights
      * @return array{price: float, weighting: LoadWeighting, coverage_pct: float}
      */
@@ -190,26 +190,24 @@ final class MonthlyIndexedPriceCalculator
     {
         $monthLoad  = array_values(array_filter($load, static fn (array $r): bool => str_starts_with($r['slot'], $month)));
         $totalKwh   = array_sum(array_column($monthLoad, 'import_kwh'));
-        $nativeKwh  = array_sum(array_column(
-            array_filter($monthLoad, static fn (array $r): bool => $r['native'] === true),
-            'import_kwh'
-        ));
-        $nativeShare = $totalKwh > 0.0 ? $nativeKwh / $totalKwh * 100.0 : 0.0;
+        $measured = array_filter($monthLoad, static fn (array $r): bool =>
+            $r['measurement_resolution_min'] !== null && $r['measurement_resolution_min'] <= $resolutionMin
+        );
+        $measuredKwh = array_sum(array_column($measured, 'import_kwh'));
+        $measuredShare = $totalKwh > 0.0 ? $measuredKwh / $totalKwh * 100.0 : 0.0;
 
-        if ($nativeShare >= self::ACTUAL_LOAD_MIN_PCT) {
-            // Seuls les créneaux NATIFS pondèrent : un créneau étalé au prorata porterait
-            // une forme de consommation inventée.
-            $native = array_filter($monthLoad, static fn (array $r): bool => $r['native'] === true);
-
+        if ($measuredShare >= self::ACTUAL_LOAD_MIN_PCT) {
+            // Les quarts issus de mesures horaires peuvent pondérer une série horaire
+            // après agrégation, mais jamais une série au pas de 15 min.
             $price = $this->average($prices, $this->alignWeights(
                 array_combine(
-                    array_column($native, 'slot'),
-                    array_column($native, 'import_kwh'),
+                    array_column($measured, 'slot'),
+                    array_column($measured, 'import_kwh'),
                 ),
                 $resolutionMin,
             ));
             if ($price !== null) {
-                return ['price' => $price, 'weighting' => LoadWeighting::ActualLoad, 'coverage_pct' => $nativeShare];
+                return ['price' => $price, 'weighting' => LoadWeighting::ActualLoad, 'coverage_pct' => $measuredShare];
             }
         }
 

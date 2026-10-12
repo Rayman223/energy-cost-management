@@ -308,10 +308,11 @@ marks the family: a market average, flat over the indexing period.
 The weighting is part of the price, so it is computed in a three-step cascade and
 reported in the response (`load_weighting`) and on the dashboard:
 
-1. `actual_load` — your own 15-minute load curve, when at least 80 % of the
-   consumption is genuinely metered at that resolution. The formula being affine,
-   this gives *exactly* the same total as slot-by-slot billing: an
-   `indexed_monthly` and a `dynamic_quarter` contract then agree to the cent.
+1. `actual_load` — your own load curve, when at least 80 % of the consumption
+   is metered at a cadence no coarser than the selected prices (15 or 60 minutes).
+   Hourly readings qualify for hourly prices, but not for 15-minute prices;
+   daily readings remain estimated. The formula being affine, this gives the
+   same total as slot-by-slot billing at the matching resolution.
 2. `standard_profile` — a standard load profile (Synergrid RLP and equivalents),
    which is what the supplier actually applies. Pick it per grid under `/tariffs`
    once a profile has been imported (see below); without a profile code on the

@@ -77,12 +77,13 @@ interface LegacyDailyRepositoryInterface
      * Consommation IMPORT (T1+T2) ventilée par quart d'heure aligné sur [$from, $to],
      * pour croiser avec un prix dynamique quart-horaire (mode 'dynamic_quarter', #230).
      *
-     * `native` vaut false pour un créneau dont une part du kWh provient d'un
-     * intervalle de relevés plus long que 15 min (conso étalée au prorata du temps,
-     * faute de mesure intra-horaire). L'appelant s'en sert pour décider s'il peut
-     * facturer au quart d'heure ou doit se replier sur le calcul horaire.
+     * `measurement_resolution_min` vaut 15 ou 60 selon la cadence des relevés,
+     * à 90 s de tolérance près, ou null au-delà d'une heure (répartition estimée).
+     * Un créneau mêlant plusieurs cadences prend la résolution la moins fine,
+     * null dominant. L'appelant compare cette résolution à celle des prix pour
+     * décider si la consommation est mesurée au pas nécessaire.
      *
-     * @return array<int, array{quarter: string, import_kwh: float, native: bool}>
+     * @return array<int, array{quarter: string, import_kwh: float, measurement_resolution_min: int|null}>
      */
     public function getQuarterImportDeltas(DateTimeImmutable $from, DateTimeImmutable $to): array;
 }

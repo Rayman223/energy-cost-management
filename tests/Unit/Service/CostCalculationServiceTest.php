@@ -827,10 +827,10 @@ final class CostCalculationServiceTest extends TestCase
             monthlyDeltasForMonth: $this->electricityDeltas(),
             hourlyImportDeltas: [['hour' => '2026-06-10 10:00:00', 'import_kwh' => 10.0]],
             quarterImportDeltas: [
-                ['quarter' => '2026-06-10 10:00:00', 'import_kwh' => 10.0, 'native' => true],
-                ['quarter' => '2026-06-10 10:15:00', 'import_kwh' => 0.0,  'native' => true],
-                ['quarter' => '2026-06-10 10:30:00', 'import_kwh' => 0.0,  'native' => true],
-                ['quarter' => '2026-06-10 10:45:00', 'import_kwh' => 0.0,  'native' => true],
+                ['quarter' => '2026-06-10 10:00:00', 'import_kwh' => 10.0, 'measurement_resolution_min' => 15],
+                ['quarter' => '2026-06-10 10:15:00', 'import_kwh' => 0.0,  'measurement_resolution_min' => 15],
+                ['quarter' => '2026-06-10 10:30:00', 'import_kwh' => 0.0,  'measurement_resolution_min' => 15],
+                ['quarter' => '2026-06-10 10:45:00', 'import_kwh' => 0.0,  'measurement_resolution_min' => 15],
             ],
         );
         $dynamic = new FakeDynamicPriceRepository(
@@ -863,8 +863,8 @@ final class CostCalculationServiceTest extends TestCase
 
     /**
      * Relevés trop grossiers : la consommation intra-horaire serait reconstruite par
-     * étalement (`native` faux), pas mesurée. On préfère alors le prix horaire NATIF
-     * à un quart-horaire de façade, et on dit pourquoi.
+     * étalement (résolution de mesure 60 min), pas mesurée. On préfère alors le prix
+     * horaire NATIF à un quart-horaire de façade, et on dit pourquoi.
      */
     public function testMonthElectricityDynamicFallsBackToHourlyWhenReadingsAreNotQuarterHourly(): void
     {
@@ -872,10 +872,10 @@ final class CostCalculationServiceTest extends TestCase
             monthlyDeltasForMonth: $this->electricityDeltas(),
             hourlyImportDeltas: [['hour' => '2026-06-10 10:00:00', 'import_kwh' => 10.0]],
             quarterImportDeltas: [
-                ['quarter' => '2026-06-10 10:00:00', 'import_kwh' => 2.5, 'native' => false],
-                ['quarter' => '2026-06-10 10:15:00', 'import_kwh' => 2.5, 'native' => false],
-                ['quarter' => '2026-06-10 10:30:00', 'import_kwh' => 2.5, 'native' => false],
-                ['quarter' => '2026-06-10 10:45:00', 'import_kwh' => 2.5, 'native' => false],
+                ['quarter' => '2026-06-10 10:00:00', 'import_kwh' => 2.5, 'measurement_resolution_min' => 60],
+                ['quarter' => '2026-06-10 10:15:00', 'import_kwh' => 2.5, 'measurement_resolution_min' => 60],
+                ['quarter' => '2026-06-10 10:30:00', 'import_kwh' => 2.5, 'measurement_resolution_min' => 60],
+                ['quarter' => '2026-06-10 10:45:00', 'import_kwh' => 2.5, 'measurement_resolution_min' => 60],
             ],
         );
         $dynamic = new FakeDynamicPriceRepository(
@@ -906,7 +906,7 @@ final class CostCalculationServiceTest extends TestCase
             monthlyDeltasForMonth: $this->electricityDeltas(),
             hourlyImportDeltas: [['hour' => '2026-06-10 10:00:00', 'import_kwh' => 10.0]],
             quarterImportDeltas: [
-                ['quarter' => '2026-06-10 10:00:00', 'import_kwh' => 10.0, 'native' => true],
+                ['quarter' => '2026-06-10 10:00:00', 'import_kwh' => 10.0, 'measurement_resolution_min' => 15],
             ],
         );
         $dynamic = new FakeDynamicPriceRepository(hourlyPricesByHour: ['2026-06-10 10:00:00' => 0.20]);
@@ -937,8 +937,8 @@ final class CostCalculationServiceTest extends TestCase
             monthlyDeltasForMonth: $this->electricityDeltas(),
             hourlyImportDeltas: [['hour' => '2026-06-10 10:00:00', 'import_kwh' => 10.0]],
             quarterImportDeltas: [
-                ['quarter' => '2026-06-10 10:00:00', 'import_kwh' => 1.0, 'native' => true],
-                ['quarter' => '2026-06-10 10:15:00', 'import_kwh' => 9.0, 'native' => true],
+                ['quarter' => '2026-06-10 10:00:00', 'import_kwh' => 1.0, 'measurement_resolution_min' => 15],
+                ['quarter' => '2026-06-10 10:15:00', 'import_kwh' => 9.0, 'measurement_resolution_min' => 15],
             ],
         );
         // Un seul créneau tarifé sur les deux, soit 10 % des kWh couverts.
@@ -971,8 +971,8 @@ final class CostCalculationServiceTest extends TestCase
             monthlyDeltasForMonth: $this->electricityDeltas(),
             hourlyImportDeltas: [['hour' => '2026-06-10 10:00:00', 'import_kwh' => 10.0]],
             quarterImportDeltas: [
-                ['quarter' => '2026-06-10 10:00:00', 'import_kwh' => 9.0, 'native' => true],
-                ['quarter' => '2026-06-10 10:15:00', 'import_kwh' => 1.0, 'native' => true],
+                ['quarter' => '2026-06-10 10:00:00', 'import_kwh' => 9.0, 'measurement_resolution_min' => 15],
+                ['quarter' => '2026-06-10 10:15:00', 'import_kwh' => 1.0, 'measurement_resolution_min' => 15],
             ],
         );
         $dynamic = new FakeDynamicPriceRepository(
@@ -1009,8 +1009,8 @@ final class CostCalculationServiceTest extends TestCase
         ];
 
         $slotsFor = static fn (float $nativeKwh, float $estimatedKwh): array => [
-            ['quarter' => '2026-06-10 10:00:00', 'import_kwh' => $nativeKwh,    'native' => true],
-            ['quarter' => '2026-06-10 10:15:00', 'import_kwh' => $estimatedKwh, 'native' => false],
+            ['quarter' => '2026-06-10 10:00:00', 'import_kwh' => $nativeKwh,    'measurement_resolution_min' => 15],
+            ['quarter' => '2026-06-10 10:15:00', 'import_kwh' => $estimatedKwh, 'measurement_resolution_min' => 60],
         ];
 
         // 8,5 / 10 kWh mesurés au quart d'heure → 85 %, au-dessus du seuil.
@@ -1057,7 +1057,7 @@ final class CostCalculationServiceTest extends TestCase
             monthlyDeltasForMonth: $this->electricityDeltas(),
             hourlyImportDeltas: [['hour' => '2026-06-10 10:00:00', 'import_kwh' => 10.0]],
             quarterImportDeltas: [
-                ['quarter' => '2026-06-10 10:00:00', 'import_kwh' => 10.0, 'native' => true],
+                ['quarter' => '2026-06-10 10:00:00', 'import_kwh' => 10.0, 'measurement_resolution_min' => 15],
             ],
         );
         $dynamic = new FakeDynamicPriceRepository(
@@ -2545,10 +2545,10 @@ final class CostCalculationServiceTest extends TestCase
     public function testIndexedMonthlyMatchesQuarterHourlyTotalWhenRealCurveIsKnown(): void
     {
         $quarterDeltas = [
-            ['quarter' => '2026-06-10 10:00:00', 'import_kwh' => 1.0, 'native' => true],
-            ['quarter' => '2026-06-10 10:15:00', 'import_kwh' => 2.0, 'native' => true],
-            ['quarter' => '2026-06-10 10:30:00', 'import_kwh' => 3.0, 'native' => true],
-            ['quarter' => '2026-06-10 10:45:00', 'import_kwh' => 4.0, 'native' => true],
+            ['quarter' => '2026-06-10 10:00:00', 'import_kwh' => 1.0, 'measurement_resolution_min' => 15],
+            ['quarter' => '2026-06-10 10:15:00', 'import_kwh' => 2.0, 'measurement_resolution_min' => 15],
+            ['quarter' => '2026-06-10 10:30:00', 'import_kwh' => 3.0, 'measurement_resolution_min' => 15],
+            ['quarter' => '2026-06-10 10:45:00', 'import_kwh' => 4.0, 'measurement_resolution_min' => 15],
         ];
         $quarterPrices = self::juneQuarterPrices(0.20, [
             '2026-06-10 10:00:00' => 0.10,
@@ -2600,6 +2600,65 @@ final class CostCalculationServiceTest extends TestCase
         self::assertSame('monthly', $monthlyResult['resolution']);
         self::assertSame('monthly', $monthlyResult['resolution_requested']);
         self::assertSame('actual_load', $monthlyResult['load_weighting']);
+    }
+
+    /** Des mesures horaires donnent le même total en indexé mensuel et en dynamique horaire. */
+    public function testIndexedMonthlyUsesHourlyMeasurementsForHourlyPrices(): void
+    {
+        $hourly = [
+            ['hour' => '2026-06-10 10:00:00', 'import_kwh' => 1.0],
+            ['hour' => '2026-06-10 11:00:00', 'import_kwh' => 3.0],
+        ];
+        $quarter = [];
+        foreach ($hourly as $row) {
+            foreach ([0, 15, 30, 45] as $minute) {
+                $quarter[] = [
+                    'quarter' => substr($row['hour'], 0, 14) . sprintf('%02d:00', $minute),
+                    'import_kwh' => $row['import_kwh'] / 4,
+                    'measurement_resolution_min' => 60,
+                ];
+            }
+        }
+        $prices = [];
+        for ($day = 1; $day <= 30; $day++) {
+            for ($hour = 0; $hour < 24; $hour++) {
+                $prices[sprintf('2026-06-%02d %02d:00:00', $day, $hour)] = 0.20;
+            }
+        }
+        $prices['2026-06-10 10:00:00'] = 0.10;
+        $prices['2026-06-10 11:00:00'] = 0.30;
+        $legacy = new FakeLegacyDailyRepository(
+            monthlyDeltasForMonth: [
+                'from' => '2026-06-01 00:00:00',
+                'to' => '2026-07-01 00:00:00',
+                'prelev_jour' => 4.0,
+                'prelev_nuit' => 0.0,
+                'injec_jour' => 0.0,
+                'injec_nuit' => 0.0,
+                'solar' => 0.0,
+            ],
+            hourlyImportDeltas: $hourly,
+            quarterImportDeltas: $quarter,
+        );
+        $results = [];
+        foreach (['indexed_monthly', 'dynamic_hourly'] as $mode) {
+            $results[$mode] = $this->makeDynamicService(
+                $legacy,
+                new FakeTariffRepository(grid: $this->electricityGrid()),
+                new FakeDynamicPriceRepository(hourlyPricesByHour: $prices),
+                pricingMode: $mode,
+            )->estimateMonthElectricityDynamic(2026, 6);
+        }
+
+        $monthly = $results['indexed_monthly'];
+        self::assertTrue($monthly['available']);
+        self::assertSame('actual_load', $monthly['load_weighting']);
+        self::assertSame('native_hourly', $monthly['price_source']);
+        self::assertFalse($monthly['monthly_partial']);
+        self::assertSame(100.0, $monthly['monthly_prices'][0]['weight_coverage_pct']);
+        self::assertEqualsWithDelta(0.25, $monthly['monthly_prices'][0]['price_htva'], 0.0001);
+        self::assertEqualsWithDelta(1.21, $monthly['energy_dynamic'], 0.0001);
+        self::assertEqualsWithDelta($results['dynamic_hourly']['energy_dynamic'], $monthly['energy_dynamic'], 0.0001);
     }
 
     /** Toutes les heures du mois sont facturées au MÊME prix unitaire. */

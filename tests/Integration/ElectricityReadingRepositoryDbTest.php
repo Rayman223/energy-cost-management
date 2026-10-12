@@ -9,6 +9,7 @@ use App\Infrastructure\MeterTopology;
 use App\Repository\ElectricityReadingRepository;
 use App\Repository\UserRepository;
 use App\Support\Dates;
+use PHPUnit\Framework\Attributes\DataProvider;
 
 /**
  * Test d'intégration de l'interpolation à minuit sur le modèle à registres
@@ -739,8 +740,8 @@ final class ElectricityReadingRepositoryDbTest extends DatabaseTestCase
 
     /**
      * Tarif dynamique quart-horaire (#230) : des relevés au pas de 15 min donnent
-     * un créneau par MTU, chacun portant exactement le delta mesuré, et tous marqués
-     * natifs — c'est ce drapeau qui autorise le service à facturer au quart d'heure.
+     * un créneau par MTU, chacun portant exactement le delta mesuré, avec une
+     * résolution de mesure de 15 min permettant de facturer au quart d'heure.
      */
     public function testQuarterImportDeltasKeepEachMeasuredQuarter(): void
     {
@@ -763,15 +764,15 @@ final class ElectricityReadingRepositoryDbTest extends DatabaseTestCase
         );
         // Deltas 1 / 2 / 3 / 4 kWh, doublés par la somme des deux registres import.
         self::assertSame([2.0, 4.0, 6.0, 8.0], array_column($rows, 'import_kwh'));
-        self::assertSame([true, true, true, true], array_column($rows, 'native'));
+        self::assertSame([15, 15, 15, 15], array_column($rows, 'measurement_resolution_min'));
     }
 
     /**
      * Relevés horaires : faute de mesure intra-horaire, le delta est étalé au prorata
-     * du temps sur les quatre quarts, et AUCUN n'est natif — l'imputer entièrement au
-     * quart :00 le ferait facturer au prix d'un seul MTU.
+     * du temps sur les quatre quarts, mesurés à l'heure mais pas au quart d'heure.
+     * L'imputer entièrement au quart :00 le ferait facturer au prix d'un seul MTU.
      */
-    public function testQuarterImportDeltasSpreadHourlyReadingsAndMarkThemEstimated(): void
+    public function testQuarterImportDeltasSpreadHourlyReadingsAndKeepTheirResolution(): void
     {
         $this->seedImportIndexes([
             ['2026-08-01 10:00:00', 100.0],
@@ -785,7 +786,38 @@ final class ElectricityReadingRepositoryDbTest extends DatabaseTestCase
 
         self::assertCount(4, $rows);
         self::assertSame([2.0, 2.0, 2.0, 2.0], array_column($rows, 'import_kwh'));
-        self::assertSame([false, false, false, false], array_column($rows, 'native'));
+        self::assertSame([60, 60, 60, 60], array_column($rows, 'measurement_resolution_min'));
+    }
+
+    public static function measurementIntervals(): iterable
+    {
+        yield 'quarter' => [900, 15];
+        yield 'quarter jitter limit' => [990, 15];
+        yield 'beyond quarter jitter' => [991, 60];
+        yield 'half hour' => [1800, 60];
+        yield 'hour' => [3600, 60];
+        yield 'hour jitter limit' => [3690, 60];
+        yield 'beyond hour jitter' => [3691, null];
+        yield 'day' => [86400, null];
+    }
+
+    #[DataProvider('measurementIntervals')]
+    public function testQuarterImportDeltasExposeTheMinimumCompatibleResolution(int $seconds, ?int $expectedResolution): void
+    {
+        $from = new \DateTimeImmutable('2026-08-01 10:00:00', Dates::utc());
+        $to = $from->modify('+' . $seconds . ' seconds');
+        $this->seedImportIndexes([
+            [$from->format('Y-m-d H:i:s'), 100.0],
+            [$to->format('Y-m-d H:i:s'), 104.0],
+        ]);
+
+        $rows = $this->repo()->getQuarterImportDeltas($from, $to);
+
+        self::assertCount((int) ceil($seconds / 900), $rows);
+        self::assertSame(
+            array_fill(0, count($rows), $expectedResolution),
+            array_column($rows, 'measurement_resolution_min'),
+        );
     }
 
     /**
@@ -810,7 +842,7 @@ final class ElectricityReadingRepositoryDbTest extends DatabaseTestCase
             new \DateTimeImmutable('2026-08-01 11:00:02'),
         );
 
-        self::assertNotContains(false, array_column($rows, 'native'));
+        self::assertSame(array_fill(0, count($rows), 15), array_column($rows, 'measurement_resolution_min'));
         // Chaque MTU garde ses 2 kWh à quelques millièmes près : seule la fraction de
         // seconde qui déborde passe au créneau suivant.
         foreach (['2026-08-01 10:00:00', '2026-08-01 10:15:00', '2026-08-01 10:30:00', '2026-08-01 10:45:00'] as $slot) {
@@ -839,7 +871,7 @@ final class ElectricityReadingRepositoryDbTest extends DatabaseTestCase
         );
 
         self::assertSame(['2026-08-01 10:00:00', '2026-08-01 10:15:00'], array_column($rows, 'quarter'));
-        self::assertSame([true, true], array_column($rows, 'native'));
+        self::assertSame([15, 15], array_column($rows, 'measurement_resolution_min'));
         // 4 kWh répartis 8 min / 7 min entre les deux MTU couverts.
         self::assertEqualsWithDelta(4.0 * 8 / 15, $rows[0]['import_kwh'], 0.001);
         self::assertEqualsWithDelta(4.0 * 7 / 15, $rows[1]['import_kwh'], 0.001);

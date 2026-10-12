@@ -8,6 +8,7 @@ use App\Domain\LoadWeighting;
 use App\Service\MonthlyIndexedPriceCalculator;
 use DateTimeImmutable;
 use DateTimeZone;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
 /**
@@ -63,7 +64,16 @@ final class MonthlyIndexedPriceCalculatorTest extends TestCase
      * La moyenne arithmétique vaudrait 0,20 € : l'écart est précisément ce que la
      * pondération capture, et ce que le baseload rate.
      */
-    public function testWeightsByActualLoadCurveWhenNativeCoverageIsSufficient(): void
+    public static function hourlyMeasurementSeries(): iterable
+    {
+        yield 'quarter readings, native hourly prices' => [15, 'native_hourly'];
+        yield 'hourly readings, native hourly prices' => [60, 'native_hourly'];
+        yield 'quarter readings, averaged hourly prices' => [15, 'avg_hourly'];
+        yield 'hourly readings, averaged hourly prices' => [60, 'avg_hourly'];
+    }
+
+    #[DataProvider('hourlyMeasurementSeries')]
+    public function testWeightsByActualLoadCurveWhenMeasuredCoverageIsSufficient(int $measurementResolution, string $source): void
     {
         $prices = $this->fullMonthHourly('2026-06', 30, 0.20, [
             '2026-06-10 10:00:00' => 0.10,
@@ -73,10 +83,10 @@ final class MonthlyIndexedPriceCalculatorTest extends TestCase
         $result = (new MonthlyIndexedPriceCalculator())->perMonth(
             $this->at('2026-06-01 00:00:00'),
             $this->at('2026-07-01 00:00:00'),
-            $this->hourlyCandidate($prices),
+            $this->hourlyCandidate($prices, $source),
             [
-                ['slot' => '2026-06-10 10:00:00', 'import_kwh' => 1.0, 'native' => true],
-                ['slot' => '2026-06-10 11:00:00', 'import_kwh' => 3.0, 'native' => true],
+                ['slot' => '2026-06-10 10:00:00', 'import_kwh' => 1.0, 'measurement_resolution_min' => $measurementResolution],
+                ['slot' => '2026-06-10 11:00:00', 'import_kwh' => 3.0, 'measurement_resolution_min' => $measurementResolution],
             ],
         );
 
@@ -86,6 +96,8 @@ final class MonthlyIndexedPriceCalculatorTest extends TestCase
         self::assertEqualsWithDelta(0.25, $june->priceHtva, self::DELTA);
         self::assertFalse($june->partial);
         self::assertTrue($june->isMeasured());
+        self::assertSame($source, $june->priceSource);
+        self::assertSame(100.0, $june->weightCoveragePct);
     }
 
     /**
@@ -93,7 +105,7 @@ final class MonthlyIndexedPriceCalculatorTest extends TestCase
      * plate dans la journée, donc elle ne porte aucune information de forme. La retenir
      * donnerait un baseload déguisé en mesure.
      */
-    public function testFallsBackWhenReadingsAreNotNative(): void
+    public function testFallsBackWhenReadingsAreEstimated(): void
     {
         $prices = $this->fullMonthHourly('2026-06', 30, 0.20, [
             '2026-06-10 10:00:00' => 0.10,
@@ -105,13 +117,106 @@ final class MonthlyIndexedPriceCalculatorTest extends TestCase
             $this->at('2026-07-01 00:00:00'),
             $this->hourlyCandidate($prices),
             [
-                ['slot' => '2026-06-10 10:00:00', 'import_kwh' => 1.0, 'native' => false],
-                ['slot' => '2026-06-10 11:00:00', 'import_kwh' => 3.0, 'native' => false],
+                ['slot' => '2026-06-10 10:00:00', 'import_kwh' => 1.0, 'measurement_resolution_min' => null],
+                ['slot' => '2026-06-10 11:00:00', 'import_kwh' => 3.0, 'measurement_resolution_min' => null],
             ],
         );
 
         self::assertSame(LoadWeighting::Baseload, $result['2026-06']->weighting);
         self::assertFalse($result['2026-06']->isMeasured());
+    }
+
+    public static function hourlyReadingsWithQuarterPrices(): iterable
+    {
+        yield 'quarter prices only, no profile' => [false, false];
+        yield 'quarter prices only, standard profile' => [false, true];
+        yield 'both price resolutions, no profile' => [true, false];
+        yield 'both price resolutions, standard profile' => [true, true];
+    }
+
+    #[DataProvider('hourlyReadingsWithQuarterPrices')]
+    public function testHourlyReadingsCannotWeightTheChosenQuarterSeries(bool $withHourlyPrices, bool $withProfile): void
+    {
+        $hourly = $this->fullMonthHourly('2026-06', 30, 0.20, [
+            '2026-06-10 10:00:00' => 0.10,
+            '2026-06-10 11:00:00' => 0.30,
+        ]);
+        $quarter = [];
+        foreach ($hourly as $slot => $price) {
+            foreach ([0, 15, 30, 45] as $minute) {
+                $quarter[substr($slot, 0, 14) . sprintf('%02d:00', $minute)] = $price;
+            }
+        }
+        $candidates = [['source' => 'native_quarter', 'resolution_min' => 15, 'prices' => $quarter]];
+        if ($withHourlyPrices) {
+            $candidates[] = $this->hourlyCandidate($hourly)[0];
+        }
+
+        $result = (new MonthlyIndexedPriceCalculator())->perMonth(
+            $this->at('2026-06-01 00:00:00'),
+            $this->at('2026-07-01 00:00:00'),
+            $candidates,
+            [
+                ['slot' => '2026-06-10 10:00:00', 'import_kwh' => 1.0, 'measurement_resolution_min' => 60],
+                ['slot' => '2026-06-10 11:00:00', 'import_kwh' => 3.0, 'measurement_resolution_min' => 60],
+            ],
+            $withProfile ? ['2026-06-10 10:00:00' => 1.0, '2026-06-10 11:00:00' => 3.0] : [],
+            $withProfile ? 'RLP0N' : null,
+        );
+
+        $june = $result['2026-06'];
+        self::assertSame('native_quarter', $june->priceSource);
+        self::assertSame($withProfile ? LoadWeighting::StandardProfile : LoadWeighting::Baseload, $june->weighting);
+        self::assertEqualsWithDelta($withProfile ? 0.25 : 0.20, $june->priceHtva, self::DELTA);
+    }
+
+    public static function measuredShares(): iterable
+    {
+        yield 'exactly 80 percent' => [60.0, 20.0, LoadWeighting::ActualLoad, 0.25, 80.0];
+        yield 'below 80 percent' => [59.9, 20.1, LoadWeighting::Baseload, 0.2122222222, 0.0];
+    }
+
+    #[DataProvider('measuredShares')]
+    public function testOnlyCompatibleMeasurementsCountTowardsTheThresholdAndPrice(
+        float $hourlyKwh,
+        float $estimatedKwh,
+        LoadWeighting $expectedWeighting,
+        float $expectedPrice,
+        float $expectedCoverage,
+    ): void {
+        $prices = $this->fullMonthHourly('2026-06', 30, 0.20, [
+            '2026-06-10 10:00:00' => 0.10,
+            '2026-06-10 11:00:00' => 0.30,
+            '2026-06-10 12:00:00' => 9.0,
+        ]);
+        $result = (new MonthlyIndexedPriceCalculator())->perMonth(
+            $this->at('2026-06-01 00:00:00'),
+            $this->at('2026-07-01 00:00:00'),
+            $this->hourlyCandidate($prices),
+            [
+                ['slot' => '2026-06-10 10:00:00', 'import_kwh' => 20.0, 'measurement_resolution_min' => 15],
+                ['slot' => '2026-06-10 11:00:00', 'import_kwh' => $hourlyKwh, 'measurement_resolution_min' => 60],
+                ['slot' => '2026-06-10 12:00:00', 'import_kwh' => $estimatedKwh, 'measurement_resolution_min' => null],
+            ],
+        );
+
+        self::assertSame($expectedWeighting, $result['2026-06']->weighting);
+        self::assertEqualsWithDelta($expectedPrice, $result['2026-06']->priceHtva, self::DELTA);
+        self::assertSame($expectedCoverage, $result['2026-06']->weightCoveragePct);
+    }
+
+    public function testZeroConsumptionDoesNotUseActualLoad(): void
+    {
+        $result = (new MonthlyIndexedPriceCalculator())->perMonth(
+            $this->at('2026-06-01 00:00:00'),
+            $this->at('2026-07-01 00:00:00'),
+            $this->hourlyCandidate($this->fullMonthHourly('2026-06', 30, 0.20)),
+            [['slot' => '2026-06-10 10:00:00', 'import_kwh' => 0.0, 'measurement_resolution_min' => 60]],
+        );
+
+        self::assertSame(LoadWeighting::Baseload, $result['2026-06']->weighting);
+        self::assertSame(0.0, $result['2026-06']->weightCoveragePct);
+        self::assertEqualsWithDelta(0.20, $result['2026-06']->priceHtva, self::DELTA);
     }
 
     /** Sans courbe exploitable ni profil : moyenne arithmétique de toutes les cotations. */
@@ -256,8 +361,8 @@ final class MonthlyIndexedPriceCalculatorTest extends TestCase
             $this->at('2026-07-01 00:00:00'),
             $this->hourlyCandidate($prices),
             [
-                ['slot' => '2026-06-10 10:00:00', 'import_kwh' => 3.0, 'native' => true],
-                ['slot' => '2026-06-10 11:00:00', 'import_kwh' => 1.0, 'native' => true],
+                ['slot' => '2026-06-10 10:00:00', 'import_kwh' => 3.0, 'measurement_resolution_min' => 15],
+                ['slot' => '2026-06-10 11:00:00', 'import_kwh' => 1.0, 'measurement_resolution_min' => 15],
             ],
             ['2026-06-10 10:00:00' => 0.25, '2026-06-10 11:00:00' => 0.75],
             'RLP0N',
@@ -382,7 +487,8 @@ final class MonthlyIndexedPriceCalculatorTest extends TestCase
      * Une courbe au pas de 15 min pondère une série HORAIRE en s'agrégeant sur l'heure :
      * 1 kWh à 10:00 et 3 kWh à 11:00, donc (1×0,10 + 3×0,30) / 4 = 0,25 €/kWh.
      */
-    public function testQuarterCurveAggregatesOntoAnHourlySeries(): void
+    #[DataProvider('hourlyMeasurementSeries')]
+    public function testQuarterSlotsAggregateOntoAnHourlySeries(int $measurementResolution, string $source): void
     {
         $prices = $this->fullMonthHourly('2026-06', 30, 0.20, [
             '2026-06-10 10:00:00' => 0.10,
@@ -392,11 +498,11 @@ final class MonthlyIndexedPriceCalculatorTest extends TestCase
         $result = (new MonthlyIndexedPriceCalculator())->perMonth(
             $this->at('2026-06-01 00:00:00'),
             $this->at('2026-07-01 00:00:00'),
-            $this->hourlyCandidate($prices),
+            $this->hourlyCandidate($prices, $source),
             [
-                ['slot' => '2026-06-10 10:00:00', 'import_kwh' => 0.4, 'native' => true],
-                ['slot' => '2026-06-10 10:30:00', 'import_kwh' => 0.6, 'native' => true],
-                ['slot' => '2026-06-10 11:15:00', 'import_kwh' => 3.0, 'native' => true],
+                ['slot' => '2026-06-10 10:00:00', 'import_kwh' => 0.4, 'measurement_resolution_min' => $measurementResolution],
+                ['slot' => '2026-06-10 10:30:00', 'import_kwh' => 0.6, 'measurement_resolution_min' => $measurementResolution],
+                ['slot' => '2026-06-10 11:15:00', 'import_kwh' => 3.0, 'measurement_resolution_min' => $measurementResolution],
             ],
         );
 

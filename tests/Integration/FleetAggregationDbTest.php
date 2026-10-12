@@ -10,6 +10,7 @@ use App\Repository\UserRepository;
 use App\Repository\UtilityReadingRepository;
 use App\Support\Dates;
 use DateTimeImmutable;
+use PHPUnit\Framework\Attributes\DataProvider;
 
 /**
  * Agrégation multi-compteur des rapports (#55). S'auto-skippe sans base de test.
@@ -502,15 +503,22 @@ final class FleetAggregationDbTest extends DatabaseTestCase
         self::assertSame('kwh', $deltas['solar_unit']);
     }
 
-    /**
-     * Le drapeau `native` autorise la facturation au quart d'heure. Un créneau
-     * alimenté par deux compteurs n'est natif que si les DEUX sont au pas de
-     * 15 min : présenter comme mesuré un créneau dont une part a été étalée
-     * facturerait une répartition comme une mesure.
-     */
-    public function testQuarterSlotIsNotNativeWhenOneMeterIsHourly(): void
+    public static function mixedMeasurementIntervals(): iterable
     {
-        $quarterly = $this->newMeter($this->fleetUserId);
+        yield 'quarter then hourly' => [3600, 60, false];
+        yield 'hourly then quarter' => [3600, 60, true];
+        yield 'quarter then daily' => [86400, null, false];
+        yield 'daily then quarter' => [86400, null, true];
+    }
+
+    /** La cadence la moins fine domine un créneau, quel que soit l'ordre des compteurs. */
+    #[DataProvider('mixedMeasurementIntervals')]
+    public function testQuarterSlotKeepsTheCoarsestMeterResolution(int $seconds, ?int $expectedResolution, bool $reverseOrder): void
+    {
+        $first = $this->newMeter($this->fleetUserId);
+        $second = $this->newMeter($this->fleetUserId);
+        $quarterly = $reverseOrder ? $second : $first;
+        $coarser = $reverseOrder ? $first : $second;
         foreach ([0, 15, 30, 45, 60] as $i => $minutes) {
             $at = (new DateTimeImmutable('2026-06-01 10:00:00', Dates::utc()))
                 ->modify("+{$minutes} minutes")
@@ -518,19 +526,20 @@ final class FleetAggregationDbTest extends DatabaseTestCase
             $this->write($quarterly, $at, self::indexes(100.0 + $i));
         }
 
-        $hourly = $this->newMeter($this->fleetUserId);
-        $this->write($hourly, '2026-06-01 10:00:00', self::indexes(500.0));
-        $this->write($hourly, '2026-06-01 11:00:00', self::indexes(508.0));
+        $from = new DateTimeImmutable('2026-06-01 10:00:00', Dates::utc());
+        $to = $from->modify('+' . $seconds . ' seconds');
+        $this->write($coarser, $from->format('Y-m-d H:i:s'), self::indexes(500.0));
+        $this->write($coarser, $to->format('Y-m-d H:i:s'), self::indexes(508.0));
 
         $quarters = $this->elec($this->fleetUserId)->getQuarterImportDeltas(
-            new DateTimeImmutable('2026-06-01 09:00:00', Dates::utc()),
-            new DateTimeImmutable('2026-06-01 12:00:00', Dates::utc()),
+            $from,
+            $to,
         );
 
         self::assertNotSame([], $quarters);
         foreach ($quarters as $quarter) {
             if ($quarter['quarter'] === '2026-06-01 10:00:00') {
-                self::assertFalse($quarter['native'], 'Le créneau mêle une mesure et un étalement.');
+                self::assertSame($expectedResolution, $quarter['measurement_resolution_min']);
 
                 return;
             }

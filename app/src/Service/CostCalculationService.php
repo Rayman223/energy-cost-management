@@ -1818,7 +1818,9 @@ final class CostCalculationService
             $quarterSlots  = $quarterPrices === [] ? [] : $this->legacyRepo->getQuarterImportDeltas($from, $to);
 
             if ($quarterSlots !== []
-                && $this->weightedShare($quarterSlots, static fn (array $s): bool => $s['native'] === true)
+                && $this->weightedShare($quarterSlots, static fn (array $s): bool =>
+                    $s['measurement_resolution_min'] !== null && $s['measurement_resolution_min'] <= 15
+                )
                    < self::QUARTER_READINGS_MIN_PCT
             ) {
                 $fallback = 'readings_not_quarter';
@@ -1900,8 +1902,8 @@ final class CostCalculationService
      * facturation créneau par créneau. La différence avec `dynamic_quarter` ne porte
      * donc que sur la pondération employée À DÉFAUT de courbe réelle.
      *
-     * La courbe au pas de 15 min ne sert ici qu'à PONDÉRER, jamais à facturer : son
-     * drapeau `native` distingue un vrai relevé quart-horaire d'un étalement au prorata.
+     * La courbe ventilée au pas de 15 min ne sert ici qu'à PONDÉRER, jamais à facturer :
+     * sa résolution de mesure indique si elle est compatible avec les cotations du mois.
      *
      * @return array{resolution: string, price_source: string, prices: array<string, float>,
      *               slots: list<array{slot: string, import_kwh: float}>, fallback: ?string,
@@ -2018,7 +2020,7 @@ final class CostCalculationService
             static fn (array $r): array => [
                 'slot'       => $r['quarter'],
                 'import_kwh' => $r['import_kwh'],
-                'native'     => $r['native'],
+                'measurement_resolution_min' => $r['measurement_resolution_min'],
             ],
             $this->legacyRepo->getQuarterImportDeltas($from, $to),
         );

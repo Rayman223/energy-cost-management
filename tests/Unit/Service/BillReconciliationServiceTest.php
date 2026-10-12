@@ -13,6 +13,7 @@ use App\Service\BillReconciliationService;
 use App\Service\CostCalculationService;
 use App\Service\TariffCalculatorService;
 use DateTimeImmutable;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use Tests\Fake\FakeDynamicPriceRepository;
 use Tests\Fake\FakeEnergyBillRepository;
@@ -203,6 +204,63 @@ final class BillReconciliationServiceTest extends TestCase
 
         self::assertCount(1, $result['rows']);
         self::assertNull($result['rows'][0]['skipped'], 'le profil du fournisseur doit être rapprochable');
+    }
+
+    public static function hourlyIndexedMonths(): iterable
+    {
+        yield 'complete month, hourly readings' => ['2026-07-01 00:00:00', 60, null];
+        yield 'partial month, hourly readings' => ['2026-06-15 00:00:00', 60, BillReconciliationService::SKIP_ESTIMATED_WEIGHTING];
+        yield 'complete month, daily readings' => ['2026-07-01 00:00:00', null, BillReconciliationService::SKIP_ESTIMATED_WEIGHTING];
+    }
+
+    #[DataProvider('hourlyIndexedMonths')]
+    public function testReconciliationUsesHourlyMeasurementsOnlyForCompleteMeasuredMonths(
+        string $to,
+        ?int $measurementResolution,
+        ?string $expectedSkip,
+    ): void {
+        $bills = new FakeEnergyBillRepository([
+            new EnergyBill(1, 'electricity', 2026, 6, amountHtva: null, amountTtc: 5.00),
+        ]);
+        $prices = [];
+        for ($day = 1; $day <= 30; $day++) {
+            for ($hour = 0; $hour < 24; $hour++) {
+                $prices[sprintf('2026-06-%02d %02d:00:00', $day, $hour)] = 0.20;
+            }
+        }
+        $prices['2026-06-10 10:00:00'] = 0.10;
+        $prices['2026-06-10 11:00:00'] = 0.30;
+        $legacy = new FakeLegacyDailyRepository(
+            monthlyDeltasForMonth: $this->deltasFor('2026-06-01 00:00:00', $to),
+            hourlyImportDeltas: [
+                ['hour' => '2026-06-10 10:00:00', 'import_kwh' => 1.0],
+                ['hour' => '2026-06-10 11:00:00', 'import_kwh' => 3.0],
+            ],
+            quarterImportDeltas: [
+                ['quarter' => '2026-06-10 10:00:00', 'import_kwh' => 1.0, 'measurement_resolution_min' => $measurementResolution],
+                ['quarter' => '2026-06-10 11:00:00', 'import_kwh' => 3.0, 'measurement_resolution_min' => $measurementResolution],
+            ],
+        );
+        $cost = new CostCalculationService(
+            legacyRepo: $legacy,
+            tariffRepo: new FakeTariffRepository(grid: $this->gridWithSpot(1.0, 0.0, pricingMode: 'indexed_monthly')),
+            gasRepo: new FakeGasReadingRepository(),
+            calculator: new TariffCalculatorService(),
+            dynamicPriceRepo: new FakeDynamicPriceRepository(hourlyPricesByHour: $prices),
+            dynamicEnabled: true,
+        );
+
+        $result = (new BillReconciliationService($bills, $cost))->reconcile();
+
+        self::assertCount(1, $result['rows']);
+        self::assertSame($expectedSkip, $result['rows'][0]['skipped']);
+        if ($expectedSkip === null) {
+            // Le rapprochement expose le prix indexé TTC : 0,25 HTVA × 1,21.
+            self::assertEqualsWithDelta(0.3025, $result['rows'][0]['avg_indexed_price'], 0.0001);
+            self::assertSame(SpotFormulaFit::MODE_SINGLE_PERIOD, $result['fit']->mode);
+        } else {
+            self::assertSame(SpotFormulaFit::MODE_UNDETERMINED, $result['fit']->mode);
+        }
     }
 
     /**

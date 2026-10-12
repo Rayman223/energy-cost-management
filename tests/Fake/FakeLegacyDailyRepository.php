@@ -17,7 +17,7 @@ final class FakeLegacyDailyRepository implements LegacyDailyRepositoryInterface
      * @param array<string,mixed> $monthlyDeltas
      * @param array<string,mixed> $monthlyDeltasForMonth
      * @param array<int, array{hour: string, import_kwh: float}> $hourlyImportDeltas
-     * @param array<int, array{quarter: string, import_kwh: float, native: bool}> $quarterImportDeltas
+     * @param array<int, array{quarter: string, import_kwh: float, measurement_resolution_min: int|null}> $quarterImportDeltas
      */
     /** Couples (année, mois) demandés à getMonthlyDeltasForMonth(), dans l'ordre.
      *
