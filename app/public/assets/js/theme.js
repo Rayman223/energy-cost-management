@@ -26,16 +26,16 @@
     var btn = document.getElementById('theme-toggle');
     if (!btn) return;
     var dark = current() === 'dark';
-    // Le texte visible reste stable ; le nom accessible décrit aussi l'action.
+    // Le nom du switch reste stable ; aria-checked expose le thème courant.
+    btn.setAttribute('aria-checked', String(dark));
     var action = btn.getAttribute(dark ? 'data-theme-light' : 'data-theme-dark');
     if (!action) return;
-    btn.setAttribute('aria-label', btn.textContent.trim() + ' : ' + action);
     btn.setAttribute('title', action);
   }
 
   // Suivi du thème système tant que l'utilisateur n'a pas choisi explicitement.
   media.addEventListener('change', function (e) {
-    if (localStorage.getItem(STORAGE_KEY)) return;
+    try { if (localStorage.getItem(STORAGE_KEY)) return; } catch (err) { /* stockage indisponible */ }
     apply(e.matches ? 'dark' : 'light');
   });
 

@@ -4,6 +4,18 @@ declare(strict_types=1);
 
 /** Translation catalog — English. */
 return [
+    'nav.followup' => 'Tracking',
+    'nav.budget' => 'Budget',
+    'nav.project' => 'Project',
+    'common.dark_theme' => 'Dark theme',
+    'nav.description.meters' => 'Configure my meters',
+    'nav.description.batteries' => 'Manage my energy storage',
+    'nav.description.stats' => 'Compare consumption',
+    'nav.description.tariffs' => 'Manage my contracts and prices',
+    'nav.description.advances' => 'Track my payments',
+    'nav.description.reconciliation' => 'Compare estimate and bill',
+    'nav.description.account' => 'Profile and preferences',
+    'nav.description.admin' => 'For administrators',
     'nav.menu' => 'Menu',
     'nav.main' => 'Main navigation',
     'common.theme_light' => 'Switch to light theme',

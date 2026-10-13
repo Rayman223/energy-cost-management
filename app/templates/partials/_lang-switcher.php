@@ -11,7 +11,7 @@ declare(strict_types=1);
  * ({@see \App\I18n\Locale::switchUrl()}) ; `$params` sert au reste.
  *
  * @var list<string>|null           $available Locales proposées (défaut [])
- * @var bool|null                   $textual   Affiche « Langue CODE » sans icônes (défaut false)
+ * @var bool|null                   $textual   Affiche le nom natif de la langue (défaut false)
  * @var string|null                 $direction 'down' (défaut) ou 'up' : sens d'ouverture
  *                                             de la liste. 'up' pour les blocs placés en
  *                                             bas de page, sinon coupés par la fenêtre.
@@ -23,19 +23,17 @@ declare(strict_types=1);
 $available = $available ?? [];
 $direction = ($direction ?? 'down') === 'up' ? ' lang-menu-up' : '';
 $params    = $params ?? [];
-$label     = $this->t('common.language') . (!empty($textual) ? ' ' . strtoupper($this->locale()) : '');
+$label     = $this->t('common.language') . (!empty($textual) ? ' : ' . \App\I18n\Locale::displayName($this->locale()) : '');
 ?>
 <details class="lang-menu<?= $direction ?>">
   <summary class="lang-summary" title="<?= $this->te('common.language') ?>" aria-label="<?= $this->e($label) ?>">
     <?php if (!empty($textual)): ?>
-    <span><?= $this->te('common.language') ?></span>
+    <span class="lang-current"><?= $this->e(\App\I18n\Locale::displayName($this->locale())) ?></span>
     <?php else: ?>
     <span class="lang-globe" aria-hidden="true">🌐</span>
-    <?php endif; ?>
     <span class="lang-current"><?= $this->e(strtoupper($this->locale())) ?></span>
-    <?php if (empty($textual)): ?>
-    <span class="lang-caret" aria-hidden="true">▾</span>
     <?php endif; ?>
+    <span class="lang-caret" aria-hidden="true">▾</span>
   </summary>
   <div class="lang-menu-list">
     <?php foreach ($available as $loc): ?>

@@ -8,6 +8,18 @@ declare(strict_types=1);
  * les valeurs (voir app/docs/plan/i18n.md).
  */
 return [
+    'nav.followup' => 'Suivi',
+    'nav.budget' => 'Budget',
+    'nav.project' => 'Projet',
+    'common.dark_theme' => 'Thème sombre',
+    'nav.description.meters' => 'Configurer mes compteurs',
+    'nav.description.batteries' => 'Gérer mon stockage d’énergie',
+    'nav.description.stats' => 'Comparer les consommations',
+    'nav.description.tariffs' => 'Gérer mes contrats et prix',
+    'nav.description.advances' => 'Suivre mes versements',
+    'nav.description.reconciliation' => 'Comparer estimation et facture',
+    'nav.description.account' => 'Profil et préférences',
+    'nav.description.admin' => 'Réservé aux administrateurs',
     'nav.menu' => 'Menu',
     'nav.main' => 'Navigation principale',
     'common.theme_light' => 'Activer le thème clair',

@@ -39,14 +39,12 @@ declare(strict_types=1);
         <div class="logo-sub"><?= $this->te('app.title') ?></div>
       </div>
     </div>
-    <button type="button" class="theme-toggle header-action header-menu-toggle" data-header-toggle aria-controls="header-menu" aria-expanded="true" hidden><?= $this->te('nav.menu') ?></button>
-    <div class="header-menu" id="header-menu">
-      <nav class="header-nav" aria-label="<?= $this->te('nav.main') ?>">
-        <a class="theme-toggle header-action" href="<?= $this->e($this->url('stats')) ?>"><?= $this->te('nav.stats') ?></a>
-        <a class="theme-toggle header-action" href="<?= $this->e($this->url('login')) ?>"><?= $this->te('auth.sign_in') ?></a>
-      </nav>
-      <?= $this->partial('_header-controls', ['available' => $available, 'discordUrl' => $discordUrl ?? null, 'donateUrl' => $donateUrl ?? null]) ?>
+    <div class="header-top-tools">
+      <?= $this->partial('_header-controls', ['available' => $available, 'authenticated' => false]) ?>
     </div>
+    <?= $this->partial('_header-navigation', [
+        'authenticated' => false, 'discordUrl' => $discordUrl ?? null, 'donateUrl' => $donateUrl ?? null,
+    ]) ?>
   </header>
 
   <main>

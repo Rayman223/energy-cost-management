@@ -11,6 +11,8 @@ use PHPUnit\Framework\TestCase;
 
 final class HeaderNavigationTest extends TestCase
 {
+    private const LANGUAGE_NAMES = ['fr' => 'Français', 'en' => 'English', 'de' => 'Deutsch', 'nl' => 'Nederlands'];
+
     /** @param array<string, mixed> $data */
     private function header(string $locale = 'fr', array $data = []): string
     {
@@ -32,7 +34,10 @@ final class HeaderNavigationTest extends TestCase
 
     private function linkText(\DOMXPath $xpath, string $path): string
     {
-        return (string) $xpath->evaluate('normalize-space(//nav//a[@href="' . Url::to($path) . '"])');
+        $link = '//header//a[not(@class="logo")][@href="' . Url::to($path) . '"]';
+        $label = $xpath->evaluate('count(' . $link . '/span)') > 0 ? $link . '/span[1]' : $link;
+
+        return (string) $xpath->evaluate('normalize-space(' . $label . ')');
     }
 
     public function testAllPrivateDestinationsHaveVisibleTextAndOnlyCurrentPageIsActive(): void
@@ -58,17 +63,17 @@ final class HeaderNavigationTest extends TestCase
     public function testAdminNavigationIsVisibleForAnAuthenticatedAdmin(): void
     {
         $xpath = $this->xpath($this->header(data: ['isAdmin' => true, 'current' => 'admin']));
-        self::assertSame('Admin', $this->linkText($xpath, 'admin'));
+        self::assertSame('Administration', $this->linkText($xpath, 'admin'));
         self::assertSame(Url::to('admin'), $xpath->evaluate('string(//a[@aria-current="page"]/@href)'));
     }
 
     /** @return iterable<string, array{string, string, string, string, string, string}> */
     public static function locales(): iterable
     {
-        yield 'French' => ['fr', 'Statistiques', 'Langue', 'Menu', 'Changer de thème', 'Activer le thème clair'];
-        yield 'English' => ['en', 'Statistics', 'Language', 'Menu', 'Toggle theme', 'Switch to light theme'];
-        yield 'German' => ['de', 'Statistiken', 'Sprache', 'Menü', 'Thema umschalten', 'Helles Design aktivieren'];
-        yield 'Dutch' => ['nl', 'Statistieken', 'Taal', 'Menu', 'Thema wisselen', 'Licht thema inschakelen'];
+        yield 'French' => ['fr', 'Statistiques', 'Langue', 'Menu', 'Thème sombre', 'Activer le thème clair'];
+        yield 'English' => ['en', 'Statistics', 'Language', 'Menu', 'Dark theme', 'Switch to light theme'];
+        yield 'German' => ['de', 'Statistiken', 'Sprache', 'Menü', 'Dunkles Design', 'Helles Design aktivieren'];
+        yield 'Dutch' => ['nl', 'Statistieken', 'Taal', 'Menu', 'Donker thema', 'Licht thema inschakelen'];
     }
 
     #[DataProvider('locales')]
@@ -78,8 +83,8 @@ final class HeaderNavigationTest extends TestCase
         $html = $this->header($locale, ['authenticated' => false, 'current' => 'stats']);
         $xpath = $this->xpath($html);
         self::assertSame($stats, $this->linkText($xpath, 'stats'));
-        self::assertSame($language . ' ' . strtoupper($locale), $xpath->evaluate('normalize-space(//summary)'));
-        self::assertSame($language . ' ' . strtoupper($locale), $xpath->evaluate('string(//summary/@aria-label)'));
+        self::assertSame(self::LANGUAGE_NAMES[$locale], $xpath->evaluate('normalize-space(//summary/span[@class="lang-current"])'));
+        self::assertSame($language . ' : ' . self::LANGUAGE_NAMES[$locale], $xpath->evaluate('string(//summary/@aria-label)'));
         self::assertSame($menu, $xpath->evaluate('normalize-space(//button[@data-header-toggle])'));
         self::assertSame($theme, $xpath->evaluate('normalize-space(//button[@id="theme-toggle"])'));
         self::assertSame($light, $xpath->evaluate('string(//button[@id="theme-toggle"]/@data-theme-light)'));
@@ -116,7 +121,7 @@ final class HeaderNavigationTest extends TestCase
         self::assertSame('header-menu', $xpath->evaluate('string(//button[@data-header-toggle]/@aria-controls)'));
         self::assertSame('true', $xpath->evaluate('string(//button[@data-header-toggle]/@aria-expanded)'));
         self::assertSame(1.0, $xpath->evaluate('count(//button[@data-header-toggle][@hidden])'));
-        self::assertSame(1.0, $xpath->evaluate('count(//div[@id="header-menu"][not(@hidden)])'));
+        self::assertSame(1.0, $xpath->evaluate('count(//*[@id="header-menu"][not(@hidden)])'));
     }
 
     public function testTextualLanguageOptionDoesNotChangeStandaloneSwitcher(): void
@@ -135,10 +140,65 @@ final class HeaderNavigationTest extends TestCase
         $xpath = $this->xpath($view->render('welcome', ['available' => ['fr', 'en', 'de', 'nl']]));
         self::assertSame($stats, $this->linkText($xpath, 'stats'));
         self::assertSame($menu, $xpath->evaluate('normalize-space(//header//button[@data-header-toggle])'));
-        self::assertSame($language . ' ' . strtoupper($locale), $xpath->evaluate('normalize-space(//header//summary)'));
+        self::assertSame(self::LANGUAGE_NAMES[$locale], $xpath->evaluate('normalize-space(//header//summary/span[@class="lang-current"])'));
         self::assertSame($theme, $xpath->evaluate('normalize-space(//header//button[@id="theme-toggle"])'));
         self::assertSame($light, $xpath->evaluate('string(//header//button[@id="theme-toggle"]/@data-theme-light)'));
         self::assertNotEmpty($this->linkText($xpath, 'login'));
         self::assertSame(0.0, $xpath->evaluate('count(//header//svg)'));
+    }
+
+    public function testCategoriesContainTheirExpectedDestinations(): void
+    {
+        $xpath = $this->xpath($this->header(data: ['isAdmin' => true]));
+        foreach ([
+            'followup' => ['meters', 'batteries', 'stats'],
+            'budget' => ['tariffs', 'advances', 'reconciliation'],
+            'account' => ['account', 'admin'],
+        ] as $group => $paths) {
+            foreach ($paths as $path) {
+                self::assertSame(1.0, $xpath->evaluate('count(//details[@data-header-group="' . $group . '"]//a[@href="' . Url::to($path) . '"])'));
+            }
+        }
+        self::assertSame(1.0, $xpath->evaluate('count(//nav/a[@href="' . Url::to('') . '"])'));
+        self::assertSame(1.0, $xpath->evaluate('count(//nav/a[@href="' . Url::to('meter-readings') . '"])'));
+        self::assertSame('Budget', $xpath->evaluate('normalize-space(//details[@data-header-group="budget"]/summary)'));
+        self::assertNotEmpty($xpath->evaluate('normalize-space(//details[@data-header-group="budget"]//small)'));
+    }
+
+    public function testActiveCategoryFollowsItsPage(): void
+    {
+        foreach ([
+            'tariffs' => 'budget', 'advances' => 'budget', 'reconciliation' => 'budget',
+            'meters' => 'followup', 'batteries' => 'followup', 'stats' => 'followup',
+            'account' => 'account', 'admin' => 'account',
+        ] as $page => $group) {
+            $xpath = $this->xpath($this->header(data: ['current' => $page, 'isAdmin' => true]));
+            self::assertSame($group, $xpath->evaluate('string(//details[contains(concat(" ", @class, " "), " current ")]/@data-header-group)'));
+            self::assertSame(1.0, $xpath->evaluate('count(//a[@aria-current="page"])'));
+        }
+        $xpath = $this->xpath($this->header(data: ['current' => 'meter-readings']));
+        self::assertSame(0.0, $xpath->evaluate('count(//details[contains(concat(" ", @class, " "), " current ")])'));
+    }
+
+    public function testLanguageThemeAndAccountAreOutsideCollapsibleNavigation(): void
+    {
+        $xpath = $this->xpath($this->header());
+        self::assertSame(0.0, $xpath->evaluate('count(//*[@id="header-menu"]//button[@id="theme-toggle"])'));
+        self::assertSame(0.0, $xpath->evaluate('count(//*[@id="header-menu"]//details[contains(@class, "lang-menu")])'));
+        self::assertSame(0.0, $xpath->evaluate('count(//*[@id="header-menu"]//details[@data-header-group="account"])'));
+        self::assertSame('switch', $xpath->evaluate('string(//button[@id="theme-toggle"]/@role)'));
+        self::assertSame('false', $xpath->evaluate('string(//button[@id="theme-toggle"]/@aria-checked)'));
+        self::assertSame(4.0, $xpath->evaluate('count(//details[contains(@class, "lang-menu")]//a)'));
+    }
+
+    public function testAnonymousHeaderHasPublicNavigationAndNoPrivateCategories(): void
+    {
+        $xpath = $this->xpath($this->header(data: ['authenticated' => false, 'isAdmin' => true, 'current' => 'stats']));
+        foreach (['followup', 'budget', 'account'] as $group) {
+            self::assertSame(0.0, $xpath->evaluate('count(//details[@data-header-group="' . $group . '"])'));
+        }
+        self::assertSame(1.0, $xpath->evaluate('count(//details[@data-header-group="project"])'));
+        self::assertSame('Statistiques', $this->linkText($xpath, 'stats'));
+        self::assertSame('Se connecter', $this->linkText($xpath, 'login'));
     }
 }
