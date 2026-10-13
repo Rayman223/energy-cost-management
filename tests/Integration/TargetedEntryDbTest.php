@@ -5,9 +5,11 @@ declare(strict_types=1);
 namespace Tests\Integration;
 
 use App\Domain\Meter;
+use App\Http\Controller\IngestController;
 use App\Http\Controller\MeterEntryController;
 use App\Http\Controller\ReadingDeletionController;
 use App\Http\Controller\ReadingsController;
+use App\Http\JsonResponse;
 use App\Http\MeterResolver;
 use App\Http\Request;
 use App\Http\ValidationException;
@@ -16,6 +18,7 @@ use App\Repository\MeterRepository;
 use App\Repository\UserRepository;
 use App\Repository\UtilityReadingRepository;
 use DateTimeImmutable;
+use PHPUnit\Framework\Attributes\DataProvider;
 
 /**
  * Saisie, historique et suppression CIBLÉS sur un compteur (#55).
@@ -24,11 +27,12 @@ use DateTimeImmutable;
  * déclarer : jusqu'ici toute écriture atterrissait sur le compteur le plus
  * ancien, quel que soit celui affiché à l'écran.
  *
- * La règle testée ici est celle du résolveur, et elle tient en une phrase :
- * **jamais de devinette**. Écrire dans le mauvais compteur ne lèverait aucune
+ * En écriture et suppression, la règle est **jamais de devinette**.
+ * Écrire dans le mauvais compteur ne lèverait aucune
  * erreur — l'index d'un second compteur est simplement plus élevé, et la
  * validation de bornes le lirait comme une consommation légitime. Le refus
- * explicite est donc la seule protection possible.
+ * explicite est donc la seule protection possible. En lecture (#78), omettre
+ * la cible conserve le compteur par défaut, même après l'ajout d'un compteur.
  */
 final class TargetedEntryDbTest extends DatabaseTestCase
 {
@@ -271,6 +275,190 @@ final class TargetedEntryDbTest extends DatabaseTestCase
     }
 
     // ── Historique et suppression ────────────────────────────────────────────
+
+    /** @return iterable<string, array{string, string}> */
+    public static function singleMeterReads(): iterable
+    {
+        yield 'today' => ['today', 'electricity'];
+        yield 'gas_history' => ['gas_history', 'gas'];
+        yield 'water_history' => ['water_history', 'water'];
+        yield 'electricity_history' => ['electricity_history', 'electricity'];
+    }
+
+    /** @param array<string, mixed> $query */
+    private function read(string $action, array $query = []): JsonResponse
+    {
+        $controller = $this->readings();
+        $request = $this->get($action, $query);
+
+        return match ($action) {
+            'today' => $controller->today($request),
+            'gas_history' => $controller->gasHistory($request),
+            'water_history' => $controller->waterHistory($request),
+            'electricity_history' => $controller->electricityHistory($request),
+        };
+    }
+
+    private function seedReadings(int $meterId, string $energy, float $start): void
+    {
+        foreach (['2026-06-01 10:00:00', '2026-06-02 10:00:00'] as $offset => $at) {
+            $timestamp = new DateTimeImmutable($at);
+            if ($energy === 'electricity') {
+                (new ElectricityReadingRepository($this->pdo(), $this->userId, meterId: $meterId))
+                    ->insertIndexes($timestamp, ['import_t1' => $start + 10.0 * $offset]);
+            } else {
+                (new UtilityReadingRepository($this->pdo(), $this->userId, $energy, $meterId))
+                    ->save($timestamp, $start + 10.0 * $offset);
+            }
+        }
+    }
+
+    #[DataProvider('singleMeterReads')]
+    public function testAddingMeterKeepsImplicitReadTarget(string $action, string $energy): void
+    {
+        $first = $this->meters()->insert(new Meter(id: 0, energyType: $energy));
+        $this->seedReadings($first, $energy, 100.0);
+        $before = $this->read($action);
+        self::assertSame(200, $before->status);
+        self::assertSame($before->data, $this->read($action, ['meter_id' => (string) $first])->data);
+
+        $second = $this->meters()->insert(new Meter(id: 0, energyType: $energy));
+        $this->seedReadings($second, $energy, 4200.0);
+
+        self::assertSame($before->data, $this->read($action)->data);
+        self::assertSame($before->data, $this->read($action, ['meter_id' => ''])->data);
+        $targeted = $this->read($action, ['meter_id' => (string) $second]);
+        self::assertSame(200, $targeted->status);
+        self::assertIsArray($targeted->data);
+        if ($action === 'today') {
+            self::assertSame(4210.0, $targeted->data['dries']['Prelev_jour']);
+            return;
+        }
+
+        self::assertSame(2, $targeted->data['total']);
+        $key = $energy === 'electricity' ? 'import_t1' : 'counter_m3';
+        self::assertSame([4210.0, 4200.0], array_column($targeted->data['items'], $key));
+        if ($energy !== 'electricity') {
+            self::assertSame([10.0, null], array_column($targeted->data['items'], 'delta_m3'));
+        }
+
+        // Le relevé hors page et les deltas restent sur le compteur choisi.
+        $page = $this->read($action, ['meter_id' => $second, 'per_page' => '1'])->data;
+        self::assertIsArray($page);
+        self::assertSame(1, $page['per_page']);
+        self::assertSame(2, $page['total']);
+        self::assertCount(1, $page['items']);
+        if ($energy === 'electricity') {
+            self::assertSame(4200.0, $page['previous']['import_t1']);
+        } else {
+            self::assertSame(10.0, $page['items'][0]['delta_m3']);
+        }
+    }
+
+    #[DataProvider('singleMeterReads')]
+    public function testReadWithoutMeterReturnsEmptyDataWithoutCreatingMeter(string $action, string $energy): void
+    {
+        self::assertNull($this->resolver()->resolveForRead(null, $energy));
+        $response = $this->read($action);
+        self::assertSame(200, $response->status);
+        $expected = $action === 'today'
+            ? ['dries' => null, 'solar' => null, 'solar_source' => 'meter_readings']
+            : ['items' => [], 'total' => 0, 'page' => 1, 'per_page' => 25];
+        if ($action === 'electricity_history') {
+            $expected['previous'] = null;
+        }
+        self::assertSame($expected, $response->data);
+        self::assertSame($expected, $this->read($action, ['meter_id' => ''])->data);
+        self::assertSame([], $this->meters()->listAll());
+    }
+
+    #[DataProvider('singleMeterReads')]
+    public function testClosedDefaultMeterRemainsReadable(string $action, string $energy): void
+    {
+        $first = $this->meters()->insert(new Meter(
+            id: 0,
+            energyType: $energy,
+            closedOn: new DateTimeImmutable('2026-06-03'),
+        ));
+        $this->seedReadings($first, $energy, 100.0);
+        $expected = $this->read($action, ['meter_id' => $first])->data;
+        $second = $this->meters()->insert(new Meter(id: 0, energyType: $energy));
+        $this->seedReadings($second, $energy, 4200.0);
+
+        self::assertSame($first, $this->resolver()->resolveForRead(null, $energy));
+        self::assertSame($expected, $this->read($action)->data);
+    }
+
+    #[DataProvider('singleMeterReads')]
+    public function testReadRejectsInvalidExplicitTargetWithoutFallingBack(string $action, string $energy): void
+    {
+        $first = $this->meters()->insert(new Meter(id: 0, energyType: $energy));
+        $this->seedReadings($first, $energy, 100.0);
+        $this->meters()->insert(new Meter(id: 0, energyType: $energy));
+        $foreign = $this->meters($this->otherUserId)->insert(new Meter(id: 0, energyType: $energy));
+        $wrongEnergy = $this->meters()->insert(new Meter(
+            id: 0,
+            energyType: $energy === 'water' ? 'gas' : 'water',
+        ));
+
+        foreach ([$foreign, $wrongEnergy, 999_999, 'abc', -3, 0] as $raw) {
+            try {
+                $this->read($action, ['meter_id' => $raw]);
+                self::fail('Une cible explicite invalide aurait dû être refusée.');
+            } catch (ValidationException $e) {
+                self::assertSame('Unknown meter_id', $e->getMessage());
+            }
+        }
+    }
+
+    /** @return iterable<string, array{string}> */
+    public static function energies(): iterable
+    {
+        foreach (Meter::ENERGIES as $energy) {
+            yield $energy => [$energy];
+        }
+    }
+
+    #[DataProvider('energies')]
+    public function testMutationsStillRequireTargetWithSeveralMeters(string $energy): void
+    {
+        $first = $this->meters()->insert(new Meter(id: 0, energyType: $energy));
+        $second = $this->meters()->insert(new Meter(id: 0, energyType: $energy));
+        $this->seedReadings($first, $energy, 100.0);
+        $this->seedReadings($second, $energy, 4200.0);
+        $action = $energy === 'electricity' ? 'electricity_history' : $energy . '_history';
+        $before = [
+            $this->read($action, ['meter_id' => $first])->data,
+            $this->read($action, ['meter_id' => $second])->data,
+        ];
+        $ingest = new IngestController(
+            new ElectricityReadingRepository($this->pdo(), $this->userId),
+            new UtilityReadingRepository($this->pdo(), $this->userId, 'gas'),
+            new UtilityReadingRepository($this->pdo(), $this->userId, 'water'),
+            null,
+            $this->resolver(),
+        );
+        $deleteMethod = $energy . 'All';
+        $body = [
+            'reading_at' => '2026-06-03T10:00:00Z',
+            'timestamp' => '2026-06-03T10:00:00Z',
+            $energy === 'electricity' ? 'import_t1' : 'counter_m3' => 4300.0,
+        ];
+
+        foreach ([[$this->entry(), $energy], [$ingest, $energy], [$this->deletion(), $deleteMethod]] as [$controller, $method]) {
+            try {
+                $controller->$method($this->post($method, $body));
+                self::fail('Une mutation ambiguë aurait dû être refusée.');
+            } catch (ValidationException $e) {
+                self::assertStringContainsString('meter_id is required', $e->getMessage());
+            }
+        }
+
+        self::assertSame($before, [
+            $this->read($action, ['meter_id' => $first])->data,
+            $this->read($action, ['meter_id' => $second])->data,
+        ], 'Aucun compteur ne doit être modifié par une mutation refusée.');
+    }
 
     public function testHistoryShowsOnlyTheDesignatedMeter(): void
     {

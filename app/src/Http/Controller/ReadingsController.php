@@ -33,7 +33,7 @@ final class ReadingsController
     /** Compteur visé, résolu à la demande ; null si aucun résolveur câblé. */
     private function meterFor(Request $request, string $energyType): ?int
     {
-        return $this->meters?->resolve($request->param('meter_id'), $energyType);
+        return $this->meters?->resolveForRead($request->param('meter_id'), $energyType);
     }
 
     /**
