@@ -1,17 +1,19 @@
 <?php
 
+declare(strict_types=1);
+
 /**
- * En-tête applicatif commun : bandeau logo + horloge + navigation en icônes,
+ * En-tête applicatif commun : bandeau logo + horloge + navigation textuelle,
  * mutualisé entre toutes les pages de la coquille app (#193).
  *
  * Calqué sur le design du dashboard : logo « ⚡ Energy cost management » cliquable vers le
  * tableau de bord, sous-titre propre à la page, horloge live (alimentée par
- * header.js) et navigation en icônes. L'icône de la page courante est marquée
- * active. L'icône Admin n'apparaît que pour les administrateurs.
+ * header.js) et navigation par catégories. La page et sa catégorie sont marquées actives.
+ * Le lien Admin n'apparaît que pour les administrateurs.
  *
  * @var string            $subtitle    Sous-titre de page, déjà traduit (échappé ici)
  * @var string            $current     Clé de page active : dashboard|tariffs|reconciliation|advances|batteries|meters|admin|account|meter-readings|api-guide|stats
- * @var bool|null         $isAdmin     Affiche l'icône Admin (défaut false)
+ * @var bool|null         $isAdmin     Affiche le lien Admin (défaut false)
  * @var bool|null         $authenticated Défaut true. À false (visiteur anonyme sur une
  *                                      page publique, cf. /stats #8), la navigation vers
  *                                      les pages privées et le bouton de déconnexion
@@ -34,50 +36,28 @@ $timezone  = $timezone ?? '';
 // doivent rendre exactement la même sortie qu'avant (#8).
 $authenticated = !isset($authenticated) || $authenticated;
 
-/**
- * Rend un lien de navigation en icône, marqué actif sur la page courante.
- */
-$navlink = function (string $page, string $url, string $icon, string $title) use ($current): string {
-    $isActive = ($page === $current);
-    $class    = 'theme-toggle' . ($isActive ? ' active' : '');
-    $aria     = $isActive ? ' aria-current="page"' : '';
-    return '<a href="' . $this->e($url) . '" class="' . $class . '"' . $aria
-        . ' title="' . $this->e($title) . '">' . $icon . '</a>';
-};
 ?>
-<header>
-  <a class="logo" href="<?= $this->url() ?>">
-    <div class="logo-icon">⚡</div>
+<header class="site-header" data-header>
+  <a class="logo" href="<?= $this->e($this->url()) ?>">
+    <div class="logo-icon" aria-hidden="true">⚡</div>
     <div>
       <div class="logo-text"><?= $this->appName() ?></div>
       <div class="logo-sub"><?= $this->e($subtitle) ?></div>
     </div>
   </a>
-  <div class="header-right">
-    <?php /* data-timezone vide ⇒ header.js retombe sur le fuseau du navigateur. */ ?>
+  <div class="header-top-tools">
     <div class="clock" data-timezone="<?= $this->e($timezone) ?>">
       <span class="time" id="clock-time">--:--:--</span>
       <span id="clock-date">--- -- ----</span>
     </div>
-    <?php if ($authenticated): ?>
-    <?= $navlink('meter-readings', $this->url('meter-readings'), '📝', $this->t('nav.meter_readings')) ?>
-    <?php if ($isAdmin): ?><?= $navlink('admin', $this->url('admin'), '🛡', $this->t('admin.title')) ?><?php endif; ?>
-    <?= $navlink('tariffs', $this->url('tariffs'), '€', $this->t('nav.tariffs')) ?>
-    <?= $navlink('reconciliation', $this->url('reconciliation'), '🧾', $this->t('nav.reconciliation')) ?>
-    <?= $navlink('advances', $this->url('advances'), '🏦', $this->t('nav.advances')) ?>
-    <?= $navlink('batteries', $this->url('batteries'), '🔋', $this->t('nav.batteries')) ?>
-    <?= $navlink('meters', $this->url('meters'), '📟', $this->t('nav.meters')) ?>
-    <?= $navlink('stats', $this->url('stats'), '📊', $this->t('nav.stats')) ?>
-    <?= $navlink('account', $this->url('account'), '👤', $this->t('nav.account')) ?>
-    <form method="post" action="<?= $this->url('auth/logout') ?>" class="logout-form"><?= \App\Security\Csrf::field() ?><button type="submit" class="theme-toggle" title="<?= $this->te('auth.sign_out') ?>">🚪</button></form>
-    <?php else: ?>
-    <?= $navlink('stats', $this->url('stats'), '📊', $this->t('nav.stats')) ?>
-    <a href="<?= $this->e($this->url('login')) ?>" class="theme-toggle" title="<?= $this->te('auth.sign_in') ?>">🔑</a>
-    <?php endif; ?>
-    <?= $this->partial('discord-link', ['url' => $discordUrl ?? null]) ?>
-    <?= $this->partial('github-link') ?>
-    <?= $this->partial('donate-link', ['url' => $donateUrl ?? null]) ?>
-    <?= $this->partial('_lang-switcher', ['available' => $available]) ?>
-    <button type="button" class="theme-toggle" id="theme-toggle" aria-label="<?= $this->te('common.theme') ?>">🌙</button>
+    <?= $this->partial('_header-controls', [
+        'available' => $available, 'authenticated' => $authenticated,
+        'isAdmin' => $isAdmin, 'current' => $current,
+    ]) ?>
   </div>
+  <?= $this->partial('_header-navigation', [
+      'authenticated' => $authenticated, 'current' => $current,
+      'discordUrl' => $discordUrl ?? null, 'donateUrl' => $donateUrl ?? null,
+  ]) ?>
 </header>
+<script defer src="<?= \App\Support\Assets::url('assets/js/header-nav.js') ?>"></script>

@@ -4,6 +4,22 @@ declare(strict_types=1);
 
 /** Übersetzungskatalog — Deutsch. */
 return [
+    'nav.followup' => 'Verbrauch',
+    'nav.budget' => 'Budget',
+    'nav.project' => 'Projekt',
+    'common.dark_theme' => 'Dunkles Design',
+    'nav.description.meters' => 'Meine Zähler konfigurieren',
+    'nav.description.batteries' => 'Meinen Energiespeicher verwalten',
+    'nav.description.stats' => 'Verbrauch vergleichen',
+    'nav.description.tariffs' => 'Verträge und Preise verwalten',
+    'nav.description.advances' => 'Meine Zahlungen verfolgen',
+    'nav.description.reconciliation' => 'Schätzung und Rechnung vergleichen',
+    'nav.description.account' => 'Profil und Einstellungen',
+    'nav.description.admin' => 'Für Administratoren',
+    'nav.menu' => 'Menü',
+    'nav.main' => 'Hauptnavigation',
+    'common.theme_light' => 'Helles Design aktivieren',
+    'common.theme_dark' => 'Dunkles Design aktivieren',
     'app.title'            => 'Verwaltung der Energiekosten',
 
     // SEO (#84): Meta-Description der öffentlichen Seiten. 150-160 Zeichen

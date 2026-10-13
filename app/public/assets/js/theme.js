@@ -10,6 +10,7 @@
   'use strict';
 
   var STORAGE_KEY = 'theme';
+  var hasManualChoice = false;
   var root = document.documentElement;
   var media = window.matchMedia('(prefers-color-scheme: dark)');
 
@@ -26,15 +27,17 @@
     var btn = document.getElementById('theme-toggle');
     if (!btn) return;
     var dark = current() === 'dark';
-    // L'icône représente l'action : en clair on propose de passer au sombre.
-    btn.textContent = dark ? '☀️' : '🌙';
-    btn.setAttribute('aria-label', dark ? 'Activer le thème clair' : 'Activer le thème sombre');
-    btn.setAttribute('title', dark ? 'Thème clair' : 'Thème sombre');
+    // Le nom du switch reste stable ; aria-checked expose le thème courant.
+    btn.setAttribute('aria-checked', String(dark));
+    var action = btn.getAttribute(dark ? 'data-theme-light' : 'data-theme-dark');
+    if (!action) return;
+    btn.setAttribute('title', action);
   }
 
   // Suivi du thème système tant que l'utilisateur n'a pas choisi explicitement.
   media.addEventListener('change', function (e) {
-    if (localStorage.getItem(STORAGE_KEY)) return;
+    if (hasManualChoice) return;
+    try { if (localStorage.getItem(STORAGE_KEY)) return; } catch (err) { /* stockage indisponible */ }
     apply(e.matches ? 'dark' : 'light');
   });
 
@@ -44,6 +47,7 @@
     if (!btn) return;
     btn.addEventListener('click', function () {
       var next = current() === 'dark' ? 'light' : 'dark';
+      hasManualChoice = true;
       try { localStorage.setItem(STORAGE_KEY, next); } catch (err) { /* stockage indisponible */ }
       apply(next);
     });

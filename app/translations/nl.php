@@ -4,6 +4,22 @@ declare(strict_types=1);
 
 /** Vertaalcatalogus — Nederlands. */
 return [
+    'nav.followup' => 'Verbruik',
+    'nav.budget' => 'Budget',
+    'nav.project' => 'Project',
+    'common.dark_theme' => 'Donker thema',
+    'nav.description.meters' => 'Mijn meters instellen',
+    'nav.description.batteries' => 'Mijn energieopslag beheren',
+    'nav.description.stats' => 'Verbruik vergelijken',
+    'nav.description.tariffs' => 'Contracten en prijzen beheren',
+    'nav.description.advances' => 'Mijn betalingen opvolgen',
+    'nav.description.reconciliation' => 'Raming en factuur vergelijken',
+    'nav.description.account' => 'Profiel en voorkeuren',
+    'nav.description.admin' => 'Voor beheerders',
+    'nav.menu' => 'Menu',
+    'nav.main' => 'Hoofdnavigatie',
+    'common.theme_light' => 'Licht thema inschakelen',
+    'common.theme_dark' => 'Donker thema inschakelen',
     'app.title'            => 'Beheer van energiekosten',
 
     // SEO (#84): meta description van de publieke pagina's. Streef naar 150-160
