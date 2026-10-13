@@ -121,6 +121,8 @@ comme `{}`.
 |----------|---------------|----------------|---------------------|
 | `gas_entry` | `{ counter_m3: float>=0, reading_at?: date, meter_id?: int }` | `{ ok:true, saved_at (ISO), counter_m3 }` | `counter_m3` invalide/<0 ; date invalide ; compteur inconnu ou ambigu ; relevé déjà existant à cette date **sur ce compteur** ; `counter_m3` < relevé précédent ou > relevé suivant **du même compteur**. |
 | `water_entry` | `{ counter_m3: float>=0, reading_at?: date, meter_id?: int }` | `{ ok:true, saved_at (ISO), counter_m3 }` | idem `gas_entry`. |
+| `delete_electricity_all` | `{ meter_id?: int }` | `{ ok:true, deleted: int }` | compteur inconnu ou ambigu. Supprime uniquement les relevés du compteur visé ; `deleted` compte les lignes supprimées, tous registres confondus (pas les horodatages). |
+| `delete_electricity_meter` | `{ meter_id?: int }` | `{ ok:true, deleted: 0\|1 }` | compteur inconnu ou ambigu. Supprime le compteur visé, ses registres et ses relevés en cascade ; `deleted` compte les compteurs supprimés. |
 | `save_tariff` | `{ energy_type: "electricity"\|"gas"\|"water", name, valid_from: date, valid_to?: date (**exclue**), lines: object, pricing_mode?: string }` | `{ ok:true, id }` | champ requis manquant (`energy_type`, `name`, `valid_from`, `lines`) ; `energy_type` hors énum ; `valid_from`/`valid_to` invalides ; `valid_to` ≤ `valid_from` (plage vide, la borne de fin étant exclue) ; clé de ligne hors format ; montant de ligne illisible ; aucune ligne exploitable. |
 | `battery_entry` | `{ battery_id?: int, charge?: float>=0, discharge?: float>=0, reading_at?: date }` | `{ ok:true, battery_id, saved_at (ISO), received, inserted }` | batterie inconnue ou ambiguë ; aucun des deux compteurs fourni ; valeur invalide/<0 ; ce **compteur** existe déjà à cet horodatage ; valeur < relevé précédent ou > relevé suivant **du même compteur** ; un autre relevé existe déjà dans le jour civil. |
 | `ingest_battery` | `{ battery_id?: int, readings: [{ timestamp: date, charge?, discharge? }] }` ou une lecture unique à la racine | `{ ok:true, battery_id, received, inserted }` | batterie inconnue ou ambiguë ; `readings` non tableau ; batch > 1000 ; horodatage invalide ; aucun compteur sur une lecture ; valeur invalide/<0. Un jour déjà servi est **ignoré en silence**, pas refusé. |
@@ -155,6 +157,14 @@ refuse explicitement (422) ; `ingest_battery` ignore la lecture en silence, pour
 qu'un agent poussant toutes les heures soit dédupliqué plutôt que mis en échec.
 
 ### Compteurs (#55)
+
+Les deux actions de suppression électrique sont réservées aux sessions navigateur,
+comme les autres suppressions ; elles ne sont pas ouvertes aux jetons Bearer.
+Le bouton « Tout supprimer » de `/meter-readings` utilise `delete_electricity_all`
+et conserve l'identifiant, le nom, les dates et les registres du compteur.
+Un compteur vide ou absent renvoie `deleted:0` sans être créé.
+`delete_electricity_meter` conserve son comportement destructif pour les appels
+existants, mais n'est plus utilisé par ce bouton (#67).
 
 Un foyer peut déclarer **plusieurs compteurs par énergie** (maison + atelier, ou
 un compteur remplacé en cours d'année) sur la page `/meters`. Toutes les routes
