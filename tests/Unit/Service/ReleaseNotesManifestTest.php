@@ -48,7 +48,7 @@ final class ReleaseNotesManifestTest extends TestCase
     public function testLegacyImpactFlagDoesNotExcludeTechnicalNotes(): void
     {
         $this->write(['version' => '1.2.3', 'user_impact' => false, 'announcements' => [
-            'en' => ['title' => 'Version 1.2.3', 'content' => '**Maintenance**\n- Refactor release validation.'],
+            'en' => ['title' => 'Version 1.2.3', 'content' => "**Maintenance**\n- Refactor release validation."],
         ]]);
         self::assertArrayHasKey('en', ReleaseNotesManifest::load($this->directory, '1.2.3')['announcements']);
     }

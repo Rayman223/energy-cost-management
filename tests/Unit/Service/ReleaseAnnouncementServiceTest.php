@@ -99,7 +99,7 @@ final class ReleaseAnnouncementServiceTest extends TestCase
 
     public function testTechnicalReleaseIsPublishedRegardlessOfLegacyImpactFlag(): void
     {
-        $this->manifest('1.0.1', false, '**Maintenance**\n- Update dependencies, CI and tests.');
+        $this->manifest('1.0.1', false, "**Maintenance**\n- Update dependencies, CI and tests.");
         $result = $this->service()->run($this->directory, '1.0.1', true);
         self::assertSame(['status' => 'sent', 'versions' => ['1.0.1']], $result['languages']['en']);
         self::assertStringContainsString('Update dependencies, CI and tests.', $this->client->payloads[0]['embeds'][0]['description']);
@@ -176,7 +176,7 @@ final class ReleaseAnnouncementServiceTest extends TestCase
 
     public function testPartialDeliveryDoesNotMarkIncompleteNotesAsSent(): void
     {
-        $this->manifest('1.0.1', true, str_repeat('- Technical change.\n', 500));
+        $this->manifest('1.0.1', true, str_repeat("- Technical change.\n", 500));
         $this->client->failOnPost = 2;
         $result = $this->service()->run($this->directory, '1.0.1', true);
         self::assertFalse($result['ok']);
