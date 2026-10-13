@@ -20,8 +20,14 @@
     }
 
     function syncViewport() {
+      var focusOnToggle = document.activeElement === button;
       button.hidden = !mobile.matches;
       setExpanded(!mobile.matches);
+      // Le bouton disparaît sur ordinateur : conserver le parcours clavier.
+      if (!mobile.matches && focusOnToggle) {
+        var firstLink = menu.querySelector('a[href]');
+        if (firstLink) firstLink.focus();
+      }
     }
 
     button.addEventListener('click', function () {
