@@ -38,7 +38,7 @@ final class ReleaseNotesManifest
         return file_exists($path) || is_link($path);
     }
 
-    /** @return array{version: string, user_impact: bool, announcements: array<string, array{title: string, content: string}>} */
+    /** @return array{version: string, announcements: array<string, array{title: string, content: string}>} */
     public static function load(string $directory, string $version): array
     {
         self::assertVersion($version);
@@ -48,16 +48,14 @@ final class ReleaseNotesManifest
             throw new RuntimeException('Missing or unreadable release manifest: ' . $version);
         }
         $data = json_decode($text, true, 512, JSON_THROW_ON_ERROR);
-        if (!is_array($data) || ($data['version'] ?? null) !== $version || !is_bool($data['user_impact'] ?? null)) {
-            throw new RuntimeException('Invalid version or user_impact in manifest: ' . $version);
+        if (!is_array($data) || ($data['version'] ?? null) !== $version) {
+            throw new RuntimeException('Invalid version in manifest: ' . $version);
         }
         $announcements = $data['announcements'] ?? null;
-        if (!$data['user_impact']) {
-            if ($announcements !== []) {
-                throw new RuntimeException('A release without user impact must have announcements: [].');
-            }
-
-            return ['version' => $version, 'user_impact' => false, 'announcements' => []];
+        // Preserve the historical empty baseline; every subsequent release needs notes.
+        // Legacy user_impact fields are ignored: technical changes matter too.
+        if ($version === '1.0.0' && $announcements === []) {
+            return ['version' => $version, 'announcements' => []];
         }
         if (!is_array($announcements) || array_keys($announcements) !== ['en']) {
             throw new RuntimeException('Exactly one English announcement is required: ' . $version);
@@ -76,7 +74,7 @@ final class ReleaseNotesManifest
             throw new RuntimeException('Empty, oversized or invalid English announcement: ' . $version);
         }
 
-        return ['version' => $version, 'user_impact' => true, 'announcements' => ['en' => ['title' => $title, 'content' => $content]]];
+        return ['version' => $version, 'announcements' => ['en' => ['title' => $title, 'content' => $content]]];
     }
 
     /** @return list<string> */

@@ -189,6 +189,8 @@ preserved across deployments (`git clean` runs without `-x`).
 
 English release announcements use `VERSION`, versioned JSON notes under
 `releases/`, and an optional `discord.release_webhook_en` secret in `config.php`.
+Notes cover all changes, including refactoring, tests, dependencies, CI and
+documentation. Long notes are split across Discord messages without truncation.
 The Unraid deployment publishes pending notes after migrations and its PHP/DB
 check; receipts prevent resending completed releases. See
 [`app/docs/release-announcements.md`](app/docs/release-announcements.md) for

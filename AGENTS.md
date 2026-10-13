@@ -6,6 +6,7 @@
 - Si une demande est ambiguë, sous-spécifiée ou implique plusieurs choix aux conséquences différentes, poser les questions utiles en un seul passage, avec des options concrètes et une recommandation. Ne pas interrompre pour un détail déductible du code ou un choix réversible; avancer avec une hypothèse raisonnable et la signaler.
 - Ne jamais attendre ni surveiller la CI après un push ou une mise à jour de PR. Effectuer les vérifications locales demandées, fournir le lien de la PR et laisser l'utilisateur consulter la CI.
 - Tout changement de schéma ou de données de base doit inclure une migration versionnée et idempotente dans la même PR. Maintenir aussi `ensureSchema()` et `database.sql` à jour lorsqu'ils font partie du mécanisme du projet.
+- Les notes de release Discord doivent couvrir toutes les modifications livrées, y compris refactorings, tests, dépendances, CI, documentation et configuration publique. Ce projet open-source ne filtre pas les annonces selon leur impact visible pour l'utilisateur. Préparer les notes en anglais dans `releases/<version>.json` et mettre à jour `VERSION`; ne jamais inclure de secrets ni modifier un manifeste déjà publié.
 - Préfixer les commandes shell avec `rtk` lorsque cet outil est disponible et requis par l'environnement.
 
 ## Projet

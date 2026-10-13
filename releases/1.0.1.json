@@ -1,0 +1,9 @@
+{
+  "version": "1.0.1",
+  "announcements": {
+    "en": {
+      "title": "Version 1.0.1",
+      "content": "**Release announcements**\n- Include all delivered changes in Discord release notes, including refactoring, tests, dependencies, CI, documentation and public configuration changes.\n- Stop filtering announcements by visible user impact: existing user_impact flags no longer suppress releases with English notes. Every release after the historical 1.0.0 baseline must include an English announcement.\n- Publish long notes as numbered Discord messages without truncation, preserving older pending release notes, emoji and code blocks.\n- Record delivery only after every message in the batch succeeds, so incomplete announcements remain available for retry.\n\n**Tests and documentation**\n- Add regression coverage for technical releases, complete long notes, Unicode, code blocks and retries after partial delivery.\n- Update release preparation, contributor instructions and project documentation to explain the complete changelog policy and multipart delivery."
+    }
+  }
+}
