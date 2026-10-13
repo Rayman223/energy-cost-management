@@ -699,7 +699,7 @@ wireRowDeletion('battery-tbody', 'delete_battery_reading', (btn) => ({ id: parse
 
 wireDeleteAll('gas-delete-all', 'delete_gas_all', 'gas-del-feedback', reloadGas, () => ({ meter_id: meterTarget('gas') }));
 wireDeleteAll('water-delete-all', 'delete_water_all', 'water-del-feedback', reloadWater, () => ({ meter_id: meterTarget('water') }));
-wireDeleteAll('electricity-delete-all', 'delete_electricity_meter', 'electricity-del-feedback', loadElectricityHistory, () => ({ meter_id: meterTarget('electricity') }));
+wireDeleteAll('electricity-delete-all', 'delete_electricity_all', 'electricity-del-feedback', loadElectricityHistory, () => ({ meter_id: meterTarget('electricity') }));
 // « Tout supprimer » ne vide que la batterie sélectionnée : les autres gardent
 // leur historique. wireDeleteAll poste un corps vide, d'où le surcharge ici.
 document.getElementById('battery-delete-all')?.addEventListener('click', () => {

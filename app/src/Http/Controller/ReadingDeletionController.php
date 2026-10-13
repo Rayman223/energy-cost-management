@@ -70,6 +70,13 @@ final class ReadingDeletionController
         return JsonResponse::ok(['ok' => true, 'deleted' => $repo->deleteAll()]);
     }
 
+    public function electricityAll(Request $request): JsonResponse
+    {
+        $repo = $this->electricityRepo->forMeter($this->meterFor($request, 'electricity'));
+
+        return JsonResponse::ok(['ok' => true, 'deleted' => $repo->deleteAll()]);
+    }
+
     /**
      * Supprime UN compteur électrique et tout son historique — celui qui est visé,
      * à défaut le compteur par défaut. Jamais le parc entier (#55).

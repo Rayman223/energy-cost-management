@@ -310,6 +310,31 @@ final class ElectricityReadingRepository implements LegacyDailyRepositoryInterfa
     }
 
     /**
+     * Supprime tous les relevés du compteur visé par l'historique, en conservant
+     * le compteur et ses registres. Sans cible explicite, vise le compteur par
+     * défaut de l'utilisateur. Ne crée aucune topologie si elle est absente.
+     *
+     * @return int Nombre de lignes meter_readings supprimées, tous registres confondus.
+     */
+    public function deleteAll(): int
+    {
+        $ids = array_keys($this->historyRegisterMap());
+        if ($ids === []) {
+            return 0;
+        }
+
+        $placeholders = implode(', ', array_fill(0, count($ids), '?'));
+        $stmt = $this->pdo->prepare(
+            "DELETE FROM meter_readings WHERE register_id IN ($placeholders)"
+        );
+        $stmt->execute($ids);
+
+        $this->invalidateMonthlyDeltaCaches();
+
+        return $stmt->rowCount();
+    }
+
+    /**
      * Supprime LE compteur électricité par défaut de l'utilisateur — le plus
      * ancien, celui que résout MeterTopology et donc le seul que ce repository
      * lise ou alimente ; ses registres et tous ses relevés partent en cascade

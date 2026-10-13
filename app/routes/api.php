@@ -214,12 +214,13 @@ if ($viaToken === false) {
     $router->add('POST', 'save_tariff', $tariffs->save(...));
 
     // POST (suppression de relevés) : par ligne (gaz/eau par id, élec par
-    // horodatage) ou intégralité d'un fluide (« Tout supprimer »).
+    // horodatage) ou tous les relevés du compteur visé (« Tout supprimer »).
     $router->add('POST', 'delete_gas_reading',         $deletion->gasReading(...));
     $router->add('POST', 'delete_water_reading',       $deletion->waterReading(...));
     $router->add('POST', 'delete_electricity_reading', $deletion->electricityReading(...));
     $router->add('POST', 'delete_gas_all',             $deletion->gasAll(...));
     $router->add('POST', 'delete_water_all',           $deletion->waterAll(...));
+    $router->add('POST', 'delete_electricity_all',     $deletion->electricityAll(...));
     $router->add('POST', 'delete_electricity_meter',   $deletion->electricityMeter(...));
     $router->add('POST', 'delete_battery_reading',      $batteries->deleteReading(...));
     $router->add('POST', 'delete_battery_readings_all', $batteries->deleteAll(...));

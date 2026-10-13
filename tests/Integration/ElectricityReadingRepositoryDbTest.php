@@ -658,6 +658,51 @@ final class ElectricityReadingRepositoryDbTest extends DatabaseTestCase
         self::assertContains('2026-07-10 12:00:00', array_column($this->repo()->getHistory(), 'reading_at'));
     }
 
+    public function testDeleteAllInvalidatesHistoryAndDeltaCachesWithoutChangingTopology(): void
+    {
+        $repo = $this->repo();
+        $topology = new MeterTopology($this->pdo());
+        $meterId = $topology->findElectricityMeter($this->userId);
+        self::assertNotNull($meterId);
+        $registers = $topology->ownedRegisterMap($this->userId, $meterId);
+        $repo->insertIndexes(new \DateTimeImmutable('2026-07-10 12:00:00'), ['production' => 500.0]);
+        self::assertSame(11, $repo->countHistory());
+        self::assertNotSame([], $repo->getMonthlyDeltasForMonth(2026, 5));
+        $repo->getMonthlyDeltas();
+
+        self::assertSame(45, $repo->deleteAll());
+
+        self::assertSame([], $repo->getHistory());
+        self::assertSame(0, $repo->countHistory());
+        self::assertSame([], $repo->getMonthlyDeltasForMonth(2026, 5));
+        self::assertSame([], $repo->getMonthlyDeltas());
+        self::assertSame($meterId, $topology->findElectricityMeter($this->userId));
+        self::assertSame($registers, $topology->ownedRegisterMap($this->userId, $meterId));
+        self::assertSame(0, $repo->deleteAll());
+
+        self::assertSame(1, $repo->insertIndexes(new \DateTimeImmutable('2026-08-01 00:00:00'), ['import_t1' => 400.0]));
+        self::assertSame(1, $repo->countHistory());
+        self::assertSame($registers, $topology->ownedRegisterMap($this->userId, $meterId));
+    }
+
+    public function testDeleteAllDefaultsToOneMeterAndRejectsForeignRepositoryTargets(): void
+    {
+        $this->pdo()
+            ->prepare("INSERT INTO meters (user_id, energy_type, label) VALUES (:uid, 'electricity', 'Atelier')")
+            ->execute(['uid' => $this->userId]);
+        $secondId = (int) $this->pdo()->lastInsertId();
+        $second = new ElectricityReadingRepository($this->pdo(), $this->userId, meterId: $secondId);
+        $second->insertIndexes(new \DateTimeImmutable('2026-07-10 12:00:00'), ['import_t1' => 999.0]);
+        $otherId = (new UserRepository($this->pdo()))->create('https://iss.test', 'other-del-all', 'test', 'Other')->id;
+        $foreign = new ElectricityReadingRepository($this->pdo(), $otherId, meterId: $secondId);
+
+        self::assertSame(0, $foreign->deleteAll());
+        self::assertSame(44, $this->repo()->deleteAll());
+        self::assertSame([], $this->repo()->getHistory());
+        self::assertCount(1, $second->getHistory());
+        self::assertSame(2, (int) $this->pdo()->query('SELECT COUNT(*) FROM meters')->fetchColumn());
+    }
+
     public function testDeleteMeterCascadesRegistersAndReadings(): void
     {
         $repo = $this->repo();
