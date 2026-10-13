@@ -1,0 +1,25 @@
+/* Navigation textuelle partagée par l'application et l'accueil public (#118). */
+.site-header .logo { min-width: 0; max-width: 100%; }
+.site-header .logo > div:last-child { min-width: 0; overflow-wrap: anywhere; }
+.header-top-tools { display: flex; align-items: center; gap: 16px; margin-left: auto; }
+.header-menu { flex-basis: 100%; min-width: 0; display: grid; gap: 12px; }
+.header-nav, .header-tools { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; min-width: 0; }
+.header-tools { padding-top: 12px; border-top: 1px solid var(--border); }
+.theme-toggle.header-action {
+  width: auto; height: auto; min-height: 40px; max-width: 100%; padding: 9px 12px;
+  font-family: var(--sans); font-size: .85rem; font-weight: 600; line-height: 1.35;
+  text-align: center; overflow-wrap: anywhere;
+}
+.header-action.active {
+  color: var(--amber); border-color: var(--amber); background: var(--amber-dim);
+  font-weight: 800;
+}
+.header-menu[hidden], .header-menu-toggle[hidden] { display: none; }
+.site-header .lang-summary { min-height: 40px; height: auto; font-family: var(--sans); font-size: .85rem; }
+
+@media (max-width: 1024px) {
+  .header-nav { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr)); }
+  .header-nav .header-action { width: 100%; text-align: left; }
+  .header-tools .lang-menu { min-width: 150px; max-width: 100%; }
+  .header-tools .lang-menu-list { left: 0; right: auto; }
+}

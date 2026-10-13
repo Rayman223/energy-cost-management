@@ -1,0 +1,9 @@
+{
+  "version": "1.1.0",
+  "announcements": {
+    "en": {
+      "title": "Version 1.1.0",
+      "content": "**Navigation**\n- Replace icon-only header links with visible text across the application and public landing page, including Discord, GitHub, project support and sign-in/sign-out controls.\n- Add an explicit dashboard link, preserve the current-page highlight and keep private and admin navigation restricted to the appropriate users.\n- Introduce a collapsible menu on screens up to 1024 pixels wide, with keyboard support, Escape-to-close, responsive resizing and visible navigation when JavaScript is unavailable.\n\n**Accessibility and translations**\n- Display language and theme controls as text, preserve the theme button label when switching themes and translate its accessible action into French, English, German and Dutch.\n- Share header controls and responsive styles between application and landing pages while preserving logout CSRF protection and optional external-link configuration.\n\n**Tests**\n- Add rendering regression coverage for translated navigation, active pages, admin access, public headers, logout security, external links, progressive menu markup and landing-page controls."
+    }
+  }
+}

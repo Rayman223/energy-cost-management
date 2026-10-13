@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 /**
  * En-tête HTML commun : contenu du <head> mutualisé entre toutes les pages.
  *
@@ -83,6 +85,7 @@ $meta          = $meta ?? null;
 <link href="https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
 <?php endif; ?>
 <link rel="stylesheet" href="<?= \App\Support\Assets::url('assets/css/tokens.css') ?>">
+<link rel="stylesheet" href="<?= \App\Support\Assets::url('assets/css/header-nav.css') ?>">
 <?php foreach ($css as $sheet): ?>
 <link rel="stylesheet" href="<?= \App\Support\Assets::url($sheet) ?>">
 <?php endforeach; ?>

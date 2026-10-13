@@ -26,10 +26,11 @@
     var btn = document.getElementById('theme-toggle');
     if (!btn) return;
     var dark = current() === 'dark';
-    // L'icône représente l'action : en clair on propose de passer au sombre.
-    btn.textContent = dark ? '☀️' : '🌙';
-    btn.setAttribute('aria-label', dark ? 'Activer le thème clair' : 'Activer le thème sombre');
-    btn.setAttribute('title', dark ? 'Thème clair' : 'Thème sombre');
+    // Le texte visible reste stable ; le nom accessible décrit aussi l'action.
+    var action = btn.getAttribute(dark ? 'data-theme-light' : 'data-theme-dark');
+    if (!action) return;
+    btn.setAttribute('aria-label', btn.textContent.trim() + ' : ' + action);
+    btn.setAttribute('title', action);
   }
 
   // Suivi du thème système tant que l'utilisateur n'a pas choisi explicitement.

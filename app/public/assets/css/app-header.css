@@ -1,5 +1,5 @@
 /* ── En-tête applicatif commun (#193) ────────────────────────────────────────
-   Bandeau logo + horloge + navigation en icônes, mutualisé sur toutes les pages
+   Bandeau logo + horloge + navigation textuelle, mutualisé sur toutes les pages
    de la coquille app. Rendu par le partial templates/partials/_header.php.
    Contient aussi la largeur de page partagée (.wrap). */
 
@@ -26,17 +26,11 @@ header {
 .logo-text { font-size: 1.15rem; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; color: var(--text-strong); }
 .logo-sub  { font-family: var(--mono); font-size: .76rem; color: var(--muted); letter-spacing: .08em; margin-top: 1px; }
 
-.header-right { display: flex; align-items: center; gap: 20px; flex-wrap: wrap; }
 .clock { font-family: var(--mono); font-size: .8rem; color: var(--muted); text-align: right; }
 .clock span { display: block; }
 .clock .time { font-size: 1.05rem; color: var(--text); }
 
-/* Icône de navigation de la page courante. */
-.theme-toggle.active {
-  color: var(--amber);
-  border-color: var(--amber);
-  background: var(--amber-dim);
-}
+/* Navigation, commandes et menu mobile : voir header-nav.css. */
 
 /* Le sélecteur de langue (.lang-menu) vit dans lang-switcher.css : il est aussi
    utilisé hors coquille app (connexion, accueil public, pages légales). Les

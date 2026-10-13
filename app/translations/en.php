@@ -4,6 +4,10 @@ declare(strict_types=1);
 
 /** Translation catalog — English. */
 return [
+    'nav.menu' => 'Menu',
+    'nav.main' => 'Main navigation',
+    'common.theme_light' => 'Switch to light theme',
+    'common.theme_dark' => 'Switch to dark theme',
     'app.title'            => 'Energy cost management',
 
     // SEO (#84): meta description of public pages. Aim for 150-160 characters —

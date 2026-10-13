@@ -8,6 +8,10 @@ declare(strict_types=1);
  * les valeurs (voir app/docs/plan/i18n.md).
  */
 return [
+    'nav.menu' => 'Menu',
+    'nav.main' => 'Navigation principale',
+    'common.theme_light' => 'Activer le thème clair',
+    'common.theme_dark' => 'Activer le thème sombre',
     // Commun / navigation
     'app.title'            => 'Gestion des coûts énergétiques',
 

@@ -1,4 +1,7 @@
 <?php
+
+declare(strict_types=1);
+
 /**
  * Page d'accueil publique (landing) — présentée aux visiteurs anonymes en mode
  * OIDC. Explique le concept et invite à se connecter. Le bouton « Se connecter »
@@ -28,7 +31,7 @@
 <body>
 <div class="landing">
 
-  <header class="landing-header">
+  <header class="landing-header site-header" data-header>
     <div class="logo">
       <div class="logo-icon">⚡</div>
       <div>
@@ -36,12 +39,13 @@
         <div class="logo-sub"><?= $this->te('app.title') ?></div>
       </div>
     </div>
-    <div class="landing-header-right">
-      <?= $this->partial('discord-link', ['url' => $discordUrl ?? null]) ?>
-      <?= $this->partial('github-link') ?>
-      <?= $this->partial('donate-link', ['url' => $donateUrl ?? null]) ?>
-      <?= $this->partial('_lang-switcher', ['available' => $available]) ?>
-      <button type="button" class="theme-toggle" id="theme-toggle" aria-label="<?= $this->te('common.theme') ?>">🌙</button>
+    <button type="button" class="theme-toggle header-action header-menu-toggle" data-header-toggle aria-controls="header-menu" aria-expanded="true" hidden><?= $this->te('nav.menu') ?></button>
+    <div class="header-menu" id="header-menu">
+      <nav class="header-nav" aria-label="<?= $this->te('nav.main') ?>">
+        <a class="theme-toggle header-action" href="<?= $this->e($this->url('stats')) ?>"><?= $this->te('nav.stats') ?></a>
+        <a class="theme-toggle header-action" href="<?= $this->e($this->url('login')) ?>"><?= $this->te('auth.sign_in') ?></a>
+      </nav>
+      <?= $this->partial('_header-controls', ['available' => $available, 'discordUrl' => $discordUrl ?? null, 'donateUrl' => $donateUrl ?? null]) ?>
     </div>
   </header>
 
@@ -132,5 +136,6 @@
 
 </div>
 <script defer src="<?= \App\Support\Assets::url('assets/js/lang-switcher.js') ?>"></script>
+<script defer src="<?= \App\Support\Assets::url('assets/js/header-nav.js') ?>"></script>
 </body>
 </html>

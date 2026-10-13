@@ -4,6 +4,10 @@ declare(strict_types=1);
 
 /** Vertaalcatalogus — Nederlands. */
 return [
+    'nav.menu' => 'Menu',
+    'nav.main' => 'Hoofdnavigatie',
+    'common.theme_light' => 'Licht thema inschakelen',
+    'common.theme_dark' => 'Donker thema inschakelen',
     'app.title'            => 'Beheer van energiekosten',
 
     // SEO (#84): meta description van de publieke pagina's. Streef naar 150-160

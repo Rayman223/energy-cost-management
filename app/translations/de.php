@@ -4,6 +4,10 @@ declare(strict_types=1);
 
 /** Übersetzungskatalog — Deutsch. */
 return [
+    'nav.menu' => 'Menü',
+    'nav.main' => 'Hauptnavigation',
+    'common.theme_light' => 'Helles Design aktivieren',
+    'common.theme_dark' => 'Dunkles Design aktivieren',
     'app.title'            => 'Verwaltung der Energiekosten',
 
     // SEO (#84): Meta-Description der öffentlichen Seiten. 150-160 Zeichen
