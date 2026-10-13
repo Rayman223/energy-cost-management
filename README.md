@@ -168,7 +168,7 @@ return [
     'api'          => [ 'rate_limit_per_hour' => 600 ],          // per Bearer token
 
     // Discord link shown in the page header. Empty = link hidden.
-    'discord'      => [ 'invite_url' => '' ],                    // e.g. https://discord.gg/xxxxxxx
+    'discord'      => [ 'invite_url' => '', 'release_webhook_en' => '' ], // empty webhook = announcements disabled
 
     // "Support the project" link shown in the page header. Empty = link hidden.
     'donate'       => [ 'url' => '' ],                           // e.g. https://buymeacoffee.com/xxxxxxx
@@ -186,6 +186,13 @@ return [
 
 Never commit `config.php`: it is the single source of truth for secrets and is
 preserved across deployments (`git clean` runs without `-x`).
+
+English release announcements use `VERSION`, versioned JSON notes under
+`releases/`, and an optional `discord.release_webhook_en` secret in `config.php`.
+The Unraid deployment publishes pending notes after migrations and its PHP/DB
+check; receipts prevent resending completed releases. See
+[`app/docs/release-announcements.md`](app/docs/release-announcements.md) for
+preparation, validation and retries.
 
 ---
 
@@ -205,6 +212,7 @@ The full schema is in `app/sql/schema.sql`; incremental changes live in
 | `api_tokens` | per-user ingestion tokens (hashed, rate-limited, revocable) |
 | `batteries` / `battery_readings` | home batteries: hardware, investment, calculation assumptions, and cumulative charge/discharge indexes |
 | `schema_migrations` | applied migration versions |
+| `release_announcements` | confirmed Discord release deliveries (version/language, UTC) |
 
 ---
 
