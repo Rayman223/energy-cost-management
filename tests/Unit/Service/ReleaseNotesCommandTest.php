@@ -26,6 +26,14 @@ final class ReleaseNotesCommandTest extends TestCase
         self::assertArrayHasKey('warning', $result);
     }
 
+    public function testTechnicalReleaseCanBeValidatedWithoutLoadingApplicationConfig(): void
+    {
+        [$code, $stdout, $stderr] = $this->execute(['--validate', '--version=1.0.1']);
+        self::assertSame(0, $code, $stderr);
+        self::assertSame(['ok' => true, 'version' => '1.0.1', 'status' => 'validated'], json_decode($stdout, true, 512, JSON_THROW_ON_ERROR));
+        self::assertSame('', $stderr);
+    }
+
     #[DataProvider('invalidArguments')]
     public function testInvalidModesCannotPublish(array $arguments): void
     {

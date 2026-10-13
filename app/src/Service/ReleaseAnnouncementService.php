@@ -28,7 +28,7 @@ final class ReleaseAnnouncementService
         $releases = [];
         foreach (ReleaseNotesManifest::versionsUpTo($directory, $installed) as $version) {
             $manifest = ReleaseNotesManifest::load($directory, $version);
-            if ($manifest['user_impact']) {
+            if ($manifest['announcements'] !== []) {
                 $releases[] = ['version' => $version] + $manifest['announcements']['en'];
             }
         }
@@ -54,7 +54,9 @@ final class ReleaseAnnouncementService
                 if (!$publish) {
                     return ['status' => 'pending', 'versions' => $versions];
                 }
-                $this->client->post($this->webhook, self::payload(array_reverse($pending)));
+                foreach (self::payloads(array_reverse($pending)) as $payload) {
+                    $this->client->post($this->webhook, $payload);
+                }
                 $this->repository->markSent($versions);
 
                 return ['status' => 'sent', 'versions' => $versions];
@@ -72,11 +74,11 @@ final class ReleaseAnnouncementService
     }
 
     /**
-     * One embed per deployment, newest first. Full notes remain available in git.
+     * All deployment notes, newest first, split into messages without truncation.
      * @param non-empty-list<array{version: string, title: string, content: string}> $pending
-     * @return array<string, mixed>
+     * @return non-empty-list<array<string, mixed>>
      */
-    public static function payload(array $pending): array
+    public static function payloads(array $pending): array
     {
         $title = count($pending) === 1 ? $pending[0]['title']
             : 'Updates from version ' . $pending[count($pending) - 1]['version'] . ' to ' . $pending[0]['version'];
@@ -86,30 +88,53 @@ final class ReleaseAnnouncementService
         ));
         $more = "\n\n[Full release notes](" . self::NOTES_URL . ')';
 
-        return ['embeds' => [[
-            'title' => $title,
-            'url' => self::NOTES_URL,
-            'description' => self::fit($content, 4096 - ReleaseNotesManifest::length($more)) . $more,
-            'color' => 0x2563EB,
-        ]], 'allowed_mentions' => ['parse' => []]];
+        $chunks = self::split($content, 4096 - ReleaseNotesManifest::length($more));
+        $payloads = [];
+        foreach ($chunks as $index => $chunk) {
+            $embed = [
+                'title' => $title,
+                'url' => self::NOTES_URL,
+                'description' => $chunk . $more,
+                'color' => 0x2563EB,
+            ];
+            if (count($chunks) > 1) {
+                $embed['footer'] = ['text' => 'Part ' . ($index + 1) . '/' . count($chunks)];
+            }
+            $payloads[] = ['embeds' => [$embed], 'allowed_mentions' => ['parse' => []]];
+        }
+
+        return $payloads;
     }
 
-    private static function fit(string $text, int $max): string
+    /** @return non-empty-list<string> */
+    private static function split(string $text, int $max): array
     {
-        if (ReleaseNotesManifest::length($text) <= $max) {
-            return $text;
-        }
-        // Reserve space for an ellipsis and a closing code fence if the cut splits one.
-        $cut = mb_substr($text, 0, $max - 5, 'UTF-8');
-        while (ReleaseNotesManifest::length($cut) > $max - 5) {
-            $cut = mb_substr($cut, 0, -1, 'UTF-8');
-        }
-        $newline = mb_strrpos($cut, "\n", 0, 'UTF-8');
-        if ($newline !== false && $newline > intdiv($max, 2)) {
-            $cut = mb_substr($cut, 0, $newline, 'UTF-8');
-        }
+        $chunks = [];
+        $inCode = false;
+        do {
+            // Reserve closing/reopening fences; keep every original character.
+            $limit = $max - 8;
+            $cut = mb_substr($text, 0, $limit, 'UTF-8');
+            while (ReleaseNotesManifest::length($cut) > $limit) {
+                $cut = mb_substr($cut, 0, -1, 'UTF-8');
+            }
+            if (strlen($cut) < strlen($text)) {
+                $newline = mb_strrpos($cut, "\n", 0, 'UTF-8');
+                if ($newline !== false && $newline > intdiv($limit, 2)) {
+                    $cut = mb_substr($cut, 0, $newline + 1, 'UTF-8');
+                }
+                // Do not split a triple-backtick delimiter at a character boundary.
+                for ($i = 0; $i < 2 && str_ends_with($cut, '`') && ($text[strlen($cut)] ?? '') === '`'; ++$i) {
+                    $cut = mb_substr($cut, 0, -1, 'UTF-8');
+                }
+            }
+            $prefix = $inCode ? "```\n" : '';
+            $inCode = $inCode !== (substr_count($cut, '```') % 2 === 1);
+            $chunks[] = $prefix . $cut . ($inCode ? "\n```" : '');
+            $text = substr($text, strlen($cut));
+        } while ($text !== '');
 
-        return rtrim($cut) . '…' . (substr_count($cut, '```') % 2 === 1 ? "\n```" : '');
+        return $chunks;
     }
 
     private function redact(string $message): string

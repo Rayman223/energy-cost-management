@@ -34,8 +34,8 @@ try {
     if ($mode === '--validate') {
         // No config.php, DB connection or webhook is needed to prepare a release.
         $present = ReleaseNotesManifest::exists($directory, $version);
-        $impact = $present && ReleaseNotesManifest::load($directory, $version)['user_impact'];
-        $result = ['ok' => true, 'version' => $version, 'status' => $impact ? 'validated' : 'ignored'];
+        $hasNotes = $present && ReleaseNotesManifest::load($directory, $version)['announcements'] !== [];
+        $result = ['ok' => true, 'version' => $version, 'status' => $hasNotes ? 'validated' : 'ignored'];
         if (!$present) {
             $result['warning'] = ReleaseNotesManifest::MISSING_WARNING;
         }

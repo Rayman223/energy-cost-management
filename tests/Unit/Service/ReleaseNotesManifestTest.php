@@ -29,7 +29,7 @@ final class ReleaseNotesManifestTest extends TestCase
 
     public function testEnglishManifestIsNormalized(): void
     {
-        $this->write(['version' => '1.2.3', 'user_impact' => true, 'announcements' => [
+        $this->write(['version' => '1.2.3', 'announcements' => [
             'en' => ['title' => ' Version 1.2.3 ', 'content' => " **Fixes**\r\n- Updated costs. "],
         ]]);
 
@@ -37,10 +37,20 @@ final class ReleaseNotesManifestTest extends TestCase
             ReleaseNotesManifest::load($this->directory, '1.2.3')['announcements']['en']);
     }
 
-    public function testNoImpactManifestHasNoAnnouncements(): void
+    public function testHistoricalBaselineHasNoAnnouncements(): void
     {
-        $this->write(['version' => '1.2.3', 'user_impact' => false, 'announcements' => []]);
-        self::assertFalse(ReleaseNotesManifest::load($this->directory, '1.2.3')['user_impact']);
+        file_put_contents($this->directory . '/1.0.0.json', json_encode([
+            'version' => '1.0.0', 'user_impact' => false, 'announcements' => [],
+        ], JSON_THROW_ON_ERROR));
+        self::assertSame([], ReleaseNotesManifest::load($this->directory, '1.0.0')['announcements']);
+    }
+
+    public function testLegacyImpactFlagDoesNotExcludeTechnicalNotes(): void
+    {
+        $this->write(['version' => '1.2.3', 'user_impact' => false, 'announcements' => [
+            'en' => ['title' => 'Version 1.2.3', 'content' => '**Maintenance**\n- Refactor release validation.'],
+        ]]);
+        self::assertArrayHasKey('en', ReleaseNotesManifest::load($this->directory, '1.2.3')['announcements']);
     }
 
     /** @param array<string, mixed> $manifest */
@@ -54,12 +64,11 @@ final class ReleaseNotesManifestTest extends TestCase
 
     public static function invalidManifests(): iterable
     {
-        $valid = ['version' => '1.2.3', 'user_impact' => true, 'announcements' => [
+        $valid = ['version' => '1.2.3', 'announcements' => [
             'en' => ['title' => 'Version 1.2.3', 'content' => 'Useful changes.'],
         ]];
         yield 'wrong version' => [array_replace($valid, ['version' => '1.2.4'])];
-        yield 'non boolean impact' => [array_replace($valid, ['user_impact' => 1])];
-        yield 'no impact with text' => [array_replace($valid, ['user_impact' => false])];
+        yield 'legacy opt out without notes' => [array_replace($valid, ['user_impact' => false, 'announcements' => []])];
         yield 'missing announcements' => [['version' => '1.2.3', 'user_impact' => false]];
         yield 'missing English' => [array_replace($valid, ['announcements' => []])];
         yield 'extra language' => [array_replace($valid, ['announcements' => $valid['announcements'] + ['fr' => $valid['announcements']['en']]])];

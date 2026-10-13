@@ -97,6 +97,14 @@ final class ReleaseAnnouncementServiceTest extends TestCase
         self::assertSame([], $this->client->payloads);
     }
 
+    public function testTechnicalReleaseIsPublishedRegardlessOfLegacyImpactFlag(): void
+    {
+        $this->manifest('1.0.1', false, '**Maintenance**\n- Update dependencies, CI and tests.');
+        $result = $this->service()->run($this->directory, '1.0.1', true);
+        self::assertSame(['status' => 'sent', 'versions' => ['1.0.1']], $result['languages']['en']);
+        self::assertStringContainsString('Update dependencies, CI and tests.', $this->client->payloads[0]['embeds'][0]['description']);
+    }
+
     public function testInvalidWebhookIsAnErrorAndDoesNotSend(): void
     {
         $this->manifest('1.0.1');
@@ -127,17 +135,61 @@ final class ReleaseAnnouncementServiceTest extends TestCase
         }
     }
 
-    public function testDiscordLimitsPreserveFullNotesLinkAndCloseTruncatedCode(): void
+    public function testLongNotesArePublishedCompletelyIncludingOlderVersions(): void
     {
-        $payload = ReleaseAnnouncementService::payload([
-            ['version' => '1.0.2', 'title' => 'Version 1.0.2', 'content' => "```\n" . str_repeat('🌍', 3_000)],
+        $content = str_repeat("- Dependency and CI updates 🌍\n", 400) . '- Final change.';
+        $payloads = ReleaseAnnouncementService::payloads([
+            ['version' => '1.0.2', 'title' => 'Version 1.0.2', 'content' => $content],
             ['version' => '1.0.1', 'title' => 'Version 1.0.1', 'content' => 'Older changes.'],
         ]);
-        $description = $payload['embeds'][0]['description'];
-        self::assertLessThanOrEqual(4096, ReleaseNotesManifest::length($description));
-        self::assertSame(0, substr_count($description, '```') % 2);
-        self::assertStringEndsWith('/tree/main/releases)', $description);
-        self::assertTrue(mb_check_encoding($description, 'UTF-8'));
+        self::assertGreaterThan(1, count($payloads));
+        $complete = '';
+        foreach ($payloads as $index => $payload) {
+            $embed = $payload['embeds'][0];
+            self::assertSame('Part ' . ($index + 1) . '/' . count($payloads), $embed['footer']['text']);
+            self::assertLessThanOrEqual(4096, ReleaseNotesManifest::length($embed['description']));
+            self::assertLessThanOrEqual(6000, ReleaseNotesManifest::length($embed['title'] . $embed['description'] . $embed['footer']['text']));
+            self::assertStringEndsWith('/tree/main/releases)', $embed['description']);
+            self::assertTrue(mb_check_encoding($embed['description'], 'UTF-8'));
+            self::assertSame(['parse' => []], $payload['allowed_mentions']);
+            $complete .= explode("\n\n[Full release notes]", $embed['description'])[0];
+        }
+        self::assertSame("**Version 1.0.2**\n" . $content . "\n\n**Version 1.0.1**\nOlder changes.", $complete);
+    }
+
+    public function testSplitCodeFencesPreserveEveryEmoji(): void
+    {
+        $payloads = ReleaseAnnouncementService::payloads([
+            ['version' => '1.0.1', 'title' => 'Version 1.0.1', 'content' => "```text\n" . str_repeat('🌍', 10_000) . "\n```\nLast change."],
+        ]);
+        $emojiCount = 0;
+        foreach ($payloads as $payload) {
+            $description = $payload['embeds'][0]['description'];
+            self::assertLessThanOrEqual(4096, ReleaseNotesManifest::length($description));
+            self::assertSame(0, substr_count($description, '```') % 2);
+            self::assertTrue(mb_check_encoding($description, 'UTF-8'));
+            $emojiCount += substr_count($description, '🌍');
+        }
+        self::assertSame(10_000, $emojiCount);
+        self::assertStringContainsString('Last change.', $description);
+    }
+
+    public function testPartialDeliveryDoesNotMarkIncompleteNotesAsSent(): void
+    {
+        $this->manifest('1.0.1', true, str_repeat('- Technical change.\n', 500));
+        $this->client->failOnPost = 2;
+        $result = $this->service()->run($this->directory, '1.0.1', true);
+        self::assertFalse($result['ok']);
+        self::assertCount(1, $this->client->payloads);
+        self::assertSame([], $this->repository->sent);
+        self::assertSame('pending', $this->service()->run($this->directory, '1.0.1')['languages']['en']['status']);
+
+        $this->client->failOnPost = null;
+        self::assertSame('sent', $this->service()->run($this->directory, '1.0.1', true)['languages']['en']['status']);
+        self::assertSame(['1.0.1'], $this->repository->sent);
+        $posts = count($this->client->payloads);
+        self::assertSame('up_to_date', $this->service()->run($this->directory, '1.0.1', true)['languages']['en']['status']);
+        self::assertCount($posts, $this->client->payloads);
     }
 
     private function service(string $webhook = self::WEBHOOK): ReleaseAnnouncementService
@@ -145,11 +197,11 @@ final class ReleaseAnnouncementServiceTest extends TestCase
         return new ReleaseAnnouncementService($this->repository, $this->client, $webhook);
     }
 
-    private function manifest(string $version, bool $impact = true): void
+    private function manifest(string $version, bool $impact = true, string $content = 'Useful changes.'): void
     {
         file_put_contents($this->directory . '/' . $version . '.json', json_encode([
             'version' => $version, 'user_impact' => $impact,
-            'announcements' => $impact ? ['en' => ['title' => 'Version ' . $version, 'content' => 'Useful changes.']] : [],
+            'announcements' => $version === '1.0.0' && !$impact ? [] : ['en' => ['title' => 'Version ' . $version, 'content' => $content]],
         ], JSON_THROW_ON_ERROR));
     }
 }
@@ -185,10 +237,11 @@ final class RecordingReleaseWebhook extends DiscordWebhook
 {
     public array $payloads = [];
     public bool $fail = false;
+    public ?int $failOnPost = null;
 
     public function post(string $url, array $payload): void
     {
-        if ($this->fail) {
+        if ($this->fail || $this->failOnPost === count($this->payloads) + 1) {
             throw new RuntimeException('Request failed: ' . $url);
         }
         $this->payloads[] = $payload;
