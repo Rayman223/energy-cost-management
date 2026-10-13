@@ -156,6 +156,7 @@ final class ConfigSchema
                 'discord' => [
                     'children' => [
                         'invite_url' => [],
+                        'release_webhook_en' => [],
                     ],
                 ],
 

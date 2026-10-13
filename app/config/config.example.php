@@ -158,6 +158,9 @@ return [
     // Lien vers le serveur Discord, affiché dans l'en-tête des pages.
     'discord' => [
         'invite_url' => '', // ex. https://discord.gg/xxxxxxx (vide = lien masqué)
+        // Secret du webhook d'annonces EN. Vide = aucune publication Discord.
+        // Préparation et reprise : app/docs/release-announcements.md.
+        'release_webhook_en' => '',
     ],
 
     // Lien de soutien au projet (#3), affiché dans l'en-tête des pages. Propre à

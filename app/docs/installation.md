@@ -39,7 +39,10 @@ The script is idempotent and: installs the SSH deploy key when the repo is
 private (see below) → `git fetch` + `reset --hard` to the target →
 `composer install --no-dev` → applies `app/sql/schema.sql` (via the `mariadb`
 client, falling back to `mysql`) → runs `app/scripts/migrate.php` → checks the
-OIDC config. `git clean` runs **without `-x`**, so `app/config/config.php` and
+OIDC config → verifies PHP bootstrap and DB connectivity → validates and publishes
+pending English Discord announcements. An empty `discord.release_webhook_en`
+disables delivery. See [release-announcements.md](release-announcements.md) for
+configuration and retries. `git clean` runs **without `-x`**, so `app/config/config.php` and
 `/vendor/` are preserved.
 
 ### Private repository access (SSH deploy key)

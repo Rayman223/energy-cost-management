@@ -18,6 +18,8 @@
 #   4. Migr.  — applique les migrations versionnées (app/sql/migrations/) via
 #               app/scripts/migrate.php (idempotent, tracé dans schema_migrations).
 #   5. Config — contrôle non-bloquant de la config OIDC (section 'oidc').
+#   6. Runtime — contrôle bloquant du bootstrap PHP et de la connexion DB.
+#   7. Release — validation puis publication des annonces Discord EN en attente.
 #
 # Config OIDC (multi-utilisateurs) : renseigner la section 'oidc' de
 # app/config/config.php (issuer, client_id, client_secret, redirect_uri,
@@ -89,7 +91,7 @@ if [[ "$REPO_URL" == git@* || "$REPO_URL" == ssh://* ]]; then
 fi
 
 # ── Étape 1 : Git ────────────────────────────────────────────────────────────
-log "=== Étape 1/5 — Git (cible : ${TAG:-main}) ==="
+log "=== Étape 1/7 — Git (cible : ${TAG:-main}) ==="
 mkdir -p "$APP_DIR"
 cd "$APP_DIR"
 
@@ -124,7 +126,7 @@ log "Clean des fichiers non suivis (config.php et vendor/ préservés)"
 git clean -fd
 
 # ── Étape 2 : Dépendances + autoloader ───────────────────────────────────────
-log "=== Étape 2/5 — composer install (--no-dev) ==="
+log "=== Étape 2/7 — composer install (--no-dev) ==="
 # ÉTAPE CRITIQUE : depuis le passage en PSR-4 Composer, le namespace applicatif
 # `App\` n'est plus chargé par un autoloader maison mais par le classmap généré
 # ici. `composer install` régénère systématiquement vendor/autoload.php (même si
@@ -146,7 +148,7 @@ docker exec -w "$CONTAINER_APP_DIR" "$CONTAINER" \
     composer install --no-dev --optimize-autoloader --no-interaction --no-progress
 
 # ── Étape 3 : Schéma DB ──────────────────────────────────────────────────────
-log "=== Étape 3/5 — Application de schema.sql ==="
+log "=== Étape 3/7 — Application de schema.sql ==="
 # Credentials lus depuis config.php (source de vérité unique) via le PHP du
 # container SWAG, pour ne rien coder en dur dans ce script.
 mapfile -t DB_CFG < <(docker exec -w "$CONTAINER_APP_DIR" "$CONTAINER" php -r \
@@ -167,13 +169,13 @@ docker exec -i "$DB_CONTAINER" "$DB_CLIENT" -u"$DB_USER" -p"$DB_PASS" "$DB_NAME"
     < "$APP_DIR/app/sql/schema.sql"
 
 # ── Étape 4 : Migrations versionnées ─────────────────────────────────────────
-log "=== Étape 4/5 — Migrations versionnées (migrate.php) ==="
+log "=== Étape 4/7 — Migrations versionnées (migrate.php) ==="
 docker exec -w "$CONTAINER_APP_DIR" "$CONTAINER" php app/scripts/migrate.php
 
 # ── Étape 5 : Contrôle de configuration (OIDC) ───────────────────────────────
 # Non-bloquant : signale si OIDC est activé sans issuer/client, ou désactivé
 # (mode Basic Auth historique, mono-tenant). N'interrompt jamais le déploiement.
-log "=== Étape 5/5 — Contrôle config OIDC ==="
+log "=== Étape 5/7 — Contrôle config OIDC ==="
 docker exec -w "$CONTAINER_APP_DIR" "$CONTAINER" php -r '
     $c = require "app/config/config.php";
     $o = $c["oidc"] ?? [];
@@ -188,5 +190,22 @@ docker exec -w "$CONTAINER_APP_DIR" "$CONTAINER" php -r '
         fwrite(STDOUT, "OIDC activé et configuré (issuer=" . $o["issuer"] . ").\n");
     }
 ' || log "Contrôle config ignoré (config.php illisible ?)"
+
+# ── Étape 6 : Contrôle du runtime ────────────────────────────────────────────
+# Bloquant : aucune annonce si le bootstrap ou la connexion DB échoue.
+log "=== Étape 6/7 — Contrôle PHP et DB ==="
+docker exec -w "$CONTAINER_APP_DIR" "$CONTAINER" php -r '
+    $config = require "app/bootstrap.php";
+    $database = new App\Infrastructure\Database($config["database"]);
+    $database->pdo()->query("SELECT 1");
+    echo "Bootstrap PHP et connexion DB OK.\n";
+'
+
+# ── Étape 7 : Annonces de release ────────────────────────────────────────────
+# Le webhook secret est lu dans config.php. Vide = publication désactivée.
+# Les reçus DB permettent de reprendre sans renvoyer les versions déjà livrées.
+log "=== Étape 7/7 — Annonces Discord EN ==="
+docker exec -w "$CONTAINER_APP_DIR" "$CONTAINER" php app/scripts/release-notes.php --validate
+docker exec -w "$CONTAINER_APP_DIR" "$CONTAINER" php app/scripts/release-notes.php --publish
 
 log "=== Déploiement OK (${TAG:-main}) ==="

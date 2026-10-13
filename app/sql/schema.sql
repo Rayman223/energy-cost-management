@@ -367,6 +367,14 @@ CREATE TABLE IF NOT EXISTS battery_readings (
     CONSTRAINT fk_battery_readings_battery FOREIGN KEY (battery_id) REFERENCES batteries (id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+-- English Discord release receipts (#112), written only after delivery.
+CREATE TABLE IF NOT EXISTS release_announcements (
+    version VARCHAR(32) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    lang VARCHAR(2) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    sent_at DATETIME NOT NULL COMMENT 'Discord delivery time (UTC)',
+    PRIMARY KEY (version, lang)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 -- ── Suivi des migrations versionnées ─────────────────────────────────────
 CREATE TABLE IF NOT EXISTS schema_migrations (
     version    VARCHAR(255) NOT NULL PRIMARY KEY,
