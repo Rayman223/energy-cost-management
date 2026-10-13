@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 /**
  * Guide d'envoi API (#132) : mode d'emploi utilisateur pour pousser ses relevés
  * (électricité, gaz, eau) sur l'API d'ingestion avec un jeton Bearer.
@@ -56,6 +58,9 @@ $url   = $this->e($apiUrl);
         {"timestamp":"2026-07-16T11:00:00+02:00","import_t1":1240.1}
       ]}'</code></pre>
   <p class="muted"><?= $this->te('apiguide.meter_note') ?></p>
+  <p><?= $this->te('apiguide.meter_read_note') ?></p>
+<pre><code>curl "<?= $url ?>?action=gas_history&amp;meter_id=7" \
+  -b cookies.txt</code></pre>
 
   <!-- ── Électricité ──────────────────────────────────────────────────────── -->
   <h2><?= $this->te('apiguide.elec_title') ?></h2>

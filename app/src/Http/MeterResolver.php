@@ -8,7 +8,11 @@ use App\Domain\Meter;
 use App\Repository\MeterRepository;
 
 /**
- * Compteur visé par une requête d'écriture ou d'historique (#55).
+ * Compteur visé par une requête d'écriture ou de lecture (#55, #78).
+ *
+ * En lecture, {@see resolveForRead()} utilise le compteur au plus petit
+ * identifiant si la cible est absente, même s'il est fermé. Les règles strictes
+ * ci-dessous restent réservées aux écritures et aux suppressions.
  *
  * Calqué sur la résolution de batterie de {@see \App\Http\Controller\BatteryReadingController}
  * — même problème, mêmes règles :
@@ -31,6 +35,23 @@ final class MeterResolver
 {
     public function __construct(private readonly MeterRepository $meters)
     {
+    }
+
+    /**
+     * Lecture mono-compteur : cible explicite validée comme en écriture, sinon
+     * compteur par défaut. L'ajout d'un compteur ne casse pas les lectures qui
+     * omettent `meter_id`. Aucun compteur n'est créé par cette résolution.
+     *
+     * @throws ValidationException identifiant explicite invalide
+     */
+    public function resolveForRead(mixed $raw, string $energyType): ?int
+    {
+        if ($raw !== null && $raw !== '') {
+            return $this->resolve($raw, $energyType);
+        }
+
+        // listByEnergy() est triée par id, comme MeterTopology::findDefaultMeter().
+        return $this->meters->listByEnergy($energyType)[0]->id ?? null;
     }
 
     /**
