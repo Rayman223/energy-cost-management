@@ -10,6 +10,7 @@
   'use strict';
 
   var STORAGE_KEY = 'theme';
+  var hasManualChoice = false;
   var root = document.documentElement;
   var media = window.matchMedia('(prefers-color-scheme: dark)');
 
@@ -35,6 +36,7 @@
 
   // Suivi du thème système tant que l'utilisateur n'a pas choisi explicitement.
   media.addEventListener('change', function (e) {
+    if (hasManualChoice) return;
     try { if (localStorage.getItem(STORAGE_KEY)) return; } catch (err) { /* stockage indisponible */ }
     apply(e.matches ? 'dark' : 'light');
   });
@@ -45,6 +47,7 @@
     if (!btn) return;
     btn.addEventListener('click', function () {
       var next = current() === 'dark' ? 'light' : 'dark';
+      hasManualChoice = true;
       try { localStorage.setItem(STORAGE_KEY, next); } catch (err) { /* stockage indisponible */ }
       apply(next);
     });
