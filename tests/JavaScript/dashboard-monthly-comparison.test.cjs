@@ -12,7 +12,7 @@ const boundary = source.indexOf('// ── Récapitulatif annuel');
 assert.ok(boundary > 0);
 const electricitySource = source.slice(0, boundary);
 
-function render(locale, weighting = 'standard_profile', comparison = {}) {
+function render(locale, weighting = 'standard_profile', comparison = {}, energyAmount = 2.16) {
   const catalog = JSON.parse(execFileSync('php', ['-r',
     'echo json_encode(require $argv[1]);', resolve(root, `app/translations/${locale}.php`),
   ], { encoding: 'utf8' }));
@@ -29,8 +29,8 @@ function render(locale, weighting = 'standard_profile', comparison = {}) {
       profile_code: weighting === 'standard_profile' ? 'RLP0N' : null,
     }],
     cost: {
-      total: 2.16, energy_total: 2.16, htva: 2, vat_rate: 6,
-      lines: [{ key: 'energy_dynamic', group: 'energy', kind: 'energy_flat', amount: 2.16, quantity: 4, rate: 0.54 }],
+      total: energyAmount, energy_total: energyAmount, htva: energyAmount / 1.06, vat_rate: 6,
+      lines: [{ key: 'energy_dynamic', group: 'energy', kind: 'energy_flat', amount: energyAmount, quantity: 4, rate: energyAmount / 4 }],
     },
     dynamic: {
       available: true, is_simulation: true,
@@ -72,6 +72,15 @@ for (const locale of ['fr', 'en', 'de', 'nl']) {
       assert.ok(contract.includes(catalog[`dash.dynamic.weighting_${weighting}`]));
       assert.ok(contract.includes('cost-formula-note--fallback'));
       assert.ok(!simulation.includes(catalog[`dash.dynamic.weighting_${weighting}`]));
+    });
+  }
+
+  for (const weighting of ['standard_profile', 'actual_load', 'baseload']) {
+    test(`${locale}: informations mensuelles conservées avec une énergie nulle (${weighting})`, () => {
+      const { contract, catalog } = render(locale, weighting, {}, 0);
+      assert.ok(contract.includes(catalog['dash.cost.energy_variable']));
+      assert.ok(contract.includes(catalog[`dash.dynamic.weighting_${weighting}`]));
+      assert.ok(contract.includes(catalog['dash.dynamic.monthly_provisional']));
     });
   }
 

@@ -121,7 +121,10 @@ function costLineDetail(ln) {
 function costLinesHtml(c, row, options = {}) {
   let html = '';
   COST_GROUP_ORDER.forEach((g) => {
-    const lines = (c.lines || []).filter((l) => l.group === g && (Number(l.amount) || Number(l.rate)));
+    // Le prix mensuel et sa pondération restent informatifs même si l'énergie vaut zéro.
+    const lines = (c.lines || []).filter((l) => l.group === g && (
+      Number(l.amount) || Number(l.rate) || (l.key === 'energy_dynamic' && options.energyNote)
+    ));
     if (!lines.length) return;
     const allCredit = lines.every(isCreditLine);
     html += `<div class="cost-group-label ${allCredit ? 'cost-group-label--credit' : ''}">${COST_GROUP_LABELS[g] || g}</div>`;
