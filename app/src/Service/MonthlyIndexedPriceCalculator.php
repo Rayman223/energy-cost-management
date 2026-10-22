@@ -177,7 +177,7 @@ final class MonthlyIndexedPriceCalculator
     }
 
     /**
-     * Cascade de pondération, appliquée au mois : courbe réelle → profil standard →
+     * Cascade de pondération, appliquée au mois : profil standard → courbe réelle →
      * baseload. Chaque niveau n'est retenu que si ses poids recouvrent effectivement
      * des créneaux cotés ; sinon le suivant prend la main.
      *
@@ -188,6 +188,18 @@ final class MonthlyIndexedPriceCalculator
      */
     private function weightedPrice(string $month, array $prices, int $resolutionMin, array $load, array $profileWeights): array
     {
+        $monthProfile = $this->alignWeights($this->pricesOfMonth($month, $profileWeights), $resolutionMin);
+        if ($monthProfile !== []) {
+            $price = $this->average($prices, $monthProfile);
+            if ($price !== null) {
+                return [
+                    'price'        => $price,
+                    'weighting'    => LoadWeighting::StandardProfile,
+                    'coverage_pct' => min(100.0, count(array_intersect_key($monthProfile, $prices)) / count($prices) * 100.0),
+                ];
+            }
+        }
+
         $monthLoad  = array_values(array_filter($load, static fn (array $r): bool => str_starts_with($r['slot'], $month)));
         $totalKwh   = array_sum(array_column($monthLoad, 'import_kwh'));
         $measured = array_filter($monthLoad, static fn (array $r): bool =>
@@ -208,18 +220,6 @@ final class MonthlyIndexedPriceCalculator
             ));
             if ($price !== null) {
                 return ['price' => $price, 'weighting' => LoadWeighting::ActualLoad, 'coverage_pct' => $measuredShare];
-            }
-        }
-
-        $monthProfile = $this->alignWeights($this->pricesOfMonth($month, $profileWeights), $resolutionMin);
-        if ($monthProfile !== []) {
-            $price = $this->average($prices, $monthProfile);
-            if ($price !== null) {
-                return [
-                    'price'        => $price,
-                    'weighting'    => LoadWeighting::StandardProfile,
-                    'coverage_pct' => min(100.0, count(array_intersect_key($monthProfile, $prices)) / count($prices) * 100.0),
-                ];
             }
         }
 

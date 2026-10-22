@@ -101,7 +101,7 @@
   /* ── Cost breakdown ────────────────────────────────────────────────────── */
   .cost-wrap { display: grid; grid-template-columns: 1fr 320px; gap: 12px; }
 
-  .cost-lines { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 20px 24px; }
+  .cost-lines { min-width: 0; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 20px 24px; }
   .cost-line {
     display: grid;
     grid-template-columns: 1fr auto auto;
@@ -342,6 +342,9 @@
     .gas-grid { grid-template-columns: 1fr; }
   }
   @media (max-width: 480px) {
+    .cost-line { grid-template-columns: minmax(0, 1fr) auto; }
+    .cost-line .cl-amount { grid-column: 2; grid-row: 1; }
+    .cost-line .cl-detail { grid-column: 1 / -1; grid-row: 2; white-space: normal; overflow-wrap: anywhere; }
     .cards-5, .cards-4, .cards-3, .cards-2 { grid-template-columns: 1fr; }
     /* auto-fit tiendrait encore 2 colonnes ici : on force l'empilement. */
     .cards-auto { grid-template-columns: 1fr; }

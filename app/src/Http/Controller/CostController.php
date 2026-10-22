@@ -35,7 +35,7 @@ final class CostController
 
         $data = $this->costSvc->estimateMonthElectricity($year, $month);
         if ($this->dynamicEnabled) {
-            $data['dynamic'] = $this->costSvc->estimateMonthElectricityDynamic($year, $month);
+            $data['dynamic'] = $this->costSvc->estimateMonthElectricityComparison($year, $month);
         }
 
         return JsonResponse::ok($data);
@@ -45,7 +45,7 @@ final class CostController
     {
         $data = $this->costSvc->estimateCurrentMonthElectricity();
         if ($this->dynamicEnabled) {
-            $data['dynamic'] = $this->costSvc->estimateCurrentMonthElectricityDynamic();
+            $data['dynamic'] = $this->costSvc->estimateCurrentMonthElectricityComparison();
         }
 
         return JsonResponse::ok($data);

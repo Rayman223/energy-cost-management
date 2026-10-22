@@ -172,13 +172,28 @@ final class CostCalculationService
      *
      * Depuis #245, ce n'est plus le pendant de {@see estimateCurrentMonthElectricity()}
      * — qui applique désormais à chaque sous-période SON propre mode — mais une
-     * PROJECTION : le comparatif « et si j'étais en dynamique ? » du dashboard, et la
-     * base du rapprochement de facture. La réponse porte `is_simulation` pour dire si
-     * elle correspond, ou non, au contrat réellement en vigueur sur la période.
+     * projection indexée conservant le mode mensuel pour le rapprochement de facture.
+     * Le dashboard utilise les méthodes Comparison pour simuler un prix au créneau.
+     * `is_simulation` dit si la réponse correspond au contrat en vigueur.
      *
      * @return array<string, mixed>
      */
     public function estimateCurrentMonthElectricityDynamic(): array
+    {
+        return $this->currentMonthDynamic(false);
+    }
+
+    /**
+     * Comparatif au prix du créneau, distinct du contrat mensuel.
+     * @return array<string, mixed>
+     */
+    public function estimateCurrentMonthElectricityComparison(): array
+    {
+        return $this->currentMonthDynamic(true);
+    }
+
+    /** @return array<string, mixed> */
+    private function currentMonthDynamic(bool $comparison): array
     {
         $deltas = $this->legacyRepo->getMonthlyDeltas();
         if (empty($deltas)) {
@@ -194,7 +209,7 @@ final class CostCalculationService
             return self::unavailable('No active electricity tariff configured', 'dash.reason.no_tariff_electricity');
         }
 
-        return $this->buildDynamicResponse($deltas, $coverage->segments, $days);
+        return $this->buildDynamicResponse($deltas, $coverage->segments, $days, $comparison);
     }
 
     /**
@@ -203,6 +218,21 @@ final class CostCalculationService
      * @return array<string, mixed>
      */
     public function estimateMonthElectricityDynamic(int $year, int $month): array
+    {
+        return $this->monthDynamic($year, $month, false);
+    }
+
+    /**
+     * Comparatif historique au prix du créneau.
+     * @return array<string, mixed>
+     */
+    public function estimateMonthElectricityComparison(int $year, int $month): array
+    {
+        return $this->monthDynamic($year, $month, true);
+    }
+
+    /** @return array<string, mixed> */
+    private function monthDynamic(int $year, int $month, bool $comparison): array
     {
         $deltas = $this->legacyRepo->getMonthlyDeltasForMonth($year, $month);
         if (empty($deltas)) {
@@ -221,7 +251,7 @@ final class CostCalculationService
             );
         }
 
-        return $this->buildDynamicResponse($deltas, $coverage->segments, $days);
+        return $this->buildDynamicResponse($deltas, $coverage->segments, $days, $comparison);
     }
 
     /**
@@ -1227,7 +1257,7 @@ final class CostCalculationService
      * Projection « tout dynamique » : toutes les sous-périodes sont indexées au spot,
      * y compris celles dont la grille est fixe.
      *
-     * Alimente le comparatif du dashboard et le rapprochement de facture, pas la
+     * Alimente le rapprochement de facture et, avec $comparison, le dashboard, pas la
      * facturation elle-même — celle-ci passe par {@see buildElectricityResponse()}.
      * `is_simulation` distingue les deux cas pour l'UI : à `true`, le montant ne
      * correspond à aucun contrat réellement en vigueur sur la période.
@@ -1240,10 +1270,44 @@ final class CostCalculationService
      * @param list<TariffSegment> $segments
      * @return array<string, mixed>
      */
-    private function buildDynamicResponse(array $deltas, array $segments, int $days): array
+    private function buildDynamicResponse(array $deltas, array $segments, int $days, bool $comparison = false): array
     {
+        // Déterminer la simulation sur les grilles contractuelles, même si les prix
+        // sont désactivés ou absents. Ne jamais modifier les grilles du repository.
+        $simulated = $this->dynamicSegmentIndexes($segments) === [];
+        if ($comparison) {
+            foreach ($segments as $i => $segment) {
+                $grid = $segment->grid;
+                if (!$grid->isMonthlyIndexed()) {
+                    continue;
+                }
+                $simulated = true;
+                $segments[$i] = new TariffSegment(
+                    new TariffGrid(
+                        id: $grid->id,
+                        energyType: $grid->energyType,
+                        name: $grid->name,
+                        validFrom: $grid->validFrom,
+                        validTo: $grid->validTo,
+                        lines: $grid->lines,
+                        pcsCoefficient: $grid->pcsCoefficient,
+                        userId: $grid->userId,
+                        country: $grid->country,
+                        currency: $grid->currency,
+                        vatRate: $grid->vatRate,
+                        pricingMode: 'dynamic_quarter',
+                        loadProfileCode: $grid->loadProfileCode,
+                    ),
+                    $segment->from,
+                    $segment->to,
+                    $segment->days,
+                );
+            }
+        }
+
         if ($this->dynamicPriceRepo === null || !$this->dynamicEnabled) {
-            return self::unavailable('Tarif dynamique non configuré.', 'dash.reason.dynamic_not_configured');
+            return self::unavailable('Tarif dynamique non configuré.', 'dash.reason.dynamic_not_configured')
+                + ['is_simulation' => $simulated];
         }
 
         $all      = array_keys($segments);
@@ -1256,9 +1320,7 @@ final class CostCalculationService
             strict: true,
         );
 
-        if (($response['available'] ?? false) === true) {
-            $response['is_simulation'] = $this->dynamicSegmentIndexes($segments) === [];
-        }
+        $response['is_simulation'] = $simulated;
 
         return $response;
     }
@@ -1573,9 +1635,8 @@ final class CostCalculationService
     /**
      * Champs propres au prix unitaire mensuel, ajoutés à la réponse (#93).
      *
-     * `load_weighting` expose la pondération la plus GROSSIÈRE rencontrée sur la
-     * période : annoncer « courbe réelle » alors qu'un des mois a été ramené au
-     * baseload laisserait croire à une précision qui n'existe pas sur l'ensemble.
+     * `load_weighting` expose le repli le plus éloigné du profil contractuel :
+     * un seul mois sans RLP doit rester visible sur toute la période.
      *
      * Les trois clés sont présentes même hors mode mensuel (à `null` / vide), pour que
      * les consommateurs n'aient pas à distinguer « champ absent » de « non pondéré ».
@@ -1592,8 +1653,8 @@ final class CostCalculationService
         }
 
         $ranks = [
-            LoadWeighting::ActualLoad->value      => 0,
-            LoadWeighting::StandardProfile->value => 1,
+            LoadWeighting::StandardProfile->value => 0,
+            LoadWeighting::ActualLoad->value      => 1,
             LoadWeighting::Baseload->value        => 2,
         ];
 
@@ -1897,10 +1958,9 @@ final class CostCalculationService
      *
      * La facturation se fait au créneau horaire, comme en dynamique horaire, mais tous
      * les créneaux d'un même mois portent le MÊME prix : la moyenne pondérée des
-     * cotations du mois. Rien d'autre ne change — et comme la formule du contrat est
-     * affine, pondérer par la courbe réelle redonne exactement le total d'une
-     * facturation créneau par créneau. La différence avec `dynamic_quarter` ne porte
-     * donc que sur la pondération employée À DÉFAUT de courbe réelle.
+     * cotations du mois, prioritairement par le profil RLP du contrat. Sans RLP,
+     * la courbe réelle puis la moyenne simple fournissent une estimation signalée.
+     * Le comparatif utilise une autre voie, au prix de chaque créneau (#121).
      *
      * La courbe ventilée au pas de 15 min ne sert ici qu'à PONDÉRER, jamais à facturer :
      * sa résolution de mesure indique si elle est compatible avec les cotations du mois.
@@ -2025,7 +2085,7 @@ final class CostCalculationService
             $this->legacyRepo->getQuarterImportDeltas($from, $to),
         );
 
-        // Profil de pondération du contrat (#93), deuxième niveau de la cascade. Absent
+        // Profil de pondération du contrat (#93), premier niveau de la cascade. Absent
         // du contrat ou absent de la base, la cascade se rabat d'elle-même sur la courbe
         // réelle puis le baseload : il n'y a jamais de poids inventés.
         $profileCode    = $indexedGrid?->loadProfileCode;

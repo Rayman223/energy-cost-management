@@ -200,7 +200,7 @@ try {
     // utilisateur réellement en dynamique, et sert de comparatif « et si ? » aux
     // autres — que `is_simulation` fait alors replier côté JS.
     if (DynamicPricing::isEnabled($config)) {
-        $cost['dynamic'] = $costSvc->estimateCurrentMonthElectricityDynamic();
+        $cost['dynamic'] = $costSvc->estimateCurrentMonthElectricityComparison();
     }
     // Le dernier intervalle de relevés ne sert qu'à choisir le mois affiché par
     // défaut : son mois de début est le dernier dont on ait une mesure des deux

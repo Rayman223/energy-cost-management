@@ -299,7 +299,7 @@ Contrairement à la saisie web, l'API ne rejette pas un coefficient hors bornes
 par `dynamic.formula.coefficient_rejected` dans les réponses de coût.
 
 `pricing_mode` (#245) porte le mode du contrat de la grille : `fixed` (défaut,
-comportement des intégrations existantes), `dynamic_hourly` ou `dynamic_quarter`.
+comportement des intégrations existantes), `dynamic_hourly`, `dynamic_quarter` ou `indexed_monthly`.
 Non validé côté API, comme le reste : une valeur hors énum retombe sur `fixed`, et
 le champ est forcé à `fixed` hors électricité. Il apparaît en retour dans `tariffs`.
 
@@ -314,7 +314,29 @@ le champ est forcé à `fixed` hors électricité. Il apparaît en retour dans `
 | `is_mixed` | La période mêle-t-elle plusieurs modes (bascule de contrat) ? |
 | `dynamic_days` | Nombre de jours réellement facturés au prix de marché. |
 | `dynamic_unavailable_reason` | Présent seulement si des sous-périodes dynamiques ont dû retomber sur le tarif fournisseur faute de prix. |
-| `dynamic.is_simulation` | `true` quand la projection tout-dynamique ne correspond à aucun contrat en vigueur sur la période. |
+| `dynamic.is_simulation` | `true` pour une simulation de tarif fixe ou dès qu’une grille mensuelle est simulée au prix du créneau, même si les prix sont indisponibles. |
+
+Pour ces deux actions et le dashboard, `dynamic` utilise
+`estimateCurrentMonthElectricityComparison()` ou
+`estimateMonthElectricityComparison(year, month)`. Une grille `indexed_monthly`
+y est projetée en `dynamic_quarter`, sans modifier ses paramètres tarifaires.
+Les grilles dynamiques gardent leur mode ; les grilles fixes sont simulées à
+l'heure. Les anciens appels `estimate*ElectricityDynamic()` restent réservés au
+calcul indexé respectant le mode mensuel, notamment pour le rapprochement facture.
+
+| Métadonnée d’indexation | Sens |
+|---|---|
+| `resolution` | Résolution appliquée : `monthly`, `quarter` ou `hourly`. |
+| `resolution_requested` | Résolution demandée avant repli. Le comparatif mensuel demande `quarter`. |
+| `resolution_fallback` | `readings_not_quarter`, `no_quarter_prices` ou `null`. Les seuils existants de 80 % des kWh s’appliquent. |
+| `load_weighting` | En mensuel : `standard_profile` (prioritaire), puis `actual_load` ou `baseload` (estimations). En multi-mois, le repli le plus éloigné du RLP reste exposé. `null` hors mensuel. |
+| `monthly_partial` | Au moins un mois est provisoire. `false` hors mensuel. |
+| `monthly_prices` | Liste par mois : `month`, `price_htva`, `weighting`, `profile_code`, `price_source`, `resolution_min`, `weight_coverage_pct`, `price_coverage_pct`, `partial`. Vide hors mensuel. |
+
+Les métadonnées à la racine décrivent le coût contractuel ; celles de `dynamic`
+décrivent le comparatif, jamais la pondération RLP du coût variable. Si le dynamique
+est désactivé côté serveur, `dynamic` est omis. Sans prix utilisables, le coût
+contractuel conserve son repli fournisseur et le comparatif est indisponible.
 
 Clés additionnelles, non cassantes. Les sous-périodes sont rendues dans l'ordre
 chronologique, et `dynamic_days` vaut toujours 0 quand `dynamic_prices.enabled` est

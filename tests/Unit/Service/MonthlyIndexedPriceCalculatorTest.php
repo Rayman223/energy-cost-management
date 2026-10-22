@@ -14,8 +14,8 @@ use PHPUnit\Framework\TestCase;
 /**
  * Réduction des cotations d'un mois à UN prix unitaire pondéré (#93).
  *
- * Ce qui est verrouillé ici, c'est la cascade de pondération — courbe réelle, profil
- * standard, baseload — et le fait qu'elle soit annoncée, car deux pondérations
+ * Ce qui est verrouillé ici, c'est la cascade de pondération — profil standard, courbe
+ * réelle, baseload — et le fait qu'elle soit annoncée, car deux pondérations
  * différentes donnent deux factures différentes sur les mêmes cotations.
  *
  * Les valeurs attendues sont calculées à la main depuis la règle métier.
@@ -241,7 +241,7 @@ final class MonthlyIndexedPriceCalculatorTest extends TestCase
     }
 
     /**
-     * Le profil standard prend la main quand la courbe réelle manque : c'est ce que le
+     * Le profil standard est prioritaire, même quand la courbe réelle manque : c'est ce que le
      * FOURNISSEUR applique, donc la bonne référence pour reproduire une facture.
      */
     public function testUsesStandardProfileWhenProvidedAndCurveIsUnusable(): void
@@ -346,10 +346,9 @@ final class MonthlyIndexedPriceCalculatorTest extends TestCase
     }
 
     /**
-     * La courbe réelle reste prioritaire sur le profil : elle décrit CETTE
-     * consommation, là où le profil décrit celle d'un groupe.
+     * Le profil du contrat reste prioritaire, même avec une courbe réelle exploitable.
      */
-    public function testActualLoadTakesPrecedenceOverTheStandardProfile(): void
+    public function testStandardProfileTakesPrecedenceOverActualLoad(): void
     {
         $prices = $this->fullMonthHourly('2026-06', 30, 0.20, [
             '2026-06-10 10:00:00' => 0.10,
@@ -369,10 +368,10 @@ final class MonthlyIndexedPriceCalculatorTest extends TestCase
         );
 
         $june = $result['2026-06'];
-        self::assertSame(LoadWeighting::ActualLoad, $june->weighting);
-        // (3×0,10 + 1×0,30) / 4 = 0,15 €/kWh, et non les 0,25 € du profil.
-        self::assertEqualsWithDelta(0.15, $june->priceHtva, self::DELTA);
-        self::assertNull($june->profileCode);
+        self::assertSame(LoadWeighting::StandardProfile, $june->weighting);
+        // 0,25×0,10 + 0,75×0,30 = 0,25 €/kWh, contre 0,15 € avec la courbe.
+        self::assertEqualsWithDelta(0.25, $june->priceHtva, self::DELTA);
+        self::assertSame('RLP0N', $june->profileCode);
     }
 
     /** Deux mois civils = deux prix, calculés chacun sur ses propres cotations. */

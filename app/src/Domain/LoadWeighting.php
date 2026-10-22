@@ -13,24 +13,24 @@ namespace App\Domain;
  * mais une composante du prix : deux pondérations différentes donnent deux factures
  * différentes sur les mêmes cotations. D'où son exposition explicite jusqu'à l'UI.
  *
- * Les trois valeurs sont ordonnées de la plus fidèle à la plus grossière.
+ * Le profil contractuel est prioritaire ; courbe réelle et baseload sont des replis estimés.
  */
 enum LoadWeighting: string
 {
     /**
-     * Courbe de charge réelle de l'utilisateur, au pas de 15 min.
+     * Courbe réelle mesurée à un pas compatible avec les cotations (15 ou 60 min).
      *
-     * Le plus juste physiquement : c'est SA consommation qui pondère SES prix. La
-     * formule étant affine, ce cas redonne exactement le total d'une facturation
-     * créneau par créneau — un contrat `indexed_monthly` et un `dynamic_quarter`
-     * coïncident alors au centime près.
+     * Estimation sans profil contractuel : sa consommation pondère les prix. La
+     * formule étant affine, ce cas redonne le total d'une facturation créneau par
+     * créneau, à cotations et résolution identiques. Une égalité entre le coût
+     * mensuel estimé et le comparatif dynamique reste donc possible.
      */
     case ActualLoad = 'actual_load';
 
     /**
      * Profil de charge standard (RLP Synergrid et équivalents).
      *
-     * Moins fidèle à l'utilisateur, mais c'est ce que le FOURNISSEUR applique : pour
+     * Référence prioritaire : c'est ce que le FOURNISSEUR applique. Pour
      * reproduire une facture, le profil standard est la bonne référence, pas la courbe
      * réelle.
      */

@@ -26,7 +26,13 @@ final class DashboardJsCatalogTest extends TestCase
      * Clés construites par concaténation, invisibles à une regex sur `tr('…')`.
      * `daysLabel()` choisit le suffixe via Intl.PluralRules.
      */
-    private const DYNAMIC_KEYS = ['dash.meta.days_one', 'dash.meta.days_other'];
+    private const DYNAMIC_KEYS = [
+        'dash.meta.days_one', 'dash.meta.days_other',
+        // Sélectionnées par monthlyPriceNote(), puis passées à tr(key).
+        'dash.dynamic.weighting_standard_profile',
+        'dash.dynamic.weighting_actual_load',
+        'dash.dynamic.weighting_baseload',
+    ];
 
     /** @return list<string> */
     private function referencedKeys(): array

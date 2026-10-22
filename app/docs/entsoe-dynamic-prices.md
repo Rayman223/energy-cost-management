@@ -227,15 +227,26 @@ Deux réglages, à deux endroits **différents depuis #245** :
 > en **€/MWh** (`+ 1,5 €/MWh`) alors que `spot_offset` est en **€/kWh TTC**, soit
 > un facteur 1000.
 >
-> La pondération suit une cascade, annoncée au dashboard : votre **courbe réelle**
+> La pondération suit une cascade, annoncée auprès du coût variable au dashboard :
+> **profil du contrat (RLP)** en priorité ; sans profil exploitable, **courbe réelle**
 > si au moins 80 % de la consommation est mesurée à une cadence compatible avec
-> les cotations retenues (15 ou 60 min). Des relevés horaires conviennent aux prix
-> horaires, mais pas aux prix 15 min ; les relevés journaliers restent estimés.
-> La formule étant affine, cette pondération redonne le total d'une facturation
-> par créneau à la résolution correspondante ; sinon le **profil standard**
-> désigné sur la grille, s'il a été importé ; sinon la **moyenne simple**, qui
-> sous-estime structurellement un profil résidentiel. Un mois non clos est signalé
-> comme provisoire, `Belpex_RLP_M` n'étant publié qu'en fin de mois.
+> les cotations retenues (15 ou 60 min) ; sinon **moyenne simple**. Ces deux replis
+> sont explicitement estimés. Des relevés horaires conviennent aux prix horaires,
+> mais pas aux prix 15 min ; les relevés journaliers restent estimés. Les règles
+> de couverture des cotations restent inchangées (80 % du calendrier du mois).
+> Chaque mois expose sa pondération et son éventuel caractère provisoire.
+> Un mois non clos est signalé comme provisoire, `Belpex_RLP_M` n'étant publié
+> qu'en fin de mois.
+>
+> Le comparatif « et si j'étais en dynamique ? » d'un contrat mensuel est une
+> **simulation distincte** : il valorise la consommation à 15 minutes si au moins
+> 80 % des kWh sont mesurés à ce pas et couverts par des prix 15 minutes. Sinon il
+> revient à l'heure, avec le motif affiché (mesures ou prix insuffisants).
+> Coefficient, marge, TVA, distribution, taxes et injection restent ceux de chaque
+> grille active ; il ne sélectionne pas une autre offre fournisseur. Une égalité
+> des montants reste possible, notamment en repli sur la courbe réelle.
+> Les contrats dynamiques gardent leur résolution et la simulation d'un tarif fixe
+> reste horaire. Le rapprochement de facture conserve le mode du contrat.
 >
 > Pour **reproduire la facture**, c'est le profil standard qu'il faut : le
 > fournisseur pondère avec le RLP, pas avec votre courbe. Le champ **Profil de
@@ -244,6 +255,12 @@ Deux réglages, à deux endroits **différents depuis #245** :
 >
 > Pousser ses index au pas de 15 min est donc utile même sans tarif dynamique, et
 > c'est désormais toujours autorisé (#93).
+
+Pour vérifier les calculs du comparatif sans base de données :
+`vendor/bin/phpunit tests/Unit/Service/BelpexDynamicComparisonTest.php`.
+Le rendu électricité et ses messages dans les quatre langues sont couverts par
+`node --test tests/JavaScript/dashboard-monthly-comparison.test.cjs`
+(Node.js 18+ et PHP CLI, sans dépendance npm).
 
 Le mode appartient à la grille, donc au contrat, et vaut pour **sa seule période
 de validité**. Pour dater une bascule fixe → dynamique, on ne modifie pas la
