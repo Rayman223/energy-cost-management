@@ -2755,7 +2755,7 @@ final class CostCalculationServiceTest extends TestCase
      *
      * Sans relevés quart-horaires natifs, la cascade descendrait au baseload (moyenne
      * simple). Avec un profil en base et son code sur la grille, elle s'arrête au
-     * niveau intermédiaire : le prix suit la forme de consommation standard, qui est
+     * premier niveau : le prix suit la forme de consommation standard, qui est
      * celle que le fournisseur applique.
      *
      * Les cotations valent 0,10 € à 10 h et 0,30 € à 11 h ; le profil pèse 0,25 / 0,75,

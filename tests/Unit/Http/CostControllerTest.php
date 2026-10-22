@@ -18,6 +18,7 @@ use PHPUnit\Framework\TestCase;
 use Tests\Fake\FakeGasReadingRepository;
 use Tests\Fake\FakeLegacyDailyRepository;
 use Tests\Fake\FakeTariffRepository;
+use Tests\Fixture\MonthlyComparisonFixture;
 
 /**
  * Vérifie le contrôleur de coûts de bout en bout (Request -> JsonResponse), avec
@@ -120,5 +121,39 @@ final class CostControllerTest extends TestCase
         self::assertSame(200, $res->status);
         self::assertIsArray($res->data);
         self::assertFalse($res->data['available']);
+    }
+
+    public function testBothCostActionsExposeRlpContractAndSeparateDynamicSimulation(): void
+    {
+        $svc = (new MonthlyComparisonFixture())->service();
+        $controller = new CostController($svc, new AnnualConsumptionService($svc));
+        $responses = [
+            $controller->costEstimate(new Request('GET', ['action' => 'cost_estimate'], [])),
+            $controller->monthCost(new Request('GET', ['action' => 'month_cost', 'year' => '2026', 'month' => '6'], [])),
+        ];
+        foreach ($responses as $response) {
+            self::assertSame(200, $response->status);
+            $data = $response->data;
+            self::assertSame('monthly', $data['resolution']);
+            self::assertSame('standard_profile', $data['load_weighting']);
+            self::assertSame(2.16, $data['energy_dynamic']);
+            self::assertTrue($data['dynamic']['is_simulation']);
+            self::assertSame('quarter', $data['dynamic']['resolution']);
+            self::assertSame(1.31, $data['dynamic']['energy_dynamic']);
+        }
+    }
+
+    public function testDisabledDynamicSectionIsOmittedFromBothCostActions(): void
+    {
+        $svc = (new MonthlyComparisonFixture())->service(false);
+        $controller = new CostController($svc, new AnnualConsumptionService($svc), dynamicEnabled: false);
+        foreach ([
+            $controller->costEstimate(new Request('GET', [], [])),
+            $controller->monthCost(new Request('GET', ['year' => '2026', 'month' => '6'], [])),
+        ] as $response) {
+            self::assertTrue($response->data['available']);
+            self::assertArrayNotHasKey('dynamic', $response->data);
+            self::assertSame('fixed', $response->data['pricing_mode']);
+        }
     }
 }

@@ -95,7 +95,8 @@ function isCreditLine(ln) {
 }
 
 function costLineLabel(ln) {
-  return ln.label || COST_LINE_LABELS[ln.key] || ln.key;
+  return ln.label || COST_LINE_LABELS[ln.key]
+    || (ln.key === 'energy_dynamic' ? tr('dash.dynamic.energy_dynamic') : ln.key);
 }
 function costLineDetail(ln) {
   const rate = ln.rate;
@@ -117,14 +118,21 @@ function costLineDetail(ln) {
   return `${q.toFixed(2)} × ${Number(rate).toFixed(7)} ${ln.unit || ''}`;
 }
 // Génère les lignes groupées à partir de cost.lines, avec la fonction `row` locale.
-function costLinesHtml(c, row) {
+function costLinesHtml(c, row, options = {}) {
   let html = '';
   COST_GROUP_ORDER.forEach((g) => {
-    const lines = (c.lines || []).filter((l) => l.group === g && (Number(l.amount) || Number(l.rate)));
+    // Le prix mensuel et sa pondération restent informatifs même si l'énergie vaut zéro.
+    const lines = (c.lines || []).filter((l) => l.group === g && (
+      Number(l.amount) || Number(l.rate) || (l.key === 'energy_dynamic' && options.energyNote)
+    ));
     if (!lines.length) return;
     const allCredit = lines.every(isCreditLine);
     html += `<div class="cost-group-label ${allCredit ? 'cost-group-label--credit' : ''}">${COST_GROUP_LABELS[g] || g}</div>`;
-    lines.forEach((l) => { html += row(costLineLabel(l), costLineDetail(l), l.amount, isCreditLine(l) ? 'credit' : ''); });
+    lines.forEach((l) => {
+      const label = l.key === 'energy_dynamic' && options.energyLabel ? options.energyLabel : costLineLabel(l);
+      html += row(label, costLineDetail(l), l.amount, isCreditLine(l) ? 'credit' : '');
+    });
+    if (g === 'energy') html += options.energyNote || '';
   });
   return html;
 }
@@ -250,7 +258,10 @@ function tariffGapHtml(data) {
 
     el.innerHTML = tariffGapHtml(data) + `<div class="cost-wrap">
       <div class="cost-lines">
-        ${costLinesHtml(c, row)}
+        ${costLinesHtml(c, row, {
+          energyLabel: data.resolution === 'monthly' ? tr('dash.cost.energy_variable') : null,
+          energyNote: monthlyPriceNote(data),
+        })}
 
         ${c.solar_produced != null ? `
         <div class="cost-group-label cost-group-label--solar">☀ ${tr('dash.solar.group')}</div>
@@ -302,6 +313,26 @@ function tariffGapHtml(data) {
     if (data.dynamic) {
       el.innerHTML += renderDynamicSection(data.dynamic, c, data);
     }
+  }
+
+  // Les informations mensuelles appartiennent au coût variable, indépendamment
+  // de la résolution de la simulation dynamique affichée plus bas.
+  function monthlyPriceNote(data) {
+    if (!data || data.resolution !== 'monthly') return '';
+    const months = data.monthly_prices && data.monthly_prices.length
+      ? data.monthly_prices
+      : [{ weighting: data.load_weighting, partial: data.monthly_partial }];
+    return months.map(price => {
+      let key = 'dash.dynamic.weighting_baseload';
+      if (price.weighting === 'standard_profile') key = 'dash.dynamic.weighting_standard_profile';
+      else if (price.weighting === 'actual_load') key = 'dash.dynamic.weighting_actual_load';
+      const estimated = price.weighting !== 'standard_profile' || price.partial === true;
+      const month = price.month ? `${escapeHtml(price.month)} — ` : '';
+      const profile = price.profile_code ? ` (${escapeHtml(price.profile_code)})` : '';
+      const provisional = price.partial === true ? ` ${tr('dash.dynamic.monthly_provisional')}` : '';
+      return `<div class="cost-formula-note${estimated ? ' cost-formula-note--fallback' : ''}">${
+        month}${tr('dash.dynamic.resolution_monthly')} ${tr(key)}${profile}${provisional}</div>`;
+    }).join('');
   }
 
   // `main` est la réponse de facturation : elle dit quelles sous-périodes du mois
@@ -377,24 +408,9 @@ function tariffGapHtml(data) {
     // Résolution effective du calcul (#230) : en mode 15 min, l'utilisateur doit
     // pouvoir distinguer un calcul réellement quart-horaire d'un repli à l'heure, et
     // savoir ce qui a manqué. En mode horaire assumé, pas de note — rien à signaler.
-    // Tarif indexé mensuel (#93) : le prix est une MOYENNE du mois, et sa pondération
-    // fait partie du prix — deux pondérations donnent deux factures. Les clés sont
-    // écrites en littéraux plutôt que concaténées : le garde-fou i18n du dépôt repère
-    // les clés par motif sur les appels de traduction, et une clé construite par
-    // concaténation lui échapperait.
     let resolutionNote = '';
     if (dyn.resolution === 'monthly') {
-      let weightingKey = 'dash.dynamic.weighting_baseload';
-      if (dyn.load_weighting === 'actual_load') weightingKey = 'dash.dynamic.weighting_actual_load';
-      else if (dyn.load_weighting === 'standard_profile') weightingKey = 'dash.dynamic.weighting_standard_profile';
-
-      const estimated = dyn.load_weighting !== 'actual_load' || dyn.monthly_partial === true;
-      const provisional = dyn.monthly_partial === true
-        ? ` ${tr('dash.dynamic.monthly_provisional')}`
-        : '';
-
-      resolutionNote = `<div class="cost-formula-note${estimated ? ' cost-formula-note--fallback' : ''}">${
-        tr('dash.dynamic.resolution_monthly')} ${tr(weightingKey)}${provisional}</div>`;
+      resolutionNote = monthlyPriceNote(dyn);
     } else if (dyn.resolution === 'quarter') {
       resolutionNote = `<div class="cost-formula-note">${tr('dash.dynamic.resolution_quarter')}</div>`;
     } else if (dyn.resolution_requested === 'quarter') {
