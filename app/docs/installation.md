@@ -42,8 +42,9 @@ client, falling back to `mysql`) → runs `app/scripts/migrate.php` → checks t
 OIDC config → verifies PHP bootstrap and DB connectivity → validates and publishes
 pending English Discord announcements. An empty `discord.release_webhook_en`
 disables delivery. See [release-announcements.md](release-announcements.md) for
-configuration and retries. `git clean` runs **without `-x`**, so `app/config/config.php` and
-`/vendor/` are preserved.
+configuration and retries. `git clean` runs **without `-x`**, so both
+`app/config/config.php` and `app/config/config.local.php`, plus `/vendor/`, are
+preserved.
 
 ### Private repository access (SSH deploy key)
 
@@ -217,6 +218,12 @@ missing sections and leftover `change_me` sentinels):
 php app/scripts/config_check.php
 ```
 
+For private deployment-only values, create `app/config/config.local.php`. It
+returns a PHP array that deep-merges over `config.php`; nested associative
+settings can be overridden individually, while list values replace the original
+list. Both files are ignored by Git. The configuration checker loads this local
+override when checking the default `config.php`.
+
 Set at least `database`, then choose the authentication mode:
 
 - **Community mode (recommended)** — set `oidc.enabled = true` and fill
@@ -237,9 +244,9 @@ Optionally set `dynamic_prices` (ENTSO-E token), `i18n`, and `api`.
 15-minute (MTU15) prices, the daily cron and a ready-made Unraid User Script —
 is in [entsoe-dynamic-prices.md](entsoe-dynamic-prices.md) (*in French*).
 Set `discord.invite_url` to show a Discord link in the page header (empty = hidden).
-Set `donate.url` likewise to show a "support the project" link there — Buy Me a
-Coffee, Ko-fi, GitHub Sponsors, any `http(s)` URL (empty = hidden). Self-hosted
-instances should leave it empty unless they point it at their own page.
+Configure the optional `support` section to publish the support page. It is
+disabled by default on self-hosted instances; the legacy `donate.url` setting is
+ignored and reported by the configuration diagnostic.
 
 Fill in `legal` (publisher, address, contact e-mail, hosting provider,
 jurisdiction): those values feed `/legal-notice` and the "data controller"
@@ -288,6 +295,44 @@ mariadb -u energy_user -p energy < app/sql/schema.sql # CREATE TABLE IF NOT EXIS
 php app/scripts/migrate.php                            # versioned migrations (tracked in schema_migrations)
 php app/scripts/migrate.php --dry-run                  # preview pending migrations
 ```
+
+### Voluntary project support (official public instance)
+
+Support remains voluntary: the application stays free, with no paid features or
+donor perks. Enable this only on a public OIDC deployment. Install the release,
+then apply the database migration:
+
+```bash
+php app/scripts/migrate.php --dry-run
+php app/scripts/migrate.php
+php app/scripts/config_check.php --strict
+php -r 'echo bin2hex(random_bytes(32)), PHP_EOL;'
+```
+
+Create a Stripe Payment Link that lets the customer choose an amount, set its
+currency to EUR, and add `client_reference_id` as a supported URL parameter.
+Configure `support` with the Payment Link URL and its `plink_…` identifier.
+Use the command above to generate an account-reference signing key; it must not
+reuse the webhook secret. Keep both secrets outside version control.
+
+Create a Stripe webhook at `https://energy-cost.eu/stripe/webhook` using the
+**Snapshot** payload format and select these event types:
+
+- `checkout.session.completed`
+- `checkout.session.async_payment_succeeded`
+- `charge.refunded`
+- `charge.dispute.created`
+- `charge.dispute.closed`
+
+Copy the endpoint signing secret into `support.stripe_webhook_secret`, set
+`support.stripe_mode` to `test`, and use a test-mode Payment Link and identifier.
+Keep `enabled` false during the test setup. Verify paid and delayed payments,
+refunds, disputes and the yearly total before switching to the live-mode link,
+identifier and secret and setting `enabled` to `true`. Enter the current year's
+GitHub Sponsors total and year manually in
+`github_sponsors_annual_cents` and `github_sponsors_year`. Set a positive
+`annual_goal_cents` to show the progress gauge; zero hides it. Stripe amounts
+are shown before processing fees.
 
 ### The test database (`<database.name>_test`)
 

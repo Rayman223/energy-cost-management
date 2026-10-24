@@ -21,6 +21,7 @@ declare(strict_types=1);
  */
 
 use App\Config\ConfigIssue;
+use App\Config\ConfigLoader;
 use App\Config\ConfigSchema;
 use App\Config\ConfigValidator;
 
@@ -43,14 +44,16 @@ if (!is_file($file)) {
     exit(1);
 }
 
-/** @var mixed $config */
-$config = require $file;
-if (!is_array($config)) {
-    fwrite(STDERR, "[ERROR] {$file} ne retourne pas un tableau de configuration.\n");
+$mainConfig = __DIR__ . '/../config/config.php';
+$override = realpath($file) !== false && realpath($file) === realpath($mainConfig)
+    ? \dirname($file) . '/config.local.php'
+    : null;
+try {
+    $config = ConfigLoader::load($file, $override);
+} catch (\Throwable $e) {
+    fwrite(STDERR, '[ERROR] ' . $e->getMessage() . "\n");
     exit(1);
 }
-
-/** @var array<string, mixed> $config */
 $issues = ConfigValidator::validate($config, !$schemaOnly);
 
 $errors   = array_values(array_filter($issues, static fn (ConfigIssue $i): bool => $i->isError()));

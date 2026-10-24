@@ -160,12 +160,16 @@ final class ConfigSchema
                     ],
                 ],
 
-                'donate' => [
-                    // Lien de soutien au projet (#3) : absent ou vide ⇒ aucune icône
-                    // dans l'en-tête (App\Support\DonateLink). Propre au déploiement.
-                    'absentHint' => 'lien de don masqué',
-                    'children'   => [
-                        'url' => [],
+                'donate' => ['moved' => 'ancienne configuration ignorée ; utiliser support'],
+
+                'support' => [
+                    'enabledDefault' => false,
+                    'absentHint' => 'financement volontaire désactivé',
+                    'children' => [
+                        'enabled' => [], 'github_url' => [], 'stripe_payment_link' => [],
+                        'stripe_payment_link_id' => [], 'stripe_mode' => [], 'stripe_webhook_secret' => [],
+                        'reference_signing_key' => [], 'annual_goal_cents' => [],
+                        'github_sponsors_annual_cents' => [], 'github_sponsors_year' => [],
                     ],
                 ],
 

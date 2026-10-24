@@ -163,11 +163,18 @@ return [
         'release_webhook_en' => '',
     ],
 
-    // Lien de soutien au projet (#3), affiché dans l'en-tête des pages. Propre à
-    // chaque déploiement : laisser vide sur une instance auto-hébergée, sauf à
-    // vouloir y afficher sa propre cagnotte.
-    'donate' => [
-        'url' => '', // ex. https://buymeacoffee.com/xxxxxxx (vide = lien masqué)
+    // Soutien du projet (#120). Désactivé par défaut sur les instances tierces.
+    'support' => [
+        'enabled' => false,
+        'github_url' => '',
+        'stripe_payment_link' => '',
+        'stripe_payment_link_id' => '',
+        'stripe_mode' => 'test', // test ou live
+        'stripe_webhook_secret' => '',
+        'reference_signing_key' => '', // clé aléatoire propre à cette instance
+        'annual_goal_cents' => 0,
+        'github_sponsors_annual_cents' => 0,
+        'github_sponsors_year' => 0,
     ],
 
     // Publicité Google AdSense (#185), au format « Auto ads » : un seul script

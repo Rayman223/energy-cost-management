@@ -71,6 +71,9 @@ $routes = [
     '/terms'          => 'terms.php',
     '/cookies'        => 'cookies.php',
     '/legal-notice'   => 'legal-notice.php',
+    '/support'        => 'support.php',
+    '/support/visibility' => 'support-visibility.php',
+    '/stripe/webhook' => 'stripe-webhook.php',
     // Guides éditoriaux (#85) : publics et indexables sans condition. Un script
     // par guide, comme les pages légales — le routeur ne fait pas de motif.
     '/guides'                   => 'guides.php',

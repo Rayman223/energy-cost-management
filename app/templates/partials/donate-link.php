@@ -3,9 +3,9 @@
 declare(strict_types=1);
 
 /**
- * Lien de soutien, rendu uniquement si une URL de don est configurée.
- * @var ?string $url URL validée, ou null pour ne rien afficher.
+ * Lien de soutien vers la page interne, affiché uniquement sur instance activée.
+ * @var ?string $url
  */
 ?>
 <?php if (($url ?? null) === null) { return; } ?>
-<a class="theme-toggle header-action" href="<?= $this->e($url) ?>" target="_blank" rel="noopener noreferrer"><?= $this->te('common.donate') ?></a>
+<a class="theme-toggle header-action" href="<?= $this->e($url) ?>"><?= $this->te('common.donate') ?></a>

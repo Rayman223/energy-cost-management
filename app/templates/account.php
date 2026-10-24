@@ -21,6 +21,7 @@ use App\Domain\User;
  * @var ?string $discordUrl
  * @var ?string $donateUrl
  * @var ?string $adsenseClient Identifiant éditeur AdSense (#185), null si publicité désactivée.
+ * @var array{badge:bool,public:bool}|null $supportMember
  */
 $csrf = \App\Security\Csrf::field();
 ?>
@@ -53,6 +54,12 @@ $csrf = \App\Security\Csrf::field();
     <h2><?= $this->te('account.token_fresh_title') ?></h2>
     <p class="hint"><?= $this->te('account.token_fresh_hint') ?></p>
     <div class="token-secret"><code><?= $this->e($freshToken) ?></code></div>
+  </div>
+  <?php endif; ?>
+
+  <?php if (($supportMember['badge'] ?? false) === true): ?>
+  <div class="card"><h2><?= $this->te('support.badge') ?></h2>
+    <p><?= $this->te('support.badge_description') ?> · <a href="<?= $this->e($this->url('support')) ?>"><?= $this->te('support.manage_visibility') ?></a></p>
   </div>
   <?php endif; ?>
 
