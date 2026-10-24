@@ -42,8 +42,9 @@ client, falling back to `mysql`) → runs `app/scripts/migrate.php` → checks t
 OIDC config → verifies PHP bootstrap and DB connectivity → validates and publishes
 pending English Discord announcements. An empty `discord.release_webhook_en`
 disables delivery. See [release-announcements.md](release-announcements.md) for
-configuration and retries. `git clean` runs **without `-x`**, so `app/config/config.php` and
-`/vendor/` are preserved.
+configuration and retries. `git clean` runs **without `-x`**, so both
+`app/config/config.php` and `app/config/config.local.php`, plus `/vendor/`, are
+preserved.
 
 ### Private repository access (SSH deploy key)
 
@@ -216,6 +217,12 @@ missing sections and leftover `change_me` sentinels):
 ```bash
 php app/scripts/config_check.php
 ```
+
+For private deployment-only values, create `app/config/config.local.php`. It
+returns a PHP array that deep-merges over `config.php`; nested associative
+settings can be overridden individually, while list values replace the original
+list. Both files are ignored by Git. The configuration checker loads this local
+override when checking the default `config.php`.
 
 Set at least `database`, then choose the authentication mode:
 

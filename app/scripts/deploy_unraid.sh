@@ -9,7 +9,7 @@
 #
 # Étapes :
 #   1. Git    — fetch + reset --hard sur le tag/main demandé (clean SANS -x,
-#               donc app/config/config.php et /vendor/ sont préservés).
+#               donc config.php, config.local.php et /vendor/ sont préservés).
 #   2. Deps   — composer install --no-dev --optimize-autoloader dans le container
 #               SWAG : installe les dépendances ET régénère l'autoloader PSR-4
 #               (obligatoire, `App\` n'a plus d'autoloader maison de repli).
@@ -24,8 +24,8 @@
 # Config OIDC (multi-utilisateurs) : renseigner la section 'oidc' de
 # app/config/config.php (issuer, client_id, client_secret, redirect_uri,
 # enabled=true). Ce fichier est hors dépôt (.gitignore) et conservé par le
-# déploiement (clean sans -x). Ne jamais committer de secret : config.php reste
-# la source de vérité unique, lue par ce script sans rien coder en dur.
+# déploiement (clean sans -x). config.local.php peut surcharger des valeurs
+# privées. Ne jamais committer de secret.
 #
 # Le dépôt est public : REPO_URL est en HTTPS et aucune authentification n'est
 # requise. S'il redevenait privé, repasser REPO_URL en git@… suffit : le script
@@ -119,10 +119,10 @@ log "Reset --hard sur FETCH_HEAD + checkout"
 git reset --hard FETCH_HEAD
 git checkout -f
 
-# clean SANS -x : les fichiers ignorés (.gitignore → app/config/config.php,
+# clean SANS -x : les fichiers ignorés (.gitignore → config.php, config.local.php,
 # /vendor/) NE sont PAS supprimés. reset --hard ne touche pas non plus les
-# fichiers non suivis : config.php est conservé.
-log "Clean des fichiers non suivis (config.php et vendor/ préservés)"
+# fichiers non suivis : les configurations locales sont conservées.
+log "Clean des fichiers non suivis (configurations locales et vendor/ préservés)"
 git clean -fd
 
 # ── Étape 2 : Dépendances + autoloader ───────────────────────────────────────

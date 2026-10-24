@@ -93,7 +93,7 @@ routes JSON through `Router` → controllers → `JsonResponse`.
 ```
 app/
 ├── autoload.php / bootstrap.php   ← App\ autoloader + config loading
-├── config/                        ← config.example.php · config.php (⚠ gitignored)
+├── config/                        ← config.example.php · config.php/config.local.php (2 fichiers ignorés)
 ├── docs/                          ← installation.md · architecture.md · import.md · api-contract.md · security-review.md · …
 ├── public/                        ← index · tariffs · account · admin · login · privacy · terms · api · auth/
 │   └── assets/                    ← versioned CSS/JS (cache-busting)
@@ -145,7 +145,9 @@ see the step-by-step guide:
 ## Configuration
 
 Copy `app/config/config.example.php` to `app/config/config.php` (gitignored) and
-fill in the keys. Highlights:
+fill in the keys. An optional `app/config/config.local.php`, also gitignored,
+deep-merges deployment-specific overrides over it; use it for private values such
+as a Stripe Payment Link instead of putting them in the main config. Highlights:
 
 ```php
 return [
@@ -186,8 +188,9 @@ return [
 ];
 ```
 
-Never commit `config.php`: it is the single source of truth for secrets and is
-preserved across deployments (`git clean` runs without `-x`).
+Never commit `config.php` or `config.local.php`. Both are preserved across
+deployments (`git clean` runs without `-x`); local values override matching
+settings from `config.php`.
 
 English release announcements use `VERSION`, versioned JSON notes under
 `releases/`, and an optional `discord.release_webhook_en` secret in `config.php`.
