@@ -14,6 +14,7 @@ return [
         'stripe_mode' => 'test', // test ou live
         'stripe_webhook_secret' => '', // Secret de signature whsec_...
         // Clé aléatoire propre à cette instance, distincte du secret webhook.
+        //rtk proxy php -r 'echo bin2hex(random_bytes(32)), PHP_EOL;'
         'reference_signing_key' => '',
     ],
 ];
