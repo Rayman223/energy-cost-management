@@ -93,7 +93,7 @@ routes JSON through `Router` → controllers → `JsonResponse`.
 ```
 app/
 ├── autoload.php / bootstrap.php   ← App\ autoloader + config loading
-├── config/                        ← config.example.php · config.php/config.local.php (2 fichiers ignorés)
+├── config/                        ← config.example.php · config.local.example.php · configs privées ignorées
 ├── docs/                          ← installation.md · architecture.md · import.md · api-contract.md · security-review.md · …
 ├── public/                        ← index · tariffs · account · admin · login · privacy · terms · api · auth/
 │   └── assets/                    ← versioned CSS/JS (cache-busting)
@@ -145,9 +145,10 @@ see the step-by-step guide:
 ## Configuration
 
 Copy `app/config/config.example.php` to `app/config/config.php` (gitignored) and
-fill in the keys. An optional `app/config/config.local.php`, also gitignored,
-deep-merges deployment-specific overrides over it; use it for private values such
-as a Stripe Payment Link instead of putting them in the main config. Highlights:
+fill in the keys. For deployment-specific private values, copy
+`app/config/config.local.example.php` to `app/config/config.local.php` (also
+gitignored). It deep-merges overrides over the main config; use it for Stripe
+URLs and secrets instead of putting them in the main config. Highlights:
 
 ```php
 return [

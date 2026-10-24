@@ -218,11 +218,13 @@ missing sections and leftover `change_me` sentinels):
 php app/scripts/config_check.php
 ```
 
-For private deployment-only values, create `app/config/config.local.php`. It
-returns a PHP array that deep-merges over `config.php`; nested associative
-settings can be overridden individually, while list values replace the original
-list. Both files are ignored by Git. The configuration checker loads this local
-override when checking the default `config.php`.
+For private deployment-only values, copy
+`app/config/config.local.example.php` to `app/config/config.local.php` and fill
+in the deployment-specific values. The local file returns a PHP array that
+deep-merges over `config.php`; nested associative settings can be overridden
+individually, while list values replace the original list. Both private files
+are ignored by Git. The configuration checker loads this local override when
+checking the default `config.php`.
 
 Set at least `database`, then choose the authentication mode:
 
