@@ -81,8 +81,18 @@ final class SupportRepository
             ON DUPLICATE KEY UPDATE
               event_id = IF(VALUES(event_created) >= event_created, VALUES(event_id), event_id),
               payment_intent = IF(VALUES(event_created) >= event_created, VALUES(payment_intent), payment_intent),
-              adjustment_cents = IF(VALUES(event_created) >= event_created, VALUES(adjustment_cents), adjustment_cents),
-              state = IF(VALUES(event_created) >= event_created, VALUES(state), state),
+              adjustment_cents = CASE
+                WHEN VALUES(event_created) > event_created THEN VALUES(adjustment_cents)
+                WHEN VALUES(event_created) = event_created AND adjustment_ref LIKE 'refund:%'
+                  THEN LEAST(adjustment_cents, VALUES(adjustment_cents))
+                WHEN VALUES(event_created) = event_created AND state = 'open' AND VALUES(state) <> 'open'
+                  THEN VALUES(adjustment_cents)
+                ELSE adjustment_cents END,
+              state = CASE
+                WHEN VALUES(event_created) > event_created THEN VALUES(state)
+                WHEN VALUES(event_created) = event_created AND state = 'open' AND VALUES(state) <> 'open'
+                  THEN VALUES(state)
+                ELSE state END,
               event_created = GREATEST(event_created, VALUES(event_created))")
             ->execute(['event' => $eventId, 'created' => $eventCreated, 'intent' => $paymentIntent, 'ref' => $reference, 'amount' => $amount, 'state' => $state]);
     }

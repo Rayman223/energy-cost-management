@@ -25,16 +25,24 @@ final class SupportPaymentsDbTest extends DatabaseTestCase
         $user = (new UserRepository($this->pdo()))->create('https://support.test', uniqid('support-', true), 'test', 'Support test');
 
         // L'événement de remboursement peut atteindre Stripe avant la session payée.
-        $repo->recordAdjustment('evt_refund', time(), 'pi_support', 'refund:ch_support', -250, 'refunded');
+        $eventCreated = time();
+        $repo->recordAdjustment('evt_refund', $eventCreated, 'pi_support', 'refund:ch_support', -250, 'refunded');
         $repo->recordPayment('cs_support', 'pi_support', $user->id, 1000, 'eur', $year);
-        $repo->recordAdjustment('evt_refund', time(), 'pi_support', 'refund:ch_support', -250, 'refunded');
-        self::assertSame(750, $repo->publicSummary($year)['stripe_cents']);
+        $repo->recordAdjustment('evt_refund_new', $eventCreated, 'pi_support', 'refund:ch_support', -400, 'refunded');
+        $repo->recordAdjustment('evt_refund', $eventCreated, 'pi_support', 'refund:ch_support', -250, 'refunded');
+        self::assertSame(600, $repo->publicSummary($year)['stripe_cents']);
         self::assertTrue($repo->member($user->id)['badge']);
+
+        $repo->recordPayment('cs_dispute', 'pi_dispute', $user->id, 1000, 'eur', $year);
+        $repo->recordAdjustment('evt_dispute_open', $eventCreated, 'pi_dispute', 'dispute:dp_support', -1000, 'open');
+        $repo->recordAdjustment('evt_dispute_won', $eventCreated, 'pi_dispute', 'dispute:dp_support', 0, 'won');
+        $repo->recordAdjustment('evt_dispute_open', $eventCreated, 'pi_dispute', 'dispute:dp_support', -1000, 'open');
+        self::assertSame(1600, $repo->publicSummary($year)['stripe_cents']);
 
         $repo->adminSetBadge($user->id, false);
         $repo->recordPayment('cs_support', 'pi_support', $user->id, 1000, 'eur', $year);
         self::assertFalse($repo->member($user->id)['badge']);
-        self::assertSame(750, $repo->publicSummary($year)['stripe_cents']);
+        self::assertSame(1600, $repo->publicSummary($year)['stripe_cents']);
     }
 
     public function testDeletingAccountAnonymizesDonationAndRemovesPreferences(): void
