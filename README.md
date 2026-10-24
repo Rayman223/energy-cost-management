@@ -2,6 +2,8 @@
 
 ### 👉 [**Use the app: energy-cost.eu**](https://energy-cost.eu) 👈
 
+Financial support: [energy-cost.eu/support](https://energy-cost.eu/support).
+
 > **[energy-cost.eu](https://energy-cost.eu) is the official production
 > instance — free, hosted and ready to use.**
 > Sign in with OpenID Connect and start tracking your electricity, gas and water
@@ -170,8 +172,8 @@ return [
     // Discord link shown in the page header. Empty = link hidden.
     'discord'      => [ 'invite_url' => '', 'release_webhook_en' => '' ], // empty webhook = announcements disabled
 
-    // "Support the project" link shown in the page header. Empty = link hidden.
-    'donate'       => [ 'url' => '' ],                           // e.g. https://buymeacoffee.com/xxxxxxx
+    // Voluntary support page; disabled by default on self-hosted installs.
+    'support'      => [ 'enabled' => false ],                     // optional support page; disabled on self-hosted installs
 
     // Optional: day-ahead spot prices (ENTSO-E), local meter agent.
     // VAT and supplier markup are NOT configured here (see the dynamic-price notes below).
