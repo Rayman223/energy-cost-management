@@ -46,7 +46,7 @@ if (!is_file($file)) {
 
 $mainConfig = __DIR__ . '/../config/config.php';
 $override = realpath($file) !== false && realpath($file) === realpath($mainConfig)
-    ? \dirname($file) . '/config.local.php'
+    ? __DIR__ . '/../config/config.local.php'
     : null;
 try {
     $config = ConfigLoader::load($file, $override);

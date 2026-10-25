@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Config;
 
+use App\Support\SupportConfig;
+
 /**
  * Valide un tableau de configuration contre {@see ConfigSchema}. Fonction pure :
  * aucune I/O (ni PDO, ni réseau, ni require) — c'est ce qui la rend testable
@@ -12,7 +14,8 @@ namespace App\Config;
  * Calibrage des sévérités (cf. #153) :
  *   - ERROR   : uniquement `database` absente ou incomplète.
  *   - WARNING : section optionnelle absente, clé inconnue (typo), sentinelle
- *               restante dans une section *active*, clé déplacée (`moved`).
+ *               restante dans une section *active*, clé déplacée (`moved`) ou
+ *               réglage incompatible avec le fonctionnement d'une section active.
  *
  * Règle d'or : « section absente = WARNING, jamais ERROR » — c'est ce qui rend
  * valide le config `database`-only généré par la CI.
@@ -29,8 +32,49 @@ final class ConfigValidator
     {
         $issues = [];
         self::walkSection(ConfigSchema::root(), $config, '', true, $checkSentinels, $issues);
+        self::checkSupport($config, $issues);
 
         return $issues;
+    }
+
+    /**
+     * Signale les réglages qui rendent inopérant un module de soutien activé.
+     * Les messages restent statiques : URL et secrets privés ne sont jamais journalisés.
+     *
+     * @param array<string, mixed> $config
+     * @param list<ConfigIssue> $issues
+     */
+    private static function checkSupport(array $config, array &$issues): void
+    {
+        $support = $config['support'] ?? [];
+        if (!is_array($support) || ($support['enabled'] ?? false) !== true) return;
+
+        $oidc = $config['oidc'] ?? [];
+        if (!is_array($oidc) || ($oidc['enabled'] ?? false) !== true) {
+            $issues[] = ConfigIssue::warning('support.enabled', 'la page de soutien nécessite une instance publique OIDC', ConfigIssue::KIND_INVALID_VALUE);
+        }
+        if (!in_array($support['stripe_mode'] ?? 'test', ['test', 'live'], true)) {
+            $issues[] = ConfigIssue::warning('support.stripe_mode', 'mode Stripe attendu : test ou live', ConfigIssue::KIND_INVALID_VALUE);
+        }
+
+        $url = $support['stripe_payment_link'] ?? '';
+        if (is_string($url) && trim($url) === '') return; // GitHub Sponsors seul.
+
+        if (SupportConfig::paymentLink($config) === null) {
+            $issues[] = ConfigIssue::warning('support.stripe_payment_link', 'URL HTTPS de Payment Link attendue, sans identifiants intégrés', ConfigIssue::KIND_INVALID_VALUE);
+        }
+        $linkId = $support['stripe_payment_link_id'] ?? '';
+        if (!is_string($linkId) || preg_match('/^plink_[A-Za-z0-9_]+$/D', $linkId) !== 1) {
+            $issues[] = ConfigIssue::warning('support.stripe_payment_link_id', 'identifiant de Payment Link attendu (plink_…)', ConfigIssue::KIND_INVALID_VALUE);
+        }
+        $secret = $support['stripe_webhook_secret'] ?? '';
+        if (!is_string($secret) || !str_starts_with(trim($secret), 'whsec_') || strlen(trim($secret)) <= 6) {
+            $issues[] = ConfigIssue::warning('support.stripe_webhook_secret', 'secret de signature du webhook attendu (whsec_…)', ConfigIssue::KIND_INVALID_VALUE);
+        }
+        $key = $support['reference_signing_key'] ?? '';
+        if (!is_string($key) || trim($key) === '' || (is_string($secret) && trim($key) === trim($secret))) {
+            $issues[] = ConfigIssue::warning('support.reference_signing_key', 'clé de signature des références requise et distincte du secret webhook', ConfigIssue::KIND_INVALID_VALUE);
+        }
     }
 
     /**

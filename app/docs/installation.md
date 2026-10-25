@@ -226,6 +226,14 @@ individually, while list values replace the original list. Both private files
 are ignored by Git. The configuration checker loads this local override when
 checking the default `config.php`.
 
+When support is enabled, the diagnostic warns about an unavailable public OIDC
+page, an invalid Stripe mode, or missing/incompatible Stripe URL, Payment Link
+ID and signing secrets. Account-reference and webhook secrets must be distinct.
+Private values are never included in these warnings. Disabled support and
+GitHub Sponsors-only configurations do not require Stripe credentials. Checking
+the main configuration through a symlink target uses the application's own
+`config.local.php`, just like the default command.
+
 Set at least `database`, then choose the authentication mode:
 
 - **Community mode (recommended)** — set `oidc.enabled = true` and fill
