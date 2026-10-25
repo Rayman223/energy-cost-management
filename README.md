@@ -2,6 +2,8 @@
 
 ### 👉 [**Use the app: energy-cost.eu**](https://energy-cost.eu) 👈
 
+Financial support: [energy-cost.eu/support](https://energy-cost.eu/support).
+
 > **[energy-cost.eu](https://energy-cost.eu) is the official production
 > instance — free, hosted and ready to use.**
 > Sign in with OpenID Connect and start tracking your electricity, gas and water
@@ -91,7 +93,7 @@ routes JSON through `Router` → controllers → `JsonResponse`.
 ```
 app/
 ├── autoload.php / bootstrap.php   ← App\ autoloader + config loading
-├── config/                        ← config.example.php · config.php (⚠ gitignored)
+├── config/                        ← config.example.php · config.local.example.php · configs privées ignorées
 ├── docs/                          ← installation.md · architecture.md · import.md · api-contract.md · security-review.md · …
 ├── public/                        ← index · tariffs · account · admin · login · privacy · terms · api · auth/
 │   └── assets/                    ← versioned CSS/JS (cache-busting)
@@ -143,7 +145,10 @@ see the step-by-step guide:
 ## Configuration
 
 Copy `app/config/config.example.php` to `app/config/config.php` (gitignored) and
-fill in the keys. Highlights:
+fill in the keys. For deployment-specific private values, copy
+`app/config/config.local.example.php` to `app/config/config.local.php` (also
+gitignored). It deep-merges overrides over the main config; use it for Stripe
+URLs and secrets instead of putting them in the main config. Highlights:
 
 ```php
 return [
@@ -170,8 +175,8 @@ return [
     // Discord link shown in the page header. Empty = link hidden.
     'discord'      => [ 'invite_url' => '', 'release_webhook_en' => '' ], // empty webhook = announcements disabled
 
-    // "Support the project" link shown in the page header. Empty = link hidden.
-    'donate'       => [ 'url' => '' ],                           // e.g. https://buymeacoffee.com/xxxxxxx
+    // Voluntary support page; disabled by default on self-hosted installs.
+    'support'      => [ 'enabled' => false ],                     // optional support page; disabled on self-hosted installs
 
     // Optional: day-ahead spot prices (ENTSO-E), local meter agent.
     // VAT and supplier markup are NOT configured here (see the dynamic-price notes below).
@@ -184,8 +189,9 @@ return [
 ];
 ```
 
-Never commit `config.php`: it is the single source of truth for secrets and is
-preserved across deployments (`git clean` runs without `-x`).
+Never commit `config.php` or `config.local.php`. Both are preserved across
+deployments (`git clean` runs without `-x`); local values override matching
+settings from `config.php`.
 
 English release announcements use `VERSION`, versioned JSON notes under
 `releases/`, and an optional `discord.release_webhook_en` secret in `config.php`.

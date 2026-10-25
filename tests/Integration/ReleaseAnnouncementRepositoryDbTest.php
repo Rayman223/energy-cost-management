@@ -46,7 +46,7 @@ final class ReleaseAnnouncementRepositoryDbTest extends DatabaseTestCase
     public function testConcurrentPublisherIsRejectedAndLockIsReleasedAfterFailure(): void
     {
         $owner = new ReleaseAnnouncementRepository($this->pdo());
-        $config = require __DIR__ . '/../../app/config/config.php';
+        $config = \App\Config\ConfigLoader::load(__DIR__ . '/../../app/config/config.php', __DIR__ . '/../../app/config/config.local.php');
         $databaseConfig = $config['database'];
         // Use the same structurally derived disposable database as DatabaseTestCase.
         $databaseConfig['name'] = self::testDatabaseName($databaseConfig['name']);

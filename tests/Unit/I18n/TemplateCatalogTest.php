@@ -157,8 +157,7 @@ final class TemplateCatalogTest extends TestCase
 
         $keys = [];
         foreach (array_merge($this->templateFiles(), $this->sourceFiles()) as $file) {
-            preg_match_all('/\'([a-z][a-z0-9_]*(?:\.[a-z0-9_]+)+)\'/', $this->read($file), $matches);
-            foreach ($matches[1] as $candidate) {
+            foreach ($this->keyLikeCandidates($this->read($file)) as $candidate) {
                 $segments = explode('.', $candidate);
                 if (!isset($prefixes[$segments[0]])) {
                     continue;
@@ -173,6 +172,28 @@ final class TemplateCatalogTest extends TestCase
         }
 
         return $this->withoutConcatenationPrefixes($keys);
+    }
+
+    /** @return list<string> */
+    private function keyLikeCandidates(string $source): array
+    {
+        // Le premier argument de ConfigIssue est un chemin de configuration,
+        // même quand son préfixe coïncide avec une famille traduite (support.*).
+        $source = preg_replace('/ConfigIssue::(?:warning|error)\(\s*\'[^\']*\'/', 'ConfigIssue::diagnostic(null', $source);
+        self::assertIsString($source);
+        preg_match_all('/\'([a-z][a-z0-9_]*(?:\.[a-z0-9_]+)+)\'/', $source, $matches);
+        return $matches[1];
+    }
+
+    public function testDiagnosticPathsDoNotHideActualTranslationKeys(): void
+    {
+        $source = <<<'PHP'
+        ConfigIssue::warning('support.enabled', 'Diagnostic', 'invalid_value');
+        ConfigIssue::error('database.host', 'Diagnostic', 'missing_required');
+        $label = 'support.title';
+        $this->te('support.enabled');
+        PHP;
+        self::assertSame(['support.title', 'support.enabled'], $this->keyLikeCandidates($source));
     }
 
     /**

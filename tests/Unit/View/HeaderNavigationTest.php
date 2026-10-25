@@ -105,8 +105,13 @@ final class HeaderNavigationTest extends TestCase
         ] as $url => $text) {
             $link = '//a[@href="' . $url . '"]';
             self::assertSame($text, $xpath->evaluate('normalize-space(' . $link . ')'));
-            self::assertSame('_blank', $xpath->evaluate('string(' . $link . '/@target)'));
-            self::assertSame('noopener noreferrer', $xpath->evaluate('string(' . $link . '/@rel)'));
+            if (str_contains($url, 'example.com/support')) {
+                self::assertSame('', $xpath->evaluate('string(' . $link . '/@target)'));
+                self::assertSame('', $xpath->evaluate('string(' . $link . '/@rel)'));
+            } else {
+                self::assertSame('_blank', $xpath->evaluate('string(' . $link . '/@target)'));
+                self::assertSame('noopener noreferrer', $xpath->evaluate('string(' . $link . '/@rel)'));
+            }
         }
         self::assertSame(0.0, $xpath->evaluate('count(//svg)'));
         $html = $this->header();

@@ -20,6 +20,7 @@ use App\Repository\MeterRepository;
 use App\Repository\TariffRepository;
 use App\Repository\UserIdentityRepository;
 use App\Repository\UserRepository;
+use App\Repository\SupportRepository;
 use App\Security\AuthGuard;
 use App\Security\Csrf;
 use App\Security\IdentityUnlinker;
@@ -356,6 +357,7 @@ echo $view->render('account', [
     'dynamicServerEnabled' => $dynamicServer,
     'discordUrl'  => DiscordLink::inviteUrl($config),
     'donateUrl'   => DonateLink::url($config),
+    'supportMember' => (new SupportRepository($pdo))->member($userId, App\Support\SupportConfig::stripeMode($config)),
     'adsenseClient' => Adsense::clientId($config),
     'error'      => $error,
     'success'    => $success,

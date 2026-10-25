@@ -30,6 +30,9 @@ final class AccountDataExporter
             '"exported_at":' . self::enc((new \DateTimeImmutable('now'))->format('c')),
             '"user":' . self::enc($this->one('SELECT id, oidc_iss, oidc_sub, provider, display_name, role, status, terms_accepted_at, created_at, last_login_at FROM users WHERE id = :uid', $userId)),
             '"profile":' . self::enc($this->one('SELECT country, timezone, currency, bidding_zone, supplier_markup_per_kwh, locale, stats_opt_out FROM user_profiles WHERE user_id = :uid', $userId)),
+            '"support":' . self::enc($this->all('SELECT stripe_mode, badge_enabled, public_opt_in, public_opted_in_at, manual_override, updated_at FROM support_members WHERE user_id = :uid ORDER BY stripe_mode', $userId)),
+            '"support_donations":' . self::enc($this->all('SELECT stripe_mode, checkout_session_id, payment_intent, amount_cents, currency, donation_year, created_at FROM support_donations WHERE user_id = :uid ORDER BY id', $userId)),
+            '"support_adjustments":' . self::enc($this->all('SELECT a.stripe_mode, a.event_id, a.event_created, a.payment_intent, a.adjustment_ref, a.adjustment_cents, a.state, a.created_at FROM support_adjustments a INNER JOIN support_donations d ON d.payment_intent = a.payment_intent AND d.stripe_mode = a.stripe_mode WHERE d.user_id = :uid ORDER BY a.id', $userId)),
             // Les dates de service sont des données saisies par
             // l'utilisateur sur son parc, pas un détail interne — les omettre
             // rendrait l'export non reconstituable.

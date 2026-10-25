@@ -42,8 +42,9 @@ client, falling back to `mysql`) → runs `app/scripts/migrate.php` → checks t
 OIDC config → verifies PHP bootstrap and DB connectivity → validates and publishes
 pending English Discord announcements. An empty `discord.release_webhook_en`
 disables delivery. See [release-announcements.md](release-announcements.md) for
-configuration and retries. `git clean` runs **without `-x`**, so `app/config/config.php` and
-`/vendor/` are preserved.
+configuration and retries. `git clean` runs **without `-x`**, so both
+`app/config/config.php` and `app/config/config.local.php`, plus `/vendor/`, are
+preserved.
 
 ### Private repository access (SSH deploy key)
 
@@ -217,6 +218,22 @@ missing sections and leftover `change_me` sentinels):
 php app/scripts/config_check.php
 ```
 
+For private deployment-only values, copy
+`app/config/config.local.example.php` to `app/config/config.local.php` and fill
+in the deployment-specific values. The local file returns a PHP array that
+deep-merges over `config.php`; nested associative settings can be overridden
+individually, while list values replace the original list. Both private files
+are ignored by Git. The configuration checker loads this local override when
+checking the default `config.php`.
+
+When support is enabled, the diagnostic warns about an unavailable public OIDC
+page, an invalid Stripe mode, or missing/incompatible Stripe URL, Payment Link
+ID and signing secrets. Account-reference and webhook secrets must be distinct.
+Private values are never included in these warnings. Disabled support and
+GitHub Sponsors-only configurations do not require Stripe credentials. Checking
+the main configuration through a symlink target uses the application's own
+`config.local.php`, just like the default command.
+
 Set at least `database`, then choose the authentication mode:
 
 - **Community mode (recommended)** — set `oidc.enabled = true` and fill
@@ -237,9 +254,9 @@ Optionally set `dynamic_prices` (ENTSO-E token), `i18n`, and `api`.
 15-minute (MTU15) prices, the daily cron and a ready-made Unraid User Script —
 is in [entsoe-dynamic-prices.md](entsoe-dynamic-prices.md) (*in French*).
 Set `discord.invite_url` to show a Discord link in the page header (empty = hidden).
-Set `donate.url` likewise to show a "support the project" link there — Buy Me a
-Coffee, Ko-fi, GitHub Sponsors, any `http(s)` URL (empty = hidden). Self-hosted
-instances should leave it empty unless they point it at their own page.
+Configure the optional `support` section to publish the support page. It is
+disabled by default on self-hosted instances; the legacy `donate.url` setting is
+ignored and reported by the configuration diagnostic.
 
 Fill in `legal` (publisher, address, contact e-mail, hosting provider,
 jurisdiction): those values feed `/legal-notice` and the "data controller"
@@ -288,6 +305,65 @@ mariadb -u energy_user -p energy < app/sql/schema.sql # CREATE TABLE IF NOT EXIS
 php app/scripts/migrate.php                            # versioned migrations (tracked in schema_migrations)
 php app/scripts/migrate.php --dry-run                  # preview pending migrations
 ```
+
+### Voluntary project support (official public instance)
+
+Support remains voluntary: the application stays free, with no paid features or
+donor perks. Enable this only on a public OIDC deployment. Install the release,
+then apply the database migrations (initial storage and isolation of test/live data):
+
+```bash
+php app/scripts/migrate.php --dry-run
+php app/scripts/migrate.php
+php app/scripts/config_check.php --strict
+php -r 'echo bin2hex(random_bytes(32)), PHP_EOL;'
+```
+
+Create a Stripe Payment Link that lets the customer choose an amount and set
+its currency to EUR. The application automatically appends a signed
+`client_reference_id` for signed-in donors. Its alphanumeric/underscore format
+follows [Stripe's character and length restrictions](https://docs.stripe.com/payment-links/url-parameters)
+(up to 200 characters); Stripe silently drops invalid values.
+Configure `support` with the Payment Link URL and its `plink_…` identifier.
+Use the command above to generate an account-reference signing key; it must not
+reuse the webhook secret. Keep both secrets outside version control.
+
+Create a Stripe webhook at `https://energy-cost.eu/stripe/webhook` using the
+**Snapshot** payload format and select these event types:
+
+- `checkout.session.completed`
+- `checkout.session.async_payment_succeeded`
+- `charge.refunded`
+- `charge.dispute.created`
+- `charge.dispute.closed`
+
+Copy the endpoint signing secret into `support.stripe_webhook_secret`, set
+`support.stripe_mode` to `test`, and use a test-mode Payment Link and identifier.
+Keep `enabled` false while entering the settings, then set it to `true` on the
+test instance to accept webhook deliveries and exercise the page. A disabled
+support module returns 404 for its webhook. Verify paid and delayed payments,
+refunds, disputes and the yearly total before configuring the production
+instance with its live-mode link, identifier and secret, `stripe_mode = 'live'`
+and `enabled = true`. Test and live donations, adjustments, badges and wall
+consent are stored separately, so switching modes cannot count test donations
+as real funds or publish test supporters. Keep the account-reference signing
+key stable. Enter the current year's
+GitHub Sponsors total and year manually in
+`github_sponsors_annual_cents` and `github_sponsors_year`. Set a positive
+`annual_goal_cents` to show the progress gauge; zero hides it. Stripe amounts
+are shown before processing fees.
+
+The calendar year is determined in UTC when Stripe confirms the payment,
+including delayed payments started in the previous year. Refunds and disputed
+amounts reduce only their own donation, down to zero; they cannot consume
+another donation's contribution. Personal exports include both modes, their
+adjustments and the wall consent timestamp. The deployment script reads the
+same merged configuration as the application, including database and OIDC
+overrides in `config.local.php`.
+
+A dispute won or an inquiry closed without escalating to a chargeback
+(`warning_closed`) releases the disputed adjustment; any refund remains
+deducted.
 
 ### The test database (`<database.name>_test`)
 
