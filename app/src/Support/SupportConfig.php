@@ -14,6 +14,12 @@ final class SupportConfig
     }
 
     /** @param array<string, mixed> $config */
+    public static function stripeMode(array $config): string
+    {
+        return ($config['support']['stripe_mode'] ?? 'test') === 'live' ? 'live' : 'test';
+    }
+
+    /** @param array<string, mixed> $config */
     public static function paymentLink(array $config): ?string
     {
         $url = ConfigUrl::httpUrl($config, 'support', 'stripe_payment_link');

@@ -26,7 +26,7 @@ final class StripeSupportWebhook
         $eventCreated = (int) ($event['created'] ?? 0);
         $object = $event['data']['object'];
         $eventId = (string) ($event['id'] ?? '');
-        if ($eventId === '') return false;
+        if ($eventId === '' || $eventCreated <= 0) return false;
 
         if (in_array($type, ['checkout.session.completed', 'checkout.session.async_payment_succeeded'], true)) {
             if (($object['payment_status'] ?? '') !== 'paid'
@@ -38,7 +38,7 @@ final class StripeSupportWebhook
             $userId = $this->verifiedUserId((string) ($object['client_reference_id'] ?? ''));
             $this->repository->recordPayment($sessionId, $paymentIntent, $userId,
                 (int) ($object['amount_total'] ?? 0), (string) ($object['currency'] ?? ''),
-                (int) gmdate('Y', (int) ($object['created'] ?? time())));
+                (int) gmdate('Y', $eventCreated), $mode);
             return true;
         }
 
@@ -56,7 +56,7 @@ final class StripeSupportWebhook
                 $amount = $status === 'won' ? 0 : -$amount;
                 $state = $status;
             }
-            if ($ref !== 'refund:' && $ref !== 'dispute:') $this->repository->recordAdjustment($eventId, $eventCreated, $intent, $ref, $amount, $state);
+            if ($ref !== 'refund:' && $ref !== 'dispute:') $this->repository->recordAdjustment($eventId, $eventCreated, $intent, $ref, $amount, $state, $mode);
         }
         return true;
     }

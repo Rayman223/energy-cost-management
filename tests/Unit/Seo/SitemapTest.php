@@ -68,6 +68,19 @@ final class SitemapTest extends TestCase
         }
     }
 
+    public function testSupportIsListedOnlyWhenPublicAndEnabled(): void
+    {
+        $config = $this->config();
+        $config['support'] = ['enabled' => true];
+        self::assertStringNotContainsString('/support?', Sitemap::render($config));
+        $config['oidc'] = ['enabled' => true];
+        foreach (['fr', 'en', 'nl', 'de'] as $locale) {
+            self::assertStringContainsString('/support?lang=' . $locale, Sitemap::render($config));
+        }
+        $config['support']['enabled'] = false;
+        self::assertStringNotContainsString('/support?', Sitemap::render($config));
+    }
+
     public function testEveryUrlIsAbsoluteAndCarriesALocale(): void
     {
         foreach ($this->locations() as $url) {

@@ -19,6 +19,14 @@ final class StripeSupportWebhookTest extends TestCase
         $body = '{"id":"evt_1","type":"unknown","livemode":false,"data":{"object":{}}}';
         self::assertFalse($service->handle($body, 't=' . time() . ',v1=' . str_repeat('0', 64)));
         self::assertFalse($service->handle($body, $this->signature($body, time() - 301)));
+        self::assertFalse($service->handle($body, $this->signature($body, time() + 301)));
+    }
+
+    public function testRejectsOversizedAndMalformedBodiesEvenWithValidSignatures(): void
+    {
+        foreach ([str_repeat(' ', 262145), '{invalid json', '{"id":"evt_no_timestamp","livemode":false,"data":{"object":{}}}'] as $body) {
+            self::assertFalse($this->service()->handle($body, $this->signature($body)));
+        }
     }
 
     public function testRejectsEventsFromTheOtherStripeMode(): void

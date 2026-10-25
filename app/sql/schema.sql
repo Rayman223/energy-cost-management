@@ -157,8 +157,9 @@ CREATE TABLE IF NOT EXISTS support_donations (
     amount_cents BIGINT NOT NULL,
     currency CHAR(3) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
     donation_year SMALLINT UNSIGNED NOT NULL,
+    stripe_mode VARCHAR(4) CHARACTER SET ascii COLLATE ascii_bin NOT NULL DEFAULT 'live',
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE KEY uq_support_session (checkout_session_id), UNIQUE KEY uq_support_payment_intent (payment_intent),
+    UNIQUE KEY uq_support_session (stripe_mode, checkout_session_id), UNIQUE KEY uq_support_payment_intent (stripe_mode, payment_intent),
     INDEX idx_support_year (donation_year, currency), INDEX idx_support_user (user_id),
     CONSTRAINT fk_support_donation_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
@@ -170,13 +171,16 @@ CREATE TABLE IF NOT EXISTS support_adjustments (
     payment_intent VARCHAR(255) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
     adjustment_ref VARCHAR(255) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
     adjustment_cents BIGINT NOT NULL, state VARCHAR(32) NOT NULL,
+    stripe_mode VARCHAR(4) CHARACTER SET ascii COLLATE ascii_bin NOT NULL DEFAULT 'live',
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE KEY uq_support_event (event_id), UNIQUE KEY uq_support_adjustment (adjustment_ref),
+    UNIQUE KEY uq_support_event (stripe_mode, event_id), UNIQUE KEY uq_support_adjustment (stripe_mode, adjustment_ref),
     INDEX idx_support_adjustment_payment (payment_intent)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS support_members (
-    user_id BIGINT UNSIGNED NOT NULL PRIMARY KEY,
+    user_id BIGINT UNSIGNED NOT NULL,
+    stripe_mode VARCHAR(4) CHARACTER SET ascii COLLATE ascii_bin NOT NULL DEFAULT 'live',
+    PRIMARY KEY (user_id, stripe_mode),
     badge_enabled TINYINT(1) NOT NULL DEFAULT 0, public_opt_in TINYINT(1) NOT NULL DEFAULT 0,
     public_opted_in_at DATETIME NULL,
     manual_override TINYINT(1) NOT NULL DEFAULT 0,

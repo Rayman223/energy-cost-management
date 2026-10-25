@@ -149,10 +149,10 @@ docker exec -w "$CONTAINER_APP_DIR" "$CONTAINER" \
 
 # ── Étape 3 : Schéma DB ──────────────────────────────────────────────────────
 log "=== Étape 3/7 — Application de schema.sql ==="
-# Credentials lus depuis config.php (source de vérité unique) via le PHP du
+# Credentials lus depuis la configuration fusionnée via le PHP du
 # container SWAG, pour ne rien coder en dur dans ce script.
 mapfile -t DB_CFG < <(docker exec -w "$CONTAINER_APP_DIR" "$CONTAINER" php -r \
-    '$d=(require "app/config/config.php")["database"]; echo $d["name"]."\n".$d["user"]."\n".$d["password"]."\n";')
+    'require "vendor/autoload.php"; $d=App\Config\ConfigLoader::load("app/config/config.php", "app/config/config.local.php")["database"]; echo $d["name"]."\n".$d["user"]."\n".$d["password"]."\n";')
 DB_NAME="${DB_CFG[0]}"
 DB_USER="${DB_CFG[1]}"
 DB_PASS="${DB_CFG[2]}"
@@ -177,7 +177,8 @@ docker exec -w "$CONTAINER_APP_DIR" "$CONTAINER" php app/scripts/migrate.php
 # (mode Basic Auth historique, mono-tenant). N'interrompt jamais le déploiement.
 log "=== Étape 5/7 — Contrôle config OIDC ==="
 docker exec -w "$CONTAINER_APP_DIR" "$CONTAINER" php -r '
-    $c = require "app/config/config.php";
+    require "vendor/autoload.php";
+    $c = App\Config\ConfigLoader::load("app/config/config.php", "app/config/config.local.php");
     $o = $c["oidc"] ?? [];
     if (!($o["enabled"] ?? false)) {
         fwrite(STDOUT, "OIDC désactivé — mode Basic Auth (mono-tenant).\n");

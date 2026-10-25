@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Seo;
 
 use App\I18n\Locale;
+use App\Security\AuthGuard;
 use App\Support\SiteUrl;
 use App\Support\SupportConfig;
 use App\View\GuideContent;
@@ -65,7 +66,7 @@ final class Sitemap
         /** @var list<array{path: string, query: array<string, string>}> $pages */
         $pages = [];
         $paths = self::PATHS;
-        if (SupportConfig::enabled($config)) $paths[] = 'support';
+        if (SupportConfig::enabled($config) && AuthGuard::isOidcEnabled($config)) $paths[] = 'support';
         foreach ($paths as $path) {
             $pages[] = ['path' => $path, 'query' => []];
         }

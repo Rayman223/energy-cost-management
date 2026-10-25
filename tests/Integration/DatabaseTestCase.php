@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Tests\Integration;
 
+use App\Config\ConfigLoader;
 use PDO;
 use PHPUnit\Framework\TestCase;
 
@@ -127,7 +128,7 @@ abstract class DatabaseTestCase extends TestCase
             }
 
             /** @var array{database: array<string, mixed>} $config */
-            $config = require $configPath;
+            $config = ConfigLoader::load($configPath, \dirname($configPath) . '/config.local.php');
             self::$db = $config['database'];
         }
 

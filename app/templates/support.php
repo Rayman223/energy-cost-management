@@ -14,7 +14,7 @@ $progress = $goal > 0 ? min(100, (int) floor($raised * 100 / $goal)) : 0;
 <html lang="<?= $this->e($this->locale()) ?>">
 <head><?= $this->partial('_head', ['title' => $title . ' — ' . $this->t('app.title'), 'css' => ['assets/css/app-header.css', 'assets/css/lang-switcher.css', 'assets/css/support.css'], 'meta' => $meta]) ?></head>
 <body><div class="support-wrap">
-  <?= $this->partial('_header', ['subtitle' => $title, 'current' => 'support', 'authenticated' => $loggedIn, 'discordUrl' => $discordUrl, 'donateUrl' => $donateUrl, 'available' => $available]) ?>
+  <?= $this->partial('_header', ['subtitle' => $title, 'current' => 'support', 'authenticated' => $loggedIn, 'isAdmin' => $isAdmin, 'discordUrl' => $discordUrl, 'donateUrl' => $donateUrl, 'available' => $available]) ?>
   <main>
     <section class="support-hero"><p class="eyebrow">Energy Cost Management</p><h1><?= $this->te('support.title') ?></h1><p><?= $this->te('support.intro') ?></p></section>
     <section class="support-card"><h2><?= $this->te('support.costs') ?></h2><p><?= $this->te('support.costs_text') ?></p>
@@ -32,4 +32,4 @@ $progress = $goal > 0 ? min(100, (int) floor($raised * 100 / $goal)) : 0;
     <section class="support-card"><h2><?= $this->te('support.wall') ?></h2><?php if ($supporters === []): ?><p><?= $this->te('support.no_names') ?></p><?php else: ?><ul class="supporter-list"><?php foreach ($supporters as $supporter): ?><li><?= $this->e($supporter['name']) ?></li><?php endforeach; ?></ul><?php endif; ?></section>
     <?php if ($isAdmin): ?><section class="support-card"><h2><?= $this->te('support.admin_badge') ?></h2><form method="post" action="<?= $this->e($this->url('support/visibility')) ?>"><?= $csrfField ?><label><?= $this->te('support.user_id') ?> <input type="number" name="admin_user_id" min="1" required></label><label><?= $this->te('support.badge') ?> <select name="badge_enabled"><option value="1"><?= $this->te('common.yes') ?></option><option value="0"><?= $this->te('common.no') ?></option></select></label><button type="submit"><?= $this->te('common.save') ?></button></form></section><?php endif; ?>
   </main>
-</div></body></html>
+</div><script defer src="<?= \App\Support\Assets::url('assets/js/header.js') ?>"></script></body></html>

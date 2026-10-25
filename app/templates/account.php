@@ -59,7 +59,7 @@ $csrf = \App\Security\Csrf::field();
 
   <?php if (($supportMember['badge'] ?? false) === true): ?>
   <div class="card"><h2><?= $this->te('support.badge') ?></h2>
-    <p><?= $this->te('support.badge_description') ?> · <a href="<?= $this->e($this->url('support')) ?>"><?= $this->te('support.manage_visibility') ?></a></p>
+    <p><?= $this->te('support.badge_description') ?><?php if ($donateUrl !== null): ?> · <a href="<?= $this->e($donateUrl) ?>"><?= $this->te('support.manage_visibility') ?></a><?php endif; ?></p>
   </div>
   <?php endif; ?>
 

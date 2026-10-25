@@ -1,11 +1,18 @@
+body { font-family: var(--sans), system-ui, sans-serif; background: var(--bg); color: var(--text); line-height: 1.6; }
+a { color: var(--blue); }
 .support-wrap { max-width: 1000px; margin: 0 auto; padding: 24px; }
 .support-wrap main { display: grid; gap: 18px; }
-.support-hero { padding: 48px 24px; border-radius: 18px; background: linear-gradient(135deg, var(--surface), var(--surface-2, var(--bg))); }
+.support-hero { padding: 48px 24px; border-radius: 18px; background: linear-gradient(135deg, var(--surface), var(--surface2)); }
 .support-hero h1 { font-size: clamp(2rem, 6vw, 3.4rem); margin: .2em 0; }
 .support-hero p { max-width: 680px; }
 .eyebrow { color: var(--muted); text-transform: uppercase; letter-spacing: .12em; font-size: .8rem; }
 .support-card { padding: 22px; border: 1px solid var(--border); border-radius: 14px; background: var(--surface); }
 .support-card h2 { margin-top: 0; }
+.support-card p + p, .support-card form { margin-top: 12px; }
+.support-card form { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; }
+.support-card input, .support-card select, .support-card button { font: inherit; color: var(--text); background: var(--surface); accent-color: var(--amber); }
+.support-card input[type="number"], .support-card select, .support-card button { padding: 8px 12px; border: 1px solid var(--border2); border-radius: 8px; }
+.support-card button { cursor: pointer; }
 .support-methods { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 18px; }
 .support-button { display: inline-block; padding: 12px 18px; border-radius: 9px; color: var(--on-amber); background: var(--amber); text-decoration: none; font-weight: 700; }
 .support-button.secondary { color: var(--text); background: var(--bg); border: 1px solid var(--border); }

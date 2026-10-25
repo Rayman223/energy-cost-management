@@ -357,7 +357,7 @@ echo $view->render('account', [
     'dynamicServerEnabled' => $dynamicServer,
     'discordUrl'  => DiscordLink::inviteUrl($config),
     'donateUrl'   => DonateLink::url($config),
-    'supportMember' => (new SupportRepository($pdo))->member($userId),
+    'supportMember' => (new SupportRepository($pdo))->member($userId, App\Support\SupportConfig::stripeMode($config)),
     'adsenseClient' => Adsense::clientId($config),
     'error'      => $error,
     'success'    => $success,

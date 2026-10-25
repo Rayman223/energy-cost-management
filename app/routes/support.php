@@ -13,6 +13,7 @@ use App\Security\WebAccessGuard;
 use App\Seo\PageMeta;
 use App\Support\SupportConfig;
 use App\Support\SupportLink;
+use App\Support\DiscordLink;
 use App\View\ViewFactory;
 
 $config = require __DIR__ . '/../bootstrap.php';
@@ -27,6 +28,7 @@ if (!SupportConfig::enabled($config) || !AuthGuard::isOidcEnabled($config)) {
 $locale = Locale::resolve($config, null);
 $view = ViewFactory::create(__DIR__ . '/../templates', $locale, (string) ($config['i18n']['default_locale'] ?? 'fr'));
 $year = (int) gmdate('Y');
+$mode = SupportConfig::stripeMode($config);
 $goal = max(0, (int) ($config['support']['annual_goal_cents'] ?? 0));
 $githubYear = (int) ($config['support']['github_sponsors_year'] ?? 0);
 $githubAmount = $githubYear === $year ? max(0, (int) ($config['support']['github_sponsors_annual_cents'] ?? 0)) : 0;
@@ -39,10 +41,10 @@ $userId = AuthSession::userId();
 try {
     $pdo = (new Database($config['database']))->pdo();
     $repo = new SupportRepository($pdo);
-    $summary = $repo->publicSummary($year);
+    $summary = $repo->publicSummary($year, $mode);
     if ($userId !== null) {
         $user = (new UserRepository($pdo))->findById($userId);
-        if ($user?->isActive()) { $member = $repo->member($userId); $isAdmin = $user->isAdmin(); $loggedIn = true; }
+        if ($user?->isActive()) { $member = $repo->member($userId, $mode); $isAdmin = $user->isAdmin(); $loggedIn = true; }
     }
 } catch (Throwable) {
     $dbAvailable = false;
@@ -60,7 +62,7 @@ if ($link !== null && $loggedIn && $userId !== null && $dbAvailable) {
 $meta = PageMeta::indexable($config, 'support', $locale, $view->t('support.meta'));
 echo $view->render('support', [
     'title' => $view->t('support.title'), 'available' => Locale::available($config),
-    'discordUrl' => null, 'donateUrl' => SupportLink::url($config), 'meta' => $meta,
+    'discordUrl' => DiscordLink::inviteUrl($config), 'donateUrl' => SupportLink::url($config), 'meta' => $meta,
     'raised' => $raised, 'goal' => $goal, 'stripeCents' => $summary['stripe_cents'],
     'githubCents' => $githubAmount, 'year' => $year, 'supporters' => $summary['supporters'],
     'dbAvailable' => $dbAvailable, 'member' => $member, 'loggedIn' => $loggedIn, 'isAdmin' => $isAdmin,

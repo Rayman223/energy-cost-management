@@ -302,7 +302,7 @@ php app/scripts/migrate.php --dry-run                  # preview pending migrati
 
 Support remains voluntary: the application stays free, with no paid features or
 donor perks. Enable this only on a public OIDC deployment. Install the release,
-then apply the database migration:
+then apply the database migrations (initial storage and isolation of test/live data):
 
 ```bash
 php app/scripts/migrate.php --dry-run
@@ -328,13 +328,27 @@ Create a Stripe webhook at `https://energy-cost.eu/stripe/webhook` using the
 
 Copy the endpoint signing secret into `support.stripe_webhook_secret`, set
 `support.stripe_mode` to `test`, and use a test-mode Payment Link and identifier.
-Keep `enabled` false during the test setup. Verify paid and delayed payments,
-refunds, disputes and the yearly total before switching to the live-mode link,
-identifier and secret and setting `enabled` to `true`. Enter the current year's
+Keep `enabled` false while entering the settings, then set it to `true` on the
+test instance to accept webhook deliveries and exercise the page. A disabled
+support module returns 404 for its webhook. Verify paid and delayed payments,
+refunds, disputes and the yearly total before configuring the production
+instance with its live-mode link, identifier and secret, `stripe_mode = 'live'`
+and `enabled = true`. Test and live donations, adjustments, badges and wall
+consent are stored separately, so switching modes cannot count test donations
+as real funds or publish test supporters. Keep the account-reference signing
+key stable. Enter the current year's
 GitHub Sponsors total and year manually in
 `github_sponsors_annual_cents` and `github_sponsors_year`. Set a positive
 `annual_goal_cents` to show the progress gauge; zero hides it. Stripe amounts
 are shown before processing fees.
+
+The calendar year is determined in UTC when Stripe confirms the payment,
+including delayed payments started in the previous year. Refunds and disputed
+amounts reduce only their own donation, down to zero; they cannot consume
+another donation's contribution. Personal exports include both modes, their
+adjustments and the wall consent timestamp. The deployment script reads the
+same merged configuration as the application, including database and OIDC
+overrides in `config.local.php`.
 
 ### The test database (`<database.name>_test`)
 
