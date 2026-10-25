@@ -7,6 +7,7 @@ namespace Tests\Integration;
 use App\Repository\SupportRepository;
 use App\Repository\UserRepository;
 use App\Service\StripeSupportWebhook;
+use PHPUnit\Framework\Attributes\DataProvider;
 
 final class SupportStripeWebhookDbTest extends DatabaseTestCase
 {
@@ -50,7 +51,7 @@ final class SupportStripeWebhookDbTest extends DatabaseTestCase
         $deleted = $users->create('https://support-webhook.test', 'deleted', 'test', 'Deleted');
         $this->pdo()->prepare("UPDATE users SET status = 'blocked' WHERE id = ?")->execute([$blocked->id]);
         $this->pdo()->prepare('DELETE FROM users WHERE id = ?')->execute([$deleted->id]);
-        $references = ['', $active->id . '.' . str_repeat('0', 64), $this->reference($blocked->id), $this->reference($deleted->id)];
+        $references = ['', $active->id . '_' . str_repeat('0', 64), $this->reference($blocked->id), $this->reference($deleted->id)];
         foreach ($references as $index => $reference) {
             self::assertTrue($this->deliver($this->paymentEvent('anonymous-' . $index, $reference)));
         }
@@ -102,9 +103,34 @@ final class SupportStripeWebhookDbTest extends DatabaseTestCase
         self::assertSame(0, (new SupportRepository($this->pdo()))->publicSummary(2026, 'test')['stripe_cents']);
     }
 
+    /** @return iterable<string, array{string, int}> */
+    public static function closedDisputeStatuses(): iterable
+    {
+        yield 'won' => ['won', 1000];
+        yield 'closed inquiry' => ['warning_closed', 1000];
+        yield 'lost' => ['lost', 0];
+    }
+
+    #[DataProvider('closedDisputeStatuses')]
+    public function testClosedDisputeBeforeCreationHasTheCorrectFinalContribution(string $status, int $expected): void
+    {
+        self::assertTrue($this->deliver($this->paymentEvent('closure')));
+        $event = $this->paymentEvent('closure');
+        $event['id'] = 'evt_closure_closed';
+        $event['type'] = 'charge.dispute.closed';
+        $event['data']['object'] = [
+            'id' => 'dp_closure', 'payment_intent' => 'pi_closure', 'amount' => 1000, 'status' => $status,
+        ];
+        self::assertTrue($this->deliver($event));
+        $event['id'] = 'evt_closure_open';
+        $event['type'] = 'charge.dispute.created';
+        self::assertTrue($this->deliver($event));
+        self::assertSame($expected, (new SupportRepository($this->pdo()))->publicSummary(2026, 'test')['stripe_cents']);
+    }
+
     private function reference(int $userId): string
     {
-        return $userId . '.' . hash_hmac('sha256', (string) $userId, self::REFERENCE_KEY);
+        return $userId . '_' . hash_hmac('sha256', (string) $userId, self::REFERENCE_KEY);
     }
 
     /** @return array<string, mixed> */

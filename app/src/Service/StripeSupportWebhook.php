@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Service;
 
 use App\Repository\SupportRepository;
+use App\Support\SupportReference;
 
 /** Valide puis normalise les événements Stripe liés au Payment Link de soutien. */
 final class StripeSupportWebhook
@@ -35,7 +36,7 @@ final class StripeSupportWebhook
             $paymentIntent = (string) ($object['payment_intent'] ?? '');
             if ($sessionId === '' || $paymentIntent === '' || (int) ($object['amount_total'] ?? 0) <= 0
                 || preg_match('/^[a-z]{3}$/i', (string) ($object['currency'] ?? '')) !== 1) return true;
-            $userId = $this->verifiedUserId((string) ($object['client_reference_id'] ?? ''));
+            $userId = SupportReference::userId((string) ($object['client_reference_id'] ?? ''), (string) ($this->supportConfig['reference_signing_key'] ?? ''));
             $this->repository->recordPayment($sessionId, $paymentIntent, $userId,
                 (int) ($object['amount_total'] ?? 0), (string) ($object['currency'] ?? ''),
                 (int) gmdate('Y', $eventCreated), $mode);
@@ -53,7 +54,7 @@ final class StripeSupportWebhook
             } else {
                 $status = $type === 'charge.dispute.created' ? 'open' : (string) ($object['status'] ?? 'lost');
                 $ref = 'dispute:' . (string) ($object['id'] ?? '');
-                $amount = $status === 'won' ? 0 : -$amount;
+                $amount = in_array($status, ['won', 'warning_closed'], true) ? 0 : -$amount;
                 $state = $status;
             }
             if ($ref !== 'refund:' && $ref !== 'dispute:') $this->repository->recordAdjustment($eventId, $eventCreated, $intent, $ref, $amount, $state, $mode);
@@ -75,14 +76,5 @@ final class StripeSupportWebhook
         $expected = hash_hmac('sha256', $timestamp . '.' . $body, $secret);
         foreach ($signatures as $signature) if (hash_equals($expected, $signature)) return true;
         return false;
-    }
-
-    private function verifiedUserId(string $reference): ?int
-    {
-        $key = (string) ($this->supportConfig['reference_signing_key'] ?? '');
-        if ($key === '' || preg_match('/^(\d+)\.([a-f0-9]{64})$/', $reference, $m) !== 1) return null;
-        if (!hash_equals(hash_hmac('sha256', $m[1], $key), $m[2])) return null;
-        $id = (int) $m[1];
-        return $id > 0 ? $id : null;
     }
 }

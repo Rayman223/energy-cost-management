@@ -13,6 +13,7 @@ use App\Security\WebAccessGuard;
 use App\Seo\PageMeta;
 use App\Support\SupportConfig;
 use App\Support\SupportLink;
+use App\Support\SupportReference;
 use App\Support\DiscordLink;
 use App\View\ViewFactory;
 
@@ -53,9 +54,8 @@ try {
 $raised = $summary['stripe_cents'] + $githubAmount;
 $link = SupportConfig::paymentLink($config);
 if ($link !== null && $loggedIn && $userId !== null && $dbAvailable) {
-    $key = (string) ($config['support']['reference_signing_key'] ?? '');
-    if ($key !== '') {
-        $reference = $userId . '.' . hash_hmac('sha256', (string) $userId, $key);
+    $reference = SupportReference::forUser($userId, (string) ($config['support']['reference_signing_key'] ?? ''));
+    if ($reference !== null) {
         $link = SupportConfig::paymentLinkForAccount($link, $reference);
     }
 }

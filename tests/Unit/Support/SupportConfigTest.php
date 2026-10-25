@@ -22,8 +22,8 @@ final class SupportConfigTest extends TestCase
     {
         $url = SupportConfig::paymentLinkForAccount(
             'https://buy.stripe.com/link?client_reference_id=stale&prefilled_email=a%40b.test',
-            '42.signature',
+            '42_signature',
         );
-        self::assertSame('https://buy.stripe.com/link?client_reference_id=42.signature&prefilled_email=a%40b.test', $url);
+        self::assertSame('https://buy.stripe.com/link?client_reference_id=42_signature&prefilled_email=a%40b.test', $url);
     }
 }

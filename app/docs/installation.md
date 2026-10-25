@@ -311,8 +311,11 @@ php app/scripts/config_check.php --strict
 php -r 'echo bin2hex(random_bytes(32)), PHP_EOL;'
 ```
 
-Create a Stripe Payment Link that lets the customer choose an amount, set its
-currency to EUR, and add `client_reference_id` as a supported URL parameter.
+Create a Stripe Payment Link that lets the customer choose an amount and set
+its currency to EUR. The application automatically appends a signed
+`client_reference_id` for signed-in donors. Its alphanumeric/underscore format
+follows [Stripe's character and length restrictions](https://docs.stripe.com/payment-links/url-parameters)
+(up to 200 characters); Stripe silently drops invalid values.
 Configure `support` with the Payment Link URL and its `plink_…` identifier.
 Use the command above to generate an account-reference signing key; it must not
 reuse the webhook secret. Keep both secrets outside version control.
@@ -349,6 +352,10 @@ another donation's contribution. Personal exports include both modes, their
 adjustments and the wall consent timestamp. The deployment script reads the
 same merged configuration as the application, including database and OIDC
 overrides in `config.local.php`.
+
+A dispute won or an inquiry closed without escalating to a chargeback
+(`warning_closed`) releases the disputed adjustment; any refund remains
+deducted.
 
 ### The test database (`<database.name>_test`)
 
