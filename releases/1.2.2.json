@@ -1,0 +1,9 @@
+{
+  "version": "1.2.2",
+  "announcements": {
+    "en": {
+      "title": "Version 1.2.2",
+      "content": "**Maintenance**\n- Update PHPUnit from 13.2.4 to 13.4.5 and refresh its locked development dependencies, including PHP Parser, DeepCopy and code coverage tools. Remove the unused tokenizer dependency.\n- Receive upstream fixes for test hooks, process isolation, mock argument matching, test reports and temporary directory handling."
+    }
+  }
+}
