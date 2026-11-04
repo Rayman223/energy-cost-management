@@ -53,7 +53,7 @@ try {
 }
 $raised = $summary['stripe_cents'] + $githubAmount;
 $link = SupportConfig::paymentLink($config);
-if ($link !== null && $loggedIn && $userId !== null && $dbAvailable) {
+if ($link !== null && $loggedIn && $userId !== null) {
     $reference = SupportReference::forUser($userId, (string) ($config['support']['reference_signing_key'] ?? ''));
     if ($reference !== null) {
         $link = SupportConfig::paymentLinkForAccount($link, $reference);
