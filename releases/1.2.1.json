@@ -1,0 +1,9 @@
+{
+  "version": "1.2.1",
+  "announcements": {
+    "en": {
+      "title": "Version 1.2.1",
+      "content": "**Maintenance**\n- Update PHPStan from 2.2.5 to 2.3.4.\n- Remove a redundant database availability check when building account-linked support payment URLs, restoring compatibility with the updated static analyser while preserving account and database error handling."
+    }
+  }
+}
