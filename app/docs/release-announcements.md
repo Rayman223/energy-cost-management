@@ -71,9 +71,12 @@ See Discord's [webhook documentation](https://docs.discord.com/developers/resour
 
 Apply migrations (`php app/scripts/migrate.php`) and check the application before
 publishing. The Unraid script already performs migrations, checks the PHP
-bootstrap and DB connection, then runs validation and publication as its final
-step. It stops on publication errors. This runtime check does not verify the HTTP
-reverse proxy; for a manual deployment, also check the website before publishing.
+bootstrap, DB connection, scheduler health and HTTP access from SWAG, including
+the deployed revision returned by the public URL. Publication follows these
+checks. A publication error can be retried with the host operator's
+resume-announcements command, without repeating migrations. For the first
+installation, run this command only after the manual SWAG cutover.
+See the [Unraid guide](unraid-containers.md).
 
 ```bash
 php app/scripts/release-notes.php --validate

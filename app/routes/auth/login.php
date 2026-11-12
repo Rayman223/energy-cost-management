@@ -111,11 +111,9 @@ try {
     // redirect_uri : si non configuré, le dériver en honorant X-Forwarded-Proto
     // (SWAG termine le TLS) pour éviter un callback http:// rejeté par l'IdP.
     if ((string) ($providerConfig['redirect_uri'] ?? '') === '') {
-        $scheme = Session::isHttps() ? 'https' : 'http';
-        $host = (string) ($_SERVER['HTTP_HOST'] ?? 'localhost');
         // Callback = la route « /auth/login » (le front controller #106 fait pointer
         // SCRIPT_NAME sur /index.php, inexploitable ici).
-        $providerConfig['redirect_uri'] = $scheme . '://' . $host . WebAccessGuard::appRootPath() . '/auth/login';
+        $providerConfig['redirect_uri'] = \App\Support\SiteUrl::absolute($config, 'auth/login');
     }
 
     if (GithubOAuthClient::supports($providerConfig)) {

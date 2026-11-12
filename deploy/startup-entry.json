@@ -1,0 +1,40 @@
+{
+  "name": "energy-cost-prd",
+  "network": "swagproxy",
+  "dependencies": [
+    "mariadb",
+    "swag"
+  ],
+  "markers": [
+    "/mnt/user/www/energy-cost/data/var/container-installed",
+    "/mnt/user/www/energy-cost/data/var/.ec-volume",
+    "/mnt/user/www/energy-cost/data/logs/.ec-volume",
+    "/mnt/user/www/energy-cost/backups/manual/.ec-volume"
+  ],
+  "mounts": [
+    {
+      "source": "/mnt/user/www/energy-cost/config",
+      "target": "/app/app/config"
+    },
+    {
+      "source": "/mnt/user/www/energy-cost/data/var",
+      "target": "/app/var"
+    },
+    {
+      "source": "/mnt/user/www/energy-cost/data/logs",
+      "target": "/app/logs"
+    },
+    {
+      "source": "/mnt/user/www/energy-cost/backups/manual",
+      "target": "/app/backups"
+    }
+  ],
+  "dependency_markers": {
+    "mariadb": [
+      "/mnt/user/appdata/mariadb/.bc-startup-volume"
+    ],
+    "swag": [
+      "/mnt/user/appdata/swag/.bc-startup-volume"
+    ]
+  }
+}

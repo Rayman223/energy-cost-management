@@ -30,3 +30,7 @@ app/config/config.php
 !/.claude/settings.json
 !/.claude/skills/
 /.mcp.json
+
+# Python deployment test artifacts
+__pycache__/
+*.pyc

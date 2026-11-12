@@ -397,51 +397,19 @@ pas de requête HTTP dont déduire l'adresse publique.
 
 ### Notification Unraid
 
-[`app/scripts/cron_load_profile_unraid.sh`](../scripts/cron_load_profile_unraid.sh)
-exécute la vérification dans le conteneur et, si un mois manque, envoie une
-**notification Unraid** (niveau *warning*) :
+Dans le conteneur PRD, le scheduler vérifie les profils tous les jours à 9 h
+dans le fuseau `EC_SCHEDULER_TZ`. Il conserve les cinq jours de grâce et douze mois
+de recherche. Les mois déjà signalés restent dédupliqués, y compris après
+recréation du conteneur ; un mois complet puis à nouveau manquant sera signalé.
 
-- le **clic** sur la notification ouvre la page d'import `/admin/load-profiles` ;
-- le **message** rappelle les trois étapes et donne l'adresse de téléchargement
-  Synergrid.
+Le relais hôte `deploy/notify-unraid.sh` tourne toutes les minutes via User Scripts.
+Il délivre les alertes persistantes avec un lien vers `/admin/load-profiles`
+(affichage détaillé Unraid), puis accuse réception. Un échec d’envoi garde
+l’alerte en attente. Ce relais n’exécute aucune vérification métier.
 
-Une seule notification **par mois manquant** : les mois déjà signalés sont retenus
-dans `STATE_FILE`. Le log répète l'avertissement à chaque passage ; un mois importé
-sort de l'état, et serait de nouveau signalé s'il venait à manquer encore.
-
-| Variable | Défaut |
-| --- | --- |
-| `APP_URL` | *(vide)* — URL publique de l'application, prioritaire sur `seo.base_url` |
-| `APP_NAME` | `energyv3` |
-| `CONTAINER` | `swag` |
-| `CONTAINER_APP_DIR` | `/config/www/$APP_NAME` |
-| `LOG_FILE` | `/mnt/user/appdata/swag/log/energy-load-profile.log` |
-| `STATE_FILE` | `/mnt/user/appdata/swag/log/energy-load-profile.notified` |
-| `GRACE_DAYS` / `LOOKBACK` | `5` / `12` |
-| `NOTIFY_BIN` | `/usr/local/emhttp/webGui/scripts/notify` |
-
-**Mise en place** (plugin *User Scripts*, comme au § 9) :
-
-1. *Settings → User Scripts → **Add New Script***, nommé par exemple
-   `energy-load-profile`.
-2. Coller ce wrapper, en adaptant `APP_URL` :
-
-   ```bash
-   #!/bin/bash
-   APP_URL="https://energie.example.tld" \
-     exec bash /mnt/user/appdata/swag/www/energyv3/app/scripts/cron_load_profile_unraid.sh
-   ```
-
-3. *Set Schedule* → **Custom** : `0 9 * * *` (une fois par jour ; sans mois
-   manquant, rien n'est notifié).
-4. **Run Script** une première fois et lire la fenêtre de log.
-
-> Le lien d'une notification Unraid n'est **cliquable qu'en affichage détaillé**
-> des notifications (réglage d'affichage dans les paramètres de notification
-> d'Unraid) ; en affichage résumé, l'adresse reste lisible dans le message. Une URL externe s'ouvre **à la
-> place** de l'onglet de l'interface Unraid, pas dans un nouvel onglet.
-
----
+Installation, reprise de l’ancien état, journaux et fuseau :
+[guide Unraid PRD](unraid-containers.md#3-crons-notifications-et-démarrage-de-larray).
+Ne pas conserver l’ancienne planification User Scripts des profils.
 
 ## 7. Première exécution manuelle
 
@@ -451,10 +419,10 @@ Sur l'hôte (installation classique) :
 php /var/www/energy-cost-management/app/scripts/cron_dynamic_prices.php
 ```
 
-Dans un conteneur (Unraid / SWAG) :
+Dans le conteneur PRD autonome :
 
 ```bash
-docker exec -w /config/www/energyv3 swag php app/scripts/cron_dynamic_prices.php
+docker exec -w /app energy-cost-prd php app/scripts/cron_dynamic_prices.php
 ```
 
 Sortie attendue — **une ligne par zone rencontrée**, ici un site avec des profils
@@ -552,62 +520,25 @@ le cron connaisse (l'application, elle, travaille en UTC — étape 5) :
 30 13,18 * * * /usr/bin/php /path/app/scripts/cron_dynamic_prices.php >> /var/log/energy-dynamic.log 2>&1
 ```
 
-### Unraid (plugin *User Scripts*)
+### Unraid : scheduler dans le conteneur PRD
 
-Le dépôt fournit un script prêt à l'emploi :
-[`app/scripts/cron_dynamic_prices_unraid.sh`](../scripts/cron_dynamic_prices_unraid.sh).
-Il vérifie que le conteneur tourne, exécute le cron PHP dedans, horodate la
-sortie dans un log, applique une rotation simple et **propage le code de sortie**.
+Les deux passages sont internes, à **13 h 30 et 18 h 30**, selon le fuseau IANA
+`EC_SCHEDULER_TZ` relevé lors de la migration. Le backend reste UTC. Les créneaux
+manqués ne sont pas rejoués et les verrous empêchent le chevauchement d’une même
+tâche ; un contrôle de profils lent ne bloque pas les prix.
 
-Variables surchargeables (mêmes conventions que
-[`deploy_unraid.sh`](../scripts/deploy_unraid.sh)) :
-
-| Variable | Défaut |
-| --- | --- |
-| `APP_NAME` | `energyv3` |
-| `CONTAINER` | `swag` |
-| `CONTAINER_APP_DIR` | `/config/www/$APP_NAME` |
-| `LOG_FILE` | `/mnt/user/appdata/swag/log/energy-dynamic.log` |
-| `LOG_MAX_BYTES` | `1048576` (1 Mo) |
-
-**Mise en place :**
-
-1. Installer le plugin **User Scripts** (*Apps → User Scripts*) si ce n'est pas
-   déjà fait.
-2. *Settings → User Scripts → **Add New Script***, nommer par exemple
-   `energy-dynamic-prices`.
-3. *Edit Script* et coller ce **wrapper** — le plugin exécute sa propre copie du
-   script, donc on délègue à la version du dépôt pour ne pas avoir à recoller le
-   contenu à chaque mise à jour :
-
-   ```bash
-   #!/bin/bash
-   # Délègue au script versionné du dépôt (toujours à jour après déploiement).
-   exec bash /mnt/user/appdata/swag/www/energyv3/app/scripts/cron_dynamic_prices_unraid.sh
-   ```
-
-4. *Set Schedule* → **Custom**, puis saisir :
-
-   ```cron
-   30 13,18 * * *
-   ```
-
-5. Cliquer **Run Script** une première fois et vérifier la fenêtre de log : elle
-   doit se terminer par une ligne `[OK] … prix enregistrés`.
-
-> Le cron Unraid s'exécute dans le **fuseau du serveur** (*Settings → Date and
-> Time*), pas en UTC. Vérifier ce réglage avant de saisir l'horaire et se reporter
-> au tableau ci-dessus : un serveur en UTC demande `30 12,17 * * *`. Le fuseau du
-> serveur n'a en revanche **aucune influence sur les données** — celles-ci sont
-> horodatées en UTC par ENTSO-E puis stockées telles quelles (étape 5).
-
-Le log est consultable à tout moment :
+Les anciens User Scripts métier doivent être désactivés. Pour un passage manuel :
 
 ```bash
-tail -f /mnt/user/appdata/swag/log/energy-dynamic.log
+docker exec energy-cost-prd php app/scripts/run_scheduled_task.php dynamic-prices
+docker exec energy-cost-prd php app/scripts/run_scheduled_task.php load-profiles
+tail -f /mnt/user/www/energy-cost/data/logs/dynamic-prices.log
 ```
 
----
+Codes : 0 = succès, 1 = erreur, 2 = profils manquants (constat attendu), 75 =
+tâche déjà active ou suspendue. Le relais de notifications reste sur l’hôte ;
+voir le [guide Unraid](unraid-containers.md). Les crontabs classiques ci-dessus
+concernent uniquement les hébergements sans scheduler interne.
 
 ## 10. Dépannage
 

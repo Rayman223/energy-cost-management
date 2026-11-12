@@ -1,0 +1,40 @@
+{
+	auto_https off
+	admin off
+	frankenphp
+}
+http://:8080 {
+	root * /app/app/public
+	encode gzip zstd
+	request_body {
+		max_size 21MB
+	}
+	route {
+		handle /healthz {
+			root * /app/deploy
+			rewrite * /healthz.php
+			php_server
+		}
+		@maintenance {
+			file {
+				root /app/var
+				try_files maintenance
+			}
+		}
+		respond @maintenance "Maintenance" 503
+		@private path_regexp private (^|/)\.|^/(app|deploy|vendor|backups|config|var|logs)(/|$)
+		respond @private 404
+		handle /ads.txt {
+			root * /app/var
+			file_server
+		}
+		@healthFile path /healthz.php
+		respond @healthFile 404
+		# Every PHP URL goes through the front controller, including legacy aliases.
+		@php path *.php
+		rewrite @php /index.php
+		php_server
+	}
+	header X-Content-Type-Options nosniff
+	header X-Energy-Cost-Revision {$EC_BUILD_COMMIT}
+}

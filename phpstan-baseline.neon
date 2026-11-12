@@ -1,7 +1,2 @@
 parameters:
-	ignoreErrors:
-		-
-			message: '#^Offset 0 on non\-empty\-list\<string\> in isset\(\) always exists and is not nullable\.$#'
-			identifier: isset.offset
-			count: 1
-			path: app/src/Security/WebAccessGuard.php
+    ignoreErrors: []

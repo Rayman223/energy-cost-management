@@ -36,11 +36,6 @@ final class Session
 
     public static function isHttps(): bool
     {
-        $https = strtolower((string) ($_SERVER['HTTPS'] ?? ''));
-        if ($https !== '' && $https !== 'off') {
-            return true;
-        }
-
-        return strtolower((string) ($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '')) === 'https';
+        return ProxyRequest::isHttps();
     }
 }

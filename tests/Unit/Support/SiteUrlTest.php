@@ -27,6 +27,7 @@ final class SiteUrlTest extends TestCase
     protected function tearDown(): void
     {
         $_SERVER = $this->server;
+        \App\Security\ProxyRequest::configure([]);
     }
 
     public function testConfiguredBaseUrlWins(): void
@@ -103,6 +104,8 @@ final class SiteUrlTest extends TestCase
         $_SERVER['HTTP_HOST']              = 'energie.example.eu';
         $_SERVER['HTTP_X_FORWARDED_PROTO'] = 'https';
         unset($_SERVER['HTTPS']);
+        $_SERVER['REMOTE_ADDR'] = '172.20.0.2';
+        \App\Security\ProxyRequest::configure(['trusted_proxies' => ['172.20.0.2']]);
 
         self::assertSame('https://energie.example.eu', SiteUrl::origin([]));
     }

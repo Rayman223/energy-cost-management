@@ -141,6 +141,7 @@ final class WebAccessGuard
             return;
         }
 
+        ProxyRequest::configure($security);
         if (self::isIpDenied($security) === true) {
             self::deny(403, self::message(self::resolveLanguage(), 'forbidden'), $jsonResponse);
         }
@@ -371,20 +372,7 @@ final class WebAccessGuard
 
     private static function clientIp(): ?string
     {
-        $xff = isset($_SERVER['HTTP_X_FORWARDED_FOR']) ? trim((string) $_SERVER['HTTP_X_FORWARDED_FOR']) : '';
-        if ($xff !== '') {
-            $parts = array_map('trim', explode(',', $xff));
-            if (isset($parts[0]) && filter_var($parts[0], FILTER_VALIDATE_IP)) {
-                return $parts[0];
-            }
-        }
-
-        $remote = isset($_SERVER['REMOTE_ADDR']) ? trim((string) $_SERVER['REMOTE_ADDR']) : '';
-        if ($remote !== '' && filter_var($remote, FILTER_VALIDATE_IP)) {
-            return $remote;
-        }
-
-        return null;
+        return ProxyRequest::clientIp();
     }
 
     private static function ipMatches(string $ip, string $rule): bool

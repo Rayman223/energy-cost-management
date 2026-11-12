@@ -42,6 +42,9 @@ return [
         // Empty array = accept the current Host if well-formed. Examples:
         // ['energie.example.eu', 'energie.example.eu:8443']
         'trusted_hosts' => [],
+        // Exact IPv4/IPv6 addresses of SWAG, never a whole Docker network.
+        // Empty: forwarded HTTPS/IP headers are ignored (direct hosting).
+        'trusted_proxies' => [],
 
         // HTTP Basic authentication for all web endpoints (dashboard + API).
         'basic_auth' => [
