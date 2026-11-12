@@ -13,6 +13,21 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  deployment:
+    name: Unraid operator and scheduler
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          coverage: none
+          tools: composer:v2
+      - run: composer install --no-progress --prefer-dist --no-interaction
+      - run: python3 -m unittest discover -s tests/Deployment -p 'test_*.py'
+      - name: Bash syntax
+        run: |
+          for file in deploy/*.sh app/scripts/*unraid.sh; do bash -n "$file"; done
   lint:
     name: PHP Lint (${{ matrix.php }})
     runs-on: ubuntu-latest

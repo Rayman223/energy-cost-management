@@ -1,194 +1,22 @@
-# Installation & onboarding (Unraid)
+# Installation & onboarding
 
-End-to-end setup of the community platform on **Unraid** (app served by the
-**SWAG** container = Nginx + PHP-FPM, with a **MariaDB** container): deploy the
-code, create the schema, bring up the **owner** account, migrate data from the old
-single-home project, and seed the first Belgian tariff templates.
+## Production Unraid : conteneur PRD autonome
 
-> All CLI commands run inside the SWAG container, from the app directory
-> (`/config/www/energyv3` by default), e.g.
-> `docker exec -w /config/www/energyv3 swag php app/scripts/migrate.php`.
+Suivre le [guide Unraid PRD](unraid-containers.md) pour préparer puis migrer
+l’installation SWAG existante, les volumes privés, le proxy, les sauvegardes et
+les tâches internes. Le modèle courant est celui de Battle-conquest :
+`energy-cost-prd` sur `swagproxy`, sans QUA. SWAG termine uniquement HTTPS.
 
----
+Les commandes PHP ci-dessous s’exécutent depuis `/app` dans le nouveau conteneur,
+par exemple `docker exec -w /app energy-cost-prd php app/scripts/migrate.php`.
+Pour une installation neuve, créer la base puis importer le schéma initial une
+seule fois avant les migrations ; pour la base existante, appliquer seulement
+les migrations. Configuration privée : `/mnt/user/www/energy-cost/config/`.
 
-## Prerequisites
-
-- Unraid with the **SWAG** container (PHP 8.4+, `pdo_mysql`, `curl`; `intl`
-  recommended) and a **MariaDB** (10.11+) container.
-- A database and user for the app (e.g. `energy` / `energy_user`).
-- For OIDC (recommended): an OpenID Connect client at your provider (Google, or a
-  self-hosted IdP) — client id/secret and the redirect URI
-  `https://<your-host>/auth/login`.
-
----
-
-## 1. Deploy the code
-
-Use [`app/scripts/deploy_unraid.sh`](../scripts/deploy_unraid.sh). Every variable
-at the top is env-overridable. The simplest is `APP_NAME` (default `energyv3`),
-which derives both `APP_DIR` and `CONTAINER_APP_DIR`; override `CONTAINER` /
-`DB_CONTAINER` too if your install differs. Then:
-
-```bash
-./app/scripts/deploy_unraid.sh                     # deploy latest main
-./app/scripts/deploy_unraid.sh v1.0.0              # deploy a git tag
-APP_NAME=energyv3 ./app/scripts/deploy_unraid.sh   # pin the deploy directory
-```
-
-The script is idempotent and: installs the SSH deploy key when the repo is
-private (see below) → `git fetch` + `reset --hard` to the target →
-`composer install --no-dev` → applies `app/sql/schema.sql` (via the `mariadb`
-client, falling back to `mysql`) → runs `app/scripts/migrate.php` → checks the
-OIDC config → verifies PHP bootstrap and DB connectivity → validates and publishes
-pending English Discord announcements. An empty `discord.release_webhook_en`
-disables delivery. See [release-announcements.md](release-announcements.md) for
-configuration and retries. `git clean` runs **without `-x`**, so both
-`app/config/config.php` and `app/config/config.local.php`, plus `/vendor/`, are
-preserved.
-
-### Private repository access (SSH deploy key)
-
-> This repository is **public**: `REPO_URL` is an `https://…` URL and the deploy
-> needs no credentials at all. This section only applies if you host your own
-> private fork — the bootstrap above then needs the `GIT_SSH_COMMAND` lines back.
-
-If the repo is **private**, the deploy needs SSH auth. The script uses a
-per-repo **deploy key** and sets it up itself (step 0) whenever `REPO_URL` is an
-SSH URL (`git@github.com:…`); with an `https://…` URL the block is skipped
-(public repo). Two Unraid quirks make persistence tricky, both handled by the
-script:
-
-- the root filesystem lives **in RAM** → `/root/.ssh` is wiped on reboot;
-- `/boot` (USB **or** SSD) stays **FAT32** → it does **not** keep Unix
-  permissions, and SSH refuses a key that isn't `chmod 600`.
-
-So the key is stored on `/boot` (persistent) and **copied into RAM with the
-right permissions on every run**. One-time setup:
-
-```bash
-# 1. Generate a dedicated key (no passphrase → non-interactive).
-ssh-keygen -t ed25519 -f /tmp/github_deploy_ed25519 -N ""
-
-# 2. Persist it on the boot device (survives reboots).
-mkdir -p /boot/config/ssh
-cp /tmp/github_deploy_ed25519 /boot/config/ssh/github_deploy_ed25519
-
-# 3. Pin GitHub's host key (avoids MITM + the interactive prompt).
-echo 'github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl' \
-    > /boot/config/ssh/github_known_hosts
-
-# 4. Add the PUBLIC key as a Deploy key on GitHub:
-#    repo → Settings → Deploy keys → Add deploy key (leave write access OFF).
-cat /tmp/github_deploy_ed25519.pub
-```
-
-Override `SSH_KEY_SRC` / `SSH_KNOWN_HOSTS_SRC` if you store them elsewhere.
-
-### Running via Unraid User Scripts (bootstrap)
-
-The **User Scripts** plugin executes its **own pasted copy** of a script, not the
-git checkout — so pasting the full `deploy_unraid.sh` means re-pasting it on every
-change. Instead, paste this tiny **bootstrap** once; it pulls the latest code and
-delegates to the versioned script (always current):
-
-```bash
-#!/bin/bash
-# User Script — pulls the latest repo, then delegates to the versioned deploy.
-set -euo pipefail
-APP_DIR="/mnt/user/appdata/swag/www/energyv3"
-REPO_URL="https://github.com/Rayman223/energy-cost-management.git"
-
-mkdir -p "$APP_DIR"; cd "$APP_DIR"
-[ -d .git ] || git init -q
-git remote get-url origin >/dev/null 2>&1 || git remote add origin "$REPO_URL"
-git remote set-url origin "$REPO_URL"
-git fetch -q --depth 1 origin "${1:-main}"
-git reset -q --hard FETCH_HEAD
-
-exec bash "$APP_DIR/app/scripts/deploy_unraid.sh" "$@"   # "$@" forwards an optional tag
-```
-
-Schedule it *At First Array Start Only* (or run it manually). The bootstrap's
-`git fetch` and the versioned script's step 1 overlap harmlessly (shallow,
-idempotent).
-
-### Web server & URL rewriting
-
-Since #106 the app runs behind a **single front controller** ([`app/public/index.php`](../public/index.php))
-serving clean, extensionless URLs (`/account`, `/tariffs`, `/api?action=…`). The
-document root must be **`app/public/`**, and any non-file request must fall back to
-`index.php`. With SWAG/Nginx, point the `location /` block at the front controller:
-
-```nginx
-root /config/www/energyv3/app/public;   # document root = app/public
-index index.php;
-
-location / {
-    try_files $uri $uri/ /index.php$is_args$args;
-}
-
-# Only index.php exists in the web root; every other …/xxx.php request must
-# reach the front controller so it can 308-redirect to the clean URL. Without
-# the `try_files … /index.php` fallback below, a request to a legacy path such
-# as /api.php would hit PHP-FPM with a missing SCRIPT_FILENAME → 404, and the
-# backward-compat redirect (incl. the ingestion API) would never fire.
-location ~ \.php$ {
-    try_files $uri /index.php$is_args$args;
-    include fastcgi_params;
-    fastcgi_pass 127.0.0.1:9000;               # SWAG's PHP-FPM (TCP, cf. default.conf)
-    fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
-}
-```
-
-Old `…/xxx.php` URLs are **308-redirected** (method + body preserved, so machine
-clients still posting to `/api.php` keep working) to their clean form by the
-front controller.
-
-#### Sous-domaine SWAG (`energy.domain.com`)
-
-Pour exposer le site sur un sous-domaine dédié, le repo fournit un **site-conf**
-d'exemple : [`nginx-swag-site.conf.example`](nginx-swag-site.conf.example). Il reprend le
-bloc Nginx ci-dessus dans un `server { server_name energy.*; … }` servi
-directement par le PHP-FPM de SWAG (pas de reverse-proxy — l'app vit dans le
-container SWAG). Remplacer `domain.com` par le domaine réel.
-
-1. **DNS** — pointer `energy.domain.com` (A/AAAA, ou CNAME vers l'hôte) sur
-   l'IP de l'Unraid, comme les autres sous-domaines de `domain.com`.
-2. **Certificat** — le wildcard `*.domain.com` géré par SWAG couvre déjà le
-   sous-domaine ; sinon, ajouter `energy` à la variable d'env `SUBDOMAINS` du
-   container et laisser SWAG renouveler le certificat.
-3. **Activer la conf** — copier le fichier dans les site-confs de SWAG puis
-   recharger Nginx :
-
-   ```bash
-   # depuis l'hôte Unraid ; APP_NAME=energyv3 par défaut (cf. deploy_unraid.sh)
-   cp /mnt/user/appdata/swag/www/energyv3/app/docs/nginx-swag-site.conf.example \
-      /mnt/user/appdata/swag/nginx/site-confs/energy.domain.com.conf
-   docker exec swag nginx -t          # vérifie la syntaxe
-   docker exec swag nginx -s reload   # applique sans redémarrer le container
-   ```
-
-   Adapter `energyv3` (chemin `root`) dans le fichier si `APP_NAME` diffère.
-
-With **Apache**, the same fallback ships in the repo as
-[`app/public/.htaccess`](../public/.htaccess) (mirror of the Nginx `try_files`).
-Set the `DocumentRoot` to **`app/public/`**, enable `mod_rewrite`, and allow the
-bundled `.htaccess` to take effect with `AllowOverride All` (or at least
-`FileInfo Options`) on that directory — otherwise clean URLs like `/login` 404:
-
-```apache
-<VirtualHost *:80>
-    DocumentRoot /var/www/energyv3/app/public   # document root = app/public
-    <Directory /var/www/energyv3/app/public>
-        AllowOverride All        # honour the bundled .htaccess (front controller)
-        Require all granted
-    </Directory>
-</VirtualHost>
-```
-
-No rewrite rules to copy by hand: the `.htaccess` routes every non-file request to
-`index.php`, including legacy `…/xxx.php` paths (which the front controller then
-308-redirects to their clean form).
+Prérequis applicatifs : PHP 8.4+, pdo_mysql, curl, mbstring et MariaDB 10.11+.
+L’image fournit aussi intl et OPcache. Pour les autres hébergements, conserver
+`app/public/` comme racine web et diriger les routes absentes vers `index.php` ;
+Apache peut utiliser le `.htaccess` fourni.
 
 ### Local development
 
@@ -251,7 +79,7 @@ Set at least `database`, then choose the authentication mode:
 
 Optionally set `dynamic_prices` (ENTSO-E token), `i18n`, and `api`.
 `dynamic_prices` is off by default; the full walkthrough — obtaining the token,
-15-minute (MTU15) prices, the daily cron and a ready-made Unraid User Script —
+15-minute (MTU15) prices, the internal scheduler and the Unraid notification relay —
 is in [entsoe-dynamic-prices.md](entsoe-dynamic-prices.md) (*in French*).
 Set `discord.invite_url` to show a Discord link in the page header (empty = hidden).
 Configure the optional `support` section to publish the support page. It is
@@ -281,7 +109,8 @@ To enable it:
 3. Publish `ads.txt` at the site root:
 
    ```bash
-   cp app/public/ads.txt.example app/public/ads.txt   # then replace pub-XXXX… with your ID
+   cp /mnt/user/www/energy-cost/src/app/public/ads.txt.example /mnt/user/www/energy-cost/data/var/ads.txt
+chown 33:33 /mnt/user/www/energy-cost/data/var/ads.txt   # then replace pub-XXXX… with your ID
    ```
 
 The format is *Auto ads*: a single asynchronous script in `<head>`, Google picks
@@ -502,7 +331,7 @@ The application cannot do this: the request must be redirected **before** it
 reaches PHP — but check what already happens first: a CDN in front of the site
 (Cloudflare and friends) often does it for you. If the `www` host already
 answers a 301 to the apex, there is nothing to add. Otherwise, see the
-commented server block at the end of
+reverse-proxy example in
 [`nginx-swag-site.conf.example`](nginx-swag-site.conf.example).
 
 Whatever host wins, it must be the one in `seo.base_url`: the redirect, the
@@ -534,7 +363,8 @@ anonymity threshold.
 ### 8.4 `ads.txt` (AdSense only)
 
 ```bash
-cp app/public/ads.txt.example app/public/ads.txt
+cp /mnt/user/www/energy-cost/src/app/public/ads.txt.example /mnt/user/www/energy-cost/data/var/ads.txt
+chown 33:33 /mnt/user/www/energy-cost/data/var/ads.txt
 # replace pub-XXXXXXXXXXXXXXXX with the publisher id of `adsense.client_id`
 ```
 

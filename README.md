@@ -135,7 +135,7 @@ mysql -u <user> -p <database> < app/sql/schema.sql        # create tables
 php app/scripts/migrate.php                               # apply versioned migrations
 ```
 
-For a full production install on **Unraid (SWAG)** — including creating the owner
+For a full production install on **Unraid (dedicated PRD container)** — including creating the owner
 account, promoting it to admin and seeding the first Belgian tariff templates —
 see the step-by-step guide:
 **[`app/docs/installation.md`](app/docs/installation.md)**.
@@ -284,14 +284,19 @@ php app/scripts/gas_cost_audit.php --from=2026-01-01 --to=2026-07-01 --user=2 --
 0 3 * * *  /usr/bin/php /path/app/scripts/backup_db.php            >> /var/log/energy-backup.log 2>&1
 ```
 
+On Unraid, use the [dedicated PRD container guide](app/docs/unraid-containers.md):
+prices and profile checks run internally. Keep the existing `database-backup` job
+and use only a host notification relay; do not duplicate these schedules or SQL
+backups with User Scripts. The PHP backup below remains available manually.
+
 The backup script (`app/scripts/backup_db.php`) produces a complete logical dump
 **in pure PHP via PDO** — no `mysqldump` binary required — so it runs as-is inside
-the web container (e.g. swag/Alpine). It reads DB credentials from
+the web container. It reads DB credentials from
 `app/config/config.php`, dumps tables (structure + data), views, triggers,
 routines and events under a consistent snapshot, and writes timestamped
 `backups/<db>_*.sql.gz` archives (git-ignored) atomically (`.part` → rename) with
 a `flock` lock and automatic 30-day rotation. Containerized example:
-`docker exec <web-container> php /config/www/energyv3/app/scripts/backup_db.php`.
+`docker exec energy-cost-prd php /app/app/scripts/backup_db.php`.
 
 Dynamic prices use the `dynamic_prices` config (ENTSO-E by default; free token at
 [transparency.entsoe.eu](https://transparency.entsoe.eu/)). The dashboard then

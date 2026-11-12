@@ -30,5 +30,6 @@ foreach (App\Config\ConfigValidator::validate($config) as $issue) {
 }
 
 date_default_timezone_set($config['timezone'] ?? 'UTC');
+App\Security\ProxyRequest::configure(is_array($config['web_security'] ?? null) ? $config['web_security'] : []);
 
 return $config;

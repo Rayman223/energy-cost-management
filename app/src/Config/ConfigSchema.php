@@ -102,6 +102,7 @@ final class ConfigSchema
                         'enabled'       => [],
                         'allowed_ips'   => [],
                         'trusted_hosts' => [],
+                        'trusted_proxies' => [],
                         'basic_auth'    => [
                             'enabledDefault' => true,
                             'children'       => [

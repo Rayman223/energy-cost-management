@@ -10,3 +10,4 @@ parameters:
         - app/public
         - app/routes
         - app/bootstrap.php
+        - deploy
