@@ -38,9 +38,15 @@ bash "$OPS" backup
 bash "$OPS" rollback --schema-compatible
 ```
 
-Toutes les commandes se verrouillent. La mise à jour construit avant interruption,
+Toutes les commandes se verrouillent. Avant d’agir sur un conteneur existant,
+l’opérateur vérifie son label et les sources/destinations de ses quatre montages,
+ainsi que la lecture seule de la configuration. Une racine ou un montage
+différent est refusé avant toute interruption. La mise à jour construit avant interruption,
 attend les tâches actives avant l’arrêt, sauvegarde avant migration, puis contrôle\nPHP, DB, santé et HTTP depuis SWAG.
 La réponse publique doit porter le SHA attendu dans `X-Energy-Cost-Revision`.
+Si une liste d’IP autorisées est configurée, son refus 403 du visiteur de contrôle
+est accepté uniquement avec ce SHA et une santé interne valide ; le contrôle
+n’usurpe jamais une IP autorisée.
 Les reçus conservent image, commit, phase et sauvegarde. Ne pas nettoyer les images
 courante/précédente ni `state/`. Les checkouts de construction sont conservés pour
 diagnostic et exclus des archives ; supprimer uniquement ceux dont la livraison
@@ -226,7 +232,9 @@ User Scripts. Les wrappers `cron_*_unraid.sh` servent uniquement au lancement
 manuel et utilisent les mêmes verrous.
 
 Les contrôles conservent cinq jours de grâce et douze mois de recherche.
-Les journaux de tâches sont limités à 1 Mo avec une rotation ; PHP et Supervisor
+Les journaux de tâches sont limités à 1 Mo avec une rotation. Un journal
+indisponible produit un avertissement sans empêcher la tâche ni ses notifications.
+PHP et Supervisor
 ont leurs propres rotations. Les échecs produisent une alerte ; les mois manquants
 sont dédupliqués et l’ancien fichier `energy-load-profile.notified` est repris.
 Un mois redevenu complet puis à nouveau manquant est signalé de nouveau.
@@ -312,6 +320,17 @@ Un échec de construction laisse l’instance en place. Un échec de sauvegarde 
 migration redémarre l’ancienne instance. Après début des migrations ou échec de
 santé, la maintenance reste en place : ne pas supprimer les marqueurs pour
 contourner le diagnostic. Le retour à une image précédente **n’annule pas SQL**.
+Une reprise conserve le chemin de sauvegarde et la référence précédente.
+Après échec du redémarrage suivant une sauvegarde, corriger la cause puis lancer
+`resume-announcements` : seule l’image courante vérifiée redémarre, sans migration
+ni publication Discord pour cette opération de sauvegarde. Une image de retour
+arrière absente est refusée avant l’arrêt du service en cours.
+Si Docker n’a pas pu créer le conteneur après une migration réussie,
+`resume-announcements` le recrée depuis l’image exacte du reçu puis revérifie
+sa santé, sans rejouer les migrations. Le retour arrière explicite reste possible
+si le conteneur a disparu. Une reprise de retour arrière ne publie pas d’annonce.
+Une erreur de lecture Docker est traitée comme un échec, jamais comme une preuve
+d’absence de conteneur.
 
 Si l’ancien code supporte le schéma et les données actuels :
 

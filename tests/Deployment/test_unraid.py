@@ -23,13 +23,25 @@ fail=os.environ.get("FAIL","")
 if a[0]=="build":
     sys.exit(1 if fail=="build" else 0)
 if a[:2]==["image","inspect"]:
+    if "-f" not in a:
+        sys.exit(1 if fail=="rollback_image" else 0)
     if ".Id" in a[3]: print("sha256:"+"b"*64)
-    elif "revision" in a[3]: print("1"*40)
+    elif "revision" in a[3]: print(("0" if a[-1]=="sha256:"+"a"*64 else "1")*40)
     sys.exit(0)
-if a[:2]==["container","inspect"]: sys.exit(0 if (r/"container").exists() else 1)
+if a[:2]==["container","inspect"]:
+    sys.exit(1 if fail=="inspect" or not (r/"container").exists() else 0)
+if a[:2]==["container","ls"]:
+    if fail=="inspect":sys.exit(1)
+    if (r/"container").exists():print("energy-cost-prd")
+    sys.exit(0)
 if a[0]=="inspect":
     pattern=a[2]
-    if "managed" in pattern: print("prd")
+    if "Mounts" in pattern:
+        pairs=[("config","/app/app/config"),("data/var","/app/var"),("data/logs","/app/logs"),("backups/manual","/app/backups")]
+        mounts=[{"Type":"bind","Source":str(r/source),"Destination":target,"RW":source!="config"} for source,target in pairs]
+        if fail=="wrong-mount":mounts[0]["Source"]=str(r/"other-config")
+        print(json.dumps(mounts))
+    elif "managed" in pattern: print("prd")
     elif "Running" in pattern: print("true" if (r/"running").exists() else "false")
     elif ".Image" in pattern: print((r/"container").read_text())
     elif "Health" in pattern: print("unhealthy" if fail=="health" else "healthy")
@@ -38,18 +50,26 @@ if a[0]=="run":
     if "--entrypoint" in a:
         if a[-1]=="app/scripts/migrate.php" and fail=="migration": sys.exit(1)
         sys.exit(0)
+    if fail=="create":sys.exit(125)
     (r/"container").write_text(a[-1]); (r/"running").touch(); sys.exit(0)
 if a[0]=="stop": (r/"running").unlink(missing_ok=True); sys.exit(0)
-if a[0]=="start": (r/"running").touch(); sys.exit(0)
+if a[0]=="start":
+    if fail=="start":sys.exit(1)
+    (r/"running").touch(); sys.exit(0)
 if a[0]=="rm": (r/"container").unlink(missing_ok=True); sys.exit(0)
 if a[0]=="exec":
     if "app/scripts/drain_scheduled_tasks.php" in a and fail=="drain":sys.exit(1)
     if "dbbackup" in a:
-        if fail=="backup":sys.exit(1)
+        if fail in ("backup","backup-health"):sys.exit(1)
         target=r/"dumps"/"mariadb"/"energyv3"/"fresh.sql.gz"
         with gzip.open(target,"wb") as f:f.write(b"-- dedicated test dump\nSELECT 1;\n")
     if "curl" in a and fail=="http":sys.exit(1)
-    if "https://energy-cost.eu/login" in a:print("X-Energy-Cost-Revision: "+("1" if (r/"container").read_text()=="sha256:"+"b"*64 else "0")*40)
+    if "curl" in a and fail=="backup-health" and any("/healthz" in part for part in a):sys.exit(22)
+    if "allowed_ips" in a[-1]:print("1" if fail=="restricted" else "0")
+    if "curl" in a and "--fail" in a and fail=="restricted" and "/healthz" not in a[-1]:sys.exit(22)
+    if "https://energy-cost.eu/login" in a:
+        print("X-Energy-Cost-Revision: "+("1" if (r/"container").read_text()=="sha256:"+"b"*64 else "0")*40)
+        if "-w" in a: print("403" if fail=="restricted" else "200")
     if "--publish" in a and fail=="discord":sys.exit(1)
     sys.exit(0)
 sys.exit(0)
@@ -95,6 +115,107 @@ class OperatorTest(unittest.TestCase):
 
     def commands(self):
         return [json.loads(line) for line in (self.root/"commands").read_text().splitlines()]
+
+    def test_prepare_collision_does_not_touch_existing_service_or_volumes(self):
+        (self.root/"state/current.json").unlink()
+        (self.root/"state/delivery.json").unlink()
+        result=self.run_operator("prepare")
+        self.assertNotEqual(result.returncode,0)
+        self.assertFalse((self.root/"data/var/maintenance").exists())
+        self.assertFalse((self.root/"data/var/.ec-volume").exists())
+        self.assertFalse((self.root/"state/delivery.json").exists())
+        self.assertEqual((self.root/"container").read_text(),OLD)
+        self.assertNotIn("build",[c[0] for c in self.commands()])
+
+    def test_repeated_image_update_preserves_real_rollback_target(self):
+        self.assertEqual(self.run_operator("update").returncode,0)
+        self.assertEqual(self.run_operator("update").returncode,0)
+        self.assertEqual(json.loads((self.root/"state/previous.json").read_text())["image"],OLD)
+
+    def test_publication_resume_preserves_backup_and_previous_image_receipt(self):
+        self.assertNotEqual(self.run_operator("update",fail="discord").returncode,0)
+        before=json.loads((self.root/"state/delivery.json").read_text())
+        self.assertTrue(before["backup"])
+        self.assertTrue(before["previous_image"])
+        self.assertEqual(self.run_operator("resume-announcements").returncode,0)
+        after=json.loads((self.root/"state/delivery.json").read_text())
+        self.assertEqual(after["backup"],before["backup"])
+        self.assertEqual(after["previous_image"],before["previous_image"])
+
+    def test_backup_restart_failure_can_resume_without_migration_or_publication(self):
+        result=self.run_operator("backup",fail="start")
+        self.assertNotEqual(result.returncode,0)
+        self.assertTrue((self.root/"data/var/maintenance").exists())
+        receipt=json.loads((self.root/"state/delivery.json").read_text())
+        self.assertEqual(receipt["phase"],"backup_restarting")
+        self.assertEqual(self.run_operator("resume-announcements").returncode,0)
+        self.assertTrue((self.root/"running").exists())
+        self.assertFalse((self.root/"data/var/maintenance").exists())
+        self.assertFalse(any(c[-1:] == ["app/scripts/migrate.php"] or "--publish" in c for c in self.commands()))
+
+    def test_missing_rollback_image_never_stops_the_service(self):
+        (self.root/"state/previous.json").write_text(json.dumps({"image":NEW,"commit":COMMIT}))
+        result=self.run_operator("rollback","--schema-compatible",fail="rollback_image")
+        self.assertNotEqual(result.returncode,0)
+        self.assertTrue((self.root/"running").exists())
+        self.assertFalse((self.root/"data/var/maintenance").exists())
+        self.assertNotIn("stop",[c[0] for c in self.commands()])
+
+    def test_healthy_previous_image_can_be_restored_without_running_migrations(self):
+        self.assertEqual(self.run_operator("update").returncode,0)
+        result=self.run_operator("rollback","--schema-compatible")
+        self.assertEqual(result.returncode,0,result.stdout+result.stderr)
+        self.assertEqual((self.root/"container").read_text(),OLD)
+        self.assertEqual(json.loads((self.root/"state/current.json").read_text())["image"],OLD)
+
+    def test_configured_ip_restriction_does_not_turn_a_valid_deployment_into_failure(self):
+        result=self.run_operator("update",fail="restricted")
+        self.assertEqual(result.returncode,0,result.stdout+result.stderr)
+        self.assertFalse((self.root/"data/var/maintenance").exists())
+
+    def test_prepare_docker_read_error_never_assumes_container_absence(self):
+        (self.root/"state/current.json").unlink()
+        (self.root/"state/delivery.json").unlink()
+        result=self.run_operator("prepare",fail="inspect")
+        self.assertNotEqual(result.returncode,0)
+        self.assertFalse((self.root/"data/var/maintenance").exists())
+        self.assertNotIn("build",[c[0] for c in self.commands()])
+
+    def test_backup_recovery_never_ignores_an_internal_health_failure(self):
+        result=self.run_operator("update",fail="backup-health")
+        self.assertNotEqual(result.returncode,0)
+        self.assertTrue((self.root/"data/var/maintenance").exists())
+        self.assertTrue((self.root/"data/var/cron-paused").exists())
+
+    def test_resuming_failed_rollback_never_publishes_a_release(self):
+        self.assertEqual(self.run_operator("update").returncode,0)
+        self.assertNotEqual(self.run_operator("rollback","--schema-compatible",fail="health").returncode,0)
+        before=sum("--publish" in c for c in self.commands())
+        result=self.run_operator("resume-announcements")
+        self.assertEqual(result.returncode,0,result.stdout+result.stderr)
+        self.assertEqual(sum("--publish" in c for c in self.commands()),before)
+
+    def test_failed_container_creation_can_resume_without_repeating_migrations(self):
+        self.assertNotEqual(self.run_operator("update",fail="create").returncode,0)
+        self.assertFalse((self.root/"container").exists())
+        before=sum(c[-1:] == ["app/scripts/migrate.php"] for c in self.commands())
+        result=self.run_operator("resume-announcements")
+        self.assertEqual(result.returncode,0,result.stdout+result.stderr)
+        self.assertEqual((self.root/"container").read_text(),NEW)
+        self.assertEqual(sum(c[-1:] == ["app/scripts/migrate.php"] for c in self.commands()),before)
+
+    def test_failed_container_creation_still_allows_explicit_compatible_rollback(self):
+        self.assertNotEqual(self.run_operator("update",fail="create").returncode,0)
+        result=self.run_operator("rollback","--schema-compatible")
+        self.assertEqual(result.returncode,0,result.stdout+result.stderr)
+        self.assertEqual((self.root/"container").read_text(),OLD)
+
+    def test_wrong_existing_configuration_mount_is_rejected_before_any_delivery(self):
+        result=self.run_operator("update",fail="wrong-mount")
+        self.assertNotEqual(result.returncode,0)
+        self.assertTrue((self.root/"running").exists())
+        self.assertFalse((self.root/"data/var/maintenance").exists())
+        self.assertNotIn("build",[c[0] for c in self.commands()])
 
     def test_build_failure_preserves_live_service(self):
         result=self.run_operator("update",fail="build")
@@ -211,6 +332,21 @@ class TaskProcessTest(unittest.TestCase):
             self.assertEqual(result.returncode,1,result.stderr)
             self.assertTrue(json.loads((root/"var/notifications/dynamic-prices.json").read_text())["pending"])
             self.assertEqual(json.loads((root/"var/notifications/load-profiles.json").read_text())["kind"],"missing")
+
+
+class TaskLoggingFailureTest(unittest.TestCase):
+    def test_unwritable_log_does_not_skip_work_or_lose_profile_notification(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root=Path(temp)
+            for name in ("var/scheduler","var/tmp","var/notifications","logs","app/scripts"):
+                (root/name).mkdir(parents=True)
+            (root/"app/bootstrap.php").write_text("<?php return [];")
+            (root/"app/scripts/cron_load_profile_check.php").write_text("<?php echo '[MISSING] RLP0N BE 2026-10 0.0\\n'; exit(2);")
+            (root/"logs/load-profiles.log").symlink_to("/dev/full")
+            code="require $argv[1].'/vendor/autoload.php'; exit((new App\\Service\\ScheduledTaskRunner($argv[2]))->run('load-profiles'));"
+            result=subprocess.run(["php","-r",code,str(REPO),str(root)],capture_output=True,text=True,timeout=5)
+            self.assertEqual(result.returncode,2,result.stderr)
+            self.assertTrue(json.loads((root/"var/notifications/load-profiles.json").read_text())["pending"])
 
 
 class NotificationRelayTest(unittest.TestCase):

@@ -35,6 +35,7 @@ phase=preflight
 previous_image=
 previous_running=false
 build=
+publish_release=true
 on_error() {
     code=$?
     trap - ERR
@@ -61,8 +62,8 @@ trap on_error ERR
 record() {
     local current=${1:-$phase}
     jq -n --arg phase "$current" --arg image "${image:-}" --arg commit "${commit:-}" \
-        --arg backup "${backup_dir:-}" --arg previous "$previous_image" \
-        '{phase:$phase,image:$image,commit:$commit,backup:$backup,previous_image:$previous}' > "$ROOT/state/delivery.tmp"
+        --arg backup "${backup_dir:-}" --arg previous "$previous_image" --argjson publish "$publish_release" \
+        '{phase:$phase,image:$image,commit:$commit,backup:$backup,previous_image:$previous,publish_release:$publish}' > "$ROOT/state/delivery.tmp"
     mv "$ROOT/state/delivery.tmp" "$ROOT/state/delivery.json"
 }
 mounts=(
@@ -123,18 +124,47 @@ healthy() {
     return 1
 }
 probe() {
+    # Health is independent of visitor restrictions. Never forge an allowed client IP.
     docker exec "$PROXY" curl --fail --silent --show-error --max-time 30 \
-        "http://$CONTAINER:8080/login" -H 'Host: energy-cost.eu' -H 'X-Forwarded-Proto: https' >/dev/null
-    local headers
-    headers=$(docker exec "$PROXY" curl --fail --silent --show-error --max-time 30 -D - -o /dev/null "$BASE_URL/login")
+        "http://$CONTAINER:8080/healthz" >/dev/null || return 1
+    local headers status ip_restricted
+    ip_restricted=$(docker exec "$CONTAINER" php -r '$c=require "app/bootstrap.php"; $s=$c["web_security"] ?? []; echo (($s["enabled"] ?? false) && !empty($s["allowed_ips"])) ? "1" : "0";') || return 1
+    headers=$(docker exec "$PROXY" curl --silent --show-error --max-time 30 -D - -o /dev/null -w '\n%{http_code}' "$BASE_URL/login") || return 1
+    status=${headers##*$'\n'}
+    if [[ "$status" != 200 && ! ( "$status" == 403 && "$ip_restricted" == 1 ) ]]; then
+        echo "Contrôle HTTP refusé (statut $status)." >&2
+        return 1
+    fi
     tr -d '\r' <<< "$headers" | grep -qiFx "X-Energy-Cost-Revision: $commit" || {
         echo 'Révision publique différente : vérifier la bascule SWAG/CDN.' >&2
         return 1
     }
 }
+
+container_present() {
+    local names
+    names=$(docker container ls --all --format '{{.Names}}') || return 1
+    if grep -Fxq -- "$CONTAINER" <<< "$names"; then echo true; else echo false; fi
+}
 assert_managed() {
     [[ "$(docker inspect -f '{{index .Config.Labels "eu.energy-cost.managed"}}' "$CONTAINER")" == prd ]] || {
         echo 'Conteneur non géré par cet opérateur.' >&2; return 1;
+    }
+    local actual
+    actual=$(docker inspect -f '{{json .Mounts}}' "$CONTAINER") || return 1
+    jq -e --arg root "${ROOT%/}" '
+      . as $actual |
+      [
+        {source:($root+"/config"),target:"/app/app/config",rw:false},
+        {source:($root+"/data/var"),target:"/app/var",rw:true},
+        {source:($root+"/data/logs"),target:"/app/logs",rw:true},
+        {source:($root+"/backups/manual"),target:"/app/backups",rw:true}
+      ] | all(.[]; . as $expected |
+        any($actual[]; .Type=="bind" and .Source==$expected.source and
+          .Destination==$expected.target and .RW==$expected.rw))
+    ' <<< "$actual" >/dev/null || {
+        echo 'Montages différents de la racine configurée : opération refusée.' >&2
+        return 1
     }
 }
 pause() {
@@ -211,7 +241,9 @@ complete() {
     phase=server_healthy
     record
     # Only after HTTP validation; failed publication can be resumed independently.
-    docker exec "$CONTAINER" php app/scripts/release-notes.php --publish
+    if [[ "$publish_release" == true ]]; then
+        docker exec "$CONTAINER" php app/scripts/release-notes.php --publish
+    fi
     rm -f -- "$ROOT/data/var/cron-paused"
     phase=complete
     record
@@ -221,7 +253,11 @@ case "$command" in
     prepare)
         test ! -f "$ROOT/state/delivery.json"
         test ! -f "$ROOT/state/current.json"
-        ! docker container inspect "$CONTAINER" >/dev/null 2>&1
+        present=$(container_present)
+        if [[ "$present" == true ]]; then
+            echo 'Conteneur déjà présent : aucune préparation ni modification des volumes.' >&2
+            exit 1
+        fi
         install_volumes
         build_image "${1:-main}"
         phase=prepared
@@ -255,7 +291,9 @@ case "$command" in
         build_image "${1:-main}"
         pause
         make_backup
-        cp "$ROOT/state/current.json" "$ROOT/state/previous.json"
+        if [[ "$image" != "$previous_image" ]]; then
+            cp "$ROOT/state/current.json" "$ROOT/state/previous.json"
+        fi
         phase=migrations_started
         record
         cli app/scripts/migrate.php
@@ -270,17 +308,31 @@ case "$command" in
         complete
         ;;
     resume-announcements)
-        assert_managed
         phase=$(jq -r .phase "$ROOT/state/delivery.json")
-        case "$phase" in migrated|switched|server_healthy) ;; *) echo 'Livraison non validable.' >&2; exit 1;; esac
+        case "$phase" in migrated|switched|server_healthy|backup_restarting) ;; *) echo 'Livraison non validable.' >&2; exit 1;; esac
         image=$(jq -r .image "$ROOT/state/delivery.json")
         commit=$(jq -r .commit "$ROOT/state/delivery.json")
-        [[ "$(docker inspect -f '{{.Image}}' "$CONTAINER")" == "$image" ]]
+        previous_image=$(jq -r '.previous_image // ""' "$ROOT/state/delivery.json")
+        backup_dir=$(jq -r '.backup // ""' "$ROOT/state/delivery.json")
+        publish_release=$(jq -r 'if .publish_release == false then false else true end' "$ROOT/state/delivery.json")
+        present=$(container_present)
+        if [[ "$present" == true ]]; then
+            assert_managed
+            [[ "$(docker inspect -f '{{.Image}}' "$CONTAINER")" == "$image" ]]
+        else
+            [[ "$(docker image inspect -f '{{index .Config.Labels "org.opencontainers.image.revision"}}' "$image")" == "$commit" ]]
+            touch "$ROOT/data/var/maintenance" "$ROOT/data/var/cron-paused"
+            create_container
+        fi
+        if [[ "$(docker inspect -f '{{.State.Running}}' "$CONTAINER")" != true ]]; then
+            docker start "$CONTAINER" >/dev/null
+        fi
         healthy
         save_current
         complete
         ;;
     backup)
+        publish_release=false
         commit=$(jq -r .commit "$ROOT/state/current.json")
         image=$(jq -r .image "$ROOT/state/current.json")
         assert_managed
@@ -289,31 +341,35 @@ case "$command" in
         pause
         make_backup
         phase=backup_restarting
-        docker start "$CONTAINER" >/dev/null
-        rm -f -- "$ROOT/data/var/maintenance"
-        healthy
-        probe
-        rm -f -- "$ROOT/data/var/cron-paused"
-        phase=complete
         record
+        docker start "$CONTAINER" >/dev/null
+        complete
         ;;
     rollback)
+        publish_release=false
         [[ "${1:-}" == --schema-compatible ]] || { echo 'Confirmer la compatibilité SQL : rollback --schema-compatible' >&2; exit 2; }
-        assert_managed
         image=$(jq -r .image "$ROOT/state/previous.json")
         commit=$(jq -r .commit "$ROOT/state/previous.json")
-        previous_image=$(docker inspect -f '{{.Image}}' "$CONTAINER")
+        docker image inspect "$image" >/dev/null
+        present=$(container_present)
+        if [[ "$present" == true ]]; then
+            assert_managed
+            previous_image=$(docker inspect -f '{{.Image}}' "$CONTAINER")
+        else
+            previous_image=$(jq -er .image "$ROOT/state/current.json")
+        fi
         # Retain an existing maintenance state after a failed migration.
         touch "$ROOT/data/var/maintenance" "$ROOT/data/var/cron-paused"
-        if [[ "$(docker inspect -f '{{.State.Running}}' "$CONTAINER")" == true ]]; then
-            docker exec "$CONTAINER" php app/scripts/drain_scheduled_tasks.php
+        if [[ "$present" == true ]]; then
+            if [[ "$(docker inspect -f '{{.State.Running}}' "$CONTAINER")" == true ]]; then
+                docker exec "$CONTAINER" php app/scripts/drain_scheduled_tasks.php
+            fi
+            docker stop --time 300 "$CONTAINER" >/dev/null
         fi
-        docker stop --time 300 "$CONTAINER" >/dev/null
         make_backup
         phase=migrations_started
         record
-        docker image inspect "$image" >/dev/null
-        docker rm "$CONTAINER" >/dev/null
+        if [[ "$present" == true ]]; then docker rm "$CONTAINER" >/dev/null; fi
         create_container
         phase=switched
         record

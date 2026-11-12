@@ -59,8 +59,9 @@ final class ScheduledTaskRunner
             }
             $log = $this->root . '/logs/' . $job . '.log';
             if (is_file($log) && filesize($log) > 1048576) {
-                if (!rename($log, $log . '.1')) {
-                    throw new RuntimeException('Cannot rotate task log');
+                if (!@rename($log, $log . '.1')) {
+                    fwrite(STDERR, "Task log rotation unavailable; continuing without the task log.\n");
+                    $log = null;
                 }
             }
             // Keep subprocess output out of User Scripts and notification payloads.
@@ -79,8 +80,8 @@ final class ScheduledTaskRunner
                 }
                 $status = proc_close($process);
                 $output = (string) file_get_contents($temp);
-                if (file_put_contents($log, gmdate('c') . ' exit=' . $status . "\n" . $output, FILE_APPEND) === false) {
-                    throw new RuntimeException('Cannot write task log');
+                if ($log !== null && @file_put_contents($log, gmdate('c') . ' exit=' . $status . "\n" . $output, FILE_APPEND) === false) {
+                    fwrite(STDERR, "Task log unavailable; task result and notifications retained.\n");
                 }
                 $missing = [];
                 if ($job === 'load-profiles' && $status === 2) {
