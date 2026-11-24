@@ -154,6 +154,13 @@ les pages restent en `503` pendant la préparation. Aucune migration ou annonce
 n’est lancée, et aucun cron métier ne tourne. Pour un tag initial, utiliser
 `prepare v1.3.0` lorsque ce tag existe et contient cette livraison.
 
+Si la construction Docker échoue en phase `preflight`, avant la création du
+conteneur et de `state/delivery.json`, corriger la cause puis relancer la même
+commande `prepare main`. Elle récupère automatiquement le dernier `main` distant
+et reconstruit son archive Git ; une modification locale du Dockerfile n'est pas
+prise en compte. Conserver les fichiers copiés et la configuration : aucune
+migration ni publication n'a été lancée à ce stade.
+
 ## 2. Geler l’ancienne instance et basculer
 
 1. Désactiver les User Scripts prix/profils et tout ancien backup PHP récurrent
@@ -303,9 +310,10 @@ docker run --rm --entrypoint frankenphp energy-cost-check validate --config /etc
 
 Les tests Python simulent Docker et utilisent des fichiers temporaires. Ils
 n’accèdent pas à la production. Pour PHPUnit BDD, utiliser exclusivement une
-configuration locale dérivant une base `<name>_test` isolée. La construction Docker,
-les volumes Unraid, TLS et les fournisseurs externes doivent être validés sur
-Unraid ; un binaire FrankenPHP local ne remplace pas cette recette.
+configuration locale dérivant une base `<name>_test` isolée. La CI construit aussi
+l'image de production et valide sa configuration Caddy. Les volumes Unraid, TLS
+et les fournisseurs externes doivent être validés sur Unraid ; un binaire
+FrankenPHP local ne remplace pas cette recette.
 
 ## 5. Sauvegarde, retour arrière et restauration
 

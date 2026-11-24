@@ -8,6 +8,8 @@ RUN install-php-extensions pdo_mysql curl mbstring intl simplexml opcache \
 WORKDIR /app
 FROM base AS build
 ENV COMPOSER_ALLOW_SUPERUSER=1
+RUN apt-get update && apt-get install -y --no-install-recommends unzip \
+    && rm -rf /var/lib/apt/lists/*
 COPY --from=composer /usr/bin/composer /usr/local/bin/composer
 COPY composer.json composer.lock ./
 RUN composer install --no-dev --no-scripts --prefer-dist --no-interaction --no-progress --no-autoloader

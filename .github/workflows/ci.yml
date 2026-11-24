@@ -13,6 +13,15 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  container:
+    name: Production Docker image
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Build production image
+        run: docker build --target production --build-arg "EC_COMMIT=${{ github.sha }}" -t energy-cost-check .
+      - name: Validate embedded Caddy configuration
+        run: docker run --rm --entrypoint frankenphp energy-cost-check validate --config /etc/caddy/Caddyfile --adapter caddyfile
   deployment:
     name: Unraid operator and scheduler
     runs-on: ubuntu-latest
