@@ -224,6 +224,29 @@ class OperatorTest(unittest.TestCase):
         self.assertFalse((self.root/"data/var/maintenance").exists())
         self.assertNotIn("stop",[c[0] for c in self.commands()])
 
+    def test_failed_prepare_build_can_be_retried_without_migrations_or_publication(self):
+        (self.root/"container").unlink()
+        (self.root/"running").unlink()
+        (self.root/"state/current.json").unlink()
+        (self.root/"state/delivery.json").unlink()
+        sentinel=self.root/"data/var/existing-data"
+        sentinel.write_text("preserved")
+        result=self.run_operator("prepare",fail="build")
+        self.assertNotEqual(result.returncode,0)
+        self.assertIn("phase=preflight",result.stderr)
+        self.assertFalse((self.root/"container").exists())
+        self.assertFalse((self.root/"state/delivery.json").exists())
+        self.assertFalse((self.root/"state/current.json").exists())
+        self.assertFalse(any(c[0] in ("run","stop","rm") for c in self.commands()))
+        result=self.run_operator("prepare")
+        self.assertEqual(result.returncode,0,result.stdout+result.stderr)
+        self.assertEqual((self.root/"container").read_text(),NEW)
+        self.assertEqual(json.loads((self.root/"state/delivery.json").read_text())["phase"],"prepared")
+        self.assertEqual(sentinel.read_text(),"preserved")
+        self.assertTrue((self.root/"data/var/maintenance").exists())
+        self.assertTrue((self.root/"data/var/cron-paused").exists())
+        self.assertFalse(any(c[-1:] == ["app/scripts/migrate.php"] or "--publish" in c for c in self.commands()))
+
     def test_busy_task_drain_failure_retains_maintenance_without_stopping(self):
         result=self.run_operator("update",fail="drain")
         self.assertNotEqual(result.returncode,0)

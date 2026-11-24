@@ -31,8 +31,9 @@ if (($dynCfg['enabled'] ?? false) !== true) {
     exit(0);
 }
 
-if (($dynCfg['provider'] ?? 'entsoe') !== 'entsoe') {
-    echo '[ERROR] Provider non supporté: ' . (string) ($dynCfg['provider'] ?? '') . "\n";
+$provider = $dynCfg['provider'] ?? 'entsoe';
+if ($provider !== 'entsoe') {
+    echo '[ERROR] Provider non supporté: ' . (string) $provider . "\n";
     exit(1);
 }
 
@@ -87,7 +88,7 @@ foreach ($zones as $zone) {
     }
 
     $repo  = new DynamicPriceRepository($pdo, $zone);
-    $count = $repo->upsertPrices($prices, (string) ($dynCfg['provider'] ?? 'entsoe'));
+    $count = $repo->upsertPrices($prices, $provider);
 
     echo sprintf("[OK] %s : %d prix enregistrés (%s → %s).\n", $zone, $count, $from->format('Y-m-d'), $to->format('Y-m-d'));
 }
